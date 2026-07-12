@@ -4,10 +4,7 @@ import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type ViewportActions = ReturnType<typeof createViewportActions>;
 
-export function createViewportActions(
-  getCanvasManager: () => ViewportApi | null,
-  initialSidebarWidth: number,
-) {
+export function createViewportActions(getCanvasManager: () => ViewportApi | null, initialSidebarWidth: number) {
   let currentSidebarWidth = initialSidebarWidth;
   const syncSidebarViewport = () => {
     const cm = getCanvasManager();
@@ -16,20 +13,25 @@ export function createViewportActions(
     cm.updateDimensions();
     cm.draw();
   };
-  const resetView = () => getCanvasManager()?.resetView();
+  const resetView = () => {
+    const cm = getCanvasManager();
+    if (!cm) return;
+    cm.resetView();
+    // /3d: recentering on the world origin can lose an off-origin solid —
+    // reset the orientation, then frame the model
+    const state = getState();
+    if (state.problemMode === "3d" && state.polytope3) {
+      window.requestAnimationFrame(() => zoomToFit());
+    }
+  };
   const zoomToFit = () => {
     const cm = getCanvasManager();
     if (!cm) return;
     const state = getState();
-    const isOpenUnbounded =
-      state.completionMode === "open" && state.polytope?.kind === "unbounded";
+    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
-    cm.zoomToFit(
-      isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds,
-      50,
-      zoomFit?.zBounds,
-    );
+    cm.zoomToFit(isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds, 50, zoomFit?.zBounds);
     cm.setSidebarWidth(currentSidebarWidth);
   };
   const toggle3D = () => {

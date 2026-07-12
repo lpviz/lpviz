@@ -1,7 +1,8 @@
 import type { AppContext } from "@/app/appContext";
 import type { AppActions } from "@/features/core/actions";
-import { ALL_VIEWPORT_DIRTY, setState } from "@/features/core/store";
+import { ALL_VIEWPORT_DIRTY, getState, setState } from "@/features/core/store";
 import { createHistoryService } from "@/features/history/historyService";
+import { refreshPolytope3, setEditor3ProblemChangeNotifier } from "@/features/polytope-editor/editor3";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import { createShareService } from "@/features/share/shareService";
@@ -18,6 +19,15 @@ const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
 export function boot(root: HTMLElement) {
   root.replaceChildren();
 
+  // lpviz.net/3d serves the 3-variable mode: same bundle, camera boots
+  // straight into 3D (no transition) and the CAD editor flow takes over.
+  // zScale is pinned to 100 so layers render z as a real world coordinate
+  // (scale.z = zScale/100 = 1) instead of a tunable visualization lift.
+  const is3DProblemRoute = /^\/3d\/?$/.test(window.location.pathname);
+  if (is3DProblemRoute) {
+    setState({ problemMode: "3d", is3DMode: true, zScale: 100 }, { viewportDirty: ALL_VIEWPORT_DIRTY });
+  }
+
   let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   let mobileSidebarHeight = Math.round(window.innerHeight * 0.42);
   const mobileQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -31,6 +41,8 @@ export function boot(root: HTMLElement) {
   const history = createHistoryService(() => {
     canvasManager?.draw();
     polytope.send();
+    // undo/redo restores raw planes; re-derive the solid and re-solve
+    if (getState().problemMode === "3d") refreshPolytope3();
   });
 
   const polytope = createPolytopeService(() => solverHandleProblemChange);
@@ -39,15 +51,13 @@ export function boot(root: HTMLElement) {
   const share = createShareService(() => solver.solverControls);
 
   solverHandleProblemChange = solver.handleProblemChange;
+  setEditor3ProblemChangeNotifier(solver.handleProblemChange);
 
   const getViewportSidebarWidth = () => (mobileLayout ? 0 : sidebarWidth);
   const applyLayoutMode = () => {
     mobileLayout = mobileQuery.matches;
     root.classList.toggle("mobile-layout", mobileLayout);
-    root.style.setProperty(
-      "--mobile-sidebar-height",
-      `${mobileSidebarHeight}px`,
-    );
+    root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
   };
   applyLayoutMode();
 
@@ -146,14 +156,8 @@ export function boot(root: HTMLElement) {
   const onResizeStart = (startEvent: PointerEvent) => {
     if (mobileLayout) {
       const applyHeight = (clientY: number) => {
-        mobileSidebarHeight = Math.max(
-          180,
-          Math.min(window.innerHeight * 0.72, window.innerHeight - clientY),
-        );
-        root.style.setProperty(
-          "--mobile-sidebar-height",
-          `${mobileSidebarHeight}px`,
-        );
+        mobileSidebarHeight = Math.max(180, Math.min(window.innerHeight * 0.72, window.innerHeight - clientY));
+        root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
         viewport.setSidebarWidth(0);
         stage.updateLayout();
       };
@@ -214,10 +218,7 @@ export function boot(root: HTMLElement) {
   const stage = mountCanvasStage(root, ctx, onResizeStart);
 
   const onResize = () => {
-    mobileSidebarHeight = Math.min(
-      mobileSidebarHeight,
-      window.innerHeight * 0.72,
-    );
+    mobileSidebarHeight = Math.min(mobileSidebarHeight, window.innerHeight * 0.72);
     applyLayoutMode();
     viewport.syncViewportLayout(getViewportSidebarWidth());
     stage.updateLayout();

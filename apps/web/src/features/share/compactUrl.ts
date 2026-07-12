@@ -20,8 +20,9 @@ import type { ShareSettings, SharedAppState } from "@/features/share/sharedState
 // Bumping rather than redefining v1 matters even though v1 barely escaped —
 // a stale link decoded against the wrong header layout would not fail, it would
 // silently load a *different* problem, which is the exact failure this format
-// was written to eliminate.
-const VERSION = 2;
+// was written to eliminate. v3 adds the /3d solid (vertices3 + objective3)
+// behind two more extended-flag bits; v2 links read unchanged.
+const VERSION = 3;
 const MIN_VERSION = 1;
 // 1e-4 of a world unit is far below one screen pixel at any usable zoom, and
 // vertices are where the bytes go. The objective is only two numbers and is
@@ -42,6 +43,9 @@ const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
+// v3: the 3-variable editor's solid vertices and its 3D objective
+const HAS_VERTICES3 = 0x02;
+const HAS_OBJECTIVE3 = 0x04;
 const QUERY_POINTS = [
   "ellipsoid",
   "chebyshev",
@@ -170,7 +174,19 @@ export function encodeSharedState(state: SharedAppState): string {
       (hasObjective ? 0x40 : 0) |
       (hasZScale ? 0x80 : 0),
   );
-  bytes.push(hasSolverStart ? HAS_SOLVER_START : 0);
+  const vertices3 = state.vertices3 ?? [];
+  const hasVertices3 = vertices3.length > 0;
+  const objective3 = state.objective3;
+  const hasObjective3 =
+    objective3 != null &&
+    Number.isFinite(objective3.x) &&
+    Number.isFinite(objective3.y) &&
+    Number.isFinite(objective3.z);
+  bytes.push(
+    (hasSolverStart ? HAS_SOLVER_START : 0) |
+      (hasVertices3 ? HAS_VERTICES3 : 0) |
+      (hasObjective3 ? HAS_OBJECTIVE3 : 0),
+  );
 
   const vertices = state.vertices ?? [];
   writeVarint(bytes, vertices.length);
@@ -194,6 +210,29 @@ export function encodeSharedState(state: SharedAppState): string {
     // a world coordinate the user placed by hand, so vertex precision applies
     writeZigZag(bytes, quantize(start.x, COORDINATE_SCALE));
     writeZigZag(bytes, quantize(start.y, COORDINATE_SCALE));
+  }
+  if (hasVertices3) {
+    // the solid's corners, delta-coded like the polygon's vertices
+    writeVarint(bytes, vertices3.length);
+    let px = 0;
+    let py = 0;
+    let pz = 0;
+    for (const vertex of vertices3) {
+      const x = quantize(vertex.x, COORDINATE_SCALE);
+      const y = quantize(vertex.y, COORDINATE_SCALE);
+      const z = quantize(vertex.z, COORDINATE_SCALE);
+      writeZigZag(bytes, x - px);
+      writeZigZag(bytes, y - py);
+      writeZigZag(bytes, z - pz);
+      px = x;
+      py = y;
+      pz = z;
+    }
+  }
+  if (hasObjective3) {
+    writeZigZag(bytes, quantize(objective3.x, OBJECTIVE_SCALE));
+    writeZigZag(bytes, quantize(objective3.y, OBJECTIVE_SCALE));
+    writeZigZag(bytes, quantize(objective3.z, OBJECTIVE_SCALE));
   }
 
   const settings = state.settings ?? {};
@@ -281,6 +320,33 @@ export function decodeSharedState(text: string): SharedAppState | null {
             y: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
           }
         : null;
+    let vertices3: { x: number; y: number; z: number }[] | undefined;
+    if ((extended & HAS_VERTICES3) !== 0) {
+      const count = readVarint(bytes, cursor);
+      if (count > 100_000) return null;
+      vertices3 = [];
+      let vx = 0;
+      let vy = 0;
+      let vz = 0;
+      for (let i = 0; i < count; i++) {
+        vx += readZigZag(bytes, cursor);
+        vy += readZigZag(bytes, cursor);
+        vz += readZigZag(bytes, cursor);
+        vertices3.push({
+          x: dequantize(vx, COORDINATE_SCALE),
+          y: dequantize(vy, COORDINATE_SCALE),
+          z: dequantize(vz, COORDINATE_SCALE),
+        });
+      }
+    }
+    const objective3 =
+      (extended & HAS_OBJECTIVE3) !== 0
+        ? {
+            x: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
+            y: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
+            z: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
+          }
+        : undefined;
 
     const settingCount = readVarint(bytes, cursor);
     if (settingCount > SETTINGS.length) return null;
@@ -329,6 +395,8 @@ export function decodeSharedState(text: string): SharedAppState | null {
       solverStartPoint,
       ...(zScale !== undefined ? { zScale } : {}),
       ...((flags & 0x20) !== 0 ? { is3DMode: true } : {}),
+      ...(vertices3 ? { vertices3 } : {}),
+      ...(objective3 ? { objective3 } : {}),
     };
   } catch {
     return null;

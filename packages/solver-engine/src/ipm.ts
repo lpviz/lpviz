@@ -1,12 +1,6 @@
-import {
-  dot,
-  infinityNorm,
-  linesToDenseAb,
-  matVec,
-  transposedMatVec,
-} from "@lpviz/math/blas";
+import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, VecM, VecN } from "@lpviz/math/types";
+import type { LinesND, VecM, VecN } from "@lpviz/math/types";
 import { formatMilliseconds } from "./time";
 
 const MAX_ITERATIONS_LIMIT = 100_000;
@@ -37,6 +31,7 @@ interface IPMSolutionData {
     iteration: number;
     x: number;
     y: number;
+    z?: number;
     objective: number;
     infeasibility: number;
     mu: number;
@@ -44,7 +39,7 @@ interface IPMSolutionData {
   footer?: string;
 }
 
-export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
+export function ipm(lines: LinesND, objective: VecN, opts: IPMOptions) {
   const {
     eps_p,
     eps_d,
@@ -111,7 +106,7 @@ function ipmCore(
     s: [],
     y: [],
     mu: [],
-    header: " Iter        x        y        Obj     Infeas          µ",
+    header: n >= 3 ? " Iter        x        y        z        Obj     Infeas          µ" : " Iter        x        y        Obj     Infeas          µ",
     rows: [],
   };
   const res = { iterates: { solution } };
@@ -206,10 +201,7 @@ function ipmCore(
 
     if (!(alphaP >= correctorThreshold && alphaD >= correctorThreshold)) {
       // mu can reach exactly 0 when alphaMax = 1; (0/0)**p would be NaN
-      const sigma =
-        mu > 0
-          ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER))
-          : SIGMA_MIN;
+      const sigma = mu > 0 ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER)) : SIGMA_MIN;
       rhsCor.fill(0);
       for (let i = 0; i < m; i++) {
         rhsCor[m + n + i] = -(dsAff[i]! * dyAff[i]! - sigma * mu);
@@ -248,12 +240,7 @@ function ipmCore(
   return res;
 }
 
-function buildKktSystem(
-  K: Float64Array,
-  A: { rows: number; cols: number; data: Float64Array },
-  s: Float64Array,
-  y: Float64Array,
-) {
+function buildKktSystem(K: Float64Array, A: { rows: number; cols: number; data: Float64Array }, s: Float64Array, y: Float64Array) {
   const m = A.rows;
   const n = A.cols;
   const size = n + 2 * m;
@@ -293,28 +280,15 @@ function alphaStep(values: Float64Array, delta: Float64Array) {
   return alpha;
 }
 
-function pushIter(
-  d: IPMSolutionData,
-  x: Float64Array,
-  s: Float64Array,
-  y: Float64Array,
-  mu: number,
-) {
+function pushIter(d: IPMSolutionData, x: Float64Array, s: Float64Array, y: Float64Array, mu: number) {
   d.x.push(x.slice());
   d.s.push(s.slice());
   d.y.push(y.slice());
   d.mu.push(mu);
 }
 
-function logIter(
-  d: IPMSolutionData,
-  verbose: boolean,
-  x: Float64Array,
-  mu: number,
-  pObj: number,
-  pRes: number,
-) {
-  const row = {
+function logIter(d: IPMSolutionData, verbose: boolean, x: Float64Array, mu: number, pObj: number, pRes: number) {
+  const row: IPMSolutionData["rows"][number] = {
     kind: "ipm" as const,
     iteration: d.x.length + 1,
     x: x[0] ?? 0,
@@ -323,21 +297,12 @@ function logIter(
     infeasibility: pRes,
     mu,
   };
+  if (x.length >= 3) row.z = x[2]!;
   if (verbose) console.log(row);
   d.rows.push(row);
 }
 
-function logFinal(
-  d: IPMSolutionData,
-  verbose: boolean,
-  converged: boolean,
-  solveTime: number,
-  failureMessage: string | null,
-) {
-  d.footer = failureMessage
-    ? `${failureMessage}\nStopped after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`
-    : converged
-      ? `Converged to optimal solution in ${formatMilliseconds(solveTime)} / ${d.x.length} iterations\n`
-      : `Did not converge after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`;
+function logFinal(d: IPMSolutionData, verbose: boolean, converged: boolean, solveTime: number, failureMessage: string | null) {
+  d.footer = failureMessage ? `${failureMessage}\nStopped after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n` : converged ? `Converged to optimal solution in ${formatMilliseconds(solveTime)} / ${d.x.length} iterations\n` : `Did not converge after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`;
   if (verbose) console.log(d.footer);
 }

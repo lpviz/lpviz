@@ -22,7 +22,18 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       zScale,
       is3DMode,
       solverStartPoint,
+      problemMode,
+      vertices3,
+      objectiveVector3,
+      editor3Phase,
     } = getSnapshot();
+    // a /3d link shares the solid's vertices (+3D objective); the base
+    // sketch's vertices ride along so the sketch/extrude phases round-trip
+    const share3D =
+      problemMode === "3d" &&
+      editor3Phase !== "sketch" &&
+      editor3Phase !== "extrude" &&
+      vertices3.length >= 4;
     // base64url only, so the whole link survives being pasted into chat,
     // email or a paper without a linkifier clipping its tail
     const encoded = encodeSharedState({
@@ -32,8 +43,10 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       solverMode,
       settings: collectShareSettings(solverMode),
       solverStartPoint,
-      zScale,
-      ...(is3DMode ? { is3DMode } : {}),
+      // /3d pins zScale to real z, so the link need not carry it
+      ...(problemMode === "3d" ? {} : { zScale }),
+      ...(is3DMode && problemMode !== "3d" ? { is3DMode } : {}),
+      ...(share3D ? { vertices3, objective3: objectiveVector3 ?? undefined } : {}),
     });
     window.prompt(
       "Share this link:",

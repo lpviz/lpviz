@@ -11,11 +11,9 @@ import type { ResultRenderPayload } from "@/features/solver/solverService";
 import type { SolverWorkerPayload } from "@/features/solver/solverWorker";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
+import { interiorPoint3 } from "@lpviz/polytope/polytope3";
 
-export type SolverSettingUpdater = <K extends keyof SolverSettings>(
-  key: K,
-  value: SolverSettings[K],
-) => void;
+export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
 
 export type SolverControl = {
   mode: SolverMode;
@@ -47,21 +45,28 @@ function isValidSharedSetting<K extends SharedKey>(
 }
 
 const hasFeasibleRegion = (state: State): boolean =>
-  hasPolytopeLines(state.polytope) &&
-  (state.polytope.kind === "bounded" || state.polytope.kind === "unbounded");
+  state.problemMode === "3d"
+    ? state.polytope3?.kind === "bounded"
+    : hasPolytopeLines(state.polytope) &&
+      (state.polytope.kind === "bounded" || state.polytope.kind === "unbounded");
 
-const isEmptyRegion = (state: State): boolean =>
-  hasPolytopeLines(state.polytope) && state.polytope.kind === "empty";
+const isEmptyRegion = (state: State): boolean => (state.problemMode === "3d" ? state.polytope3 !== null && state.polytope3.kind !== "bounded" : hasPolytopeLines(state.polytope) && state.polytope.kind === "empty");
 
 // the objective vector + constraint lines guard common to every buildRequest
 function objectiveBase(state: State) {
+  if (state.problemMode === "3d") {
+    if (!state.objectiveVector3 || !state.polytope3 || state.polytope3.kind !== "bounded") {
+      return null;
+    }
+    return {
+      lines: state.polytope3.planes,
+      objective: Float64Array.of(state.objectiveVector3.x, state.objectiveVector3.y, state.objectiveVector3.z),
+    };
+  }
   if (!state.objectiveVector || !hasPolytopeLines(state.polytope)) return null;
   return {
     lines: state.polytope.lines,
-    objective: Float64Array.of(
-      state.objectiveVector.x,
-      state.objectiveVector.y,
-    ),
+    objective: Float64Array.of(state.objectiveVector.x, state.objectiveVector.y),
   };
 }
 
@@ -83,23 +88,14 @@ const messageBlocks = (
   ],
 });
 
-export function createSolverControls({
-  updateSolverSetting,
-  hasUnboundedObjectiveDirection,
-}: {
-  updateSolverSetting: SolverSettingUpdater;
-  hasUnboundedObjectiveDirection: (state: State) => boolean;
-}): SolverControl[] {
+export function createSolverControls({ updateSolverSetting, hasUnboundedObjectiveDirection }: { updateSolverSetting: SolverSettingUpdater; hasUnboundedObjectiveDirection: (state: State) => boolean }): SolverControl[] {
   const collectShared = (keys: readonly SharedKey[]): ShareSettings => {
     const s = getState().solverSettings;
     const out: ShareSettings = {};
     for (const k of keys) (out[k] as SolverSettings[SharedKey]) = s[k];
     return out;
   };
-  const applyShared = (
-    settings: ShareSettings,
-    keys: readonly SharedKey[],
-  ): void => {
+  const applyShared = (settings: ShareSettings, keys: readonly SharedKey[]): void => {
     for (const k of keys) {
       const v: unknown = settings[k];
       if (isValidSharedSetting(k, v)) updateSolverSetting(k, v);
@@ -109,28 +105,30 @@ export function createSolverControls({
   return [
     {
       mode: "central",
-      isSelectable: (s) =>
-        hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
+      isSelectable: (s) => hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
       getRunBlock: (s) => {
         if (!hasPolytopeLines(s.polytope)) return null;
-        if (s.polytope.kind === "empty")
-          return messageBlocks(
-            "No valid region",
-            "Central Path requires a feasible region.",
-          );
-        if (hasUnboundedObjectiveDirection(s))
-          return messageBlocks(
-            "Solver unavailable",
-            "Central Path is disabled when the objective points in an unbounded direction. Select IPM, PDHG, or Simplex to see how they handle this unbounded problem.",
-          );
+        if (s.polytope.kind === "empty") return messageBlocks("No valid region", "Central Path requires a feasible region.");
+        if (hasUnboundedObjectiveDirection(s)) return messageBlocks("Solver unavailable", "Central Path is disabled when the objective points in an unbounded direction. Select IPM, PDHG, or Simplex to see how they handle this unbounded problem.");
         return null;
       },
       collectShareSettings: () => collectShared(["centralPathIter"]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, ["centralPathIter"]),
+      applySharedSettings: (settings) => applyShared(settings, ["centralPathIter"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
-        if (!base || !hasPolytopeLines(s.polytope)) return null;
+        if (!base) return null;
+        if (s.problemMode === "3d") {
+          const interior = s.polytope3 ? interiorPoint3(s.polytope3.planes, s.polytope3.vertices) : null;
+          if (!interior) return null;
+          return {
+            solver: "central",
+            vertices: [],
+            ...base,
+            interiorPoint: [interior.x, interior.y, interior.z],
+            niter: Math.max(1, s.solverSettings.centralPathIter || 1),
+          };
+        }
+        if (!hasPolytopeLines(s.polytope)) return null;
         return {
           solver: "central",
           vertices: s.polytope.vertices,
@@ -142,14 +140,9 @@ export function createSolverControls({
     {
       mode: "ipm",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) =>
-        isEmptyRegion(s)
-          ? messageBlocks("No valid region", "IPM requires a feasible region.")
-          : null,
-      collectShareSettings: () =>
-        collectShared(["alphaMax", "correctorThreshold", "maxitIPM"]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, ["alphaMax", "correctorThreshold", "maxitIPM"]),
+      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "IPM requires a feasible region.") : null),
+      collectShareSettings: () => collectShared(["alphaMax", "correctorThreshold", "maxitIPM"]),
+      applySharedSettings: (settings) => applyShared(settings, ["alphaMax", "correctorThreshold", "maxitIPM"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -224,14 +217,22 @@ export function createSolverControls({
           "ellipsoidInitialScale",
         ]),
       buildRequest: (s) => {
-        const base = objectiveBase(s);
-        if (!base || !hasPolytopeLines(s.polytope)) return null;
+        // the ellipsoid method is 2-variable only, so it reads the planar
+        // region directly rather than through the dimension-agnostic base
+        if (
+          s.problemMode === "3d" ||
+          !s.objectiveVector ||
+          !hasPolytopeLines(s.polytope)
+        ) {
+          return null;
+        }
         const ss = s.solverSettings;
         return {
           solver: "ellipsoid",
           // the drawn region bounds the initial ellipsoid
           vertices: s.polytope.vertices,
-          ...base,
+          lines: s.polytope.lines,
+          objective: Float64Array.of(s.objectiveVector.x, s.objectiveVector.y),
           maxit: Math.max(1, ss.maxitEllipsoid || 1),
           deepCuts: ss.ellipsoidDeepCuts,
           rayShoot: ss.ellipsoidRayShoot,
@@ -244,24 +245,8 @@ export function createSolverControls({
       mode: "pdhg",
       isSelectable: hasFeasibleRegion,
       getRunBlock: () => null,
-      collectShareSettings: () =>
-        collectShared([
-          "pdhgEta",
-          "pdhgTau",
-          "maxitPDHG",
-          "pdhgIneqMode",
-          "pdhgHalpernMode",
-          "pdhgColorByBasis",
-        ]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, [
-          "pdhgEta",
-          "pdhgTau",
-          "maxitPDHG",
-          "pdhgIneqMode",
-          "pdhgHalpernMode",
-          "pdhgColorByBasis",
-        ]),
+      collectShareSettings: () => collectShared(["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
+      applySharedSettings: (settings) => applyShared(settings, ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;

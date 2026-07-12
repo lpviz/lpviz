@@ -23,3 +23,5 @@ export type VectorN = VecN;
 export type Vertices = Vec2[];
 export type Line = Vec3;
 export type Lines = Line[];
+export type LineND = number[];
+export type LinesND = LineND[];

@@ -1,3 +1,4 @@
+import { getState } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { usageTipsList } from "@/ui/usageTips";
 
@@ -14,7 +15,7 @@ export function mountHelpButton(parent: HTMLElement) {
   });
   panel.append(
     el("div", { className: "help-panel__title", text: "Usage Tips" }),
-    usageTipsList(),
+    usageTipsList(getState().problemMode),
     docsLink,
   );
   const button = el("button", {

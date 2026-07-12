@@ -1,11 +1,7 @@
 import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { IteratePath } from "@/features/core/store";
 import type { VecN } from "@lpviz/math/types";
-import type {
-  SolverEngineSuccessResponse,
-  SolverWorkerPayload,
-  SolverWorkerResponse,
-} from "./solverWorker";
+import type { SolverEngineSuccessResponse, SolverWorkerPayload, SolverWorkerResponse } from "./solverWorker";
 
 // Solver results at high maxit are tens of thousands of small Float64Arrays
 // plus as many row objects; structured-cloning that shape costs tens of
@@ -28,6 +24,8 @@ const PDHG_EPS_Z_LIFT = 500;
 type PackedRowsColumns = {
   x: Float64Array;
   y: Float64Array;
+  // present only for 3-variable problems
+  z?: Float64Array;
   objective: Float64Array;
   infeasibility: Float64Array;
   // epsilon for pdhg rows, mu for ipm rows, rho for ellipsoid rows
@@ -56,10 +54,7 @@ export type PackedSolverWorkerResponse =
       polygonOffsets?: Uint32Array;
     };
 
-function packIterations(
-  entries: Float64Array[],
-  zOf: (entry: Float64Array, index: number) => number,
-): Float64Array {
+function packIterations(entries: Float64Array[], zOf: (entry: Float64Array, index: number) => number): Float64Array {
   const packed = new Float64Array(entries.length * 3);
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
@@ -86,6 +81,7 @@ function packRows(
       | {
           x: number;
           y: number;
+          z?: number;
           objective: number;
           infeasibility: number;
           restart?: boolean;
@@ -94,11 +90,13 @@ function packRows(
   },
   extraOf: (row: never) => number,
   withRestart: boolean,
+  withZ: boolean,
 ): PackedRowsColumns {
   const count = rows.length;
   const cols: PackedRowsColumns = {
     x: new Float64Array(count),
     y: new Float64Array(count),
+    z: withZ ? new Float64Array(count) : undefined,
     objective: new Float64Array(count),
     infeasibility: new Float64Array(count),
     extra: new Float64Array(count),
@@ -108,6 +106,7 @@ function packRows(
     const row = rows.at(i)!;
     cols.x[i] = row.x;
     cols.y[i] = row.y;
+    if (cols.z) cols.z[i] = row.z ?? 0;
     cols.objective[i] = row.objective;
     cols.infeasibility[i] = row.infeasibility;
     cols.extra[i] = extraOf(row as never);
@@ -116,26 +115,18 @@ function packRows(
   return cols;
 }
 
-export function packSolverResponse(
-  response: SolverEngineSuccessResponse,
-  request: SolverWorkerPayload,
-): { wire: PackedSolverWorkerResponse; transfer: ArrayBuffer[] } {
+export function packSolverResponse(response: SolverEngineSuccessResponse, request: SolverWorkerPayload): { wire: PackedSolverWorkerResponse; transfer: ArrayBuffer[] } {
+  // In a 3-variable problem the third packed component is the iterate's real
+  // z coordinate (the client renders it verbatim, objective snapshot null),
+  // not the 2D display lift.
+  const is3Var = (request.objective as VecN).length >= 3;
+
   if (response.solver === "pdhg") {
     const result = response.result;
     const objective = request.objective as VecN;
     const eps = result.eps;
-    const iterations = packIterations(
-      result.iterations,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        PDHG_EPS_Z_LIFT * (eps?.[index] ?? 0),
-    );
-    const rows = packRows(
-      result.rows,
-      (row: { epsilon: number }) => row.epsilon,
-      true,
-    );
+    const iterations = packIterations(result.iterations, is3Var ? (entry) => entry[2] ?? 0 : (entry, index) => objective[0]! * entry[0]! + objective[1]! * entry[1]! + PDHG_EPS_Z_LIFT * (eps?.[index] ?? 0));
+    const rows = packRows(result.rows, (row: { epsilon: number }) => row.epsilon, true, is3Var);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
       success: true,
@@ -151,15 +142,7 @@ export function packSolverResponse(
     };
     return {
       wire,
-      transfer: [
-        iterations.buffer,
-        rows.x.buffer,
-        rows.y.buffer,
-        rows.objective.buffer,
-        rows.infeasibility.buffer,
-        rows.extra.buffer,
-        ...(rows.restart ? [rows.restart.buffer] : []),
-      ] as ArrayBuffer[],
+      transfer: [iterations.buffer, rows.x.buffer, rows.y.buffer, ...(rows.z ? [rows.z.buffer] : []), rows.objective.buffer, rows.infeasibility.buffer, rows.extra.buffer, ...(rows.restart ? [rows.restart.buffer] : [])] as ArrayBuffer[],
     };
   }
 
@@ -167,14 +150,8 @@ export function packSolverResponse(
     const sol = response.result.iterates.solution;
     const objective = request.objective as VecN;
     const mu = sol.mu;
-    const iterations = packIterations(
-      sol.x,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        (mu?.[index] ?? 0),
-    );
-    const rows = packRows(sol.rows, (row: { mu: number }) => row.mu, false);
+    const iterations = packIterations(sol.x, is3Var ? (entry) => entry[2] ?? 0 : (entry, index) => objective[0]! * entry[0]! + objective[1]! * entry[1]! + (mu?.[index] ?? 0));
+    const rows = packRows(sol.rows, (row: { mu: number }) => row.mu, false, is3Var);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
       success: true,
@@ -188,14 +165,7 @@ export function packSolverResponse(
     };
     return {
       wire,
-      transfer: [
-        iterations.buffer,
-        rows.x.buffer,
-        rows.y.buffer,
-        rows.objective.buffer,
-        rows.infeasibility.buffer,
-        rows.extra.buffer,
-      ] as ArrayBuffer[],
+      transfer: [iterations.buffer, rows.x.buffer, rows.y.buffer, ...(rows.z ? [rows.z.buffer] : []), rows.objective.buffer, rows.infeasibility.buffer, rows.extra.buffer] as ArrayBuffer[],
     };
   }
 
@@ -210,7 +180,8 @@ export function packSolverResponse(
         objective[1]! * entry[1]! +
         (rho?.[index] ?? 0),
     );
-    const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false);
+    // the ellipsoid method is 2-variable only, so its rows carry no z
+    const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false, false);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
       success: true,
@@ -247,15 +218,13 @@ export function packSolverResponse(
   return { wire: response, transfer: [] };
 }
 
-export function unpackSolverResponse(
-  wire: PackedSolverWorkerResponse,
-): SolverWorkerResponse {
+export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWorkerResponse {
   if (!("packed" in wire) || !wire.packed) {
     return wire;
   }
 
   const iteratePath = unpackIteratePath(wire.iterations, wire.stride);
-  const { x, y, objective, infeasibility, extra, restart } = wire.rows;
+  const { x, y, z, objective, infeasibility, extra, restart } = wire.rows;
 
   // Row objects materialize lazily from the packed columns: only rows that
   // actually render (a screenful) are ever built, instead of one object per
@@ -278,6 +247,7 @@ export function unpackSolverResponse(
                   restart: restart ? restart[index] === 1 : false,
                   x: x[index]!,
                   y: y[index]!,
+                  ...(z ? { z: z[index]! } : {}),
                   objective: objective[index]!,
                   infeasibility: infeasibility[index]!,
                   epsilon: extra[index]!,
@@ -353,6 +323,7 @@ export function unpackSolverResponse(
                     iteration: index + 1,
                     x: x[index]!,
                     y: y[index]!,
+                    ...(z ? { z: z[index]! } : {}),
                     objective: objective[index]!,
                     infeasibility: infeasibility[index]!,
                     mu: extra[index]!,

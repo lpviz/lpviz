@@ -1,4 +1,4 @@
-import type { Lines, VecN } from "@lpviz/math/types";
+import type { LinesND, VecN } from "@lpviz/math/types";
 import { pdhgEq } from "./pdhg_eq";
 import { pdhgIneq } from "./pdhg_ineq";
 
@@ -15,7 +15,7 @@ interface PDHGOptions {
   startPoint?: number[];
 }
 
-export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
+export function pdhg(lines: LinesND, objective: VecN, options: PDHGOptions) {
   const {
     ineq = false,
     halpern = false,
@@ -37,7 +37,5 @@ export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
     halpern,
     startPoint,
   };
-  return ineq
-    ? pdhgIneq(lines, objective, solverOptions)
-    : pdhgEq(lines, objective, solverOptions);
+  return ineq ? pdhgIneq(lines, objective, solverOptions) : pdhgEq(lines, objective, solverOptions);
 }

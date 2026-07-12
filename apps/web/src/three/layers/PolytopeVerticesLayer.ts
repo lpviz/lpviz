@@ -3,11 +3,8 @@ import type { PointXY } from "@lpviz/math/types";
 import { BufferAttribute, Group, Points, PointsMaterial } from "three";
 import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import {
-  SHARED_CIRCLE_TEXTURE,
-  SHARED_SQUARE_TEXTURE,
-} from "../helpers/sharedTextures";
+import { is3DSolidActive, shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { SHARED_CIRCLE_TEXTURE, SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
 import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
@@ -16,19 +13,11 @@ const OPEN_ANCHOR_COLOR = "#ff0000";
 const VERTEX_PIXEL_SIZE = 10;
 const VERTEX_RENDER_ORDER = RENDER_ORDER.polytopeVertices;
 
-function buildVertexPositions(
-  displayVertices: PointXY[],
-  shapeFilter: "circle" | "square",
-  completionMode: State["completionMode"],
-  hasDerivedClosedRegion: boolean,
-): Float32Array {
+function buildVertexPositions(displayVertices: PointXY[], shapeFilter: "circle" | "square", completionMode: State["completionMode"], hasDerivedClosedRegion: boolean): Float32Array {
   const out: number[] = [];
   for (let index = 0; index < displayVertices.length; index++) {
     const v = displayVertices[index]!;
-    const isAnchor =
-      completionMode === "open" &&
-      !hasDerivedClosedRegion &&
-      (index === 0 || index === displayVertices.length - 1);
+    const isAnchor = completionMode === "open" && !hasDerivedClosedRegion && (index === 0 || index === displayVertices.length - 1);
     const isSquare = isAnchor;
     if (shapeFilter === "square" ? !isSquare : isSquare) continue;
     out.push(v.x, v.y, 0);
@@ -87,49 +76,21 @@ export class PolytopeVerticesLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.vertices,
-      raw.completionMode,
-      raw.polytope,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.vertices, raw.completionMode, raw.polytope, raw.problemMode, raw.editor3Phase, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
     const raw = ctx.getState();
     const snap = ctx.getSnapshot();
 
-    const visible =
-      raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
+    const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw) && !is3DSolidActive(raw);
     this.object3D.visible = visible;
     if (!visible) return;
 
-    const hasDerived =
-      raw.completionMode === "open" &&
-      raw.polytope?.kind === "bounded" &&
-      (raw.polytope.vertices?.length ?? 0) >= 3;
-    const displayVertices: PointXY[] =
-      hasDerived && raw.polytope?.kind === "bounded"
-        ? raw.polytope.vertices.map(([x, y]) => ({ x, y }))
-        : raw.vertices;
-    applyPositions(
-      this.circlePoints,
-      buildVertexPositions(
-        displayVertices,
-        "circle",
-        raw.completionMode,
-        hasDerived,
-      ),
-    );
-    applyPositions(
-      this.squarePoints,
-      buildVertexPositions(
-        displayVertices,
-        "square",
-        raw.completionMode,
-        hasDerived,
-      ),
-    );
+    const hasDerived = raw.completionMode === "open" && raw.polytope?.kind === "bounded" && (raw.polytope.vertices?.length ?? 0) >= 3;
+    const displayVertices: PointXY[] = hasDerived && raw.polytope?.kind === "bounded" ? raw.polytope.vertices.map(([x, y]) => ({ x, y })) : raw.vertices;
+    applyPositions(this.circlePoints, buildVertexPositions(displayVertices, "circle", raw.completionMode, hasDerived));
+    applyPositions(this.squarePoints, buildVertexPositions(displayVertices, "square", raw.completionMode, hasDerived));
   }
 
   dispose(): void {

@@ -29,9 +29,17 @@ import {
   type ConstraintDragTarget,
 } from "@/features/polytope-editor/interactionState";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
+import { applyEdgeBevel, applyFaceOffsetDrag, applyFaceRemoval, applyVertexChamfer, baseCentroidForSketch, commitExtrusion, commitObjective3, currentEdges3, deleteVertex3, insertVertex3, MIN_EXTRUDE_HEIGHT, moveVertex3, objectiveAnchor3, setObjectiveVector3 } from "@/features/polytope-editor/editor3";
+import { constrainedPointFromPointer, faceOffsetFromPointer, findEdge3NearClient, findFaceAtClient, findVertex3NearClient, heightFromPointer, isExtrudeHandleAtClient, isObjective3TipAtClient, objectivePointFromPointer } from "@/features/polytope-editor/interaction3";
+import { collectZoomFitBounds } from "@/features/viewport/bounds";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromLines } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, PointXYZ } from "@lpviz/math/types";
+
+// Camera pans/orbits also end in a click; ignore clicks whose pointer
+// travelled further than this (the editor's own drags are suppressed via
+// lastCompletedInteraction, which camera gestures never set).
+const CLICK_MOVE_TOLERANCE_PX = 5;
 
 export function attachCanvasInteractions({
   canvasManager,
@@ -69,14 +77,24 @@ export function attachCanvasInteractions({
   let suppressClickUntil = 0;
   const canvas = canvasManager.getCanvasElement();
   const cleanupHandlers: Array<() => void> = [];
+
+  const setCanvasCursor = (cursor: string) => {
+    if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
+  };
+
+  const maybeSnapPoint3 = (point: PointXYZ): PointXYZ => (getState().snapToGrid ? { x: Math.round(point.x), y: Math.round(point.y), z: Math.round(point.z) } : point);
+
+  // frame the solid after big shape changes (extrude commit) so it never
+  // towers out of the viewport
+  const fitSolidInView = () => {
+    const zoomFit = collectZoomFitBounds(getState());
+    if (zoomFit) canvasManager.zoomToFit(zoomFit.bounds, 50, zoomFit.zBounds);
+  };
   const DOUBLE_TAP_MS = 350;
   const DOUBLE_TAP_RADIUS_PX = 28;
   // How close (in screen pixels) a click must land to the first vertex to close
   // the region. Touch needs a more forgiving target than a mouse cursor.
-  const coarsePointer =
-    typeof window !== "undefined" &&
-    typeof window.matchMedia === "function" &&
-    window.matchMedia("(pointer: coarse)").matches;
+  const coarsePointer = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
   const CLOSE_HIT_RADIUS_PX = coarsePointer ? 24 : 12;
 
   // The editor's close test is in world units; convert the pixel radius to a
@@ -85,47 +103,33 @@ export function attachCanvasInteractions({
   // out, which is the usual case on mobile).
   const worldDistanceForPixels = (worldPoint: PointXY, pixels: number) => {
     const canvasPoint = canvasManager.toCanvasCoords(worldPoint.x, worldPoint.y);
-    const shifted = canvasManager.toLogicalCoords(
-      canvasPoint.x + pixels,
-      canvasPoint.y,
-    );
+    const shifted = canvasManager.toLogicalCoords(canvasPoint.x + pixels, canvasPoint.y);
     return Math.hypot(shifted.x - worldPoint.x, shifted.y - worldPoint.y);
   };
 
   // pen and touch share the same "has this gesture drifted far enough to be a
   // drag rather than a tap" test, latched onto the gesture's start record
-  const markIfMovedBeyondTap = (
-    start: { clientX: number; clientY: number; moved: boolean },
-    clientX: number,
-    clientY: number,
-  ) => {
-    start.moved =
-      start.moved ||
-      Math.hypot(clientX - start.clientX, clientY - start.clientY) >
-        DOUBLE_TAP_RADIUS_PX;
+  const markIfMovedBeyondTap = (start: { clientX: number; clientY: number; moved: boolean }, clientX: number, clientY: number) => {
+    start.moved = start.moved || Math.hypot(clientX - start.clientX, clientY - start.clientY) > DOUBLE_TAP_RADIUS_PX;
   };
 
-  const bindEvent = (
-    target: EventTarget,
-    eventName: string,
-    handler: (event: never) => void,
-    options?: boolean | AddEventListenerOptions,
-  ) => {
+  const bindEvent = (target: EventTarget, eventName: string, handler: (event: never) => void, options?: boolean | AddEventListenerOptions) => {
     const listener = handler as EventListener;
     target.addEventListener(eventName, listener, options);
-    cleanupHandlers.push(() =>
-      target.removeEventListener(eventName, listener, options),
-    );
+    cleanupHandlers.push(() => target.removeEventListener(eventName, listener, options));
   };
 
-  const captureHistoryEntry = (
-    state: Pick<State, "vertices" | "objectiveVector" | "completionMode">,
-  ): HistoryEntry => ({
+  const captureHistoryEntry = (state: Pick<State, "vertices" | "objectiveVector" | "completionMode" | "problemMode" | "vertices3" | "objectiveVector3" | "editor3Phase">): HistoryEntry => ({
     vertices: state.vertices.map((v) => ({ x: v.x, y: v.y })),
-    objectiveVector: state.objectiveVector
-      ? { ...state.objectiveVector }
-      : null,
+    objectiveVector: state.objectiveVector ? { ...state.objectiveVector } : null,
     completionMode: state.completionMode,
+    ...(state.problemMode === "3d"
+      ? {
+          vertices3: state.vertices3.map((v) => ({ ...v })),
+          objectiveVector3: state.objectiveVector3 ? { ...state.objectiveVector3 } : null,
+          editor3Phase: state.editor3Phase,
+        }
+      : {}),
   });
 
   const persistPendingDragHistory = () => {
@@ -135,9 +139,7 @@ export function attachCanvasInteractions({
   };
 
   const updatePanControls = () => {
-    canvasManager.set2DPanEnabled(
-      computeDrawingPhase(getState()) === "ready_for_solvers",
-    );
+    canvasManager.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
   };
 
   const restoreViewportControls = () => {
@@ -147,6 +149,7 @@ export function attachCanvasInteractions({
 
   const cleanupDragState = () => {
     pendingDragHistory = null;
+    setCanvasCursor("");
     setState(
       {
         editorInteraction: { kind: "idle" },
@@ -172,25 +175,28 @@ export function attachCanvasInteractions({
     if (options.saveToHistory ?? true) {
       saveHistory();
     }
-    setState(
-      {
-        vertices: result.vertices,
-        completionMode: result.completionMode,
-        interiorPoint: result.interiorPoint,
-        polytope: null as null,
-        inequalitiesMessage: null,
-        highlightIndex: null,
-        ...(options.extraPatch ?? {}),
-      },
-    );
+    const state3D = getState();
+    // Closing the base sketch in 3D problem mode advances the CAD flow to the
+    // extrude phase (the prism planes are built from the closed polygon's
+    // 2D H-rep, which sendPolytope() computes below).
+    const advanceToExtrude = state3D.problemMode === "3d" && state3D.editor3Phase === "sketch" && result.completionMode === "closed";
+    setState({
+      vertices: result.vertices,
+      completionMode: result.completionMode,
+      interiorPoint: result.interiorPoint,
+      polytope: null as null,
+      inequalitiesMessage: null,
+      highlightIndex: null,
+      ...(advanceToExtrude ? { editor3Phase: "extrude" as const, extrudePreviewHeight: null } : {}),
+      ...(options.extraPatch ?? {}),
+    });
+    if (advanceToExtrude) setCurrentMouse(null);
     canvasManager.draw();
     sendPolytope();
     updatePanControls();
   };
 
-  const applyEditorTransition = (
-    transition: ReturnType<typeof getEditorTransition>,
-  ) => {
+  const applyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => {
     if (transition.kind === "reject-nonconvex") {
       alert(transition.reason);
       return;
@@ -207,22 +213,15 @@ export function attachCanvasInteractions({
       if (transition.saveToHistory) {
         saveHistory();
       }
-      setState(
-        { objectiveVector: transition.objectiveVector },
-      );
+      setState({ objectiveVector: transition.objectiveVector });
       sendPolytope();
       canvasManager.draw();
       updatePanControls();
     }
   };
 
-  const applyConstraintDrag = (
-    target: ConstraintDragTarget,
-    logicalCoords: PointXY,
-  ) => {
-    const delta =
-      (logicalCoords.x - target.start.x) * target.normal.x +
-      (logicalCoords.y - target.start.y) * target.normal.y;
+  const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: PointXY) => {
+    const delta = (logicalCoords.x - target.start.x) * target.normal.x + (logicalCoords.y - target.start.y) * target.normal.y;
 
     if (target.operation.kind === "closed-line") {
       const line = target.operation.lines[target.operation.lineIndex];
@@ -231,17 +230,11 @@ export function attachCanvasInteractions({
 
       const shift = delta * length;
       const updatedLines = target.operation.lines.slice();
-      updatedLines[target.operation.lineIndex] = [
-        line[0],
-        line[1],
-        line[2] + shift,
-      ];
+      updatedLines[target.operation.lineIndex] = [line[0], line[1], line[2] + shift];
       const updatedVertices = verticesFromLines(updatedLines);
       if (updatedVertices.length < 2) return;
 
-      setState(
-        { vertices: updatedVertices.map(([x, y]) => ({ x, y })) },
-      );
+      setState({ vertices: updatedVertices.map(([x, y]) => ({ x, y })) });
 
       setState(
         {
@@ -266,13 +259,9 @@ export function attachCanvasInteractions({
       const shiftX = target.normal.x * delta;
       const shiftY = target.normal.y * delta;
       const indices = new Set(operation.vertexIndices);
-      setState(
-        {
-          vertices: getState().vertices.map((v, i) =>
-            indices.has(i) ? { x: v.x + shiftX, y: v.y + shiftY } : v,
-          ),
-        },
-      );
+      setState({
+        vertices: getState().vertices.map((v, i) => (indices.has(i) ? { x: v.x + shiftX, y: v.y + shiftY } : v)),
+      });
       setState(
         {
           editorInteraction: {
@@ -293,21 +282,14 @@ export function attachCanvasInteractions({
     canvasManager.draw();
   };
 
-  const applyDraggingInteraction = (
-    interaction: Extract<EditorInteractionState, { kind: "dragging" }>,
-    logicalCoords: PointXY,
-  ) => {
+  const applyDraggingInteraction = (interaction: Extract<EditorInteractionState, { kind: "dragging" }>, logicalCoords: PointXY) => {
     persistPendingDragHistory();
     const dragTarget = interaction.target;
     if (dragTarget.kind === "point") {
       const pointIndex = dragTarget.index;
-      setState(
-        {
-          vertices: getState().vertices.map((v, i) =>
-            i === pointIndex ? logicalCoords : v,
-          ),
-        },
-      );
+      setState({
+        vertices: getState().vertices.map((v, i) => (i === pointIndex ? logicalCoords : v)),
+      });
       sendPolytope();
       canvasManager.draw();
       return;
@@ -339,10 +321,7 @@ export function attachCanvasInteractions({
     canvasManager.draw();
   };
 
-  const updatePointerPreview = (
-    phase: DrawingPhase,
-    logicalCoords: PointXY,
-  ) => {
+  const updatePointerPreview = (phase: DrawingPhase, logicalCoords: PointXY) => {
     if (phase === "empty" || phase === "sketching_polytope") {
       setCurrentMouse(logicalCoords);
       canvasManager.draw();
@@ -350,15 +329,91 @@ export function attachCanvasInteractions({
     }
 
     if (phase === "awaiting_objective" || phase === "objective_preview") {
-      setState(
-        { currentObjective: logicalCoords },
-      );
+      setState({ currentObjective: logicalCoords });
       canvasManager.draw();
     }
   };
 
+  // world position of the objective arrow's tip (anchored at the solid's centroid)
+  const objective3Tip = (state: State): PointXYZ => {
+    const anchor = objectiveAnchor3();
+    const vector = state.objectiveVector3 ?? { x: 0, y: 0, z: 0 };
+    return { x: anchor.x + vector.x, y: anchor.y + vector.y, z: anchor.z + vector.z };
+  };
+
+  // A vertex that is not a hull corner but lies on a face (just inserted via
+  // double-click) drags along that face's outward normal; hull corners drag
+  // freely on the camera plane.
+  const faceNormalAxisForHandle = (state: State, vertexIndex: number): PointXYZ | undefined => {
+    const rep = state.polytope3;
+    if (!rep || rep.kind !== "bounded") return undefined;
+    if (rep.faces.some((face) => face.vertexIndices.includes(vertexIndex))) return undefined;
+    const v = rep.vertices[vertexIndex]!;
+    for (const face of rep.faces) {
+      const plane = rep.planes[face.planeIndex]!;
+      if (Math.abs(plane[0]! * v.x + plane[1]! * v.y + plane[2]! * v.z - plane[3]!) < 1e-6 * (1 + Math.abs(plane[3]!))) {
+        return { x: plane[0]!, y: plane[1]!, z: plane[2]! };
+      }
+    }
+    return undefined;
+  };
+
+  const getDragStartTarget3D = (state: State, clientX: number, clientY: number) => {
+    if (state.editor3Phase === "extrude") {
+      const base = baseCentroidForSketch();
+      if (base && isExtrudeHandleAtClient(canvasManager, base, state.extrudePreviewHeight ?? 0, clientX, clientY)) {
+        return { kind: "extrude-handle" } as const;
+      }
+      return null;
+    }
+    if (state.editor3Phase === "ready") {
+      if (state.objectiveVector3 && !state.objectiveHidden && isObjective3TipAtClient(canvasManager, objective3Tip(state), clientX, clientY)) {
+        return { kind: "objective3" } as const;
+      }
+      const vertexIndex = findVertex3NearClient(canvasManager, state.vertices3, clientX, clientY);
+      if (vertexIndex >= 0) {
+        return {
+          kind: "vertex3",
+          index: vertexIndex,
+          anchor: { ...state.vertices3[vertexIndex]! },
+          axis: faceNormalAxisForHandle(state, vertexIndex),
+        } as const;
+      }
+      const pick = findFaceAtClient(canvasManager, state, clientX, clientY);
+      if (pick) {
+        const plane = state.planes[pick.planeIndex]!;
+        return {
+          kind: "face3",
+          anchorPoint: pick.point,
+          normal: { x: plane[0]!, y: plane[1]!, z: plane[2]! },
+          anchorD: plane[3]!,
+        } as const;
+      }
+    }
+    return null;
+  };
+
   const handleDragStart = (clientX: number, clientY: number): boolean => {
     const state = getState();
+    // In 3D problem mode only the sketch phase reuses the 2D editor's drag
+    // targets (base vertices on the ground plane); everything later is a
+    // handle/face/objective-tip drag that starts immediately.
+    if (state.problemMode === "3d" && state.editor3Phase !== "sketch") {
+      const target3D = getDragStartTarget3D(state, clientX, clientY);
+      if (!target3D) return false;
+      pendingDragHistory = captureHistoryEntry(state);
+      setState(
+        {
+          editorInteraction: { kind: "dragging", target: target3D },
+          // hull re-derivation reorders planes during face/vertex drags, so
+          // any hover highlight index would go stale mid-drag
+          ...(target3D.kind === "face3" || target3D.kind === "vertex3" ? { hoveredFaceIndex: null } : {}),
+        },
+        { viewportDirty: {} },
+      );
+      canvasManager.setControlsBlocked(true);
+      return true;
+    }
     const target = getDragStartTarget(canvasManager, state, clientX, clientY);
     if (!target) return false;
 
@@ -377,6 +432,8 @@ export function attachCanvasInteractions({
       canvasManager.setControlsBlocked(true);
       return true;
     }
+    // the 2D hit-tester never yields 3D targets; narrow for pending-drag
+    if (target.kind !== "point" && target.kind !== "constraint") return false;
 
     setState(
       {
@@ -396,22 +453,101 @@ export function attachCanvasInteractions({
     return true;
   };
 
+  const applyDragging3D = (target: Extract<State["editorInteraction"], { kind: "dragging" }>["target"], clientX: number, clientY: number) => {
+    persistPendingDragHistory();
+    if (target.kind === "extrude-handle") {
+      const base = baseCentroidForSketch();
+      if (!base) return;
+      const rawHeight = heightFromPointer(canvasManager, base, clientX, clientY);
+      if (rawHeight === null) return;
+      const height = getState().snapToGrid ? Math.round(rawHeight) : rawHeight;
+      setState({ extrudePreviewHeight: height });
+      canvasManager.draw();
+      return;
+    }
+    if (target.kind === "face3") {
+      const targetD = faceOffsetFromPointer(canvasManager, target.anchorPoint, target.normal, target.anchorD, clientX, clientY);
+      if (targetD === null) return;
+      applyFaceOffsetDrag(target.normal, targetD);
+      canvasManager.draw();
+      return;
+    }
+    if (target.kind === "vertex3") {
+      const point = target.axis ? constrainedPointFromPointer(canvasManager, target.anchor, target.axis, clientX, clientY) : objectivePointFromPointer(canvasManager, target.anchor, clientX, clientY);
+      if (!point) return;
+      moveVertex3(target.index, maybeSnapPoint3(point));
+      canvasManager.draw();
+      return;
+    }
+    if (target.kind === "objective3") {
+      const anchor = objectiveAnchor3();
+      const currentVector = getState().objectiveVector3 ?? { x: 0, y: 0, z: 0 };
+      const tip: PointXYZ = { x: anchor.x + currentVector.x, y: anchor.y + currentVector.y, z: anchor.z + currentVector.z };
+      const point = objectivePointFromPointer(canvasManager, tip, clientX, clientY);
+      if (!point) return;
+      setObjectiveVector3(maybeSnapPoint3({ x: point.x - anchor.x, y: point.y - anchor.y, z: point.z - anchor.z }));
+      canvasManager.draw();
+    }
+  };
+
+  // All pointer-move behavior past the sketch phase in 3D problem mode:
+  // handle/face/objective drags, the objective preview, and face hover.
+  // Returns false only when the 2D editor should take over (sketch phase).
+  const handleDragMove3D = (state: State, clientX: number, clientY: number): boolean => {
+    if (state.editor3Phase === "sketch") {
+      setCanvasCursor("crosshair");
+      return false;
+    }
+    const interaction = state.editorInteraction;
+    if (interaction.kind === "dragging" && (interaction.target.kind === "extrude-handle" || interaction.target.kind === "face3" || interaction.target.kind === "vertex3" || interaction.target.kind === "objective3")) {
+      setCanvasCursor("grabbing");
+      applyDragging3D(interaction.target, clientX, clientY);
+      return true;
+    }
+    if (interaction.kind !== "idle") return true;
+    if (state.editor3Phase === "extrude") {
+      const base = baseCentroidForSketch();
+      const overHandle = base !== null && isExtrudeHandleAtClient(canvasManager, base, state.extrudePreviewHeight ?? 0, clientX, clientY);
+      setCanvasCursor(overHandle ? "ns-resize" : "");
+      return true;
+    }
+    if (state.editor3Phase === "objective") {
+      setCanvasCursor("crosshair");
+      const anchor = objectiveAnchor3();
+      const point = objectivePointFromPointer(canvasManager, anchor, clientX, clientY);
+      if (point) {
+        setState({ currentObjective3: maybeSnapPoint3({ x: point.x - anchor.x, y: point.y - anchor.y, z: point.z - anchor.z }) });
+        canvasManager.draw();
+      }
+      return true;
+    }
+    if (state.editor3Phase === "ready") {
+      const overDraggable = (state.objectiveVector3 && !state.objectiveHidden && isObjective3TipAtClient(canvasManager, objective3Tip(state), clientX, clientY)) || findVertex3NearClient(canvasManager, state.vertices3, clientX, clientY) >= 0;
+      const pick = findFaceAtClient(canvasManager, state, clientX, clientY);
+      setCanvasCursor(overDraggable || pick ? "grab" : "");
+      const hovered = pick ? pick.planeIndex : null;
+      if (state.hoveredFaceIndex !== hovered) {
+        setState({ hoveredFaceIndex: hovered });
+        canvasManager.draw();
+      }
+      return true;
+    }
+    return true;
+  };
+
   const handleDragMove = (clientX: number, clientY: number) => {
     const initialState = getState();
+    if (initialState.problemMode === "3d" && handleDragMove3D(initialState, clientX, clientY)) {
+      return;
+    }
     const initialInteraction = initialState.editorInteraction;
     const phaseSnapshot = computeDrawingPhase(initialState);
-    if (
-      initialInteraction.kind === "idle" &&
-      phaseSnapshot === "ready_for_solvers"
-    ) {
+    if (initialInteraction.kind === "idle" && phaseSnapshot === "ready_for_solvers") {
       return;
     }
 
     const logicalCoords = getLogicalFromClient(canvasManager, clientX, clientY);
-    if (
-      initialInteraction.kind === "pending-drag" &&
-      exceedsDragThreshold(initialState, clientX, clientY)
-    ) {
+    if (initialInteraction.kind === "pending-drag" && exceedsDragThreshold(initialState, clientX, clientY)) {
       setState(
         {
           editorInteraction: {
@@ -438,32 +574,44 @@ export function attachCanvasInteractions({
   const handleDragEnd = () => {
     const interaction = getState().editorInteraction;
     if (interaction.kind === "dragging") {
+      const kind = interaction.target.kind;
+      if (kind === "extrude-handle") {
+        // A tall-enough release commits the prism and advances to objective
+        // selection; a tiny one just resets the preview.
+        const height = getState().extrudePreviewHeight ?? 0;
+        if (height >= MIN_EXTRUDE_HEIGHT) {
+          commitExtrusion(height);
+          fitSolidInView();
+        } else setState({ extrudePreviewHeight: null });
+        canvasManager.draw();
+      }
       setState(
         {
           editorInteraction: { kind: "idle" },
           lastCompletedInteraction:
-            interaction.target.kind === "point"
+            kind === "point" || kind === "vertex3"
               ? "dragged-point"
-              : interaction.target.kind === "constraint"
-                ? "dragged-constraint"
-                : interaction.target.kind === "solver-start"
+              : kind === "objective" || kind === "objective3"
+                ? "dragged-objective"
+                : kind === "solver-start"
                   ? "dragged-start"
-                  : "dragged-objective",
+                  : "dragged-constraint",
         },
         { viewportDirty: {} },
       );
       // a moved start marker changes no geometry, and re-sending the polytope
       // would reset any accumulated trace (comparing paths from different
-      // starts is the point of dragging it)
-      if (interaction.target.kind !== "solver-start") sendPolytope();
+      // starts is the point of dragging it); 3D targets already committed
+      // their edits live through editor3
+      if (kind === "point" || kind === "constraint" || kind === "objective") {
+        sendPolytope();
+      }
     }
 
     cleanupDragState();
   };
 
-  const handlePointerRelease = (
-    event: MouseEvent | TouchEvent | PointerEvent,
-  ) => {
+  const handlePointerRelease = (event: MouseEvent | TouchEvent | PointerEvent) => {
     if (getState().isTransitioning3D) return;
 
     const interactionBeforeEnd = getState();
@@ -474,20 +622,36 @@ export function attachCanvasInteractions({
     }
   };
 
-  const stopBlockedPointerEvent = (
-    event: MouseEvent | TouchEvent | PointerEvent,
-  ) => {
+  const stopBlockedPointerEvent = (event: MouseEvent | TouchEvent | PointerEvent) => {
     if (getState().editorInteraction.kind === "idle") return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  const handlePointerStart = (
-    clientX: number,
-    clientY: number,
-    event: MouseEvent | TouchEvent | PointerEvent,
-  ) => {
+  let lastPointerDownScreen: { x: number; y: number } | null = null;
+  let rightPointerDownScreen: { x: number; y: number } | null = null;
+
+  // Right-click (no travel) deletes a solid vertex; right-DRAG is the orbit
+  // gesture, so deletion must wait for mouseup and check pointer travel.
+  const handleRightPointerUp = (event: MouseEvent) => {
+    const start = rightPointerDownScreen;
+    rightPointerDownScreen = null;
+    const state = getState();
+    if (state.problemMode !== "3d" || (state.editor3Phase !== "ready" && state.editor3Phase !== "objective")) return;
+    if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > CLICK_MOVE_TOLERANCE_PX) return;
+    const vertexIndex = findVertex3NearClient(canvasManager, state.vertices3, event.clientX, event.clientY);
+    if (vertexIndex < 0) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (deleteVertex3(vertexIndex)) {
+      saveHistory(state);
+      canvasManager.draw();
+    }
+  };
+
+  const handlePointerStart = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
     if (getState().isTransitioning3D) return;
+    lastPointerDownScreen = { x: clientX, y: clientY };
     const handled = handleDragStart(clientX, clientY);
     if (handled) {
       event.preventDefault();
@@ -495,25 +659,16 @@ export function attachCanvasInteractions({
     }
   };
 
-  const handlePointerMove = (
-    clientX: number,
-    clientY: number,
-    event: MouseEvent | TouchEvent | PointerEvent,
-  ) => {
+  const handlePointerMove = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
     const state = getState();
-    if (
-      state.isTransitioning3D ||
-      (state.isNavigatingViewport && state.editorInteraction.kind === "idle")
-    ) {
+    if (state.isTransitioning3D || (state.isNavigatingViewport && state.editorInteraction.kind === "idle")) {
       return;
     }
     handleDragMove(clientX, clientY);
     stopBlockedPointerEvent(event);
   };
 
-  const handleWindowPointerEnd = (
-    event: MouseEvent | TouchEvent | PointerEvent,
-  ) => {
+  const handleWindowPointerEnd = (event: MouseEvent | TouchEvent | PointerEvent) => {
     if (event.target === canvas) return;
     if (getState().editorInteraction.kind === "idle") return;
     handlePointerRelease(event);
@@ -525,6 +680,15 @@ export function attachCanvasInteractions({
   };
 
   const finishOpenRegion = () => {
+    // open (unbounded) base regions are not supported in 3D problem mode,
+    // but Enter still closes the base sketch (2D muscle memory)
+    if (getState().problemMode === "3d") {
+      const state = getState();
+      if (state.editor3Phase === "sketch" && state.completionMode === "draft" && state.vertices.length >= 3) {
+        applyEditorTransition(getEditorTransition(state, { kind: "click", point: { ...state.vertices[0]! }, closeThreshold: 1 }));
+      }
+      return;
+    }
     const finishResult = getEditorTransition(getState(), {
       kind: "finish-open",
     });
@@ -545,6 +709,8 @@ export function attachCanvasInteractions({
   };
 
   const handleWheel = (event: WheelEvent) => {
+    // in /3d the z axis is a real coordinate; zScale stays pinned
+    if (getState().problemMode === "3d") return;
     const { is3DMode, isTransitioning3D, zScale } = getState();
     const is3D = is3DMode || isTransitioning3D;
     if (!is3D || !event.shiftKey || isTransitioning3D) return;
@@ -553,19 +719,12 @@ export function attachCanvasInteractions({
     event.stopImmediatePropagation();
 
     const zoomFactor = 1.05;
-    const dominantDelta =
-      Math.abs(event.deltaY) > Math.abs(event.deltaX)
-        ? event.deltaY
-        : event.deltaX;
+    const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
     if (dominantDelta === 0) return;
 
-    const effectiveScale =
-      (zScale || DEFAULT_Z_SCALE) *
-      (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
+    const effectiveScale = (zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
     const clampedScale = Math.max(0.01, Math.min(100, effectiveScale));
-    setState(
-      { zScale: clampedScale },
-    );
+    setState({ zScale: clampedScale });
     canvasManager.draw();
   };
 
@@ -573,6 +732,19 @@ export function attachCanvasInteractions({
     if (shouldIgnoreEditEvent()) return;
 
     const state = getState();
+    // In 3D solid phases, vertex deletion happens on right mouseUP with a
+    // travel guard (see handleRightPointerUp) — contextmenu fires at
+    // mouseDOWN on macOS, before an orbit can be told apart from a click,
+    // and deleting there nuked vertices the user only meant to orbit past.
+    // Here we only suppress the browser menu when a vertex is under the
+    // pointer.
+    if (state.problemMode === "3d" && state.editor3Phase !== "sketch") {
+      if (state.editor3Phase !== "ready" && state.editor3Phase !== "objective") return;
+      if (findVertex3NearClient(canvasManager, state.vertices3, event.clientX, event.clientY) < 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
     const local = getLocalFromClient(
       canvasManager,
       event.clientX,
@@ -595,12 +767,7 @@ export function attachCanvasInteractions({
     const {
       geometry: { vertices: displayVertices },
     } = getEditorContext(state);
-    const deleteIndex = findVertexNearLocalPoint(
-      canvasManager,
-      local.x,
-      local.y,
-      displayVertices,
-    );
+    const deleteIndex = findVertexNearLocalPoint(canvasManager, local.x, local.y, displayVertices);
     if (deleteIndex === -1) return;
 
     event.preventDefault();
@@ -616,6 +783,37 @@ export function attachCanvasInteractions({
   const handleDoubleClickAt = (clientX: number, clientY: number) => {
     if (shouldIgnoreEditEvent()) return;
 
+    const state3D = getState();
+    if (state3D.problemMode === "3d" && state3D.editor3Phase !== "sketch") {
+      // double-click a corner to chamfer it, an edge to bevel it, or a face
+      // to insert a draggable vertex on it (pull it out to split the facet)
+      if ((state3D.editor3Phase === "ready" || state3D.editor3Phase === "objective") && state3D.polytope3) {
+        const vertexIndex = findVertex3NearClient(canvasManager, state3D.vertices3, clientX, clientY);
+        if (vertexIndex >= 0) {
+          if (applyVertexChamfer(vertexIndex)) {
+            saveHistory(state3D);
+            canvasManager.draw();
+          }
+          return;
+        }
+        const edges = currentEdges3();
+        const edgeIndex = findEdge3NearClient(canvasManager, state3D.vertices3, edges, clientX, clientY);
+        if (edgeIndex >= 0) {
+          if (applyEdgeBevel(edges[edgeIndex]!)) {
+            saveHistory(state3D);
+            canvasManager.draw();
+          }
+          return;
+        }
+        const pick = findFaceAtClient(canvasManager, state3D, clientX, clientY);
+        if (pick && insertVertex3(pick.point) !== null) {
+          saveHistory(state3D);
+          canvasManager.draw();
+        }
+      }
+      return;
+    }
+
     const logicalMouse = getLogicalFromClient(canvasManager, clientX, clientY);
     const state = getState();
     const {
@@ -630,11 +828,7 @@ export function attachCanvasInteractions({
       return;
     }
 
-    const edgeIndex = findEdgeNearPoint(
-      logicalMouse,
-      displayVertices,
-      displayMode,
-    );
+    const edgeIndex = findEdgeNearPoint(logicalMouse, displayVertices, displayMode);
     if (edgeIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-edge-point",
@@ -666,12 +860,7 @@ export function attachCanvasInteractions({
 
   const registerTap = (clientX: number, clientY: number) => {
     const now = performance.now();
-    if (
-      lastTap &&
-      now - lastTap.time <= DOUBLE_TAP_MS &&
-      Math.hypot(clientX - lastTap.clientX, clientY - lastTap.clientY) <=
-        DOUBLE_TAP_RADIUS_PX
-    ) {
+    if (lastTap && now - lastTap.time <= DOUBLE_TAP_MS && Math.hypot(clientX - lastTap.clientX, clientY - lastTap.clientY) <= DOUBLE_TAP_RADIUS_PX) {
       lastTap = null;
       suppressClickUntil = now + DOUBLE_TAP_MS;
       handleDoubleClickAt(clientX, clientY);
@@ -697,17 +886,31 @@ export function attachCanvasInteractions({
     }
 
     const state = getState();
+    if (state.problemMode === "3d") {
+      // ignore the click that ends a camera pan/orbit
+      if (lastPointerDownScreen && Math.hypot(event.clientX - lastPointerDownScreen.x, event.clientY - lastPointerDownScreen.y) > CLICK_MOVE_TOLERANCE_PX) {
+        return;
+      }
+      if (state.editor3Phase === "objective") {
+        const anchor = objectiveAnchor3();
+        const pointerPoint = objectivePointFromPointer(canvasManager, anchor, event.clientX, event.clientY);
+        const vector = state.currentObjective3 ?? (pointerPoint ? maybeSnapPoint3({ x: pointerPoint.x - anchor.x, y: pointerPoint.y - anchor.y, z: pointerPoint.z - anchor.z }) : null);
+        if (!vector) return;
+        saveHistory();
+        commitObjective3(vector);
+        canvasManager.draw();
+        return;
+      }
+      if (state.editor3Phase !== "sketch") return;
+      // sketch phase falls through to the 2D drafting click path below
+    }
     const { session } = getEditorContext(state);
     const drawingPhase = session.kind === "drafting";
     const objectivePhase = session.kind === "selecting-objective";
     if (state.is3DMode && !drawingPhase && !objectivePhase) return;
 
     if (drawingPhase || objectivePhase) {
-      const point = getLogicalFromClient(
-        canvasManager,
-        event.clientX,
-        event.clientY,
-      );
+      const point = getLogicalFromClient(canvasManager, event.clientX, event.clientY);
       applyEditorTransition(
         getEditorTransition(state, {
           kind: "click",
@@ -718,12 +921,7 @@ export function attachCanvasInteractions({
     }
   };
 
-  const isTextEntryTarget = (target: EventTarget | null) =>
-    target instanceof HTMLElement &&
-    (target.isContentEditable ||
-      target.tagName === "INPUT" ||
-      target.tagName === "TEXTAREA" ||
-      target.tagName === "SELECT");
+  const isTextEntryTarget = (target: EventTarget | null) => target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 
   // "+" lengthens the replay, "-" shortens it — the flashed readout names the
   // value so the direction is unambiguous. It shows on every press, including
@@ -750,25 +948,32 @@ export function attachCanvasInteractions({
     }
     if (event.key === "Enter") {
       // let a focused button or link activate natively
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest("button, a, [role='button']")
-      ) {
+      if (event.target instanceof HTMLElement && event.target.closest("button, a, [role='button']")) {
         return;
       }
       event.preventDefault();
       finishOpenRegion();
     }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
+    // delete the hovered facet of the 3-variable solid
+    if (event.key === "Delete" || event.key === "Backspace" || event.key.toLowerCase() === "x") {
+      const s = getState();
+      if (s.problemMode === "3d" && s.editor3Phase === "ready" && s.hoveredFaceIndex !== null) {
+        event.preventDefault();
+        if (applyFaceRemoval(s.hoveredFaceIndex)) {
+          saveHistory(s);
+          canvasManager.draw();
+        }
+        return;
+      }
+    }
     if (event.key.toLowerCase() === "s") {
       const { snapToGrid } = getState();
       setState({ snapToGrid: !snapToGrid });
     }
     if (event.key.toLowerCase() === "h") {
       const { objectiveHidden } = getState();
-      setState(
-        { objectiveHidden: !objectiveHidden },
-      );
+      setState({ objectiveHidden: !objectiveHidden });
       canvasManager.draw();
     }
     // "=" and "_" are the unshifted/shifted twins of "+" and "-", so both
@@ -790,11 +995,30 @@ export function attachCanvasInteractions({
     canvas,
     "mousedown",
     (event: MouseEvent) => {
+      if (event.button === 2) {
+        rightPointerDownScreen = { x: event.clientX, y: event.clientY };
+        return;
+      }
       if (event.button !== 0) return;
       handlePointerStart(event.clientX, event.clientY, event);
     },
     { capture: true },
   );
+  bindEvent(
+    canvas,
+    "mouseup",
+    (event: MouseEvent) => {
+      if (event.button === 2) handleRightPointerUp(event);
+    },
+    { capture: true },
+  );
+  bindEvent(canvas, "mouseleave", () => {
+    setCanvasCursor("");
+    if (getState().hoveredFaceIndex !== null) {
+      setState({ hoveredFaceIndex: null });
+      canvasManager.draw();
+    }
+  });
   bindEvent(
     canvas,
     "mousemove",
@@ -816,11 +1040,7 @@ export function attachCanvasInteractions({
     canvas,
     "pointerdown",
     (event: PointerEvent) => {
-      if (
-        event.pointerType !== "pen" ||
-        !event.isPrimary ||
-        event.button !== 0
-      ) {
+      if (event.pointerType !== "pen" || !event.isPrimary || event.button !== 0) {
         return;
       }
       activePenStart = {
@@ -845,11 +1065,7 @@ export function attachCanvasInteractions({
     canvas,
     "pointermove",
     (event: PointerEvent) => {
-      if (
-        event.pointerType !== "pen" ||
-        !activePenStart ||
-        activePenStart.pointerId !== event.pointerId
-      ) {
+      if (event.pointerType !== "pen" || !activePenStart || activePenStart.pointerId !== event.pointerId) {
         return;
       }
       markIfMovedBeyondTap(activePenStart, event.clientX, event.clientY);
@@ -861,11 +1077,7 @@ export function attachCanvasInteractions({
     canvas,
     "pointerup",
     (event: PointerEvent) => {
-      if (
-        event.pointerType !== "pen" ||
-        !activePenStart ||
-        activePenStart.pointerId !== event.pointerId
-      ) {
+      if (event.pointerType !== "pen" || !activePenStart || activePenStart.pointerId !== event.pointerId) {
         return;
       }
       const started = activePenStart;
@@ -948,12 +1160,7 @@ export function attachCanvasInteractions({
     },
     { capture: true },
   );
-  bindEvent(
-    window,
-    "touchend",
-    (event: TouchEvent) => handleWindowPointerEnd(event),
-    { passive: false, capture: true },
-  );
+  bindEvent(window, "touchend", (event: TouchEvent) => handleWindowPointerEnd(event), { passive: false, capture: true });
   bindEvent(window, "keydown", handleKeyDown, { capture: true });
   bindEvent(canvas, "wheel", handleWheel, { passive: false, capture: true });
   bindEvent(canvas, "contextmenu", handleContextMenu, { capture: true });
