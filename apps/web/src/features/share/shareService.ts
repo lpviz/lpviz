@@ -1,10 +1,7 @@
 import { getSnapshot, getState, type SolverMode } from "@/features/core/store";
-import {
-  compactSharedAppState,
-  type ShareSettings,
-} from "@/features/share/sharedState";
+import { encodeSharedState } from "@/features/share/compactUrl";
+import type { ShareSettings } from "@/features/share/sharedState";
 import type { SolverControl } from "@/features/solver/solverControls";
-import JSONCrush from "jsoncrush";
 
 export function createShareService(getSolverControls: () => SolverControl[]) {
   const collectShareSettings = (mode: SolverMode): ShareSettings => {
@@ -25,7 +22,9 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       zScale,
       is3DMode,
     } = getSnapshot();
-    const payload = compactSharedAppState({
+    // base64url only, so the whole link survives being pasted into chat,
+    // email or a paper without a linkifier clipping its tail
+    const encoded = encodeSharedState({
       vertices,
       completionMode,
       objective: objectiveVector,
@@ -34,10 +33,9 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       zScale,
       ...(is3DMode ? { is3DMode } : {}),
     });
-    const crushed = JSONCrush.crush(JSON.stringify(payload));
     window.prompt(
       "Share this link:",
-      `${window.location.origin}${window.location.pathname}?s=${encodeURIComponent(crushed)}`,
+      `${window.location.origin}${window.location.pathname}?s=${encoded}`,
     );
   };
   return { share, collectShareSettings };

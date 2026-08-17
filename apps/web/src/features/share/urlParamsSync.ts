@@ -4,6 +4,7 @@ import {
   setState,
   type SolverMode,
 } from "@/features/core/store";
+import { decodeSharedState } from "@/features/share/compactUrl";
 import {
   buildSharedStatePatch,
   expandSharedAppState,
@@ -65,9 +66,17 @@ export function applyUrlParamsOnce({
   };
   if (!params.has("s")) return;
   try {
-    const crushed = params.get("s") ?? "";
-    const data = JSON.parse(JSONCrush.uncrush(crushed));
-    if (data) applySharedState(expandSharedAppState(data) as SharedAppState);
+    const encoded = params.get("s") ?? "";
+    // Links shared before the base64url format are still out in the world —
+    // in chat logs, in the README, in a paper — so JSONCrush stays on the read
+    // path. Anything in the base64url alphabet with a valid version byte is
+    // the current format; everything else falls back.
+    const data =
+      decodeSharedState(encoded) ??
+      (expandSharedAppState(
+        JSON.parse(JSONCrush.uncrush(encoded)),
+      ) as SharedAppState);
+    if (data) applySharedState(data);
     // strip only the consumed param; keep any other query params and the hash
     const url = new URL(window.location.href);
     url.searchParams.delete("s");
