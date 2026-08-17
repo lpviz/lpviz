@@ -15,14 +15,25 @@ import {
 import { applyHugeBounds } from "./sharedLineMaterials";
 
 // Constant screen-width polyline rendering with true fat-line styling at a
-// fraction of the cost of instanced fat lines (Line2): one miter-joined
-// triangle strip per path, extruded in the vertex shader. Line2 expands every
-// segment into a capped quad — at millions of sub-pixel segments that is
-// orders of magnitude of redundant overdraw — while a ribbon rasterizes
-// width x on-screen-length once for the whole path.
+// fraction of the cost of instanced fat lines (Line2): one uncapped quad per
+// segment, extruded in the vertex shader along that segment's own screen-space
+// normal. Line2 expands every segment into a *capped* quad — at millions of
+// sub-pixel segments that is orders of magnitude of redundant overdraw —
+// whereas uncapped quads tile the path edge to edge and rasterize
+// width x on-screen-length once, the same as a continuous ribbon.
 //
-// The path lives in a float texture indexed by gl_VertexID (two vertices per
-// point, no vertex attributes at all), so a path costs one RGBA32F texel per
+// Extruding per segment (rather than sharing two mitered vertices per point,
+// as this did originally) is what makes the width *actually* constant: a
+// shared-vertex joint has to reach the intersection of the two offset edges to
+// keep both segments full width, which grows without bound as a turn
+// approaches a hairpin. Clamping that miter is what made zig-zagging paths —
+// the ellipsoid method's especially, where a third of the joints turn by more
+// than 120° — visibly taper toward every corner. The cost is a small wedge of
+// missing ink on the outside of sharp corners, which at these widths reads as
+// a mitre-less join rather than as a defect.
+//
+// The path lives in a float texture indexed by gl_VertexID (four vertices per
+// segment, no vertex attributes at all), so a path costs one RGBA32F texel per
 // point of GPU memory and geometries share a single static index buffer.
 
 const TEX_WIDTH = 4096;
@@ -62,8 +73,13 @@ vec3 fetchPoint(int i) {
 }
 
 void main() {
-  int i = gl_VertexID >> 1;
-  float side = ((gl_VertexID & 1) == 0) ? 1.0 : -1.0;
+  // four vertices per segment: corners 0,1 sit on the segment's first point,
+  // corners 2,3 on its second; the low bit picks the side of the line
+  int segment = gl_VertexID >> 2;
+  int corner = gl_VertexID & 3;
+  int end = corner >> 1;
+  int i = segment + end;
+  float side = ((corner & 1) == 0) ? 1.0 : -1.0;
 
   ivec2 texel = ivec2(
     clamp(i, 0, pointCount - 1) & ${TEX_WIDTH_MASK},
@@ -72,45 +88,20 @@ void main() {
   vColor = mix(vec3(1.0), texelFetch(colorTex, texel, 0).rgb, useVertexColor);
 
   mat4 mvp = projectionMatrix * modelViewMatrix;
-  vec4 clipCur = mvp * vec4(fetchPoint(i), 1.0);
-  vec4 clipPrev = mvp * vec4(fetchPoint(i - 1), 1.0);
-  vec4 clipNext = mvp * vec4(fetchPoint(i + 1), 1.0);
+  vec4 clipA = mvp * vec4(fetchPoint(segment), 1.0);
+  vec4 clipB = mvp * vec4(fetchPoint(segment + 1), 1.0);
 
   vec2 half_res = 0.5 * resolution;
-  vec2 sCur = clipCur.xy / clipCur.w * half_res;
-  vec2 sPrev = clipPrev.xy / clipPrev.w * half_res;
-  vec2 sNext = clipNext.xy / clipNext.w * half_res;
+  vec2 sA = clipA.xy / clipA.w * half_res;
+  vec2 sB = clipB.xy / clipB.w * half_res;
 
-  vec2 dirA = sCur - sPrev;
-  vec2 dirB = sNext - sCur;
-  float lenA = length(dirA);
-  float lenB = length(dirB);
-  vec2 dA = lenA > 1e-4 ? dirA / lenA : vec2(0.0);
-  vec2 dB = lenB > 1e-4 ? dirB / lenB : vec2(0.0);
-
-  vec2 tangent = dA + dB;
-  float tangentLen = length(tangent);
-  vec2 dir;
-  if (tangentLen > 1e-4) {
-    dir = tangent / tangentLen;
-  } else if (lenA > 1e-4) {
-    dir = dA;
-  } else if (lenB > 1e-4) {
-    dir = dB;
-  } else {
-    dir = vec2(1.0, 0.0);
-  }
-
+  vec2 delta = sB - sA;
+  float len = length(delta);
+  vec2 dir = len > 1e-6 ? delta / len : vec2(1.0, 0.0);
   vec2 normal = vec2(-dir.y, dir.x);
-  vec2 segNormal = lenB > 1e-4
-    ? vec2(-dB.y, dB.x)
-    : (lenA > 1e-4 ? vec2(-dA.y, dA.x) : normal);
-  // miter widening, clamped so hairpin turns bevel instead of spiking
-  float miter = 1.0 / clamp(abs(dot(normal, segNormal)), 0.5, 1.0);
 
-  vec2 offsetPx = normal * (side * 0.5 * linewidth * miter);
-  vec4 clip = clipCur;
-  clip.xy += offsetPx / half_res * clip.w;
+  vec4 clip = (end == 0) ? clipA : clipB;
+  clip.xy += normal * (side * 0.5 * linewidth) / half_res * clip.w;
   gl_Position = clip;
 }
 `;
@@ -135,8 +126,8 @@ void main() {
 `;
 
 // One static index buffer shared by all ribbon geometries: triangles
-// (2i, 2i+1, 2i+2) / (2i+1, 2i+3, 2i+2) stitch the per-point vertex pairs
-// into a strip. Grown geometrically when a longer path appears.
+// (4s, 4s+1, 4s+2) / (4s+1, 4s+3, 4s+2) turn each segment's four corners into
+// a quad. Grown geometrically when a longer path appears.
 let sharedIndex = new BufferAttribute(new Uint32Array(0), 1);
 
 function ensureSharedIndex(pointCount: number): BufferAttribute {
@@ -146,7 +137,7 @@ function ensureSharedIndex(pointCount: number): BufferAttribute {
   const segments = Math.ceil(capacity / 6);
   const indices = new Uint32Array(segments * 6);
   for (let s = 0; s < segments; s++) {
-    const v = 2 * s;
+    const v = 4 * s;
     const o = 6 * s;
     indices[o] = v;
     indices[o + 1] = v + 1;
