@@ -6,6 +6,7 @@ import { ControlsController } from "@/three/controllers/ControlsController";
 import { SharedMaterialsController } from "@/three/controllers/SharedMaterialsController";
 import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
+import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
 import { GridLayer } from "@/three/layers/GridLayer";
 import { IterateHighlightLayer } from "@/three/layers/IterateHighlightLayer";
 import { IterateLineLayer } from "@/three/layers/IterateLineLayer";
@@ -44,6 +45,7 @@ export function mountCanvasGL(
     new PolytopeVerticesLayer(),
     new TraceLineLayer(),
     new TracePointsLayer(),
+    new EllipsoidLayer(),
     new IterateLineLayer(),
     new IteratePointsLayer(),
     new IterateRestartPointsLayer(),

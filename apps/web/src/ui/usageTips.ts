@@ -38,7 +38,7 @@ const USAGE_TIP_SECTIONS: UsageTipSection[] = [
     tips: [
       {
         label: "Run a solver",
-        desc: "pick IPM, PDHG, Simplex, or Central Path",
+        desc: "pick IPM, PDHG, Simplex, Ellipsoid, or Central Path",
       },
       { label: "Replay iterations", desc: "click <strong>Animate</strong>" },
       { label: "Keep a trace", desc: "toggle the <strong>Trace</strong> box" },

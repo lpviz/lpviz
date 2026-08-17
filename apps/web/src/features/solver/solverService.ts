@@ -4,7 +4,9 @@ import {
   getState,
   updateIteratePaths,
   updateIteratePathsWithTrace,
+  type EllipsoidPath,
   type IteratePath,
+  type LocalizingSetPath,
 } from "@/features/core/store";
 import type { ResultTextBlock } from "@/features/solver/types";
 import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
@@ -27,6 +29,8 @@ export function applySolverResult(
       return applySimplexResult(response.result, updateResult);
     case "central":
       return applyCentralPathResult(response.result, updateResult);
+    case "ellipsoid":
+      return applyEllipsoidResult(response.result, updateResult);
   }
 }
 
@@ -50,6 +54,15 @@ type VirtualResultRow =
       objective: number;
       infeasibility: number;
       epsilon: number;
+    }
+  | {
+      kind: "ellipsoid";
+      iteration: number;
+      x: number;
+      y: number;
+      objective: number;
+      infeasibility: number;
+      rho: number;
     };
 
 // Rows materialize lazily through this view so that a 100k-iteration result
@@ -110,6 +123,22 @@ export interface CentralPathResult {
   iterations: Float64Array[];
   logs: string[];
   tsolve: number;
+}
+
+// `E` is the ellipse representation: a flat stride-5 Float64Array on the worker
+// side, an EllipsoidPath once unpacked on the client (see resultPacking).
+export interface EllipsoidResult<I = Float64Array[], E = Float64Array> {
+  iterations: I;
+  ellipsoids: E;
+  // the cutting-plane query points also carry the localizing polyhedron: flat
+  // on the worker side, a LocalizingSetPath once unpacked
+  polygonPoints?: Float64Array;
+  polygonOffsets?: Uint32Array;
+  localizingSets?: LocalizingSetPath | null;
+  header: string;
+  rows: ResultRowsView<Extract<VirtualResultRow, { kind: "ellipsoid" }>>;
+  footer: string;
+  rho?: number[];
 }
 
 function applyIPMResult(
@@ -176,6 +205,24 @@ function applyPDHGResult(
   );
 }
 
+function applyEllipsoidResult(
+  result: EllipsoidResult<IteratePath, EllipsoidPath>,
+  updateResult: (payload: ResultRenderPayload) => void,
+) {
+  // worker-packed results arrive flat with the display z already baked in
+  applyCanonicalIterateResult(
+    {
+      iterations: result.iterations,
+      header: result.header,
+      rows: result.rows,
+      footer: result.footer,
+      ellipsoids: result.ellipsoids,
+      localizingSets: result.localizingSets ?? null,
+    },
+    updateResult,
+  );
+}
+
 function applyCentralPathResult(
   result: CentralPathResult,
   updateResult: (payload: ResultRenderPayload) => void,
@@ -207,12 +254,15 @@ type CanonicalIterateResult = {
   updateTrace?: boolean;
   phases?: number[];
   restartIndices?: number[];
+  ellipsoids?: EllipsoidPath;
+  localizingSets?: LocalizingSetPath | null;
 };
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
-  if (row.kind === "ipm") {
-    return `${fmtInt(row.iteration, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.mu, 10, 1, false)}`;
+  if (row.kind === "ipm" || row.kind === "ellipsoid") {
+    const trailing = row.kind === "ipm" ? row.mu : row.rho;
+    return `${fmtInt(row.iteration, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
   }
   const iterationLabel = row.restart ? `${row.iteration}r` : `${row.iteration}`;
   return `${fmtStr(iterationLabel, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.epsilon, 10, 1, false)}`;
@@ -227,13 +277,27 @@ function applyCanonicalIterateResult(
     updateTrace = true,
     phases,
     restartIndices,
+    ellipsoids,
+    localizingSets,
   }: CanonicalIterateResult,
   updateResult: (payload: ResultRenderPayload) => void,
 ) {
   if (updateTrace) {
-    updateIteratePathsWithTrace(iterations, phases, restartIndices);
+    updateIteratePathsWithTrace(
+      iterations,
+      phases,
+      restartIndices,
+      ellipsoids,
+      localizingSets,
+    );
   } else {
-    updateIteratePaths(iterations, phases, restartIndices);
+    updateIteratePaths(
+      iterations,
+      phases,
+      restartIndices,
+      ellipsoids,
+      localizingSets,
+    );
   }
 
   updateResult(buildIteratePayload({ header, rows, footer }));

@@ -1,3 +1,4 @@
+import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { IteratePath } from "@/features/core/store";
 import type { VecN } from "@lpviz/math/types";
 import type {
@@ -29,7 +30,7 @@ type PackedRowsColumns = {
   y: Float64Array;
   objective: Float64Array;
   infeasibility: Float64Array;
-  // epsilon for pdhg rows, mu for ipm rows
+  // epsilon for pdhg rows, mu for ipm rows, rho for ellipsoid rows
   extra: Float64Array;
   restart?: Uint8Array;
 };
@@ -40,7 +41,7 @@ export type PackedSolverWorkerResponse =
       id: number;
       success: true;
       packed: true;
-      solver: "pdhg" | "ipm";
+      solver: "pdhg" | "ipm" | "ellipsoid";
       iterations: Float64Array;
       stride: number;
       rows: PackedRowsColumns;
@@ -48,6 +49,11 @@ export type PackedSolverWorkerResponse =
       footer?: string;
       phases?: number[];
       restartIndices?: number[];
+      // flat [cx, cy, p11, p12, p22] per iteration; ellipsoid method only
+      ellipsoids?: Float64Array;
+      // localizing polygons, only for the cutting-plane query points
+      polygonPoints?: Float64Array;
+      polygonOffsets?: Uint32Array;
     };
 
 function packIterations(
@@ -193,6 +199,50 @@ export function packSolverResponse(
     };
   }
 
+  if (response.solver === "ellipsoid") {
+    const result = response.result;
+    const objective = request.objective as VecN;
+    const rho = result.rho;
+    const iterations = packIterations(
+      result.iterations,
+      (entry, index) =>
+        objective[0]! * entry[0]! +
+        objective[1]! * entry[1]! +
+        (rho?.[index] ?? 0),
+    );
+    const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false);
+    const wire: PackedSolverWorkerResponse = {
+      id: response.id,
+      success: true,
+      packed: true,
+      solver: "ellipsoid",
+      iterations,
+      stride: 3,
+      rows,
+      header: result.header,
+      footer: result.footer,
+      ellipsoids: result.ellipsoids,
+      polygonPoints: result.polygonPoints,
+      polygonOffsets: result.polygonOffsets,
+    };
+    return {
+      wire,
+      transfer: [
+        iterations.buffer,
+        rows.x.buffer,
+        rows.y.buffer,
+        rows.objective.buffer,
+        rows.infeasibility.buffer,
+        rows.extra.buffer,
+        result.ellipsoids.buffer,
+        // empty buffers are not worth a transfer, and skipping them keeps a
+        // detached zero-length array from ever reaching the client
+        ...(result.polygonPoints?.length ? [result.polygonPoints.buffer] : []),
+        ...(result.polygonOffsets?.length ? [result.polygonOffsets.buffer] : []),
+      ] as ArrayBuffer[],
+    };
+  }
+
   // simplex and central path results are small (few iterations / log strings)
   return { wire: response, transfer: [] };
 }
@@ -237,6 +287,50 @@ export function unpackSolverResponse(
         footer: wire.footer ?? "",
         phases: wire.phases,
         restartIndices: wire.restartIndices,
+      },
+    };
+  }
+
+  if (wire.solver === "ellipsoid") {
+    const packedEllipsoids = wire.ellipsoids ?? new Float64Array(0);
+    const polygonPoints = wire.polygonPoints ?? new Float64Array(0);
+    const polygonOffsets = wire.polygonOffsets ?? new Uint32Array(1);
+    return {
+      id: wire.id,
+      solver: "ellipsoid",
+      success: true,
+      result: {
+        iterations: iteratePath,
+        ellipsoids: {
+          data: packedEllipsoids,
+          count: Math.floor(packedEllipsoids.length / ELLIPSOID_STRIDE),
+          stride: ELLIPSOID_STRIDE,
+        },
+        localizingSets:
+          polygonOffsets.length > 1
+            ? {
+                points: polygonPoints,
+                offsets: polygonOffsets,
+                count: polygonOffsets.length - 1,
+              }
+            : null,
+        header: wire.header,
+        rows: {
+          length: x.length,
+          at: (index: number) =>
+            index >= 0 && index < x.length
+              ? {
+                  kind: "ellipsoid" as const,
+                  iteration: index + 1,
+                  x: x[index]!,
+                  y: y[index]!,
+                  objective: objective[index]!,
+                  infeasibility: infeasibility[index]!,
+                  rho: extra[index]!,
+                }
+              : undefined,
+        },
+        footer: wire.footer ?? "",
       },
     };
   }

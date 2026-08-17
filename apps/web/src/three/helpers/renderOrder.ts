@@ -23,6 +23,7 @@ export const RENDER_ORDER = {
   traceLine: 5,
 
   tracePoints: 14,
+  ellipsoid: 18,
   iterateLine: 20,
   iteratePoints: 22,
   iterateRestartPoints: 23,

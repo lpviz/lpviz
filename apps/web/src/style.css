@@ -1435,6 +1435,45 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
   margin-bottom: 0;
 }
 
+/* an option that does not apply to the current selection stays visible, so its
+   absence from the run is legible rather than mysterious */
+.controlPanel .settings-checkbox-row label.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.controlPanel select {
+  font-family: "JuliaMono", monospace;
+  font-size: 0.95rem;
+  width: 100%;
+  margin-top: 5px;
+  margin-bottom: 10px;
+  padding: 4px 6px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+/* label and control side by side, for controls narrow enough to share a line */
+.controlPanel .settings-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.controlPanel .settings-inline-row label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.controlPanel .settings-inline-row select {
+  width: auto;
+  margin: 0;
+}
+
 .objective-rotation {
   margin-top: 1em;
 }

@@ -3,6 +3,7 @@ import {
   computeDrawingPhase,
   getState,
   on,
+  type EllipsoidQueryPoint,
   type SolverMode,
   type SolverSettings,
   type State,
@@ -41,16 +42,23 @@ const LEAVING_RULE_LABELS: Record<LeavingRule, string> = {
   first: "Lowest index",
   last: "Highest index",
 };
-const ENTERING_RULE_OPTIONS = ENTERING_RULES.map((value) => ({
-  value,
-  text: ENTERING_RULE_LABELS[value],
-}));
-const LEAVING_RULE_OPTIONS = LEAVING_RULES.map((value) => ({
-  value,
-  text: LEAVING_RULE_LABELS[value],
-}));
+const ENTERING_RULE_OPTIONS = ENTERING_RULES.map(
+  (value) => [value, ENTERING_RULE_LABELS[value]] as const,
+);
+const LEAVING_RULE_OPTIONS = LEAVING_RULES.map(
+  (value) => [value, LEAVING_RULE_LABELS[value]] as const,
+);
+const QUERY_POINT_OPTIONS = [
+  ["ellipsoid", "Ellipsoid"],
+  ["chebyshev", "Chebyshev"],
+  ["analytic", "Analytic"],
+  ["volumetric", "Volumetric"],
+] as const satisfies readonly (readonly [EllipsoidQueryPoint, string])[];
 
-type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG">;
+type MaxitSettingKey = Extract<
+  keyof SolverSettings,
+  "maxitIPM" | "maxitPDHG" | "maxitEllipsoid"
+>;
 type SettingsSync = (state: State) => void;
 type SettingField = HTMLInputElement | HTMLSelectElement;
 
@@ -79,19 +87,16 @@ function checkbox(id: string, onChange: (v: boolean) => void) {
   i.addEventListener("change", () => onChange(i.checked));
   return i;
 }
-function dropdown<T extends string>(
+function select<T extends string>(
   id: string,
-  options: readonly { value: T; text: string }[],
-  initial: T,
+  options: readonly (readonly [T, string])[],
   onChange: (v: T) => void,
 ) {
-  const s = el("select", {
-    attrs: { id, autocomplete: "off" },
-  }) as HTMLSelectElement;
-  for (const opt of options) {
-    s.append(el("option", { attrs: { value: opt.value }, text: opt.text }));
-  }
-  s.value = initial;
+  const s = el("select", { attrs: { id, autocomplete: "off" } }, [
+    ...options.map(([value, label]) =>
+      el("option", { attrs: { value }, text: label }),
+    ),
+  ]) as HTMLSelectElement;
   s.addEventListener("change", () => onChange(s.value as T));
   return s;
 }
@@ -126,6 +131,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   mkButton("ipm", "IPM", "ipmButton");
   mkButton("pdhg", "PDHG");
   mkButton("simplex", "Simplex");
+  mkButton("ellipsoid", "Ellipsoid");
   mkButton("central", "Central Path", "iteratePathButton");
 
   const settings = el("div");
@@ -326,30 +332,114 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       };
     }
 
+    if (mode === "ellipsoid") {
+      const scaleValue = el("span", {
+        text: st.ellipsoidInitialScale.toFixed(2),
+      });
+      const scale = range(
+        "ellipsoidInitialScaleSlider",
+        "1.05",
+        "4",
+        "0.05",
+        (v) => {
+          const next = parseFloat(v);
+          scaleValue.textContent = next.toFixed(2);
+          ctx.actions.updateSolverSetting("ellipsoidInitialScale", next);
+          ctx.actions.recomputeIfModeActive("ellipsoid");
+        },
+      );
+      scale.value = String(st.ellipsoidInitialScale);
+      const maxit = renderMaxit(
+        "maxitSliderEllipsoid",
+        st.maxitEllipsoid,
+        "maxitEllipsoid",
+        "ellipsoid",
+      );
+      sec.append(
+        labeled(
+          "Initial ellipsoid size:",
+          "ellipsoidInitialScaleSlider",
+          scale,
+          scaleValue,
+          true,
+        ),
+        maxit.element,
+      );
+      const query = select(
+        "ellipsoidQueryPoint",
+        QUERY_POINT_OPTIONS,
+        (v) => {
+          ctx.actions.updateSolverSetting("ellipsoidQueryPoint", v);
+          ctx.actions.recomputeIfModeActive("ellipsoid");
+        },
+      );
+      query.value = st.ellipsoidQueryPoint;
+      sec.append(
+        el("div", { className: "settings-inline-row" }, [
+          el("label", {
+            attrs: { for: "ellipsoidQueryPoint" },
+            text: "Query point:",
+          }),
+          query,
+        ]),
+      );
+
+      const row = el("div", { className: "settings-checkbox-row" });
+      const checkboxes = (
+        [
+          ["ellipsoidDeepCuts", "Deep cuts"],
+          ["ellipsoidParallelCuts", "Parallel cuts"],
+          ["ellipsoidRayShoot", "Ray shoot"],
+        ] as const
+      ).map(([key, label]) => {
+        const cb = checkbox(key, (v) => {
+          ctx.actions.updateSolverSetting(key, v);
+          ctx.actions.recomputeIfModeActive("ellipsoid");
+        });
+        cb.checked = st[key];
+        const wrap = el("label", { attrs: { for: key }, text: label + " " }, [
+          cb,
+        ]);
+        row.append(wrap);
+        return [key, cb, wrap] as const;
+      });
+      sec.append(row);
+      return (s) => {
+        const next = s.solverSettings;
+        scaleValue.textContent = next.ellipsoidInitialScale.toFixed(2);
+        setInputValue(scale, String(next.ellipsoidInitialScale));
+        maxit.sync(next);
+        if (document.activeElement !== query) {
+          query.value = next.ellipsoidQueryPoint;
+        }
+        // the cut shape options belong to the ellipsoid update itself; the
+        // other query points localize with a polyhedron and never form one
+        const cutsApply = next.ellipsoidQueryPoint === "ellipsoid";
+        for (const [key, cb, wrap] of checkboxes) {
+          cb.checked = next[key];
+          const applies = cutsApply || key === "ellipsoidRayShoot";
+          cb.disabled = !applies;
+          wrap.classList.toggle("is-disabled", !applies);
+        }
+      };
+    }
+
     if (mode === "simplex") {
       const dual = checkbox("simplexDualMode", (v) => {
         ctx.actions.updateSolverSetting("simplexDualMode", v);
         ctx.actions.recomputeIfModeActive("simplex");
       });
       dual.checked = st.simplexDualMode;
-      const entering = dropdown(
-        "simplexEnteringRule",
-        ENTERING_RULE_OPTIONS,
-        st.simplexEnteringRule,
-        (v) => {
-          ctx.actions.updateSolverSetting("simplexEnteringRule", v);
-          ctx.actions.recomputeIfModeActive("simplex");
-        },
-      );
-      const leaving = dropdown(
-        "simplexLeavingRule",
-        LEAVING_RULE_OPTIONS,
-        st.simplexLeavingRule,
-        (v) => {
-          ctx.actions.updateSolverSetting("simplexLeavingRule", v);
-          ctx.actions.recomputeIfModeActive("simplex");
-        },
-      );
+      const entering = select("simplexEnteringRule", ENTERING_RULE_OPTIONS, (v) => {
+        ctx.actions.updateSolverSetting("simplexEnteringRule", v);
+        ctx.actions.recomputeIfModeActive("simplex");
+      });
+      entering.value = st.simplexEnteringRule;
+      const leaving = select("simplexLeavingRule", LEAVING_RULE_OPTIONS, (v) => {
+        ctx.actions.updateSolverSetting("simplexLeavingRule", v);
+        ctx.actions.recomputeIfModeActive("simplex");
+      });
+      leaving.value = st.simplexLeavingRule;
       sec.append(
         el("div", { className: "settings-checkbox-row" }, [
           el(
@@ -428,7 +518,13 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   }
 
   function render(s: State) {
-    for (const mode of ["ipm", "pdhg", "simplex", "central"] as SolverMode[]) {
+    for (const mode of [
+      "ipm",
+      "pdhg",
+      "simplex",
+      "ellipsoid",
+      "central",
+    ] as SolverMode[]) {
       const ui = getSolverButtonUiState(s, mode);
       const b = buttons.get(mode)!;
       b.className = ui.active ? "button-active" : "";

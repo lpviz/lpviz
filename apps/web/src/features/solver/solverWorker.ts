@@ -1,13 +1,20 @@
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import { centralPath } from "@lpviz/solver-engine/centralPath";
+import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
+import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
 import { simplex, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
 import { packSolverResponse } from "./resultPacking";
 
-import type { IteratePath } from "@/features/core/store";
+import type {
+  EllipsoidPath,
+  EllipsoidQueryPoint,
+  IteratePath,
+} from "@/features/core/store";
 import type {
   CentralPathResult,
+  EllipsoidResult,
   IPMResult,
   PDHGResult,
   SimplexResult,
@@ -50,22 +57,48 @@ export type SolverWorkerPayload =
       lines: Lines;
       objective: VecN;
       niter: number;
+    }
+  | {
+      solver: "ellipsoid";
+      vertices: Vertices;
+      lines: Lines;
+      objective: VecN;
+      maxit: number;
+      deepCuts: boolean;
+      parallelCuts: boolean;
+      rayShoot: boolean;
+      queryPoint: EllipsoidQueryPoint;
+      initialScale: number;
     };
 
 type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 
-// `I` is the iterates representation for pdhg/ipm: the worker emits one
-// Float64Array per iterate (SolverEngineSuccessResponse), then packs/transfers
-// so the client receives one flat IteratePath (SolverWorkerSuccessResponse).
-// simplex/central are small and pass through unchanged.
-type SolverSuccessResponse<I> =
+// `I` is the iterates representation for pdhg/ipm/ellipsoid: the worker emits
+// one Float64Array per iterate (SolverEngineSuccessResponse), then
+// packs/transfers so the client receives one flat IteratePath
+// (SolverWorkerSuccessResponse). `E` is the same split for the ellipsoid
+// method's per-iteration ellipses. simplex/central are small and pass through
+// unchanged.
+type SolverSuccessResponse<I, E> =
   | { id: number; solver: "ipm"; success: true; result: IPMResult<I> }
   | { id: number; solver: "simplex"; success: true; result: SimplexResult }
   | { id: number; solver: "pdhg"; success: true; result: PDHGResult<I> }
-  | { id: number; solver: "central"; success: true; result: CentralPathResult };
+  | { id: number; solver: "central"; success: true; result: CentralPathResult }
+  | {
+      id: number;
+      solver: "ellipsoid";
+      success: true;
+      result: EllipsoidResult<I, E>;
+    };
 
-export type SolverEngineSuccessResponse = SolverSuccessResponse<Float64Array[]>;
-export type SolverWorkerSuccessResponse = SolverSuccessResponse<IteratePath>;
+export type SolverEngineSuccessResponse = SolverSuccessResponse<
+  Float64Array[],
+  Float64Array
+>;
+export type SolverWorkerSuccessResponse = SolverSuccessResponse<
+  IteratePath,
+  EllipsoidPath
+>;
 
 type SolverWorkerErrorResponse = {
   id: number;
@@ -157,6 +190,38 @@ async function runIPM(
   });
 }
 
+// The ellipsoid mode covers a family: the ellipsoid method proper, plus the
+// cutting-plane methods that localize with a polyhedron and differ in which
+// interior point they query. They return the same shape, so everything
+// downstream — packing, the log, the drawn ellipse — is shared.
+async function runEllipsoid(
+  vertices: Vertices,
+  lines: Lines,
+  objective: VecN,
+  maxit: number,
+  deepCuts: boolean,
+  parallelCuts: boolean,
+  rayShoot: boolean,
+  queryPoint: EllipsoidQueryPoint,
+  initialScale: number,
+) {
+  return wrapSolverCall("Ellipsoid", () => {
+    const shared = {
+      ...DEFAULT_BASE_OPTIONS,
+      maxit,
+      rayShoot,
+      initialScale,
+    };
+    return queryPoint === "ellipsoid"
+      ? ellipsoid(vertices, lines, objective, {
+          ...shared,
+          deepCuts,
+          parallelCuts,
+        })
+      : cuttingPlane(vertices, lines, objective, { ...shared, queryPoint });
+  });
+}
+
 async function runPDHG(
   lines: Lines,
   objective: VecN,
@@ -234,6 +299,24 @@ async function executeSolver(
         data.tau,
         data.colorByBasis,
         data.startPoint,
+      ),
+    };
+  }
+  if (data.solver === "ellipsoid") {
+    return {
+      id,
+      solver: "ellipsoid",
+      success: true,
+      result: await runEllipsoid(
+        data.vertices,
+        data.lines,
+        data.objective,
+        data.maxit,
+        data.deepCuts,
+        data.parallelCuts,
+        data.rayShoot,
+        data.queryPoint,
+        data.initialScale,
       ),
     };
   }

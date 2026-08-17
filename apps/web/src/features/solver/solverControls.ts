@@ -198,6 +198,52 @@ export function createSolverControls({
       },
     },
     {
+      mode: "ellipsoid",
+      isSelectable: hasFeasibleRegion,
+      getRunBlock: (s) =>
+        isEmptyRegion(s)
+          ? messageBlocks(
+              "No valid region",
+              "The ellipsoid method requires a feasible region.",
+            )
+          : null,
+      collectShareSettings: () =>
+        collectShared([
+          "maxitEllipsoid",
+          "ellipsoidDeepCuts",
+          "ellipsoidParallelCuts",
+          "ellipsoidRayShoot",
+          "ellipsoidQueryPoint",
+          "ellipsoidInitialScale",
+        ]),
+      applySharedSettings: (settings) =>
+        applyShared(settings, [
+          "maxitEllipsoid",
+          "ellipsoidDeepCuts",
+          "ellipsoidParallelCuts",
+          "ellipsoidRayShoot",
+          "ellipsoidQueryPoint",
+          "ellipsoidInitialScale",
+        ]),
+      buildRequest: (s) => {
+        const base = objectiveBase(s);
+        if (!base || !hasPolytopeLines(s.polytope)) return null;
+        const ss = s.solverSettings;
+        return {
+          solver: "ellipsoid",
+          // the drawn region bounds the initial ellipsoid
+          vertices: s.polytope.vertices,
+          ...base,
+          maxit: Math.max(1, ss.maxitEllipsoid || 1),
+          deepCuts: ss.ellipsoidDeepCuts,
+          parallelCuts: ss.ellipsoidParallelCuts,
+          rayShoot: ss.ellipsoidRayShoot,
+          queryPoint: ss.ellipsoidQueryPoint,
+          initialScale: ss.ellipsoidInitialScale,
+        };
+      },
+    },
+    {
       mode: "pdhg",
       isSelectable: hasFeasibleRegion,
       getRunBlock: () => null,
