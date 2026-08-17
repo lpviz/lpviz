@@ -15,14 +15,6 @@ const FEASIBILITY_TOLERANCE = 1e-9;
 const RAY_BLOCKING_TOLERANCE = 1e-12;
 // closer than this to the last iterate, the incumbent is that iterate
 const INCUMBENT_MERGE_TOLERANCE = 1e-9;
-// a constraint must lean against the cut normal to bound its far side at all
-const PARALLEL_ALIGNMENT_TOLERANCE = 1e-12;
-const PARALLEL_DEGENERATE_TOLERANCE = 1e-12;
-
-// volume of an ellipsoid with the given squared semi-axes, up to the constant
-const cutVolume = (shape: { aSq: number; bSq: number }, n: number) =>
-  Math.sqrt(shape.aSq) * Math.pow(Math.sqrt(shape.bSq), n - 1);
-
 // [cx, cy, p11, p12, p22] per iteration: the center and the symmetric shape
 // matrix P of E = { x : (x - c)' P^-1 (x - c) <= 1 }. lpviz LPs have n = 2, so
 // this is the ellipse itself; for n > 2 it is the (x, y) block of P.
@@ -42,7 +34,6 @@ interface EllipsoidOptions {
   maxit: number;
   tol: number;
   deepCuts: boolean;
-  parallelCuts: boolean;
   rayShoot: boolean;
   initialScale: number;
   verbose: boolean;
@@ -176,7 +167,6 @@ export function ellipsoid(
     maxit,
     tol,
     deepCuts,
-    parallelCuts,
     rayShoot,
     initialScale,
     verbose,
@@ -209,7 +199,6 @@ export function ellipsoid(
   const g = new Float64Array(n);
   const Pg = new Float64Array(n);
   const nextP = new Float64Array(n * n);
-  const farScratch = new Float64Array(n);
 
   const best = new Float64Array(n);
   let bestObjective = -Infinity;
@@ -309,35 +298,16 @@ export function ellipsoid(
       break;
     }
 
-    // The single deep cut, as squared semi-axes along and across the cut normal
-    // (the same parameterization the parallel cut produces, so the two can be
-    // compared on volume and the better one taken).
+    const tau = (1 + n * alpha) / (n + 1);
     const delta = ((n * n) / (n * n - 1)) * (1 - alpha * alpha);
     const sigma = (2 * (1 + n * alpha)) / ((n + 1) * (1 + alpha));
-    let shape = {
-      tau: -(1 + n * alpha) / (n + 1),
-      aSq: delta * (1 - sigma),
-      bSq: delta,
-    };
-
-    if (parallelCuts) {
-      const gamma = farSideBound(A, b, P, center, g, gPg, n, farScratch);
-      if (gamma < 1 && gamma > alpha) {
-        const twoSided = parallelCutShape(alpha, gamma, n);
-        if (twoSided && cutVolume(twoSided, n) < cutVolume(shape, n)) {
-          shape = twoSided;
-        }
-      }
-    }
-
     const invGPg = 1 / gPg;
-    const step = shape.tau / Math.sqrt(gPg);
-    const crossTerm = (shape.aSq - shape.bSq) * invGPg;
+    const step = tau / Math.sqrt(gPg);
 
-    for (let j = 0; j < n; j++) center[j] += step * Pg[j]!;
+    for (let j = 0; j < n; j++) center[j] -= step * Pg[j]!;
     for (let j = 0; j < n; j++) {
       for (let k = j; k < n; k++) {
-        const value = shape.bSq * P[j * n + k]! + crossTerm * Pg[j]! * Pg[k]!;
+        const value = delta * (P[j * n + k]! - sigma * Pg[j]! * Pg[k]! * invGPg);
         nextP[j * n + k] = value;
         nextP[k * n + j] = value;
       }
@@ -461,118 +431,6 @@ function initialEllipsoid(vertices: Vertices, n: number, scale: number) {
     P[j * n + j] = semiAxis * semiAxis;
   }
   return { center, P };
-}
-
-/**
- * The tightest lower bound on `g'x` that any *other* constraint implies over
- * the current ellipsoid, expressed as a depth `gamma` on the far side of the
- * cut (so the retained slab is `-gamma <= u'y <= -alpha` once the ellipsoid is
- * mapped to the unit ball). Infinity when nothing bounds that side.
- *
- * For a constraint exactly anti-parallel to `g` this is the constraint itself.
- * For any other constraint with `a_j'g < 0`, splitting `a_j = -lambda g + w`
- * still gives a valid bound once `w'x` is bounded over the ellipsoid, which is
- * where the `sqrt(w'Pw)` term comes from — weaker the less parallel it is, and
- * exact when `w` vanishes.
- */
-function farSideBound(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  P: Float64Array,
-  center: Float64Array,
-  g: Float64Array,
-  gPg: number,
-  n: number,
-  scratch: Float64Array,
-) {
-  let gg = 0;
-  let gAtCenter = 0;
-  for (let j = 0; j < n; j++) {
-    gg += g[j]! * g[j]!;
-    gAtCenter += g[j]! * center[j]!;
-  }
-  if (!(gg > 0)) return Infinity;
-
-  const sqrtGPg = Math.sqrt(gPg);
-  let best = Infinity;
-  for (let i = 0; i < A.rows; i++) {
-    const offset = i * n;
-    let alignment = 0;
-    for (let j = 0; j < n; j++) alignment += A.data[offset + j]! * g[j]!;
-    if (alignment >= -PARALLEL_ALIGNMENT_TOLERANCE) continue;
-
-    const lambda = -alignment / gg;
-    let orthogonalAtCenter = 0;
-    for (let j = 0; j < n; j++) {
-      scratch[j] = A.data[offset + j]! + lambda * g[j]!;
-      orthogonalAtCenter += scratch[j]! * center[j]!;
-    }
-    const spread = Math.sqrt(Math.max(0, quadraticForm(P, scratch, n)));
-    // a_j'x <= b_j  =>  g'x >= (w'x - b_j) / lambda, worst case over the ellipsoid
-    const lowerBound = (orthogonalAtCenter - spread - b[i]!) / lambda;
-    const gamma = (gAtCenter - lowerBound) / sqrtGPg;
-    if (gamma < best) best = gamma;
-  }
-  return best;
-}
-
-/**
- * The minimum-volume ellipsoid containing the unit ball intersected with the
- * slab `-gamma <= u'y <= -alpha`, as the offset `tau` of its center along `u`
- * and its squared semi-axes along and across `u`.
- *
- * Derivation: by symmetry about the `u` axis the optimal ellipsoid is
- * `(t - tau)^2/a^2 + |y_perp|^2/b^2 <= 1`, and it must contain the ball's
- * cross-section at both cut levels, which pins two of the three unknowns:
- *
- *   (h - tau)^2/a^2 + (1 - h^2)/b^2 = 1   at h = -alpha and h = -gamma
- *
- * Subtracting those gives `tau = (s/2)(1 - r)` for `r = a^2/b^2`, `s` the sum
- * of the two levels; substituting back leaves one free parameter, and
- * minimizing `a * b^(n-1)` over it reduces to a quadratic in `P = d + rs`.
- * Verified against brute-force containment and against the single-cut formula
- * in the limit (see the tests).
- *
- * Worth knowing before reaching for this: it reliably produces a smaller
- * ellipsoid every single step and still tends to converge *slower* here. It
- * minimizes volume, but what drives termination is `rho`, the width along the
- * objective. Squeezing across a thin slab leaves a pancake whose long axis —
- * and so whose `rho` — barely moves, while the single deep cut shrinks more
- * evenly. On the corridor region that is 43 iterations against 34. Parallel
- * cuts pay off for the feasibility version of the method, where volume is the
- * thing being reduced; with a sliding objective they optimize the wrong
- * functional, which is why they are off by default.
- */
-function parallelCutShape(alpha: number, gamma: number, n: number) {
-  const d = gamma - alpha;
-  const s = -(alpha + gamma);
-  if (!(d > 0) || Math.abs(s) < PARALLEL_DEGENERATE_TOLERANCE) return null;
-
-  const oneMinusAlphaSquared = 1 - alpha * alpha;
-  const a2 = s * (1 + n);
-  const a1 = 4 * oneMinusAlphaSquared + 2 * n * (gamma * gamma - alpha * alpha);
-  const a0 = -4 * d * oneMinusAlphaSquared;
-
-  const discriminant = a1 * a1 - 4 * a2 * a0;
-  if (!(discriminant >= 0)) return null;
-  const root = Math.sqrt(discriminant);
-
-  let bestVolume = Infinity;
-  let best: { tau: number; aSq: number; bSq: number } | null = null;
-  for (const p of [(-a1 + root) / (2 * a2), (-a1 - root) / (2 * a2)]) {
-    const r = (p - d) / s;
-    if (!(r > 0) || !Number.isFinite(r)) continue;
-    const bSq = (p * p) / (4 * r) + oneMinusAlphaSquared;
-    if (!(bSq > 0)) continue;
-    const aSq = r * bSq;
-    if (!(aSq > 0)) continue;
-    const volume = Math.sqrt(aSq) * Math.pow(Math.sqrt(bSq), n - 1);
-    if (volume < bestVolume) {
-      bestVolume = volume;
-      best = { tau: (s / 2) * (1 - r), aSq, bSq };
-    }
-  }
-  return best;
 }
 
 /**

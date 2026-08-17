@@ -65,7 +65,6 @@ export type SolverWorkerPayload =
       objective: VecN;
       maxit: number;
       deepCuts: boolean;
-      parallelCuts: boolean;
       rayShoot: boolean;
       queryPoint: EllipsoidQueryPoint;
       initialScale: number;
@@ -200,7 +199,6 @@ async function runEllipsoid(
   objective: VecN,
   maxit: number,
   deepCuts: boolean,
-  parallelCuts: boolean,
   rayShoot: boolean,
   queryPoint: EllipsoidQueryPoint,
   initialScale: number,
@@ -216,7 +214,6 @@ async function runEllipsoid(
       ? ellipsoid(vertices, lines, objective, {
           ...shared,
           deepCuts,
-          parallelCuts,
         })
       : cuttingPlane(vertices, lines, objective, { ...shared, queryPoint });
   });
@@ -313,7 +310,6 @@ async function executeSolver(
         data.objective,
         data.maxit,
         data.deepCuts,
-        data.parallelCuts,
         data.rayShoot,
         data.queryPoint,
         data.initialScale,

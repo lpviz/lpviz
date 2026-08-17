@@ -63,7 +63,6 @@ const SETTINGS: readonly SettingCodec[] = [
   { key: "centralPathIter", kind: "int" },
   { key: "maxitEllipsoid", kind: "int" },
   { key: "ellipsoidDeepCuts", kind: "bool" },
-  { key: "ellipsoidParallelCuts", kind: "bool" },
   { key: "ellipsoidRayShoot", kind: "bool" },
   { key: "ellipsoidQueryPoint", kind: "enum", values: QUERY_POINTS },
   { key: "ellipsoidInitialScale", kind: "scaled", scale: 1e4 },

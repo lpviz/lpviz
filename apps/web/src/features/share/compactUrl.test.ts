@@ -92,7 +92,7 @@ describe("compact share links", () => {
       simplexDualMode: true,
       pdhgColorByBasis: true,
       ellipsoidQueryPoint: "analytic" as const,
-      ellipsoidParallelCuts: true,
+      ellipsoidDeepCuts: false,
       ellipsoidRayShoot: false,
       ellipsoidInitialScale: 3.25,
       objectiveRotationSpeed: 2.5,
@@ -103,7 +103,7 @@ describe("compact share links", () => {
     expect(decoded.settings.simplexDualMode).toBe(true);
     expect(decoded.settings.pdhgColorByBasis).toBe(true);
     expect(decoded.settings.ellipsoidQueryPoint).toBe("analytic");
-    expect(decoded.settings.ellipsoidParallelCuts).toBe(true);
+    expect(decoded.settings.ellipsoidDeepCuts).toBe(false);
     expect(decoded.settings.ellipsoidRayShoot).toBe(false);
     expect(decoded.settings.ellipsoidInitialScale).toBeCloseTo(3.25, 4);
     expect(decoded.settings.objectiveRotationSpeed).toBeCloseTo(2.5, 4);

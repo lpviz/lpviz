@@ -320,7 +320,6 @@ describe("ellipsoid", () => {
     maxit: 500,
     tol: 1e-6,
     deepCuts: true,
-    parallelCuts: false,
     rayShoot: true,
     initialScale: 1.5,
     verbose: false,

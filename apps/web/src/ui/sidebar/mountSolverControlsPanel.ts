@@ -388,7 +388,6 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       const checkboxes = (
         [
           ["ellipsoidDeepCuts", "Deep cuts"],
-          ["ellipsoidParallelCuts", "Parallel cuts"],
           ["ellipsoidRayShoot", "Ray shoot"],
         ] as const
       ).map(([key, label]) => {
