@@ -21,6 +21,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       solverMode,
       zScale,
       is3DMode,
+      solverStartPoint,
     } = getSnapshot();
     // base64url only, so the whole link survives being pasted into chat,
     // email or a paper without a linkifier clipping its tail
@@ -30,6 +31,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       objective: objectiveVector,
       solverMode,
       settings: collectShareSettings(solverMode),
+      solverStartPoint,
       zScale,
       ...(is3DMode ? { is3DMode } : {}),
     });

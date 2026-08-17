@@ -25,6 +25,7 @@ describe("compact share links", () => {
       ...BASE,
       zScale: 0.1,
       is3DMode: true,
+      solverStartPoint: { x: -1.75, y: 0.5 },
       settings: {
         maxitEllipsoid: 12345,
         ellipsoidQueryPoint: "volumetric",
@@ -124,6 +125,38 @@ describe("compact share links", () => {
     expect(decoded.zScale).toBeCloseTo(1.75, 3);
     const flat = roundTrip({ ...BASE })!;
     expect(flat.is3DMode).toBeUndefined();
+  });
+
+  test("round-trips a dragged solver start point", () => {
+    const decoded = roundTrip({
+      ...BASE,
+      solverMode: "simplex",
+      solverStartPoint: { x: -3.5017, y: 2.25 },
+    })!;
+    expect(decoded.solverStartPoint!.x).toBeCloseTo(-3.5017, 4);
+    expect(decoded.solverStartPoint!.y).toBeCloseTo(2.25, 4);
+  });
+
+  test("an untouched start point costs nothing and stays null", () => {
+    // null means "wherever this solver starts by default", which the receiving
+    // build works out for itself — pinning it would freeze today's default into
+    // the link
+    const withNull = encodeSharedState({ ...BASE, solverStartPoint: null });
+    expect(withNull).toBe(encodeSharedState(BASE));
+    expect(decodeSharedState(withNull)!.solverStartPoint).toBeNull();
+  });
+
+  test("still reads v1 links, which predate the start point", () => {
+    // frozen payload from the v1 encoder: two header bytes instead of three
+    const v1 = "AUkF__AE39QDgOIJn5wBwLgCwKkHv6kHgPEEn40G39QDgNRhgJ9JAQLBAg";
+    const decoded = decodeSharedState(v1)!;
+    expect(decoded).not.toBeNull();
+    expect(decoded.solverMode).toBe("simplex");
+    expect(decoded.settings.maxitIPM).toBe(321);
+    expect(decoded.vertices.length).toBe(5);
+    expect(decoded.vertices[0]!.x).toBeCloseTo(-4, 4);
+    expect(decoded.objective!.x).toBeCloseTo(0.8, 4);
+    expect(decoded.solverStartPoint).toBeNull();
   });
 
   test("handles an empty drawing and a missing objective", () => {

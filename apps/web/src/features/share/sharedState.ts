@@ -35,6 +35,8 @@ export type SharedAppState = {
   objective: { x: number; y: number } | null;
   solverMode: SolverMode;
   settings: ShareSettings;
+  /** Null means the solver's own default start, not "no start point". */
+  solverStartPoint?: { x: number; y: number } | null;
   zScale?: number;
   is3DMode?: boolean;
 };
@@ -157,6 +159,11 @@ export function buildSharedStatePatch(
       ? { x: sharedState.objective.x, y: sharedState.objective.y }
       : null,
     solverMode,
+    // always written, so loading a link clears a start point left over from
+    // whatever the user was doing before
+    solverStartPoint: isFinitePoint(sharedState.solverStartPoint)
+      ? { x: sharedState.solverStartPoint.x, y: sharedState.solverStartPoint.y }
+      : null,
     ...(Number.isFinite(sharedState.zScale)
       ? { zScale: Math.max(0.01, Math.min(100, sharedState.zScale!)) }
       : {}),

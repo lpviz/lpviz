@@ -15,7 +15,14 @@ import type { ShareSettings, SharedAppState } from "@/features/share/sharedState
 // their default are omitted entirely. That runs shorter than the compressed
 // JSON it replaces while staying paste-safe.
 
-const VERSION = 1;
+// v2 added the extended-flags byte (and with it the solver start point). v1 is
+// still read: its header is one byte shorter and it can carry no start point.
+// Bumping rather than redefining v1 matters even though v1 barely escaped —
+// a stale link decoded against the wrong header layout would not fail, it would
+// silently load a *different* problem, which is the exact failure this format
+// was written to eliminate.
+const VERSION = 2;
+const MIN_VERSION = 1;
 // 1e-4 of a world unit is far below one screen pixel at any usable zoom, and
 // vertices are where the bytes go. The objective is only two numbers and is
 // printed to three decimals in the problem panel, so it gets enough precision
@@ -32,6 +39,9 @@ const SOLVER_MODES = [
   "ellipsoid",
 ] as const;
 const COMPLETION_MODES = ["draft", "closed", "open"] as const;
+// Extended flags (header byte 2), added in v2 because the first flags byte has
+// no spare bit left. Only ever append.
+const HAS_SOLVER_START = 0x01;
 const QUERY_POINTS = [
   "ellipsoid",
   "chebyshev",
@@ -147,6 +157,12 @@ export function encodeSharedState(state: SharedAppState): string {
   const hasObjective = state.objective !== null && state.objective !== undefined;
   const hasZScale =
     state.zScale !== undefined && Number.isFinite(state.zScale);
+  const start = state.solverStartPoint;
+  // null is the meaningful value here: it says "wherever this solver starts by
+  // default", so an untouched marker costs no bytes and stays correct even if
+  // that default later moves. Only a point the user actually dragged is pinned.
+  const hasSolverStart =
+    start != null && Number.isFinite(start.x) && Number.isFinite(start.y);
   bytes.push(
     completion |
       (solver << 2) |
@@ -154,6 +170,7 @@ export function encodeSharedState(state: SharedAppState): string {
       (hasObjective ? 0x40 : 0) |
       (hasZScale ? 0x80 : 0),
   );
+  bytes.push(hasSolverStart ? HAS_SOLVER_START : 0);
 
   const vertices = state.vertices ?? [];
   writeVarint(bytes, vertices.length);
@@ -173,6 +190,11 @@ export function encodeSharedState(state: SharedAppState): string {
     writeZigZag(bytes, quantize(state.objective!.y, OBJECTIVE_SCALE));
   }
   if (hasZScale) writeVarint(bytes, quantize(state.zScale!, Z_SCALE_SCALE));
+  if (hasSolverStart) {
+    // a world coordinate the user placed by hand, so vertex precision applies
+    writeZigZag(bytes, quantize(start.x, COORDINATE_SCALE));
+    writeZigZag(bytes, quantize(start.y, COORDINATE_SCALE));
+  }
 
   const settings = state.settings ?? {};
   const written: number[] = [];
@@ -214,8 +236,13 @@ export function decodeSharedState(text: string): SharedAppState | null {
   if (!/^[A-Za-z0-9_-]+$/.test(text)) return null;
   try {
     const bytes = fromBase64Url(text);
-    if (bytes.length < 3 || bytes[0] !== VERSION) return null;
-    const cursor: Cursor = { at: 2 };
+    const version = bytes[0]!;
+    if (bytes.length < 3 || version < MIN_VERSION || version > VERSION) {
+      return null;
+    }
+    // v1 has no extended-flags byte, so its body starts one byte earlier
+    const extended = version >= 2 ? bytes[2]! : 0;
+    const cursor: Cursor = { at: version >= 2 ? 3 : 2 };
 
     const flags = bytes[1]!;
     const completionMode = COMPLETION_MODES[flags & 0x03];
@@ -247,6 +274,13 @@ export function decodeSharedState(text: string): SharedAppState | null {
       (flags & 0x80) !== 0
         ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE)
         : undefined;
+    const solverStartPoint =
+      (extended & HAS_SOLVER_START) !== 0
+        ? {
+            x: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
+            y: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
+          }
+        : null;
 
     const settingCount = readVarint(bytes, cursor);
     if (settingCount > SETTINGS.length) return null;
@@ -292,6 +326,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
       objective,
       solverMode,
       settings,
+      solverStartPoint,
       ...(zScale !== undefined ? { zScale } : {}),
       ...((flags & 0x20) !== 0 ? { is3DMode: true } : {}),
     };
