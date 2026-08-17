@@ -49,6 +49,7 @@
         <a href="/docs/simplex">Simplex</a>
         <a href="/docs/interior-point">Interior Point</a>
         <a href="/docs/pdhg" class="is-active" aria-current="page">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
       </nav>
     </header>
@@ -81,8 +82,57 @@
         <p>where [·]₊ clips negatives to zero (prices can't go negative). The extrapolation step — using the <em>reflected</em> dual 2<var>y</var><sub>k+1</sub> − <var>y</var><sub>k</sub> rather than <var>y</var><sub>k+1</sub> itself — is what makes the scheme convergent (this is the Chambolle–Pock method, 2011). Each iteration costs exactly one multiply by <var>A</var> and one by <var>A</var>ᵀ, which is why PDHG scales to LPs with billions of nonzeros where factorization-based methods (<a href="/docs/simplex">Simplex</a>, <a href="/docs/interior-point">IPM</a>) run out of memory.</p>
         <p>Unchecking <em>Inequality mode</em> switches to the textbook <em>standard-form</em> variant: the problem is rewritten with split variables and slacks (<var>x</var> = <var>x</var>⁺ − <var>x</var>⁻, <var>A</var><var>x</var> + <var>s</var> = <var>b</var>, all variables ≥ 0), the projection moves to the primal update, and the extrapolation moves to the primal side. The LP is the same, but the splitting geometry — and therefore the trajectory you see — is different.</p>
 
+        <figure>
+          <svg viewBox="0 0 360 200" width="360" height="200" role="img" aria-labelledby="pdhg-ineq-fig">
+            <title id="pdhg-ineq-fig">Two block diagrams. In inequality mode the primal variable is free and the dual is projected and extrapolated; in standard form the split primal variables and slacks are projected and extrapolated while the dual is free.</title>
+            <text x="85" y="26" text-anchor="middle" class="lead">Inequality mode (on)</text>
+            <rect x="20" y="42" width="130" height="36" rx="6" fill="none" stroke="var(--pdhg)" stroke-opacity="0.5" stroke-width="1.5" />
+            <text x="85" y="65" text-anchor="middle">x ∈ ℝⁿ — free</text>
+            <line x1="85" y1="78" x2="85" y2="108" stroke="var(--pdhg)" stroke-width="1.5" />
+            <polygon points="85,114 81,105 89,105" fill="var(--pdhg)" />
+            <rect x="20" y="114" width="130" height="50" rx="6" fill="var(--pdhg)" fill-opacity="0.1" stroke="var(--pdhg)" stroke-width="1.75" />
+            <text x="85" y="134" text-anchor="middle">y ≥ 0 — projected</text>
+            <text x="85" y="150" text-anchor="middle">and extrapolated</text>
+            <text x="275" y="26" text-anchor="middle" class="lead">Standard form (off)</text>
+            <rect x="210" y="42" width="130" height="50" rx="6" fill="var(--pdhg)" fill-opacity="0.1" stroke="var(--pdhg)" stroke-width="1.75" />
+            <text x="275" y="62" text-anchor="middle">x⁺, x⁻, s ≥ 0 — projected</text>
+            <text x="275" y="78" text-anchor="middle">and extrapolated</text>
+            <line x1="275" y1="92" x2="275" y2="122" stroke="var(--pdhg)" stroke-width="1.5" />
+            <polygon points="275,128 271,119 279,119" fill="var(--pdhg)" />
+            <rect x="210" y="128" width="130" height="36" rx="6" fill="none" stroke="var(--pdhg)" stroke-opacity="0.5" stroke-width="1.5" />
+            <text x="275" y="151" text-anchor="middle">y ∈ ℝᵐ — free</text>
+            <text x="180" y="188" text-anchor="middle">the projection, and the extrapolation, swap sides</text>
+          </svg>
+          <figcaption>The bold box is the side that gets clipped back into its cone each iteration. Which variables are constrained decides where the projection lives, and the projection is what bends the trajectory.</figcaption>
+        </figure>
+
         <h2 id="steps">Step sizes and divergence</h2>
-        <p>The sliders η (primal) and τ (dual) are the two step sizes, 0.25 by default. PDHG converges when η·τ·‖<var>A</var>‖² &lt; 1; beyond that the spiral stops contracting and the iterates fly apart. lpviz doesn't hide this — push both sliders toward 0.75 on a region with long constraint vectors and you can watch the divergence live (the run halts once the residuals overflow). Divergence from too-aggressive step sizes is a real failure mode first-order methods must manage; production solvers pick and adapt these step sizes automatically.</p>
+        <p>The sliders η (primal) and τ (dual) are the two step sizes, 0.25 by default. PDHG converges when η·τ·‖<var>A</var>‖² &lt; 1; beyond that the spiral stops contracting and the iterates fly apart. lpviz doesn't hide this — push both sliders toward 0.75 on a region with many facets and you can watch the divergence live (the run halts once the residuals overflow). Divergence from too-aggressive step sizes is a real failure mode first-order methods must manage; production solvers pick and adapt these step sizes automatically.</p>
+
+        <figure>
+          <svg viewBox="0 0 360 210" width="360" height="210" role="img" aria-labelledby="pdhg-step-fig">
+            <title id="pdhg-step-fig">A plot with the primal step size on the horizontal axis and the dual step size on the vertical axis. A shaded region bounded by a hyperbola marks the step sizes guaranteed to converge on a 28-edge region; a second hyperbola higher up is the looser limit for a 5-edge region. The default of 0.25, 0.25 sits just inside the shaded region.</title>
+            <polygon points="45,175 325,175 325,159.4 272.5,155.8 220,150 185,143.7 150,133.4 132.5,125 115,112.5 97.5,91.7 87,70.9 78.3,43.75 76.2,35 45,35" fill="var(--pdhg)" fill-opacity="0.12" />
+            <polyline points="76.2,35 78.3,43.75 87,70.9 97.5,91.7 115,112.5 132.5,125 150,133.4 185,143.7 220,150 272.5,155.8 325,159.4" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <polyline points="220,35 255,58.3 290,75 325,87.5" fill="none" stroke="var(--pdhg)" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="5 4" />
+            <line x1="45" y1="175" x2="335" y2="175" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.25" />
+            <line x1="45" y1="175" x2="45" y2="30" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.25" />
+            <circle cx="132.5" cy="131.25" r="4" fill="var(--pdhg)" />
+            <circle cx="307.5" cy="43.75" r="4" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <text x="342" y="179" text-anchor="end">η</text>
+            <text x="45" y="24" text-anchor="middle">τ</text>
+            <text x="38" y="190" text-anchor="middle">0</text>
+            <text x="325" y="190" text-anchor="middle">0.8</text>
+            <text x="36" y="39" text-anchor="end">0.8</text>
+            <text x="150" y="167" text-anchor="middle">guaranteed to converge</text>
+            <text x="252" y="139" text-anchor="middle">m = 28 edges</text>
+            <text x="283" y="66" text-anchor="end">m = 5 edges</text>
+            <text x="140" y="126">default</text>
+            <text x="300" y="40" text-anchor="end">slider maximum</text>
+          </svg>
+          <figcaption>The stability condition is a hyperbola in the two step sizes, and it tightens as the region gains edges.</figcaption>
+        </figure>
+        <p>The shape of that condition is worth knowing before you drag the sliders. lpviz normalizes every constraint to a unit normal, so ‖<var>A</var>‖ depends only on how many edges your region has and how their normals are spread: for <var>m</var> normals pointing in evenly spread directions, ‖<var>A</var>‖² is exactly <var>m</var>/2, and the condition becomes η·τ &lt; 2/<var>m</var>. The default η = τ = 0.25 gives η·τ = 0.0625, which clears that bar for regions up to 32 edges — so the defaults are safe on essentially every preset, and the way to leave the safe zone is to draw a region with many facets and then push both sliders up. Past the bar convergence is no longer guaranteed rather than immediately impossible: the condition is sufficient, not necessary, and on a small region you will often still converge — faster, in fact — while on a many-faceted one the iterates run away.</p>
 
         <h2 id="convergence">Convergence and termination</h2>
         <p>PDHG is a <em>first-order</em> method: cheap iterations, but many of them. The average iterate converges at a sublinear O(1/k) rate, and you'll see the signature long tail — early iterations cover most of the distance, then the spiral tightens excruciatingly slowly. lpviz stops when the scaled KKT error</p>
@@ -94,7 +144,51 @@
         <p class="eq"><var>z</var><sub>k+1</sub> = <sup>k</sup>⁄<sub>k+1</sub> · <var>T</var>(<var>z</var><sub>k</sub>) + <sup>1</sup>⁄<sub>k+1</sub> · <var>z</var><sub>anchor</sub></p>
         <p>The pull toward the anchor damps the spiraling, and periodically the anchor is <em>restarted</em> to the current iterate. lpviz restarts adaptively, when the fixed-point residual has dropped to 20% of its value at the last restart, when it has dropped below 50% and begins rising again, or after a fixed fraction of the total iteration budget. Restart iterations are marked with an <code>r</code> in the log and highlighted along the path. With restarts, the convergence rate on LPs improves from sublinear to linear — flip Halpern on and off with <em>Trace</em> enabled and compare both the shape of the path (straighter, punctuated segments vs. a smooth spiral) and the final iteration counts.</p>
 
+        <figure>
+          <svg viewBox="0 0 340 235" width="340" height="235" role="img" aria-labelledby="pdhg-halpern-fig">
+            <title id="pdhg-halpern-fig">A polygon with two trajectories from the same start: a pale spiral that loops several times, and a Halpern path made of near-straight segments joined at square restart markers.</title>
+            <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <path d="M 150 100 C 140 40, 260 10, 292 60 C 310 90, 270 120, 245 100 C 225 84, 245 50, 272 56 C 288 60, 284 78, 270 72" fill="none" stroke="var(--pdhg)" stroke-width="2" stroke-opacity="0.35" />
+            <polyline points="150,100 196,72 232,58 252,72 262,60 266,70 268,66" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <g fill="var(--pdhg)">
+              <rect x="193" y="69" width="6" height="6" /><rect x="229" y="55" width="6" height="6" /><rect x="249" y="69" width="6" height="6" /><rect x="259" y="57" width="6" height="6" />
+              <circle cx="150" cy="100" r="3.5" />
+            </g>
+            <circle cx="268" cy="66" r="4.5" fill="currentColor" />
+            <text x="30" y="220" class="lead">plain PDHG</text>
+            <text x="30" y="230">orbits the saddle</text>
+            <text x="310" y="220" text-anchor="end" class="lead">Halpern with restarts</text>
+            <text x="310" y="230" text-anchor="end">sprints between restarts (▪)</text>
+          </svg>
+          <figcaption>The anchor damps the rotation, and each restart re-aims at the current iterate — so the path advances in near-straight segments instead of orbiting.</figcaption>
+        </figure>
+
         <h2 id="basis">Color by basis</h2>
+        <figure>
+          <svg viewBox="0 0 340 225" width="340" height="225" role="img" aria-labelledby="pdhg-basis-fig">
+            <title id="pdhg-basis-fig">A spiralling trajectory drawn in three colours, one per active set. The colour changes twice near the start and then stays the same for the rest of the spiral.</title>
+            <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <path d="M 150 100 C 143 60, 190 22, 240 18" fill="none" stroke="var(--simplex)" stroke-width="2" />
+            <path d="M 240 18 C 280 15, 300 42, 292 62 C 286 80, 268 94, 250 96" fill="none" stroke="var(--central)" stroke-width="2" />
+            <path d="M 250 96 C 232 92, 236 62, 258 56 C 274 52, 280 66, 272 72" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <g fill="var(--simplex)">
+              <circle cx="150" cy="100" r="3.5" /><circle cx="154" cy="70.9" r="3" /><circle cx="173.6" cy="45.5" r="3" /><circle cx="203.9" cy="26.9" r="3" />
+            </g>
+            <g fill="var(--central)">
+              <circle cx="240" cy="18" r="3" /><circle cx="272.8" cy="23.5" r="3" /><circle cx="290.8" cy="40.6" r="3" /><circle cx="292" cy="62" r="3" /><circle cx="275.5" cy="85" r="3" />
+            </g>
+            <g fill="var(--pdhg)">
+              <circle cx="250" cy="96" r="3" /><circle cx="239" cy="76.8" r="3" /><circle cx="258" cy="56" r="3" /><circle cx="274" cy="60.3" r="3" /><circle cx="272" cy="72" r="3" />
+            </g>
+            <circle cx="268" cy="66" r="4.5" fill="currentColor" />
+            <g fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5">
+              <circle cx="240" cy="18" r="6.5" /><circle cx="250" cy="96" r="6.5" />
+            </g>
+            <text x="14" y="196" class="lead">each colour is one active set</text>
+            <text x="14" y="210">rings mark where it changes — then it stops</text>
+          </svg>
+          <figcaption>The fingerprint changes a handful of times early, then stops — while the point is still visibly spiralling, and long before the residuals are small.</figcaption>
+        </figure>
         <p><em>Color by basis</em> colors each iterate by a fingerprint of its <em>active set</em> — which constraints currently have a positive dual price (inequality mode) or which variables sit at zero (standard-form mode). The color typically flickers early, then locks in well before the numbers converge: the iterates have identified which constraints will be tight at the optimum — the optimal <em>basis</em> — even though the point itself is still spiraling. This "basis identification" behavior is exactly what advanced implementations exploit to jump to an exact solution early.</p>
 
         <h2 id="controls">The controls</h2>
@@ -122,7 +216,7 @@
 
         <nav class="pager" aria-label="Continue reading">
           <a href="/docs/interior-point"><span class="dir">← Previous</span>Interior Point Methods</a>
-          <a class="next" href="/docs/central-path"><span class="dir">Next →</span>The Central Path</a>
+          <a class="next" href="/docs/ellipsoid"><span class="dir">Next →</span>The Ellipsoid Method</a>
         </nav>
       </article>
     </main>

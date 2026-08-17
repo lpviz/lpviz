@@ -49,6 +49,7 @@
         <a href="/docs/simplex">Simplex</a>
         <a href="/docs/interior-point">Interior Point</a>
         <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path" class="is-active" aria-current="page">Central Path</a>
       </nav>
     </header>
@@ -87,6 +88,28 @@
           <li>Backtrack the step (halving, with an Armijo sufficient-increase test) until it improves the barrier objective while staying strictly feasible — the barrier itself rejects any step that would cross the boundary.</li>
           <li>Stop when the gradient's ∞-norm falls below 10⁻⁴.</li>
         </ol>
+        <figure>
+          <svg viewBox="0 0 350 190" width="350" height="190" role="img" aria-labelledby="cp-n-fig">
+            <title id="cp-n-fig">Two copies of the same polygon and the same central path curve. The left one carries only two dots, at the analytic center and the optimum; the right one carries about twenty, bunched at both ends of the curve.</title>
+            <polygon points="30.9,107.5 46.3,56.9 102.4,40.4 157.4,61.3 167.3,102 98,136.1" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <path d="M 88 85 C 110 82, 135 72, 157.4 61.3" fill="none" stroke="var(--central)" stroke-width="2" />
+            <g fill="var(--central)">
+              <circle cx="88" cy="85" r="3.5" />
+            </g>
+            <circle cx="157.4" cy="61.3" r="4" fill="currentColor" />
+            <text x="98" y="168" text-anchor="middle" class="lead">N = 2</text>
+            <text x="98" y="182" text-anchor="middle">the two ends of the path</text>
+            <polygon points="200.9,107.5 216.3,56.9 272.4,40.4 327.4,61.3 337.3,102 268,136.1" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <path d="M 258 85 C 280 82, 305 72, 327.4 61.3" fill="none" stroke="var(--central)" stroke-width="2" />
+            <g fill="var(--central)">
+              <circle cx="258" cy="85" r="3.5" /><circle cx="259.3" cy="84.8" r="2.2" /><circle cx="261.3" cy="84.5" r="2.2" /><circle cx="264" cy="84" r="2.2" /><circle cx="267.4" cy="83.3" r="2.2" /><circle cx="271.5" cy="82.4" r="2.2" /><circle cx="277.1" cy="81" r="2.2" /><circle cx="284.1" cy="78.9" r="2.2" /><circle cx="292.6" cy="76" r="2.2" /><circle cx="301.1" cy="72.8" r="2.2" /><circle cx="308.1" cy="70" r="2.2" /><circle cx="313.7" cy="67.6" r="2.2" /><circle cx="317.9" cy="65.7" r="2.2" /><circle cx="321.3" cy="64.2" r="2.2" /><circle cx="324" cy="62.9" r="2.2" /><circle cx="326.1" cy="61.9" r="2.2" />
+            </g>
+            <circle cx="327.4" cy="61.3" r="4" fill="currentColor" />
+            <text x="268" y="168" text-anchor="middle" class="lead">N = 30</text>
+            <text x="268" y="182" text-anchor="middle">same curve, sampled finely</text>
+          </svg>
+          <figcaption>N does not change the path; it changes how finely the path is sampled. Because the µ values are spaced evenly in log scale, the dots bunch where the path lingers and spread where it moves.</figcaption>
+        </figure>
         <p>Each solve is <em>warm-started</em> from the previous µ's optimizer, which is exactly why path-following works: neighboring points on the path are close, so a few Newton steps suffice. The very first solve starts from the centroid of your polygon (or the interior point supplied in 3-variable mode) — the method needs a strictly feasible starting point, which is also why the Central Path button disables when your region is unbounded in the objective direction (the path would escape to infinity).</p>
 
         <h2 id="reading">Reading the picture</h2>
@@ -108,7 +131,7 @@
         </ul>
 
         <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/pdhg"><span class="dir">← Previous</span>PDHG</a>
+          <a href="/docs/ellipsoid"><span class="dir">← Previous</span>The Ellipsoid Method</a>
           <a class="next" href="/docs/"><span class="dir">Back to</span>Docs overview</a>
         </nav>
       </article>

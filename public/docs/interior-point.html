@@ -49,6 +49,7 @@
         <a href="/docs/simplex">Simplex</a>
         <a href="/docs/interior-point" class="is-active" aria-current="page">Interior Point</a>
         <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
       </nav>
     </header>
@@ -112,6 +113,56 @@
             </tbody>
           </table>
         </div>
+
+        <h3 id="alpha-max">α<sub>max</sub>, and what a step size ratio buys</h3>
+        <figure>
+          <svg viewBox="0 0 340 235" width="340" height="235" role="img" aria-labelledby="ipm-alpha-fig">
+            <title id="ipm-alpha-fig">The same polygon crossed by two interior point trajectories from one starting point: a dense trail of small steps following a gentle arc, and a path of four long steps cutting straight across to the optimal vertex.</title>
+            <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <polyline points="110,175 119,172.3 127.8,169.4 136.5,166.1 145.1,162.6 153.7,158.8 162,154.7 170.3,150.2 178.5,145.6 186.6,140.5 194.5,135.3 202.4,129.6 210.1,123.8 217.7,117.5 225.2,111.1 232.7,104.3 239.9,97.2 247.1,89.8 254.2,82.2 261.2,74.2 268,66" fill="none" stroke="var(--ipm)" stroke-width="1.5" stroke-opacity="0.5" />
+            <g fill="var(--ipm)" fill-opacity="0.5">
+              <circle cx="119" cy="172.3" r="2" /><circle cx="127.8" cy="169.4" r="2" /><circle cx="136.5" cy="166.1" r="2" /><circle cx="145.1" cy="162.6" r="2" /><circle cx="153.7" cy="158.8" r="2" /><circle cx="162" cy="154.7" r="2" /><circle cx="170.3" cy="150.2" r="2" /><circle cx="178.5" cy="145.6" r="2" /><circle cx="186.6" cy="140.5" r="2" /><circle cx="194.5" cy="135.3" r="2" /><circle cx="202.4" cy="129.6" r="2" /><circle cx="210.1" cy="123.8" r="2" /><circle cx="217.7" cy="117.5" r="2" /><circle cx="225.2" cy="111.1" r="2" /><circle cx="232.7" cy="104.3" r="2" /><circle cx="239.9" cy="97.2" r="2" /><circle cx="247.1" cy="89.8" r="2" /><circle cx="254.2" cy="82.2" r="2" /><circle cx="261.2" cy="74.2" r="2" />
+            </g>
+            <polyline points="110,175 172,104 236,76 263,68 268,66" fill="none" stroke="var(--ipm)" stroke-width="2" />
+            <g fill="var(--ipm)">
+              <circle cx="110" cy="175" r="3.5" /><circle cx="172" cy="104" r="3.5" /><circle cx="236" cy="76" r="3.5" /><circle cx="263" cy="68" r="3.5" />
+            </g>
+            <circle cx="268" cy="66" r="4.5" fill="currentColor" />
+            <text x="30" y="220" class="lead">αmax = 0.1</text>
+            <text x="30" y="230">a long, readable trail</text>
+            <text x="310" y="220" text-anchor="end" class="lead">αmax = 0.99</text>
+            <text x="310" y="230" text-anchor="end">what a real solver does</text>
+          </svg>
+          <figcaption>Same directions, same algorithm — only the fraction of each step that is actually taken differs. The small-step path traces the geometry; the large-step path cuts corners the small one never reaches.</figcaption>
+        </figure>
+        <p>Every iteration computes how far it <em>could</em> move before <var>s</var> or <var>y</var> hits zero, then multiplies that distance by α<sub>max</sub>. At the default 0.1 you are watching a deliberately slowed-down solver: the trajectory is dense enough to see its curvature, and it stays well inside the region because it never spends more than a tenth of its available room. At 0.99 — what production solvers use — each step lands within one percent of the boundary, the arc collapses into a few chords, and the run finishes in about a dozen iterations. Nothing about the search direction changed; only the appetite.</p>
+
+        <h3 id="corrector">The corrector threshold</h3>
+        <figure>
+          <svg viewBox="0 0 360 185" width="360" height="185" role="img" aria-labelledby="ipm-corr-fig">
+            <title id="ipm-corr-fig">Two panels. On the left a narrowing corridor blocks a straight affine step, and a second curved step stays centred and travels further. On the right a wide corridor lets a single straight step run almost the whole way.</title>
+            <line x1="20" y1="45" x2="165" y2="82" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <line x1="20" y1="135" x2="165" y2="100" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <line x1="55" y1="92" x2="95" y2="68" stroke="var(--ipm)" stroke-width="2" stroke-opacity="0.45" />
+            <polygon points="95,68 89.4,76 85.2,69.2" fill="var(--ipm)" fill-opacity="0.45" />
+            <path d="M 55 92 Q 85 82 120 90" fill="none" stroke="var(--ipm)" stroke-width="2" />
+            <polygon points="120,90 110.3,91.2 112.5,83.6" fill="var(--ipm)" />
+            <circle cx="55" cy="92" r="3.5" fill="var(--ipm)" />
+            <text x="20" y="26" class="lead">step ratio below threshold</text>
+            <text x="20" y="158">affine step blocked;</text>
+            <text x="20" y="172">corrector recentres, goes further</text>
+            <line x1="195" y1="55" x2="345" y2="55" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <line x1="195" y1="140" x2="345" y2="140" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <line x1="215" y1="100" x2="330" y2="88" stroke="var(--ipm)" stroke-width="2" />
+            <polygon points="330,88 321.5,92.9 320.7,84.9" fill="var(--ipm)" />
+            <circle cx="215" cy="100" r="3.5" fill="var(--ipm)" />
+            <text x="195" y="26" class="lead">step ratio above threshold</text>
+            <text x="340" y="158" text-anchor="end">nothing in the way;</text>
+            <text x="340" y="172" text-anchor="end">corrector skipped</text>
+          </svg>
+          <figcaption>The threshold is a test on the predictor's step ratio, not on the objective: it asks whether the affine direction was blocked, and only pays for a second solve when it was.</figcaption>
+        </figure>
+        <p>The corrector costs a second solve with the same factorized matrix, so it is worth skipping when the predictor is already doing well. The threshold is where "well" is drawn: at the default 0.9, any predictor that can move at least 90% of the way to the boundary in both the primal and the dual is taken as-is. Below that, Mehrotra's corrector is added, and its centering weight σ = (µ<sub>aff</sub>/µ)³ scales with how badly the predictor did — barely centering when it was almost free, retreating hard toward the <a href="/docs/central-path">central path</a> when it was blocked at a corner. Raising the threshold toward 0.999 corrects nearly every iteration; lowering it approaches pure affine scaling, which takes the greedy direction and lets the corners deal with the consequences.</p>
 
         <h2 id="log">Reading the log</h2>
         <pre><code> Iter        x        y        Obj     Infeas          µ

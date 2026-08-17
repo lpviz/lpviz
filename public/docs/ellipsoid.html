@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The Ellipsoid Method and Cutting Planes, Visualized — lpviz Docs</title>
+    <meta
+      name="description"
+      content="How the ellipsoid method solves linear programs by shrinking a localizing set around the optimum: deep cuts, the objective ray shoot, the ρ certificate, and the Chebyshev, analytic and volumetric cutting-plane query points — visualized interactively in lpviz."
+    />
+    <link rel="canonical" href="https://lpviz.net/docs/ellipsoid" />
+    <link rel="stylesheet" href="/docs/docs.css" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="lpviz" />
+    <meta property="og:title" content="The Ellipsoid Method and Cutting Planes, Visualized" />
+    <meta property="og:description" content="Watch a localizing ellipsoid shrink onto the optimum of a polytope you draw, and compare it with the Chebyshev, analytic and volumetric cutting-plane query points." />
+    <meta property="og:url" content="https://lpviz.net/docs/ellipsoid" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="The Ellipsoid Method, Visualized — lpviz" />
+    <meta name="twitter:description" content="Localizing sets, deep cuts, ray shooting, and four choices of query point on LPs you draw." />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "TechArticle",
+            "headline": "The Ellipsoid Method and Cutting Planes, Visualized",
+            "description": "How the ellipsoid method localizes the optimum of a linear program, what each of its options does, and how lpviz's cutting-plane query points differ from it.",
+            "url": "https://lpviz.net/docs/ellipsoid",
+            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
+              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
+              { "@type": "ListItem", "position": 3, "name": "Ellipsoid", "item": "https://lpviz.net/docs/ellipsoid" }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav aria-label="Documentation">
+        <a class="brand" href="/">lpviz</a>
+        <a href="/docs/">Docs</a>
+        <a href="/docs/simplex">Simplex</a>
+        <a href="/docs/interior-point">Interior Point</a>
+        <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid" class="is-active" aria-current="page">Ellipsoid</a>
+        <a href="/docs/central-path">Central Path</a>
+      </nav>
+    </header>
+    <main>
+      <article>
+        <p class="breadcrumbs"><a href="/docs/">Docs</a> / Ellipsoid</p>
+        <h1>The ellipsoid method</h1>
+        <p class="lede">The ellipsoid method never looks for a good point. It keeps a <em>set</em> that provably still contains the optimum, asks one question about the point in the middle of it, and throws away the half of the set that the answer rules out. In <a href="https://lpviz.net/">lpviz</a> that set is drawn on the canvas, so you can watch the search space itself collapse onto the answer.</p>
+
+        <figure>
+          <svg viewBox="0 0 340 230" width="340" height="230" role="img" aria-labelledby="ell-fig">
+            <title id="ell-fig">A polygon surrounded by a circle and two progressively longer, thinner ellipses, with a zig-zagging path of ellipse centers ending at the optimal vertex.</title>
+            <polygon points="70,148 92,80 158,58 232,86 244,142 156,186" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <circle cx="157" cy="122" r="100" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" stroke-opacity="0.3" />
+            <ellipse cx="185" cy="100" rx="105" ry="60" transform="rotate(-35 185 100)" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" stroke-opacity="0.5" />
+            <ellipse cx="205" cy="95" rx="116" ry="40" transform="rotate(-38 205 95)" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" stroke-opacity="0.75" />
+            <polyline points="157,122 185,100 205,95 222,112 238,92 228,82 234,90 232,86" fill="none" stroke="var(--ellipsoid)" stroke-width="2" />
+            <g fill="var(--ellipsoid)">
+              <circle cx="157" cy="122" r="3.5" /><circle cx="185" cy="100" r="3" /><circle cx="205" cy="95" r="3" /><circle cx="222" cy="112" r="3" /><circle cx="238" cy="92" r="3" /><circle cx="228" cy="82" r="2.5" /><circle cx="234" cy="90" r="2.5" />
+            </g>
+            <circle cx="232" cy="86" r="4.5" fill="currentColor" />
+          </svg>
+          <figcaption>Every ellipse contains every feasible point at least as good as the best one found so far. Each cut shrinks the area by a constant factor, but stretches the ellipse across the cut — which is why the centers precess rather than march.</figcaption>
+        </figure>
+
+        <h2 id="idea">The idea</h2>
+        <p>lpviz solves <span class="mono">maximize <var>c</var>ᵀ<var>x</var> s.t. <var>A</var><var>x</var> ≤ <var>b</var></span>. The ellipsoid method attacks it with a <strong>localizing set</strong> <var>E</var> and a <strong>separation oracle</strong>:</p>
+        <ul>
+          <li><var>E</var> is maintained as an invariant: it contains every feasible point at least as good as the incumbent (the best feasible point found so far). At the start <var>E</var> is big enough to contain the whole drawn region, so the invariant holds trivially.</li>
+          <li>The oracle is asked about one point — the center <var>x</var><sub>k</sub> of <var>E</var>. It answers with a <em>separating hyperplane</em>: a half-space known to contain everything worth keeping, and to exclude the center.</li>
+          <li><var>E</var> is replaced by the minimum-volume ellipsoid containing <var>E</var> ∩ (that half-space). The invariant survives, and the volume shrinks by a fixed factor.</li>
+        </ul>
+        <p>Nothing here needs the objective to be linear, or the constraints to be few; the method only needs to be able to cut. That generality is why the ellipsoid method matters historically: Khachiyan used it in 1979 to prove that linear programming is solvable in polynomial time, the first such proof, and it remains the standard tool for showing that an optimization problem is tractable whenever you can separate over it.</p>
+        <p>It is also famously not competitive in practice, and lpviz shows you why: the volume guarantee is worst-case, dimension-driven, and completely indifferent to how easy your particular polygon is. <a href="/docs/simplex">Simplex</a> would finish this drawing in a handful of pivots.</p>
+
+        <h2 id="iteration">What one iteration does</h2>
+        <p>The ellipsoid is stored as a center <var>x</var><sub>k</sub> and a symmetric shape matrix <var>P</var>, meaning <var>E</var> = { <var>x</var> : (<var>x</var> − <var>x</var><sub>k</sub>)ᵀ<var>P</var>⁻¹(<var>x</var> − <var>x</var><sub>k</sub>) ≤ 1 }. Each iteration:</p>
+        <ol>
+          <li><strong>Ask the oracle.</strong> Find the constraint the center violates most. If there is one, that constraint is the cut — everything feasible lies on its far side. This is a <em>feasibility cut</em>.</li>
+          <li><strong>Otherwise cut with the objective.</strong> A feasible center is a new incumbent, so every point with <var>c</var>ᵀ<var>x</var> ≤ (incumbent value) can be discarded: they cannot beat what is already in hand. This is the <em>sliding objective</em> variant — the objective cut slides upward as the incumbent improves.</li>
+          <li><strong>Update.</strong> Replace <var>E</var> by the minimum-volume ellipsoid containing the retained piece. In two variables that costs a handful of arithmetic operations; there is no linear system to solve.</li>
+        </ol>
+        <p>The update has a closed form that is worth internalizing, because it explains the shape of everything you see. For a cut through the center in <var>n</var> = 2 variables, the new ellipse has semi-axis <sup>2</sup>⁄<sub>3</sub> along the cut normal and <sup>2</sup>⁄<sub>√3</sub> ≈ 1.155 across it. The area falls to about 77% — but the axis <em>across</em> the cut <em>grows</em> by 15%. Successive ellipses therefore do not nest; they become longer and thinner, tilted away from the cut just made. That elongation rotates the direction of the next cut, and the rotation is what makes the path spiral.</p>
+
+        <h2 id="rho">ρ, and how a run stops</h2>
+        <p>The reported convergence measure is</p>
+        <p class="eq">ρ = √( <var>c</var>ᵀ<var>P</var><var>c</var> )</p>
+        <p>the ellipsoid's half-width in the objective direction: how much objective value could still be hiding inside it. Because the ellipsoid contains the optimum, <var>c</var>ᵀ<var>x</var><sub>k</sub> + ρ is a genuine <strong>upper bound</strong> on the optimal value, while the incumbent is a <strong>lower bound</strong>. lpviz stops when the two brackets close:</p>
+        <p class="eq"><var>c</var>ᵀ<var>x</var><sub>k</sub> + ρ − (incumbent) ≤ 10⁻⁵ · (1 + |incumbent|)</p>
+        <p>and the center is itself feasible, so that the point marked as the answer really is a point of your region. This certificate is sharper than ρ alone and closes sooner. Two other endings deserve a mention, and the log names them: the cuts can consume the entire ellipsoid, which means nothing better than the incumbent remains and the incumbent is optimal; or the method can converge to a point sitting on the boundary of the <em>initial</em> ellipsoid, which means the objective is unbounded over your region and the answer is an artifact of where the search was fenced in. lpviz says so explicitly rather than reporting a number.</p>
+        <p>In the 3D view the path is lifted to <var>c</var>ᵀ<var>x</var><sub>k</sub> + ρ — the certified upper bound — so the trajectory visibly descends onto the objective plane as the bound tightens, instead of climbing it the way the other solvers' paths do.</p>
+
+        <h2 id="controls">The controls</h2>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Control</th><th>Default</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Initial ellipsoid size</td>
+                <td>1.50</td>
+                <td>Inflation factor for the starting localization: the drawn region's bounding box, scaled by this factor, with the smallest axis-aligned ellipsoid drawn around it. Minimum 1.05 so the region is strictly inside.</td>
+              </tr>
+              <tr>
+                <td>Maximum iterations</td>
+                <td>500</td>
+                <td>Iteration cap (log scale, up to 100k). The ellipsoid method needs far more iterations than the other solvers, so this one matters.</td>
+              </tr>
+              <tr>
+                <td>Query point</td>
+                <td>Ellipsoid</td>
+                <td>Which point of the localizing set to ask the oracle about. <em>Ellipsoid</em> is the method proper; the other three localize with a polyhedron instead. See <a href="#query">below</a>.</td>
+              </tr>
+              <tr>
+                <td>Deep cuts</td>
+                <td>on</td>
+                <td>Push the cutting plane past the center, out to the constraint or incumbent level, instead of through it.</td>
+              </tr>
+              <tr>
+                <td>Ray shoot</td>
+                <td>on</td>
+                <td>When the center is feasible, slide along the objective to the boundary and adopt that point as the incumbent.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><em>Deep cuts</em> greys out unless the query point is <em>Ellipsoid</em>: it describes how the ellipsoid update reshapes itself, and the other three query points never build an ellipsoid to reshape. Their cuts are already as deep as the oracle can make them, since a polyhedron can simply store the violated constraint itself. <em>Ray shoot</em> applies to all four.</p>
+
+        <h3 id="initial-size">Initial ellipsoid size</h3>
+        <figure>
+          <svg viewBox="0 0 380 200" width="380" height="200" role="img" aria-labelledby="ell-scale-fig">
+            <title id="ell-scale-fig">Two panels showing the same polygon with its starting circle: on the left the circle hugs the region at the minimum inflation of 1.05, on the right the same circle is drawn at inflation 4 so the region inside it appears much smaller.</title>
+            <circle cx="95" cy="95" r="62" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" />
+            <polygon points="53,124 114,131 137,91 99,53 53,76" fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" />
+            <text x="95" y="184" text-anchor="middle" class="lead">1.05× — the minimum</text>
+            <circle cx="285" cy="95" r="62" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" />
+            <polygon points="274,103 290,105 296,94 286,84 274,90" fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" />
+            <text x="285" y="184" text-anchor="middle" class="lead">4× — the maximum</text>
+          </svg>
+          <figcaption>Both panels show one starting ellipsoid at the same drawn size; only the region inside it changes. Across the slider's whole range the starting area grows by about 15×.</figcaption>
+        </figure>
+        <p>This is the most counter-intuitive control on the panel, because it looks like a speed control and is not one. The ellipsoid method's guarantee is that volume falls by a constant factor per iteration, so the number of iterations needed depends on the <em>logarithm</em> of the initial volume. Starting 16× tighter buys you about ten iterations — once, at the beginning. Cut depth, by contrast, multiplies: it changes the factor itself, and therefore every iteration after it.</p>
+        <p>Treat it as a framing control. Small values put the whole picture on screen at once and make the early ellipses easy to compare with the region; large values are useful for watching the method spend its first iterations doing nothing but discovering where your region is. On an unbounded region the setting matters in a different way: it is the fence that keeps the search finite, and a point that converges onto it is what lpviz reports as unboundedness.</p>
+
+        <h3 id="deep-cuts">Deep cuts</h3>
+        <figure>
+          <svg viewBox="0 0 380 205" width="380" height="205" role="img" aria-labelledby="ell-deep-fig">
+            <title id="ell-deep-fig">Two panels on identical circles. On the left the cutting plane passes through the center and the new ellipse covers half the disc. On the right the plane is pushed past the center, the retained cap is much smaller, and the new ellipse around it is markedly smaller.</title>
+            <path d="M 95 40 A 55 55 0 0 0 95 150 Z" fill="var(--ellipsoid)" fill-opacity="0.1" />
+            <circle cx="95" cy="95" r="55" fill="none" stroke="currentColor" stroke-opacity="0.4" stroke-width="1.5" />
+            <line x1="95" y1="30" x2="95" y2="160" stroke="currentColor" stroke-opacity="0.65" stroke-width="1.5" stroke-dasharray="4 3" />
+            <ellipse cx="76.7" cy="95" rx="36.7" ry="63.5" fill="none" stroke="var(--ellipsoid)" stroke-width="2" />
+            <text x="95" y="183" text-anchor="middle" class="lead">central cut</text>
+            <text x="95" y="197" text-anchor="middle">area × 0.77</text>
+            <path d="M 263 44.6 A 55 55 0 0 0 263 145.4 Z" fill="var(--ellipsoid)" fill-opacity="0.1" />
+            <circle cx="285" cy="95" r="55" fill="none" stroke="currentColor" stroke-opacity="0.4" stroke-width="1.5" />
+            <line x1="263" y1="30" x2="263" y2="160" stroke="currentColor" stroke-opacity="0.65" stroke-width="1.5" stroke-dasharray="4 3" />
+            <ellipse cx="252" cy="95" rx="22" ry="58.2" fill="none" stroke="var(--ellipsoid)" stroke-width="2" />
+            <text x="285" y="183" text-anchor="middle" class="lead">deep cut</text>
+            <text x="285" y="197" text-anchor="middle">area × 0.47</text>
+            <line x1="95" y1="18" x2="128" y2="18" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.2" />
+            <polygon points="134,18 126,14.5 126,21.5" fill="currentColor" fill-opacity="0.55" />
+            <text x="140" y="21.5">discarded</text>
+            <line x1="285" y1="18" x2="318" y2="18" stroke="currentColor" stroke-opacity="0.55" stroke-width="1.2" />
+            <polygon points="324,18 316,14.5 316,21.5" fill="currentColor" fill-opacity="0.55" />
+            <text x="330" y="21.5">more</text>
+          </svg>
+          <figcaption>Both cuts are valid: everything worth keeping is in the shaded cap. The deep cut simply knows more — the violated constraint lies at a definite distance, so the plane can be pushed out to it. Areas are for the cut depths drawn here.</figcaption>
+        </figure>
+        <p>A cut only has to exclude the center to guarantee progress, and the textbook method asks for nothing more. But the oracle usually knows more than that. When the center violates constraint <var>i</var>, the whole slab between the center and that constraint is infeasible too, so the plane can be moved out to the constraint itself. When the center is feasible and the incumbent is already better than it, the objective cut can be raised to the incumbent's level. Both are free: no extra work, no risk of losing the optimum.</p>
+        <p>The payoff compounds, because cut depth changes the shrink factor rather than the starting volume. On a square region the same solve takes <strong>72 iterations with deep cuts and 97 without</strong>. Turning them off is the way to see the classical, pessimistic version of the algorithm — and to watch the ellipse take the full lazy 0.77 step every single iteration.</p>
+
+        <h3 id="ray-shoot">Ray shoot</h3>
+        <figure>
+          <svg viewBox="0 0 360 200" width="360" height="200" role="img" aria-labelledby="ell-ray-fig">
+            <title id="ell-ray-fig">A polygon with a feasible center point, a dashed ray running along the objective direction to a point on the boundary, and two cut lines running parallel to each other: a pale one through the center and a bold one through the boundary point, with the band between them shaded as the extra region discarded.</title>
+            <polygon points="96,48 204,192 277.4,107.8 197.4,1.2" fill="var(--ellipsoid)" fill-opacity="0.1" />
+            <polygon points="60,150 110,60 215,40 300,95 250,165" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <line x1="96" y1="48" x2="204" y2="192" stroke="var(--ellipsoid)" stroke-width="1.5" stroke-opacity="0.45" stroke-dasharray="5 4" />
+            <line x1="197.4" y1="1.2" x2="277.4" y2="107.8" stroke="var(--ellipsoid)" stroke-width="2" />
+            <line x1="150" y1="120" x2="237.4" y2="54.5" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.5" stroke-dasharray="4 3" />
+            <line x1="150" y1="120" x2="190" y2="90" stroke="currentColor" stroke-opacity="0.7" stroke-width="1.5" />
+            <polygon points="199,83.2 187,84 191.5,93.5" fill="currentColor" fill-opacity="0.7" />
+            <circle cx="150" cy="120" r="4" fill="var(--ellipsoid)" />
+            <circle cx="237.4" cy="54.5" r="4.5" fill="currentColor" />
+            <text x="140" y="136">center</text>
+            <text x="243" y="46">incumbent</text>
+            <text x="60" y="45" class="lead">cut without</text>
+            <text x="60" y="58" class="lead">the ray shoot</text>
+            <text x="291" y="118" class="lead">with it</text>
+            <text x="222" y="150">extra region discarded</text>
+          </svg>
+          <figcaption>The shot point is feasible, so nothing at least as good as it can be both optimal and discarded — the cut stays valid, and it now bites deep instead of passing through the center.</figcaption>
+        </figure>
+        <p>When the center lands inside the region, the objective cut through it discards only the points worse than the center. But from a feasible point you can do better for free: slide along <var>c</var> until a constraint blocks the way, and that boundary point is feasible and strictly better. Adopting it as the incumbent moves the objective cut out to the shaded line, discarding the whole band in between.</p>
+        <p>It is worth <strong>1.65 to 2.4× fewer iterations</strong> on the regions in lpviz's preset gallery, which is why it is on by default. It also changes what the final answer looks like: the incumbent is usually a point on the boundary rather than any ellipsoid center, so the last row of the log — the point lpviz marks as the answer — is not the last point the method queried. That row is appended deliberately; without it the marker would sit on a query point that merely happened to be last.</p>
+
+        <h2 id="query">Query point</h2>
+        <p>This is the setting that changes the algorithm rather than tuning it. The ellipsoid method's defining move is to query the <em>center of a covering ellipsoid</em>, which is a crude proxy for "deep inside the region still under consideration". It is crude because an ellipsoid is a lossy summary: after a few cuts, the real region under consideration is a polyhedron, and the ellipsoid drawn around it can be far larger and shaped quite differently.</p>
+        <p>The other three settings keep the polyhedron. They accumulate cuts exactly as before — same oracle, same incumbent handling, same ray shoot, same initial bounding box — and differ only in which interior point of it they ask about next.</p>
+        <figure>
+          <svg viewBox="0 0 360 224" width="360" height="224" role="img" aria-labelledby="ell-query-fig">
+            <title id="ell-query-fig">A localizing polygon with four labelled query points inside it: the center of a dashed covering ellipse, the center of the largest inscribed circle, the analytic center, and the volumetric center.</title>
+            <ellipse cx="180" cy="110" rx="133" ry="100" fill="none" stroke="var(--ellipsoid)" stroke-width="1.5" stroke-opacity="0.5" stroke-dasharray="5 4" />
+            <polygon points="86,181 274,181 274,110 203,39 86,112" fill="none" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.75" />
+            <circle cx="194" cy="118" r="62" fill="none" stroke="var(--ipm)" stroke-width="1.25" stroke-opacity="0.45" stroke-dasharray="3 3" />
+            <line x1="158" y1="33" x2="177" y2="104" stroke="currentColor" stroke-opacity="0.35" stroke-width="1" />
+            <line x1="286" y1="83" x2="201" y2="114" stroke="currentColor" stroke-opacity="0.35" stroke-width="1" />
+            <line x1="284" y1="152" x2="188" y2="130" stroke="currentColor" stroke-opacity="0.35" stroke-width="1" />
+            <line x1="76" y1="160" x2="170" y2="146" stroke="currentColor" stroke-opacity="0.35" stroke-width="1" />
+            <circle cx="180" cy="110" r="4" fill="var(--ellipsoid)" />
+            <circle cx="194" cy="118" r="4" fill="var(--ipm)" />
+            <circle cx="181" cy="128" r="4" fill="var(--central)" />
+            <circle cx="177" cy="144" r="4" fill="var(--pdhg)" />
+            <text x="154" y="29" text-anchor="middle" class="lead">Ellipsoid</text>
+            <text x="290" y="80" class="lead">Chebyshev</text>
+            <text x="288" y="156" class="lead">Volumetric</text>
+            <text x="72" y="164" text-anchor="end" class="lead">Analytic</text>
+          </svg>
+          <figcaption>One localizing set, four answers to "what is the middle of this?". The dashed ellipse is the covering ellipsoid whose center the ellipsoid method queries; the dotted circle is the largest ball that fits inside.</figcaption>
+        </figure>
+        <dl>
+          <dt>Ellipsoid</dt>
+          <dd>The method proper. The query point is the center of the covering ellipsoid, and is a function of the ellipsoid's own history rather than of the polyhedron.</dd>
+          <dt>Chebyshev</dt>
+          <dd>The center of the largest ball that fits inside the polyhedron, computed as one small LP. Fast and robust on round regions; the worst of the three on slivers, for the obvious reason that a ball is a poor model of a thin region and its center can be pushed nearly anywhere along the sliver's length.</dd>
+          <dt>Analytic</dt>
+          <dd>The ACCPM point: the minimizer of the log barrier −Σ log(<var>b</var><sub>i</sub> − <var>a</var><sub>i</sub>ᵀ<var>x</var>), found by damped Newton. Unlike a ball, the barrier sees the shape of the set, so the point adapts to anisotropy — the same object that governs the <a href="/docs/central-path">central path</a>, used here as a notion of "middle" rather than as a path to follow.</dd>
+          <dt>Volumetric</dt>
+          <dd>Vaidya's point: the minimizer of ½ log det <var>H</var>(<var>x</var>), where <var>H</var> is the barrier Hessian. It weights each face by its <em>leverage score</em>, so nearly-redundant cuts stop dragging the query point around. It also drops cuts whose leverage falls below a threshold, which is what keeps the constraint count — and the per-iteration cost — bounded as the run goes on. Dropping a cut only ever enlarges the localizing set, so it can never lose the optimum.</dd>
+        </dl>
+        <p>Mean iterations to a 10⁻⁶ gap, averaged over 12 objective directions:</p>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Region</th><th>Ellipsoid</th><th>Chebyshev</th><th>Analytic</th><th>Volumetric</th></tr></thead>
+            <tbody>
+              <tr><td>Square</td><td>37.5</td><td>7.2</td><td>8.7</td><td>8.7</td></tr>
+              <tr><td>Pentagon</td><td>48.3</td><td>7.8</td><td>11.7</td><td>11.8</td></tr>
+              <tr><td>Corridor</td><td>34.5</td><td>9.4</td><td>11.3</td><td>11.3</td></tr>
+              <tr><td>Needle</td><td>36.7</td><td>16.1</td><td>11.5</td><td>11.5</td></tr>
+              <tr><td>Many facets</td><td>34.7</td><td>6.7</td><td>9.7</td><td>9.7</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Two things stand out. The ellipsoid method costs three to five times as many iterations as any of the polyhedral query points — the price of summarizing the localizing set by an ellipsoid. And Chebyshev, the cheapest and generally the fastest, is the one that falls apart on <em>Needle</em>: 16.1 iterations against 11.5 for the two barrier-based points, which barely notice the geometry. That is the whole argument for analytic and volumetric centers in one row of a table.</p>
+
+        <h3 id="spiral">Why the ellipsoid method spirals</h3>
+        <figure>
+          <svg viewBox="0 0 350 200" width="350" height="200" role="img" aria-labelledby="ell-spiral-fig">
+            <title id="ell-spiral-fig">Two panels. On the left, the ellipsoid method's path winds around the optimal vertex in a rotating spiral. On the right, a cutting-plane path approaches the same vertex in a few decaying, non-rotating steps.</title>
+            <polygon points="30,120 48,58 105,30 133,72 95,130" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <polyline points="81.5,80 146.6,37 149.9,93 113.8,74.9 138.1,59 139.3,79.9 125.8,73.1 134.9,67.1 135.4,74.9 130.3,72.4 133.7,70.2 133.9,73.1" fill="none" stroke="var(--ellipsoid)" stroke-width="2" />
+            <g fill="var(--ellipsoid)">
+              <circle cx="81.5" cy="80" r="3.5" /><circle cx="146.6" cy="37" r="2.5" /><circle cx="149.9" cy="93" r="2.5" /><circle cx="113.8" cy="74.9" r="2.5" /><circle cx="138.1" cy="59" r="2.5" /><circle cx="139.3" cy="79.9" r="2.5" /><circle cx="125.8" cy="73.1" r="2.5" /><circle cx="134.9" cy="67.1" r="2.5" />
+            </g>
+            <circle cx="133" cy="72" r="4.5" fill="currentColor" />
+            <text x="85" y="168" text-anchor="middle" class="lead">Ellipsoid</text>
+            <text x="85" y="184" text-anchor="middle">mean turn 120°, no reversals</text>
+            <polygon points="215,120 233,58 290,30 318,72 280,130" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <polyline points="266.5,80 300,50 306,96 313,62 315.5,82 317,68 317.6,75 318,72" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <g fill="var(--pdhg)">
+              <circle cx="266.5" cy="80" r="3.5" /><circle cx="300" cy="50" r="2.5" /><circle cx="306" cy="96" r="2.5" /><circle cx="313" cy="62" r="2.5" /><circle cx="315.5" cy="82" r="2.5" /><circle cx="317" cy="68" r="2.5" />
+            </g>
+            <circle cx="318" cy="72" r="4.5" fill="currentColor" />
+            <text x="266" y="168" text-anchor="middle" class="lead">Analytic</text>
+            <text x="266" y="184" text-anchor="middle">turns decay and alternate</text>
+          </svg>
+          <figcaption>Both paths converge to the same vertex. Only one of them precesses.</figcaption>
+        </figure>
+        <p>Run the ellipsoid method on a pentagon and the path visibly winds: measured over 53 steps, the mean turn is <strong>120° per step with zero turn-direction reversals</strong> — not a wobble but a clean precession. The mechanism is the update formula. Each minimum-volume ellipsoid is elongated <em>perpendicular</em> to the cut just made, so the next cut, chosen against that elongated shape, points in a rotated direction; near the optimum the method settles into a cycle of objective cut → active constraint A → active constraint B, three cuts about 120° apart, forever tightening. The other three query points show nothing of the sort: their turn angles decay and their direction alternates, because the point they query is defined by the polyhedron itself and not by an ellipsoid carrying the memory of the last cut.</p>
+        <p>The spiral is worth watching with <em>Trace</em> on. It is the clearest picture in lpviz of a method that is provably converging and visibly wasteful at the same time.</p>
+
+        <h2 id="drawn-ellipse">What the drawn ellipse means</h2>
+        <figure>
+          <svg viewBox="0 0 360 190" width="360" height="190" role="img" aria-labelledby="ell-cover-fig">
+            <title id="ell-cover-fig">On the left, a large ellipse enclosing a small region with two successive query points inside it. On the right, a small ellipse inscribed at a query point inside a polygon, with the next query point lying outside that ellipse.</title>
+            <ellipse cx="90" cy="95" rx="78" ry="52" transform="rotate(-20 90 95)" fill="none" stroke="var(--ellipsoid)" stroke-width="2" />
+            <polygon points="55,110 75,72 115,68 128,98 95,122" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <circle cx="90" cy="95" r="3.5" fill="var(--ellipsoid)" />
+            <circle cx="108" cy="88" r="3.5" fill="var(--ellipsoid)" />
+            <line x1="90" y1="95" x2="108" y2="88" stroke="var(--ellipsoid)" stroke-width="1.5" />
+            <text x="90" y="166" text-anchor="middle" class="lead">covering</text>
+            <text x="90" y="180" text-anchor="middle">the next point stays inside</text>
+            <polygon points="200,140 215,60 300,45 345,105 290,150" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <ellipse cx="255" cy="100" rx="42" ry="26" transform="rotate(15 255 100)" fill="none" stroke="var(--pdhg)" stroke-width="2" />
+            <circle cx="255" cy="100" r="3.5" fill="var(--pdhg)" />
+            <circle cx="300" cy="72" r="3.5" fill="var(--pdhg)" />
+            <line x1="255" y1="100" x2="300" y2="72" stroke="var(--pdhg)" stroke-width="1.5" />
+            <text x="272" y="166" text-anchor="middle" class="lead">inscribed</text>
+            <text x="272" y="180" text-anchor="middle">the next point may be outside</text>
+          </svg>
+          <figcaption>Same drawing, opposite meanings. Only in the left case is the ellipse the region still under consideration.</figcaption>
+        </figure>
+        <p>lpviz draws an ellipse for every iterate of this mode, and the ellipse means <em>opposite things</em> depending on the query point. Users notice this, usually as a suspected bug, so it is worth stating plainly:</p>
+        <ul>
+          <li><strong>Ellipsoid:</strong> the ellipse is the localizing set — a <em>covering</em> ellipsoid. Everything still under consideration is inside it, and successive centers are therefore always inside it too.</li>
+          <li><strong>Chebyshev, analytic, volumetric:</strong> the ellipse is <em>inscribed</em> at the query point — the Dikin ellipsoid of the barrier there, or Chebyshev's inscribed ball. It is a local measure of elbow room, not a bound on anything, so the next query point routinely lands outside it. That is expected.</li>
+        </ul>
+        <p>For those three the region actually under consideration is the polyhedron of accumulated cuts, and lpviz will draw it: hover a row in the iteration log (or scrub the replay) and its localizing polyhedron appears as a thin outline. It is drawn one at a time on purpose — they nest, they are many-sided, and unlike the ellipses they do not shrink smoothly, so drawing them all at once buries the picture. The invariant that does hold, and that hovering successive rows makes visible, is that the polyhedron only ever shrinks.</p>
+
+        <h2 id="log">Reading the log</h2>
+        <pre><code> Iter        x        y        Obj     Infeas          ρ
+    1     0.50     0.50    1.4e+0    2.1e+0    1.1e+1
+    2     4.83    -1.24    4.1e+0    0.0e+0    6.2e+0</code></pre>
+        <ul>
+          <li><strong>x, y</strong>: the point queried this iteration — the ellipsoid center, or the polyhedron's Chebyshev/analytic/volumetric center.</li>
+          <li><strong>Obj</strong>: its objective value. It does <em>not</em> increase monotonically: the query point is chosen for its position in the localizing set, not for its objective, and it is often infeasible.</li>
+          <li><strong>Infeas</strong>: the largest constraint violation at that point, which is zero exactly when the oracle returned an objective cut instead of a feasibility cut.</li>
+          <li><strong>ρ</strong>: the objective half-width of the localizing set — how much better than the current point anything still under consideration could be. This is the number that has to reach zero.</li>
+          <li>The final row is the incumbent, the point actually returned. With the ray shoot on it is usually a boundary point that no iteration queried.</li>
+        </ul>
+
+        <h2 id="behavior">Behavior to watch for</h2>
+        <ul>
+          <li><strong>The set is the story.</strong> Every other solver in lpviz draws a sequence of <em>points</em> that approach the answer. This one draws a sequence of <em>regions</em> that contain it. Watching an ellipse that still contains the optimum shrink around it is a different mental model of "solving" than watching an iterate converge.</li>
+          <li><strong>Dimension, not geometry.</strong> Switch between <em>Pentagon</em> and <em>Many Facets</em>: the count does not grow with the number of edges — 48.3 on the pentagon against 34.7 on the far more constrained region — because the shrink factor depends on the number of variables and nothing else. <a href="/docs/simplex">Simplex</a> pivot counts track the number of edges walked; the ellipsoid method does not care how many edges there are.</li>
+          <li><strong>Cheap guarantees are expensive.</strong> Compare against <a href="/docs/interior-point">IPM</a> with α<sub>max</sub> ≈ 0.99 on the same drawing: a dozen Newton steps against dozens of cuts. The ellipsoid method asks less of the problem — one separating hyperplane per iteration — and pays for it in iterations.</li>
+          <li><strong>Turn the options off one at a time.</strong> Deep cuts off, ray shoot off, query point <em>Ellipsoid</em>: that is Khachiyan's algorithm as published, and the ellipse takes the full lazy step every iteration. Switching each one back on is a compact tour of how the method was made practical enough to teach.</li>
+          <li><strong>Unbounded regions are a real case.</strong> Leave the region open in the objective direction and the method still terminates — on the initial ellipsoid's boundary, which lpviz reports as unboundedness rather than as an answer. Widening <em>Initial ellipsoid size</em> moves the fence, and the reported point moves with it.</li>
+        </ul>
+
+        <nav class="pager" aria-label="Continue reading">
+          <a href="/docs/pdhg"><span class="dir">← Previous</span>PDHG</a>
+          <a class="next" href="/docs/central-path"><span class="dir">Next →</span>The Central Path</a>
+        </nav>
+      </article>
+    </main>
+    <footer class="site-footer">
+      <div>
+        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
+      </div>
+    </footer>
+  </body>
+</html>

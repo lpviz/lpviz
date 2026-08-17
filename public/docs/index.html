@@ -6,18 +6,18 @@
     <title>lpviz Documentation — Visualize Linear Programming Solvers</title>
     <meta
       name="description"
-      content="How lpviz works: draw a feasible region, pick an objective, and watch the Simplex method, interior point methods (IPM), PDHG, and the central path solve your linear program step by step."
+      content="How lpviz works: draw a feasible region, pick an objective, and watch the Simplex method, interior point methods (IPM), PDHG, the ellipsoid method, and the central path solve your linear program step by step."
     />
     <link rel="canonical" href="https://lpviz.net/docs/" />
     <link rel="stylesheet" href="/docs/docs.css" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="lpviz" />
     <meta property="og:title" content="lpviz Documentation — Visualize Linear Programming Solvers" />
-    <meta property="og:description" content="Interactive guides to the Simplex method, interior point methods, PDHG, and the central path — with a browser app that animates every iteration." />
+    <meta property="og:description" content="Interactive guides to the Simplex method, interior point methods, PDHG, the ellipsoid method, and the central path — with a browser app that animates every iteration." />
     <meta property="og:url" content="https://lpviz.net/docs/" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="lpviz Documentation" />
-    <meta name="twitter:description" content="Interactive guides to the Simplex method, interior point methods, PDHG, and the central path." />
+    <meta name="twitter:description" content="Interactive guides to the Simplex method, interior point methods, PDHG, the ellipsoid method, and the central path." />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -27,7 +27,7 @@
             "@id": "https://lpviz.net/#app",
             "name": "lpviz",
             "url": "https://lpviz.net/",
-            "description": "Interactive web app for visualizing linear programming solvers: Simplex, interior point methods, PDHG, and the central path.",
+            "description": "Interactive web app for visualizing linear programming solvers: Simplex, interior point methods, PDHG, the ellipsoid method, and the central path.",
             "applicationCategory": "EducationalApplication",
             "operatingSystem": "Any (web browser)"
           },
@@ -41,6 +41,7 @@
               { "@type": "TechArticle", "name": "The Simplex Method", "url": "https://lpviz.net/docs/simplex" },
               { "@type": "TechArticle", "name": "Interior Point Methods", "url": "https://lpviz.net/docs/interior-point" },
               { "@type": "TechArticle", "name": "PDHG: Primal-Dual Hybrid Gradient", "url": "https://lpviz.net/docs/pdhg" },
+              { "@type": "TechArticle", "name": "The Ellipsoid Method", "url": "https://lpviz.net/docs/ellipsoid" },
               { "@type": "TechArticle", "name": "The Central Path", "url": "https://lpviz.net/docs/central-path" }
             ]
           }
@@ -56,19 +57,21 @@
         <a href="/docs/simplex">Simplex</a>
         <a href="/docs/interior-point">Interior Point</a>
         <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
       </nav>
     </header>
     <main>
       <article>
         <h1>lpviz documentation</h1>
-        <p class="lede"><a href="https://lpviz.net/">lpviz</a> is a free, interactive web app for visualizing how linear programming solvers work. You draw a feasible region, aim an objective, and watch four different algorithms find the optimum — one iteration at a time, entirely in your browser.</p>
+        <p class="lede"><a href="https://lpviz.net/">lpviz</a> is a free, interactive web app for visualizing how linear programming solvers work. You draw a feasible region, aim an objective, and watch five different algorithms find the optimum — one iteration at a time, entirely in your browser.</p>
 
         <figure>
           <svg viewBox="0 0 340 230" width="340" height="230" role="img" aria-labelledby="hero-title">
-            <title id="hero-title">A convex polygon with four solver trajectories: Simplex hops along vertices, the interior point method curves through the interior, PDHG spirals inward, and the central path bends smoothly toward the optimum.</title>
+            <title id="hero-title">A convex polygon with five solver trajectories: Simplex hops along vertices, the interior point method curves through the interior, PDHG spirals inward, the ellipsoid method zig-zags in, and the central path bends smoothly toward the optimum.</title>
             <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
             <path d="M 150 100 C 140 40, 260 10, 292 60 C 310 90, 270 120, 245 100 C 225 84, 245 50, 272 56 C 288 60, 284 78, 270 72" fill="none" stroke="var(--pdhg)" stroke-width="2" stroke-opacity="0.9" />
+            <polyline points="150,132 222,84 200,128 252,96 258,74 263,84 268,66" fill="none" stroke="var(--ellipsoid)" stroke-width="2" stroke-opacity="0.9" />
             <path d="M 160 128 C 205 122 242 96 266 70" fill="none" stroke="var(--central)" stroke-width="2" stroke-opacity="0.9" />
             <path d="M 140 148 C 180 142 232 108 264 72" fill="none" stroke="var(--ipm)" stroke-width="2" stroke-opacity="0.9" />
             <polyline points="38,150 66,58 168,28 268,66" fill="none" stroke="var(--simplex)" stroke-width="2" stroke-opacity="0.9" />
@@ -78,11 +81,12 @@
             <circle cx="268" cy="66" r="4.5" fill="currentColor" />
           </svg>
           <figcaption>
-            Four ways to the same optimum.
+            Five ways to the same optimum.
             <span class="legend">
               <span><span class="swatch" style="background: var(--simplex)"></span>Simplex</span>
               <span><span class="swatch" style="background: var(--ipm)"></span>IPM</span>
               <span><span class="swatch" style="background: var(--pdhg)"></span>PDHG</span>
+              <span><span class="swatch" style="background: var(--ellipsoid)"></span>Ellipsoid</span>
               <span><span class="swatch" style="background: var(--central)"></span>Central path</span>
             </span>
           </figcaption>
@@ -94,8 +98,8 @@
         <p>where <var>x</var> ∈ ℝⁿ is the decision variable (<var>n</var> = 2 in the main app, <var>n</var> = 3 in <a href="https://lpviz.net/3d">3-variable mode</a>), each row <var>a</var><sub>i</sub>ᵀ<var>x</var> ≤ <var>b</var><sub>i</sub> of <var>A</var><var>x</var> ≤ <var>b</var> is a half-plane, and <var>c</var> is the objective vector you aim with the arrow.</p>
         <p>When you draw a polygon, each edge becomes one inequality constraint; the panel at the top of the sidebar shows the resulting system (the <em>H-representation</em> of your region). Because the feasible region is the intersection of half-planes it is always convex, and if an optimum exists, some vertex of the region attains it — the geometric fact underlying the <a href="/docs/simplex">Simplex method</a>.</p>
 
-        <h2 id="solvers">The four solvers</h2>
-        <p>lpviz implements four algorithms that reach the same answer in very different ways. Each has its own page explaining the math, the exact implementation, and what to watch for on screen.</p>
+        <h2 id="solvers">The five solvers</h2>
+        <p>lpviz implements five algorithms that reach the same answer in very different ways. Each has its own page explaining the math, the exact implementation, and what to watch for on screen.</p>
         <div class="card-grid">
           <a href="/docs/simplex"><strong>Simplex method</strong>
             <p>Walks from vertex to vertex along edges of the region, improving the objective at every pivot. Includes a two-phase setup, selectable pivot rules (Bland, Dantzig), and a dual simplex mode.</p></a>
@@ -103,6 +107,8 @@
             <p>A Mehrotra-style predictor–corrector method that cuts smoothly through the interior, loosely tracking the central path.</p></a>
           <a href="/docs/pdhg"><strong>PDHG</strong>
             <p>The primal-dual hybrid gradient method behind modern GPU solvers like PDLP. First-order steps that characteristically spiral into the optimum, with optional Halpern acceleration and restarts.</p></a>
+          <a href="/docs/ellipsoid"><strong>Ellipsoid method</strong>
+            <p>Khachiyan's polynomial-time method: shrink a set that provably still contains the optimum, one cut at a time. Includes three cutting-plane query points — Chebyshev, analytic and volumetric centers.</p></a>
           <a href="/docs/central-path"><strong>Central path</strong>
             <p>Not a solver but the smooth curve of log-barrier optimizers connecting the analytic center to the optimum — traced directly with Newton's method.</p></a>
         </div>
@@ -115,6 +121,7 @@
               <tr><td><a href="/docs/simplex">Simplex</a></td><td>Active-set / pivoting</td><td>Hops between vertices along edges</td><td>Dual simplex mode, entering rule (Bland / Dantzig), ratio-test tie-break</td></tr>
               <tr><td><a href="/docs/interior-point">IPM</a></td><td>Primal-dual interior point</td><td>A smooth arc through the interior</td><td>α<sub>max</sub>, corrector threshold, max iterations</td></tr>
               <tr><td><a href="/docs/pdhg">PDHG</a></td><td>First-order primal-dual</td><td>A spiral tightening around the optimum</td><td>η, τ, Halpern, inequality mode, color by basis</td></tr>
+              <tr><td><a href="/docs/ellipsoid">Ellipsoid</a></td><td>Cutting plane / localization</td><td>A shrinking ellipse, centers precessing</td><td>Initial size, query point, deep cuts, ray shoot</td></tr>
               <tr><td><a href="/docs/central-path">Central path</a></td><td>Log-barrier / Newton</td><td>A smooth curve from the analytic center</td><td>N (number of steps)</td></tr>
             </tbody>
           </table>
@@ -124,7 +131,7 @@
         <ol>
           <li><strong>Draw the region.</strong> Click empty space to add vertices. Close the polygon by clicking the first vertex or pressing <kbd>Enter</kbd>. Every edge becomes a constraint you can drag; right-click a vertex to delete it, double-click an edge to insert one.</li>
           <li><strong>Aim the objective.</strong> Click inside the region to place the objective vector <var>c</var>, then drag the arrow to point it where the objective should increase.</li>
-          <li><strong>Pick a solver.</strong> Choose IPM, PDHG, Simplex, or Central Path in the sidebar. The iterates appear immediately; tune the solver's sliders and the path re-solves live.</li>
+          <li><strong>Pick a solver.</strong> Choose IPM, PDHG, Simplex, Ellipsoid, or Central Path in the sidebar. The iterates appear immediately; tune the solver's sliders and the path re-solves live.</li>
           <li><strong>Inspect.</strong> The bottom terminal lists every iterate (hover a row to highlight the point); the top panel lists constraints (hover to highlight the line). Click <em>Animate</em> to replay the iterations, or enable <em>Trace</em> to keep old paths on screen while you experiment.</li>
         </ol>
         <p>A gallery of preset regions (Pentagon, Corridor, Needle, Tight Corner, Many Facets, and more) is available at the top of the screen — each is chosen to stress the solvers in a different way.</p>
@@ -133,7 +140,7 @@
         <p>lpviz has two distinct "3D" features:</p>
         <ul>
           <li><strong>3D view</strong> (the <em>3D</em> button in the 2-variable app) tilts the camera and lifts every point to a height equal to its objective value, so a solver's path literally climbs the objective plane. <kbd>Shift</kbd>+scroll adjusts the height scale.</li>
-          <li><strong><a href="https://lpviz.net/3d">3-variable mode</a></strong> (at <code>lpviz.net/3d</code>) is a full LP editor in ℝ³: sketch a base polygon, extrude it into a solid, then push/pull faces, cut corners, and bevel edges — every face is one inequality constraint. All four solvers run on the resulting 3-variable LP.</li>
+          <li><strong><a href="https://lpviz.net/3d">3-variable mode</a></strong> (at <code>lpviz.net/3d</code>) is a full LP editor in ℝ³: sketch a base polygon, extrude it into a solid, then push/pull faces, cut corners, and bevel edges — every face is one inequality constraint. All the solvers run on the resulting 3-variable LP, except the polyhedral query points of the <a href="/docs/ellipsoid">ellipsoid mode</a>, which are implemented for two variables.</li>
         </ul>
 
         <h2 id="sharing">Sharing and reproducibility</h2>
@@ -144,11 +151,11 @@
           <dt>What is linear programming?</dt>
           <dd>Optimizing a linear objective subject to linear inequality constraints. It is the workhorse of mathematical optimization, used in logistics, scheduling, finance, energy markets, and as a subroutine inside integer programming and machine learning methods.</dd>
           <dt>Why do some iterates leave the feasible region?</dt>
-          <dd>That's real solver behavior, not a bug. lpviz's <a href="/docs/interior-point">IPM</a> is an <em>infeasible-start</em> method (it starts at the origin and gains feasibility as it converges), <a href="/docs/pdhg">PDHG</a> iterates only satisfy the constraints in the limit, and <a href="/docs/simplex">dual simplex</a> hops between constraint intersections outside the region until optimality.</dd>
+          <dd>That's real solver behavior, not a bug. lpviz's <a href="/docs/interior-point">IPM</a> is an <em>infeasible-start</em> method (it starts at the origin and gains feasibility as it converges), <a href="/docs/pdhg">PDHG</a> iterates only satisfy the constraints in the limit, the <a href="/docs/ellipsoid">ellipsoid method</a> queries the center of a set that merely <em>contains</em> your region at first, and <a href="/docs/simplex">dual simplex</a> hops between constraint intersections outside the region until optimality.</dd>
           <dt>Which solver is "best"?</dt>
           <dd>It depends on the problem. Simplex pivots are cheap and finite; interior point methods take few, expensive iterations regardless of geometry; PDHG uses only matrix–vector products, which is why it scales to enormous LPs on GPUs. Watching them on the same region is the point of lpviz.</dd>
           <dt>Does lpviz need a server?</dt>
-          <dd>No. lpviz is a static site; all four solvers are implemented in TypeScript and run in a Web Worker in your browser. It is <a href="https://github.com/lpviz/lpviz">open source on GitHub</a>.</dd>
+          <dd>No. lpviz is a static site; all five solvers are implemented in TypeScript and run in a Web Worker in your browser. It is <a href="https://github.com/lpviz/lpviz">open source on GitHub</a>.</dd>
           <dt>How do I cite lpviz?</dt>
           <dd>
             <pre><code>@article{lpviz,

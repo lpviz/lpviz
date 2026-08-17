@@ -11,6 +11,7 @@
   --ipm: #2563eb;
   --pdhg: #0f9960;
   --central: #8250df;
+  --ellipsoid: #b45309;
   color-scheme: light dark;
 }
 
@@ -27,6 +28,7 @@
     --ipm: #6d9bff;
     --pdhg: #3fbf8a;
     --central: #ab7ff0;
+    --ellipsoid: #e0994a;
   }
 }
 
@@ -239,6 +241,19 @@ figure {
 figure svg {
   max-width: 100%;
   height: auto;
+}
+
+/* Labels inside the hand-drawn figures. Kept here so the SVG markup stays
+   free of styling and follows the page's light/dark palette. */
+figure svg text {
+  font-size: 11px;
+  fill: var(--muted);
+}
+
+figure svg text.lead {
+  font-size: 11.5px;
+  font-weight: 600;
+  fill: var(--fg);
 }
 
 figcaption {

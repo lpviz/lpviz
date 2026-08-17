@@ -4,16 +4,16 @@
     <meta charset="utf-8" />
     <title>lpviz: Visualize linear programming</title>
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="lpviz is an interactive web app for visualizing linear programming solvers. Draw your constraints and objective, and see how methods like IPM, PDHG, Simplex, and Central Path solve your problem." />
-    <meta name="keywords" content="lpviz, linear programming, interactive visualization, LP solver, simplex, interior point, pdhg, central path, visualize" />
+    <meta name="description" content="lpviz is an interactive web app for visualizing linear programming solvers. Draw your constraints and objective, and see how methods like IPM, PDHG, Simplex, the Ellipsoid method, and Central Path solve your problem." />
+    <meta name="keywords" content="lpviz, linear programming, interactive visualization, LP solver, simplex, interior point, pdhg, ellipsoid method, cutting plane, central path, visualize" />
     <link rel="canonical" href="https://lpviz.net/" />
     <meta property="og:title" content="lpviz: Visualize linear programming" />
-    <meta property="og:description" content="Draw a feasible region, aim an objective, and watch Simplex, interior point methods, PDHG, and the central path solve it — live in your browser." />
+    <meta property="og:description" content="Draw a feasible region, aim an objective, and watch Simplex, interior point methods, PDHG, the ellipsoid method, and the central path solve it — live in your browser." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://lpviz.net/" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="lpviz" />
-    <meta name="twitter:description" content="Draw a feasible region, aim an objective, and watch Simplex, interior point methods, PDHG, and the central path solve it — live in your browser." />
+    <meta name="twitter:description" content="Draw a feasible region, aim an objective, and watch Simplex, interior point methods, PDHG, the ellipsoid method, and the central path solve it — live in your browser." />
     <link rel="preload" href="/fonts/JuliaMono-Light.v1.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="icon" href="data:," />
     <script type="application/ld+json">
@@ -22,7 +22,7 @@
         "@type": "WebApplication",
         "name": "lpviz",
         "url": "https://lpviz.net/",
-        "description": "Interactive web app for visualizing linear programming solvers: Simplex, interior point methods (IPM), PDHG, and the central path.",
+        "description": "Interactive web app for visualizing linear programming solvers: Simplex, interior point methods (IPM), PDHG, the ellipsoid method, and the central path.",
         "applicationCategory": "EducationalApplication",
         "operatingSystem": "Any (web browser)"
       }
@@ -32,7 +32,7 @@
   <body>
     <noscript>
       <p>lpviz is an interactive linear programming visualizer and requires JavaScript. Meanwhile, the documentation works without it:</p>
-      <nav><a href="/docs/">lpviz documentation</a> · <a href="/docs/simplex">The Simplex Method</a> · <a href="/docs/interior-point">Interior Point Methods</a> · <a href="/docs/pdhg">PDHG</a> · <a href="/docs/central-path">The Central Path</a></nav>
+      <nav><a href="/docs/">lpviz documentation</a> · <a href="/docs/simplex">The Simplex Method</a> · <a href="/docs/interior-point">Interior Point Methods</a> · <a href="/docs/pdhg">PDHG</a> · <a href="/docs/ellipsoid">The Ellipsoid Method</a> · <a href="/docs/central-path">The Central Path</a></nav>
     </noscript>
     <div id="root"></div>
     <script type="module" src="./apps/web/src/main.ts"></script>

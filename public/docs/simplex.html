@@ -49,6 +49,7 @@
         <a href="/docs/simplex" class="is-active" aria-current="page">Simplex</a>
         <a href="/docs/interior-point">Interior Point</a>
         <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
       </nav>
     </header>
@@ -103,6 +104,32 @@
 
         <h2 id="dual">Dual simplex mode</h2>
         <p>Every LP has a <em>dual</em>: for <span class="mono">max <var>c</var>ᵀ<var>x</var> s.t. <var>A</var><var>x</var> ≤ <var>b</var></span>, the dual is <span class="mono">min <var>b</var>ᵀ<var>y</var> s.t. <var>A</var>ᵀ<var>y</var> = <var>c</var>, <var>y</var> ≥ 0</span> — one dual variable per constraint, and equal optimal values (strong duality). With <em>Dual simplex mode</em> checked, lpviz runs the same two-phase primal algorithm on the dual problem, then maps every dual basis back into your picture: the basic dual variables select which constraints are tight, and the displayed point is the intersection of those constraint lines (complementary slackness in action).</p>
+        <figure>
+          <svg viewBox="0 0 350 240" width="350" height="240" role="img" aria-labelledby="dual-fig">
+            <title id="dual-fig">A polygon with the primal simplex path walking its vertices, and a dual simplex path of open circles sliding in along the extension of one constraint line from far outside the region, reaching the same optimal vertex last.</title>
+            <line x1="168" y1="28" x2="340" y2="93.3" stroke="currentColor" stroke-opacity="0.3" stroke-width="1.25" stroke-dasharray="5 4" />
+            <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <g stroke="currentColor" stroke-opacity="0.3" stroke-width="1.25">
+              <line x1="337.1" y1="73.3" x2="329.9" y2="108.5" />
+              <line x1="308.2" y1="64.1" x2="311.8" y2="99.9" />
+              <line x1="292.3" y1="57" x2="290.5" y2="92.8" />
+            </g>
+            <polyline points="38,150 66,58 168,28 268,66" fill="none" stroke="var(--simplex)" stroke-width="2" stroke-opacity="0.45" />
+            <g fill="var(--simplex)" fill-opacity="0.45">
+              <circle cx="38" cy="150" r="3" /><circle cx="66" cy="58" r="3" /><circle cx="168" cy="28" r="3" />
+            </g>
+            <polyline points="333.5,90.9 310,82 291.4,74.9 268,66" fill="none" stroke="var(--simplex)" stroke-width="2" stroke-dasharray="5 3" />
+            <g fill="none" stroke="var(--simplex)" stroke-width="2">
+              <circle cx="333.5" cy="90.9" r="4" /><circle cx="310" cy="82" r="4" /><circle cx="291.4" cy="74.9" r="4" />
+            </g>
+            <circle cx="268" cy="66" r="4.5" fill="currentColor" />
+            <line x1="8" y1="216" x2="26" y2="216" stroke="var(--simplex)" stroke-width="2" stroke-opacity="0.45" />
+            <text x="32" y="220">primal — walks the vertices, always feasible</text>
+            <line x1="8" y1="230" x2="26" y2="230" stroke="var(--simplex)" stroke-width="2" stroke-dasharray="5 3" />
+            <text x="32" y="234">dual — constraint intersections outside the region</text>
+          </svg>
+          <figcaption>Dual iterates are intersections of constraint lines, drawn here sliding in along the extension of one edge (dashed). They are super-optimal and infeasible until the final one.</figcaption>
+        </figure>
         <p>The behavior looks completely different from primal simplex. The path hops between intersections of constraint lines that are usually <em>outside</em> the feasible region — "super-optimal" points that satisfy the optimality conditions but not feasibility — and only becomes feasible at the very last step, which is the optimum. The status logic flips accordingly: an infeasible dual means your (nonempty) primal is unbounded, and an unbounded dual means the primal is infeasible.</p>
 
         <h2 id="log">Reading the log</h2>
