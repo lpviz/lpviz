@@ -107,9 +107,14 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       result.style.removeProperty("--virtual-font-size");
     }
   }
+  // Set while a virtualized result is mounted, so a panel that changes height
+  // can re-window without a full re-render (see the size observer below).
+  let refillVirtualWindow: (() => void) | null = null;
+
   function render(s: State) {
     // fit() reads layout (clientWidth); keep it ahead of the DOM writes below
     fit(s);
+    refillVirtualWindow = null;
     result.className = s.resultDisplayMode === "virtual" ? "virtualized" : "";
     result.replaceChildren();
     currentHoveredRow = null;
@@ -226,6 +231,8 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       rowsEl.replaceChildren(fragment);
     };
 
+    refillVirtualWindow = fillWindow;
+
     let scrollRafId: number | null = null;
     sc.addEventListener(
       "scroll",
@@ -241,6 +248,36 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     fillWindow();
   }
   render(getState());
+
+  // The panel used to re-render only when its *contents* changed, which left
+  // two gaps once it could be resized independently (dragging the sidebar
+  // handle, or expanding the log by scrolling the sidebar):
+  //
+  //   - width: fit() sizes the font to the width, so rows stayed fitted to a
+  //     width they no longer had and wrapped;
+  //   - height: the virtual window is sized from the viewport, so a taller
+  //     panel kept showing exactly as many rows as the short one did.
+  //
+  // Width is the expensive case and needs the full re-render; height only
+  // needs the window refilled, which matters because expanding the log emits a
+  // stream of height changes.
+  let fittedWidth = result.clientWidth;
+  let fittedHeight = result.clientHeight;
+  const sizeObserver = new ResizeObserver(() => {
+    const width = result.clientWidth;
+    const height = result.clientHeight;
+    if (width !== fittedWidth) {
+      fittedWidth = width;
+      fittedHeight = height;
+      render(getState());
+      return;
+    }
+    if (height === fittedHeight) return;
+    fittedHeight = height;
+    refillVirtualWindow?.();
+  });
+  sizeObserver.observe(result);
+
   const controller = new AbortController();
   on(
     [
@@ -269,6 +306,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   return {
     destroy: () => {
       controller.abort();
+      sizeObserver.disconnect();
       clearHoverState();
       frame.remove();
     },

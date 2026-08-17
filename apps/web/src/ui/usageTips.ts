@@ -60,6 +60,7 @@ const USAGE_TIP_SECTIONS: UsageTipSection[] = [
         label: "Highlight an iterate",
         desc: "hover its row in the bottom panel",
       },
+      { label: "See more log rows", desc: "scroll the sidebar" },
     ],
   },
   {

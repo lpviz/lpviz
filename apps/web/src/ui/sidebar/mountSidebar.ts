@@ -1,6 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on } from "@/features/core/store";
 import { el } from "@/ui/dom";
+import { createSidebarLogExpansion } from "@/ui/sidebar/logExpansion";
 import { mountAnimationControlsPanel } from "@/ui/sidebar/mountAnimationControlsPanel";
 import { mountProblemPanel } from "@/ui/sidebar/mountProblemPanel";
 import { mountSolverControlsPanel } from "@/ui/sidebar/mountSolverControlsPanel";
@@ -80,6 +81,10 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   );
   ui.append(label, replay);
   children.push(mountSolverLogPanel(ui, ctx));
+  const logPanel = ui.querySelector<HTMLElement>("#terminal-container");
+  const logExpansion = logPanel
+    ? createSidebarLogExpansion({ sidebar, content, logPanel })
+    : null;
   const controller = new AbortController();
   on(
     ["solverSettings"],
@@ -94,6 +99,7 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
       sidebar.style.width = `${w}px`;
     },
     destroy: () => {
+      logExpansion?.destroy();
       controller.abort();
       for (const c of children) c.destroy();
       header.remove();

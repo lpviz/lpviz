@@ -249,6 +249,11 @@ body {
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
+  /* The sidebar only overflows once the log has been expanded by scrolling
+     (see logExpansion.ts). Reserving the gutter up front keeps the log's width
+     — and so the font size its fixed-width rows are fitted to — from changing
+     the moment the scrollbar appears. */
+  scrollbar-gutter: stable;
 }
 
 #sidebarContent .header {
