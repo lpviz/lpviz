@@ -74,7 +74,7 @@ export function boot(root: HTMLElement) {
     recomputeIfModeActive: solver.recomputeIfModeActive,
     setTraceEnabled: solver.setTraceEnabled,
 
-    startReplay: solver.startReplay,
+    toggleReplay: solver.toggleReplay,
     startRotation: solver.startRotation,
     stopRotation: solver.stopRotation,
 
@@ -107,7 +107,9 @@ export function boot(root: HTMLElement) {
           editorInteraction: { kind: "idle" },
           lastCompletedInteraction: "none",
           rotateObjectiveMode: false,
-          animationIntervalId: null,
+          // any in-flight replay was already stopped by stopRotation() above;
+          // clearing `replayActive` here without cancelling its RAF loop would
+          // leave the loop running against the freshly loaded problem
         },
         { viewportDirty: ALL_VIEWPORT_DIRTY },
       );

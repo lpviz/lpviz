@@ -5,6 +5,7 @@ import { attachCanvasInteractions } from "@/ui/canvas/canvasInteractions";
 import { mountCanvasGL } from "@/ui/canvas/mountCanvasGL";
 import { mountHelpButton } from "@/ui/canvas/mountHelpButton";
 import { mountProblemGallery } from "@/ui/canvas/mountProblemGallery";
+import { mountReplayDurationOverlay } from "@/ui/canvas/mountReplayDurationOverlay";
 import { el } from "@/ui/dom";
 
 export function mountCanvasStage(
@@ -16,6 +17,7 @@ export function mountCanvasStage(
   const viewport = el("div", { className: "canvas-stage__viewport" });
   main.append(viewport);
   parent.append(main);
+  const replayDuration = mountReplayDurationOverlay(main);
   let detachInteractions: (() => void) | null = null;
   let destroyed = false;
   const gl = mountCanvasGL(
@@ -39,6 +41,7 @@ export function mountCanvasStage(
             handleUndoRedo: ctx.services.history.handleUndoRedo,
             onSolverStartMoved: () =>
               ctx.actions.recomputeIfModeActive(getState().solverMode),
+            showReplayDuration: replayDuration.show,
           });
           ctx.services.viewport.syncViewportLayout(
             ctx.getViewportSidebarWidth(),
@@ -127,6 +130,7 @@ export function mountCanvasStage(
       gl.destroy();
       gallery.destroy();
       help.destroy();
+      replayDuration.destroy();
       main.remove();
     },
   };

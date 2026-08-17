@@ -7,6 +7,7 @@ type VirtualRowBlocks = {
   length: number;
   at(index: number): ResultTextBlock | undefined;
 };
+import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
 import type { Line, PointXY, PointXYZ } from "@lpviz/math/types";
 import {
   hasPolytopeLines,
@@ -188,6 +189,9 @@ const FIELD_DIRTY: Partial<Record<keyof State, (s: State) => ViewportDirtyFlags>
     iterateRestartIndices: () => ITERATE_DIRTY,
     iterateObjectiveVector: () => ITERATE_DIRTY,
     highlightIteratePathIndex: () => ITERATE_DIRTY,
+    // the optimum star is hidden for the duration of a replay, so starting or
+    // stopping one changes what the iterate pass draws (see IterateStarLayer)
+    replayActive: () => ITERATE_DIRTY,
     traceBuffer: () => TRACE_DIRTY,
     traceEnabled: () => TRACE_DIRTY,
     // zScale rescales every world-anchored layer's height
@@ -234,6 +238,11 @@ export type SolverSettings = {
   ellipsoidInitialScale: number;
   objectiveAngleStep: number;
   objectiveRotationSpeed: number;
+  // Total wall-clock length of an "Animate" replay in milliseconds — not a
+  // per-step delay: the replay maps elapsed time onto the whole iterate path,
+  // so it takes just as long at 20 iterates as at 20,000 (see
+  // replayController). Adjusted with the +/- keys; the name is left over from
+  // when it was a per-step delay.
   replaySpeed: number;
 };
 
@@ -259,7 +268,7 @@ export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
   ellipsoidInitialScale: 1.5,
   objectiveAngleStep: 0.1,
   objectiveRotationSpeed: 1,
-  replaySpeed: 10,
+  replaySpeed: DEFAULT_REPLAY_DURATION_MS,
 };
 
 export type State = {
@@ -291,7 +300,10 @@ export type State = {
   iteratePhases: number[];
   highlightIteratePathIndex: number | null;
   rotateObjectiveMode: boolean;
-  animationIntervalId: number | null;
+  // "an Animate replay is playing out" — the replay's RAF handle stays private
+  // to replayController (it changes every frame, and a store field that churned
+  // at 60Hz would invalidate every selector keyed on it)
+  replayActive: boolean;
   originalIteratePath: IteratePath;
   originalIteratePhases: number[];
   iterateRestartIndices: number[];
@@ -349,7 +361,7 @@ const initialState: State = {
   iteratePhases: [],
   highlightIteratePathIndex: null,
   rotateObjectiveMode: false,
-  animationIntervalId: null,
+  replayActive: false,
   originalIteratePath: EMPTY_ITERATE_PATH,
   originalIteratePhases: [],
   iterateRestartIndices: [],
@@ -603,14 +615,6 @@ export function displayedSolverStartPoint(state: State): PointXY | null {
     return nearestPolytopeVertex(state, point) ?? point;
   }
   return point;
-}
-
-export function prepareAnimationInterval(): void {
-  const { animationIntervalId } = getState();
-  if (animationIntervalId !== null) {
-    clearInterval(animationIntervalId);
-    setState({ animationIntervalId: null });
-  }
 }
 
 export function updateIteratePaths(

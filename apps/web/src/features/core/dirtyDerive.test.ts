@@ -32,6 +32,7 @@ describe("deriveViewportDirty (field -> layers)", () => {
       "iterateRestartIndices",
       "iterateObjectiveVector",
       "highlightIteratePathIndex",
+      "replayActive",
     ] as const) {
       expect(deriveViewportDirty(st({}), [key])).toEqual({ iterate: true });
     }

@@ -10,7 +10,7 @@ export function mountAnimationControlsPanel(
   const root = el("div", { className: "controlPanel controlPanel--compact" });
   parent.append(root);
   const animate = el("button", { text: "Animate" });
-  animate.addEventListener("click", () => ctx.actions.startReplay());
+  animate.addEventListener("click", () => ctx.actions.toggleReplay());
   const start = el("button", {
     id: "startRotateObjectiveButton",
     text: "Rotate Objective",
@@ -95,10 +95,12 @@ export function mountAnimationControlsPanel(
     const hasSolution = (s.originalIteratePath?.count ?? 0) > 0;
     const hasObjective = s.objectiveVector !== null;
     const isRotating = s.rotateObjectiveMode;
-    const isAnimating = s.animationIntervalId !== null && !isRotating;
+    const isAnimating = s.replayActive && !isRotating;
 
-    animate.disabled =
-      !hasComputedLines || !hasSolution || isAnimating || isRotating;
+    // the same button stops the replay it started, so it stays enabled while
+    // one is playing; its label carries the mode, matching "Stop Rotation"
+    animate.textContent = isAnimating ? "Stop Animation" : "Animate";
+    animate.disabled = !hasComputedLines || !hasSolution || isRotating;
     start.disabled =
       !hasComputedLines || !hasObjective || isAnimating || isRotating;
     stop.disabled = !isRotating;
@@ -117,7 +119,7 @@ export function mountAnimationControlsPanel(
       "originalIteratePath",
       "objectiveVector",
       "rotateObjectiveMode",
-      "animationIntervalId",
+      "replayActive",
       "traceEnabled",
       "solverSettings",
     ],

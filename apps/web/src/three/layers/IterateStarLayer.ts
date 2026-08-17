@@ -17,16 +17,15 @@ export class IterateStarLayer extends SinglePointSpriteLayer {
   }
 
   protected selectorDeps(raw: State): readonly unknown[] {
-    return [raw.originalIteratePath, raw.animationIntervalId];
+    return [raw.replayActive];
   }
 
   protected selectIndex(raw: State): number | null {
     if (raw.iteratePath.count === 0) return null;
-    const replayInProgress = raw.animationIntervalId !== null;
-    const replayComplete =
-      raw.originalIteratePath.count === 0 ||
-      raw.iteratePath.count >= raw.originalIteratePath.count;
-    if (replayInProgress && !replayComplete) return null;
+    // `replayActive` falls exactly when the replay ends — whether it played out
+    // or was stopped — and both leave the full path on screen, so the marker is
+    // always on the real optimum when it is shown
+    if (raw.replayActive) return null;
     return raw.iteratePath.count - 1;
   }
 }

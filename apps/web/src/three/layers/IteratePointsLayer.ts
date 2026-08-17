@@ -26,19 +26,25 @@ export class IteratePointsLayer extends PointCloudLayer {
       raw.iteratePath,
       raw.iteratePhases,
       raw.iterateObjectiveVector,
+      raw.replayActive,
       ctx.getSnapshot().mode,
     ];
   }
 
   protected rebuild(ctx: SceneContext): void {
     const raw = ctx.getState();
-    const { points, count, stride } = raw.iteratePath;
-    if (count === 0 || !shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)) {
+    const { points, stride } = raw.iteratePath;
+    // A replay's last point is the interpolated head sliding along the current
+    // segment, not an iterate. The line layer draws it (that is the sweep), but
+    // a dot there would be indistinguishable from a real iterate, so the cloud
+    // stops one short and each dot appears exactly as the head reaches it.
+    const count = raw.iteratePath.count - (raw.replayActive ? 1 : 0);
+    if (count <= 0 || !shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)) {
       this.hide();
       return;
     }
     const phases = raw.iteratePhases;
-    const hasPhases = phases.length === count && phases.length > 0;
+    const hasPhases = phases.length >= count && phases.length > 0;
     const objVec = raw.iterateObjectiveVector;
     this.draw(
       count,

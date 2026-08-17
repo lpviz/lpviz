@@ -1,5 +1,4 @@
 import type { AppContext } from "@/app/appContext";
-import { getState, on } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { createSidebarLogExpansion } from "@/ui/sidebar/logExpansion";
 import { mountAnimationControlsPanel } from "@/ui/sidebar/mountAnimationControlsPanel";
@@ -60,47 +59,17 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
     mountSolverControlsPanel(ui, ctx),
     mountAnimationControlsPanel(ui, ctx),
   ];
-  const label = el("label", {
-    className: "is-hidden",
-    attrs: { for: "replaySpeedSlider" },
-    text: "Speed:",
-  });
-  const replay = el("input", {
-    className: "is-hidden",
-    attrs: {
-      type: "range",
-      id: "replaySpeedSlider",
-      min: "1",
-      max: "100",
-      step: "1",
-      autocomplete: "off",
-    },
-  }) as HTMLInputElement;
-  replay.addEventListener("input", () =>
-    ctx.actions.updateSolverSetting("replaySpeed", parseInt(replay.value, 10)),
-  );
-  ui.append(label, replay);
   children.push(mountSolverLogPanel(ui, ctx));
   const logPanel = ui.querySelector<HTMLElement>("#terminal-container");
   const logExpansion = logPanel
     ? createSidebarLogExpansion({ sidebar, content, logPanel })
     : null;
-  const controller = new AbortController();
-  on(
-    ["solverSettings"],
-    ({ solverSettings }) => {
-      replay.value = String(solverSettings.replaySpeed);
-    },
-    controller.signal,
-  );
-  replay.value = String(getState().solverSettings.replaySpeed);
   return {
     updateWidth: (w: number) => {
       sidebar.style.width = `${w}px`;
     },
     destroy: () => {
       logExpansion?.destroy();
-      controller.abort();
       for (const c of children) c.destroy();
       header.remove();
     },

@@ -28,6 +28,7 @@ import {
   solverStartNearLocalPoint,
   type ConstraintDragTarget,
 } from "@/features/polytope-editor/interactionState";
+import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromLines } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
@@ -38,6 +39,7 @@ export function attachCanvasInteractions({
   sendPolytope,
   handleUndoRedo,
   onSolverStartMoved,
+  showReplayDuration,
 }: {
   canvasManager: ViewportApi;
   saveHistory: SaveHistory;
@@ -45,6 +47,7 @@ export function attachCanvasInteractions({
   handleUndoRedo: HandleUndoRedo;
   /** Re-solve the active solver after the start marker moved or reset. */
   onSolverStartMoved: () => void;
+  showReplayDuration: (durationMs: number) => void;
 }): () => void {
   let pendingDragHistory: HistoryEntry | null = null;
   let lastTap: {
@@ -722,6 +725,21 @@ export function attachCanvasInteractions({
       target.tagName === "TEXTAREA" ||
       target.tagName === "SELECT");
 
+  // "+" lengthens the replay, "-" shortens it — the flashed readout names the
+  // value so the direction is unambiguous. It shows on every press, including
+  // one that hits an end of the range, so the keys never feel dead.
+  const adjustReplayDuration = (direction: 1 | -1) => {
+    const { solverSettings } = getState();
+    const replaySpeed = stepReplayDurationMs(
+      solverSettings.replaySpeed,
+      direction,
+    );
+    if (replaySpeed !== solverSettings.replaySpeed) {
+      setState({ solverSettings: { ...solverSettings, replaySpeed } });
+    }
+    showReplayDuration(replaySpeed);
+  };
+
   const handleKeyDown = (event: KeyboardEvent) => {
     // this is a window-level capture handler; typing in form fields must not
     // trigger canvas shortcuts (or block native text-editing undo)
@@ -752,6 +770,17 @@ export function attachCanvasInteractions({
         { objectiveHidden: !objectiveHidden },
       );
       canvasManager.draw();
+    }
+    // "=" and "_" are the unshifted/shifted twins of "+" and "-", so both
+    // layouts of each key work. Checked after the modifier guard above so
+    // ctrl/cmd +/- stays browser zoom.
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      adjustReplayDuration(1);
+    }
+    if (event.key === "-" || event.key === "_") {
+      event.preventDefault();
+      adjustReplayDuration(-1);
     }
   };
 

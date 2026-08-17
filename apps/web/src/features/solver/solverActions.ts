@@ -2,7 +2,6 @@ import {
   clearIterateState,
   computeDrawingPhase,
   getState,
-  prepareAnimationInterval,
   resetTraceState,
   setState,
   setTraceCapacity,
@@ -16,6 +15,7 @@ import {
   type SolverSettingUpdater,
 } from "@/features/solver/solverControls";
 import { applySolverResult } from "@/features/solver/solverService";
+import { createReplayController } from "@/features/solver/replayController";
 import { createRotationController } from "@/features/solver/rotationController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { runSolverWorker } from "@/features/solver/workerClient";
@@ -29,7 +29,7 @@ export type SolverActions = {
   setTraceEnabled: (enabled: boolean) => void;
   startRotation: () => void;
   stopRotation: () => void;
-  startReplay: () => void;
+  toggleReplay: () => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
   invalidatePendingSolveResults: () => void;
   computePath: () => Promise<void>;
@@ -89,9 +89,18 @@ export function createSolverActions(
     setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / angleStep)));
   };
 
+  const replay = createReplayController({
+    getCanvasManager,
+    isIterateHoverActive: () => iterateHoverActive,
+  });
+
   const computePath = async () => {
     const cm = getCanvasManager();
     if (!cm) return;
+    // Before anything reads or clears the iterate state: a replay running over
+    // a path this call is about to replace (or clear, on the not-ready paths
+    // below) would keep drawing its scratch copy of the old one.
+    replay.cancel();
     const state = getState();
     const solverDefinition = getSolverControl(state.solverMode);
     if (
@@ -117,7 +126,7 @@ export function createSolverActions(
       return;
     }
     const gen = ++requestGeneration;
-    prepareAnimationInterval();
+    replay.cancel();
     try {
       const response = await runSolverWorker(request);
       if (gen !== requestGeneration) return;
@@ -137,7 +146,7 @@ export function createSolverActions(
     hasCanvas: () => getCanvasManager() !== null,
   });
   const setRotationActive = (active: boolean) => {
-    prepareAnimationInterval();
+    replay.cancel();
     if (!active) rotation.cancel();
     else rotation.resetTiming();
     setState({ rotateObjectiveMode: active, highlightIteratePathIndex: null });
@@ -146,14 +155,13 @@ export function createSolverActions(
   const stopActiveMotion = () => {
     const s = getState();
     const wasRotating = s.rotateObjectiveMode;
-    if (!wasRotating && s.animationIntervalId === null) return;
+    if (!wasRotating && !s.replayActive) return;
     invalidatePendingSolveResults();
-    prepareAnimationInterval();
+    replay.cancel();
     rotation.cancel();
     setState({
       rotateObjectiveMode: false,
       highlightIteratePathIndex: null,
-      animationIntervalId: null,
     });
     if (wasRotating) present.restoreFullVirtualResult();
   };
@@ -195,53 +203,6 @@ export function createSolverActions(
     }
     setRotationActive(true);
     rotation.begin();
-  };
-  const startReplay = () => {
-    const cm = getCanvasManager();
-    if (!cm) return;
-    const snap = getState();
-    if (snap.rotateObjectiveMode) return;
-    if (snap.animationIntervalId !== null)
-      clearInterval(snap.animationIntervalId);
-    // Replay grows a fresh IteratePath over the same flat buffer each step
-    // (just bumping `count`), so no per-frame iterate copying is needed.
-    const orig = snap.originalIteratePath;
-    const origPhases = snap.originalIteratePhases;
-    setState(
-      {
-        iteratePath: { points: orig.points, count: 0, stride: orig.stride },
-        iteratePhases: [],
-        iterateObjectiveVector: snap.originalIterateObjectiveVector,
-        highlightIteratePathIndex: null,
-        animationIntervalId: null,
-      },
-    );
-    cm.draw();
-    let i = 0;
-    const id = window.setInterval(() => {
-      if (getState().animationIntervalId !== id) return;
-      if (i >= orig.count) {
-        clearInterval(id);
-        setState({ animationIntervalId: null }, { viewportDirty: {} });
-        return;
-      }
-      setState(
-        {
-          iteratePath: {
-            points: orig.points,
-            count: i + 1,
-            stride: orig.stride,
-          },
-          ...(origPhases.length > 0
-            ? { iteratePhases: origPhases.slice(0, i + 1) }
-            : {}),
-          ...(!iterateHoverActive ? { highlightIteratePathIndex: i } : {}),
-        },
-      );
-      i++;
-      cm.draw();
-    }, snap.solverSettings.replaySpeed || 500);
-    setState({ animationIntervalId: id }, { viewportDirty: {} });
   };
   const recomputeIfModeActive = (mode: SolverMode) => {
     if (!getState().rotateObjectiveMode && getState().solverMode === mode)
@@ -292,7 +253,7 @@ export function createSolverActions(
     setTraceEnabled,
     startRotation,
     stopRotation: stopActiveMotion,
-    startReplay,
+    toggleReplay: replay.toggle,
     recomputeIfModeActive,
     invalidatePendingSolveResults,
     computePath,
@@ -307,9 +268,9 @@ export function createSolverActions(
     hasUnboundedObjectiveDirection,
     destroy: () => {
       rotation.cancel();
-      // stop any active replay; its interval would otherwise keep mutating
+      // stop any active replay; its RAF loop would otherwise keep mutating
       // the store and drawing on the destroyed viewport runtime
-      prepareAnimationInterval();
+      replay.cancel();
       controller.abort();
     },
   };

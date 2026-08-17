@@ -10,7 +10,8 @@ export type AppActions = {
   ) => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
   setTraceEnabled: (enabled: boolean) => void;
-  startReplay: () => void;
+  // one control for both directions: starts a replay, or stops the running one
+  toggleReplay: () => void;
   startRotation: () => void;
   stopRotation: () => void;
   share: () => void;
