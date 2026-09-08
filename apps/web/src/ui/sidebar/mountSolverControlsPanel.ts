@@ -26,6 +26,7 @@ const fmt = (value: number) => NUMBER_FORMAT.format(value);
 
 type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG">;
 type SettingsSync = (state: State) => void;
+type SettingField = HTMLInputElement | HTMLSelectElement;
 
 type SolverButtonUiState = {
   active: boolean;
@@ -51,6 +52,22 @@ function checkbox(id: string, onChange: (v: boolean) => void) {
   }) as HTMLInputElement;
   i.addEventListener("change", () => onChange(i.checked));
   return i;
+}
+function dropdown<T extends string>(
+  id: string,
+  options: readonly { value: T; text: string }[],
+  initial: T,
+  onChange: (v: T) => void,
+) {
+  const s = el("select", {
+    attrs: { id, autocomplete: "off" },
+  }) as HTMLSelectElement;
+  for (const opt of options) {
+    s.append(el("option", { attrs: { value: opt.value }, text: opt.text }));
+  }
+  s.value = initial;
+  s.addEventListener("change", () => onChange(s.value as T));
+  return s;
 }
 function labeled(
   text: string,
@@ -91,7 +108,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   let renderedMode: SolverMode | null = null;
   let syncSettings: SettingsSync = () => {};
 
-  function setInputValue(input: HTMLInputElement, value: string) {
+  function setInputValue(input: SettingField, value: string) {
     if (document.activeElement !== input) input.value = value;
   }
 
@@ -289,6 +306,33 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
         ctx.actions.recomputeIfModeActive("simplex");
       });
       dual.checked = st.simplexDualMode;
+      const enteringOptions = [
+        { value: "coeff", text: "Highest objective coeff" },
+        { value: "first", text: "Lowest index" },
+        { value: "last", text: "Highest index" },
+      ] as const;
+      const entering = dropdown(
+        "simplexEnteringRule",
+        enteringOptions,
+        st.simplexEnteringRule,
+        (v) => {
+          ctx.actions.updateSolverSetting("simplexEnteringRule", v);
+          ctx.actions.recomputeIfModeActive("simplex");
+        },
+      );
+      const leavingOptions = [
+        { value: "first", text: "Lowest index" },
+        { value: "last", text: "Highest index" },
+      ] as const;
+      const leaving = dropdown(
+        "simplexLeavingRule",
+        leavingOptions,
+        st.simplexLeavingRule,
+        (v) => {
+          ctx.actions.updateSolverSetting("simplexLeavingRule", v);
+          ctx.actions.recomputeIfModeActive("simplex");
+        },
+      );
       sec.append(
         el("div", { className: "settings-checkbox-row" }, [
           el(
@@ -297,9 +341,13 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
             [dual],
           ),
         ]),
+        labeled("Entering rule:", "simplexEnteringRule", entering, undefined, true),
+        labeled("Leaving rule (ratio test):", "simplexLeavingRule", leaving, undefined, true),
       );
       return (s) => {
         dual.checked = s.solverSettings.simplexDualMode;
+        setInputValue(entering, String(s.solverSettings.simplexEnteringRule));
+        setInputValue(leaving, String(s.solverSettings.simplexLeavingRule));
       };
     }
 

@@ -155,9 +155,10 @@ export function createSolverControls({
               "Simplex requires a valid feasible region.",
             )
           : null,
-      collectShareSettings: () => collectShared(["simplexDualMode"]),
+      collectShareSettings: () =>
+        collectShared(["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
       applySharedSettings: (settings) =>
-        applyShared(settings, ["simplexDualMode"]),
+        applyShared(settings, ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -172,6 +173,8 @@ export function createSolverControls({
           ...base,
           ...(snapped ? { startVertex: [snapped.x, snapped.y] } : {}),
           dual: s.solverSettings.simplexDualMode,
+          enteringRule: s.solverSettings.simplexEnteringRule,
+          leavingRule: s.solverSettings.simplexLeavingRule,
         };
       },
     },

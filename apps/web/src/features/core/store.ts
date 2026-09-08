@@ -12,6 +12,7 @@ import {
   hasPolytopeLines,
   type PolytopeRepresentation,
 } from "@lpviz/polytope/polytopeTypes";
+import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 
 export const MAX_TRACE_POINT_SPRITES = 1200;
@@ -182,6 +183,8 @@ export type SolverSettings = {
   correctorThreshold: number;
   maxitIPM: number;
   simplexDualMode: boolean;
+  simplexEnteringRule: EnteringRule;
+  simplexLeavingRule: LeavingRule;
   pdhgEta: number;
   pdhgTau: number;
   maxitPDHG: number;
@@ -199,6 +202,8 @@ const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
   correctorThreshold: 0.9,
   maxitIPM: 1000,
   simplexDualMode: false,
+  simplexEnteringRule: "first",
+  simplexLeavingRule: "first",
   pdhgEta: 0.25,
   pdhgTau: 0.25,
   maxitPDHG: 1000,

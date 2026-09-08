@@ -2,7 +2,7 @@ import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
-import { simplex } from "@lpviz/solver-engine/simplex";
+import { simplex, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
 import { packSolverResponse } from "./resultPacking";
 
 import type { IteratePath } from "@/features/core/store";
@@ -29,6 +29,8 @@ export type SolverWorkerPayload =
       objective: VecN;
       startVertex?: number[];
       dual: boolean;
+      enteringRule: EnteringRule;
+      leavingRule: LeavingRule;
     }
   | {
       solver: "pdhg";
@@ -115,10 +117,19 @@ async function runSimplex(
   lines: Lines,
   objective: VecN,
   dual: boolean,
+  enteringRule: EnteringRule,
+  leavingRule: LeavingRule,
   startVertex?: number[],
 ) {
   return wrapSolverCall("Simplex", () => {
-    const options = { tol: DEFAULT_TOLERANCE, verbose: false, dual, startVertex };
+    const options = {
+      tol: DEFAULT_TOLERANCE,
+      verbose: false,
+      dual,
+      enteringRule,
+      leavingRule,
+      startVertex,
+    };
     return simplex(lines, objective, options);
   });
 }
@@ -202,6 +213,8 @@ async function executeSolver(
         data.lines,
         data.objective,
         data.dual,
+        data.enteringRule,
+        data.leavingRule,
         data.startVertex,
       ),
     };

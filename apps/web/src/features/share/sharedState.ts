@@ -5,6 +5,8 @@ export type ShareSettings = {
   correctorThreshold?: number;
   maxitIPM?: number;
   simplexDualMode?: boolean;
+  simplexEnteringRule?: "coeff" | "first" | "last";
+  simplexLeavingRule?: "first" | "last";
   pdhgEta?: number;
   pdhgTau?: number;
   maxitPDHG?: number;
@@ -40,6 +42,8 @@ const shareKeyMap = {
   correctorThreshold: "f",
   maxitIPM: "i",
   simplexDualMode: "d",
+  simplexEnteringRule: "n",
+  simplexLeavingRule: "w",
   pdhgEta: "e",
   pdhgTau: "t",
   maxitPDHG: "p",

@@ -168,6 +168,107 @@ describe("simplex", () => {
   });
 });
 
+describe("simplex pivot rules", () => {
+  const enteringRules = ["coeff", "first", "last"] as const;
+  const leavingRules = ["first", "last"] as const;
+
+  test("every entering/leaving rule combination reaches the square optimum", () => {
+    for (const dual of [false, true]) {
+      for (const enteringRule of enteringRules) {
+        for (const leavingRule of leavingRules) {
+          const r = simplex(SQUARE, Float64Array.of(1, 1), {
+            tol: 1e-9,
+            verbose: false,
+            dual,
+            enteringRule,
+            leavingRule,
+          });
+          expect(r.status).toBe("optimal");
+          const last = r.iterations[r.iterations.length - 1]!;
+          expect(last[0]!).toBeCloseTo(-4, 6);
+          expect(last[1]!).toBeCloseTo(-4, 6);
+        }
+      }
+    }
+  });
+
+  test("rule combinations agree with the brute-force optimum on random polygons", () => {
+    let seed = 101;
+    const rand = () =>
+      (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    let runs = 0;
+    for (let t = 0; t < 40 && runs < 12; t++) {
+      const cnt = 3 + Math.floor(rand() * 5);
+      const cx = rand() * 16 - 8;
+      const cy = rand() * 16 - 8;
+      const angles = Array.from(
+        { length: cnt },
+        () => rand() * 2 * Math.PI,
+      ).sort((a, b) => a - b);
+      if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) continue;
+      const R = 1 + rand() * 8;
+      const hull = angles.map(
+        (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
+      );
+      const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
+      const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
+      const lines = hull.map((start, i) => {
+        const end = hull[(i + 1) % hull.length]!;
+        let A = end[1] - start[1];
+        let B = -(end[0] - start[0]);
+        const n = Math.hypot(A, B);
+        A /= n;
+        B /= n;
+        let C = A * start[0] + B * start[1];
+        if (A * centX + B * centY > C) {
+          A = -A;
+          B = -B;
+          C = -C;
+        }
+        return [A, B, C] as [number, number, number];
+      });
+      const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
+      if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
+      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      runs++;
+      for (const dual of [false, true]) {
+        for (const enteringRule of enteringRules) {
+          for (const leavingRule of leavingRules) {
+            const r = simplex(lines, obj, {
+              tol: 1e-9,
+              verbose: false,
+              dual,
+              enteringRule,
+              leavingRule,
+            });
+            const last = r.iterations[r.iterations.length - 1]!;
+            const got = obj[0]! * last[0]! + obj[1]! * last[1]!;
+            expect(r.status).toBe("optimal");
+            expect(got).toBeCloseTo(expected, 5);
+          }
+        }
+      }
+    }
+    expect(runs).toBeGreaterThan(5);
+  });
+
+  test("unknown rule values fall back to the default (first/first)", () => {
+    // Crafted share URLs can push arbitrary strings into the settings, so the
+    // solver must degrade to its defaults instead of misbehaving.
+    const r = simplex(SQUARE, Float64Array.of(1, 1), {
+      tol: 1e-9,
+      verbose: false,
+      dual: false,
+      enteringRule: "bogus" as unknown as "first",
+      leavingRule: "bogus" as unknown as "first",
+    });
+    expect(r.status).toBe("optimal");
+    const last = r.iterations[r.iterations.length - 1]!;
+    expect(last[0]!).toBeCloseTo(-4, 6);
+    expect(last[1]!).toBeCloseTo(-4, 6);
+  });
+});
+
 describe("ipm", () => {
   const opts = (alphaMax: number) => ({
     eps_p: 1e-6,
