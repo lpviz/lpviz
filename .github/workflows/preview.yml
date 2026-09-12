@@ -1,0 +1,130 @@
+# PR preview deployments to Cloudflare Workers.
+#
+# Runs after the CI workflow finishes for a pull request from a fork. The job
+# targets the `preview` environment, which requires a maintainer's approval
+# before it starts (open the run under Actions and click "Review deployments").
+# That approval is how a maintainer triggers a PR deployment.
+#
+# Same-repo branches are deliberately excluded: Cloudflare Workers Builds
+# already previews them automatically (branch-name alias + bot comment) on
+# every push. Workers Builds is driven by push events, which fork PRs never
+# produce, so this workflow only fills that gap.
+#
+# Security model: this workflow never checks out or executes PR code. It runs
+# the workflow file and package.json scripts from `main`, downloads the
+# already-built `dist/` artifact from the CI run, and uploads it with
+# `wrangler versions upload` (the `prdeploy` script). That creates a new
+# *version* of the `lpviz` Worker reachable at a preview URL; production
+# traffic is unaffected until someone runs `wrangler deploy`.
+name: PR preview
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy preview to Cloudflare
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name != github.repository
+    runs-on: ubuntu-latest
+    environment:
+      name: preview
+      url: ${{ steps.upload.outputs.url }}
+    concurrency:
+      group: preview-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: true
+    permissions:
+      contents: read # check out main
+      actions: read # download the CI artifact
+      pull-requests: write # comment on the PR
+    env:
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_REPO: ${{ github.event.workflow_run.head_repository.full_name }}
+      HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+    steps:
+      - name: Find the pull request for this commit
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # The commits/{sha}/pulls endpoint returns nothing for commits that only
+        # exist in a fork, so list open PRs and match on the head instead. Prefer
+        # an exact head-SHA match; fall back to the PR for the same fork branch.
+        run: |
+          number=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls?state=open&per_page=100" \
+            --jq '[.[] | select(.head.repo.full_name == env.HEAD_REPO and .head.ref == env.HEAD_BRANCH)] | (map(select(.head.sha == env.HEAD_SHA))[0] // .[0] | .number) // empty' | head -n1)
+          if [ -z "$number" ]; then
+            echo "::error::No open pull request found for $HEAD_REPO@$HEAD_BRANCH ($HEAD_SHA)"
+            exit 1
+          fi
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      # Checks out `main` (the workflow_run ref), never the PR branch. This gives
+      # us package.json's `prdeploy` script and the wrangler version pinned in bun.lock.
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download build from the CI run
+        uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+
+      - name: Upload version to Cloudflare
+        id: upload
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: "false"
+          WRANGLER_OUTPUT_FILE_DIRECTORY: ${{ runner.temp }}/wrangler
+          PR: ${{ steps.pr.outputs.number }}
+        run: |
+          bun run prdeploy --tag "pr-$PR" --preview-alias "pr-$PR" --message "PR #$PR @ ${HEAD_SHA::7}"
+          entry=$(cat "$WRANGLER_OUTPUT_FILE_DIRECTORY"/*.json | jq -c 'select(.type == "version-upload")')
+          {
+            echo "version_id=$(jq -r '.version_id' <<<"$entry")"
+            echo "version_url=$(jq -r '.preview_url' <<<"$entry")"
+            echo "url=$(jq -r '.preview_alias_url // .preview_url' <<<"$entry")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Comment on the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.pr.outputs.number }}
+          URL: ${{ steps.upload.outputs.url }}
+          VERSION_URL: ${{ steps.upload.outputs.version_url }}
+          VERSION_ID: ${{ steps.upload.outputs.version_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- lpviz-preview -->'
+          cat > "$RUNNER_TEMP/comment.md" <<MD
+          $marker
+          ### Preview deployment
+
+          | | |
+          | --- | --- |
+          | Preview | $URL |
+          | This version | $VERSION_URL |
+          | Commit | $HEAD_SHA |
+
+          Version \`$VERSION_ID\`, deployed by [this run]($RUN_URL). The preview URL is updated each time a maintainer approves a new deployment for this PR.
+          MD
+
+          existing=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+            --jq "[.[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\")))][0].id // empty" | head -n1)
+          if [ -n "$existing" ]; then
+            gh api --silent -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$existing" -F body=@"$RUNNER_TEMP/comment.md"
+          else
+            gh api --silent "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -F body=@"$RUNNER_TEMP/comment.md"
+          fi

@@ -1,0 +1,61 @@
+# Continuous integration: typecheck, dead-code check, tests, production build.
+#
+# Runs for every push to main and every pull request. For pull requests from
+# contributors without write access, GitHub holds the run until a maintainer
+# clicks "Approve and run" on the PR (repository setting: Settings > Actions >
+# General > "Require approval for all external contributors").
+#
+# No secrets are available to this workflow, so it is safe to run against
+# untrusted code. For pull requests from forks, the built `dist/` is uploaded
+# as an artifact that the "PR preview" workflow (preview.yml) deploys once a
+# maintainer approves it. Same-repo branches are previewed automatically by
+# Cloudflare Workers Builds instead.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, lint, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Check for unused code and dependencies
+        # knip is not a devDependency (the `format` script also runs it via bunx).
+        # Pin the major so a new release can't break CI without a deliberate bump.
+        run: bunx knip@6
+
+      - name: Test
+        run: bun test
+
+      - name: Build
+        run: bun run build
+
+      - name: Upload build for PR preview (fork PRs only)
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist
+          retention-days: 7
+          if-no-files-found: error
