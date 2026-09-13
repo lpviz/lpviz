@@ -81,6 +81,9 @@ function randomPolygon(rand: () => number) {
 }
 
 const flatLogs = (r: { logs: string[][] }) => r.logs.flat().join("");
+// a log row whose iteration number carries the cycling-guard marker, e.g. "  27d"
+const GUARDED_ROW = /^\s*\d+d /m;
+const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
 const lastIterate = (r: { iterations: Float64Array[] }) =>
   r.iterations[r.iterations.length - 1]!;
 
@@ -203,7 +206,7 @@ describe("simplex", () => {
           expect(r.status).toBe("optimal");
           expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
           // nondegenerate vertices never need the Bland fallback
-          expect(flatLogs(r)).not.toContain("Cycling guard");
+          expect(flatLogs(r)).not.toMatch(GUARDED_ROW);
         }
       }
     }
@@ -253,7 +256,8 @@ describe("simplex pivot rules", () => {
     // With entering rule "last", Phase 1 on STALL_LINES cycles through
     // degenerate pivots until MAX_ITERATIONS without the guard. The region is
     // open in the objective direction, so the right answer is "unbounded",
-    // which Bland's rule reaches in a handful of pivots.
+    // which Bland's rule reaches in a handful of pivots. Rows pivoted under
+    // the fallback carry a "d" after the iteration number.
     const stall = { tol: 1e-5, verbose: false, dual: false };
     const bland = simplex(STALL_LINES, STALL_OBJECTIVE, stall);
     const cycling = simplex(STALL_LINES, STALL_OBJECTIVE, {
@@ -261,8 +265,14 @@ describe("simplex pivot rules", () => {
       enteringRule: "last",
       leavingRule: "first",
     });
-    expect(flatLogs(bland)).not.toContain("Cycling guard");
-    expect(flatLogs(cycling)).toContain("Cycling guard");
+    expect(flatLogs(bland)).not.toMatch(GUARDED_ROW);
+    const phase1 = cycling.logs[0]!;
+    const firstGuarded = phase1.findIndex((row) => GUARDED_ROW.test(row));
+    expect(firstGuarded).toBeGreaterThan(MAX_CONSECUTIVE_DEGENERATE_PIVOTS);
+    // once active, every remaining iteration row of the phase is marked
+    for (const row of phase1.slice(firstGuarded)) {
+      if (/^\s*\d+d? /.test(row)) expect(row).toMatch(GUARDED_ROW);
+    }
     expect(bland.status).toBe("unbounded");
     expect(cycling.status).toBe("unbounded");
     expect(cycling.phase1Iterations!.length + cycling.iterations.length).toBeLessThan(100);

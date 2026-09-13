@@ -6,7 +6,7 @@ import {
 } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, Vec2N, Vec2Ns, VecN } from "@lpviz/math/types";
-import { fmtE, fmtF, fmtInt } from "./fmt";
+import { fmtE, fmtF, fmtStr } from "./fmt";
 
 const MAX_ITERATIONS = 100_000;
 
@@ -315,25 +315,32 @@ function selectLeavingIndex(
 // (lowest index entering and leaving) is guaranteed to avoid it. Rather than
 // letting the other rules spin until MAX_ITERATIONS, both simplex loops count
 // consecutive degenerate pivots and fall back to Bland's rule for the rest of
-// the phase once the count exceeds this limit. A legitimately degenerate
-// vertex in the app's 2-D/3-D problems needs only a handful of degenerate
-// pivots, and a false trigger merely changes the pivot rule.
+// the phase once the count exceeds this limit. Iterations pivoted under the
+// fallback carry a "d" after their number in the log, the way PDHG marks
+// Halpern restarts with "r". A legitimately degenerate vertex in the app's
+// 2-D/3-D problems needs only a handful of degenerate pivots, and a false
+// trigger merely changes the pivot rule.
 const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
 
-function createCyclingGuard(
-  initial: PivotRules,
-  tol: number,
-  logs: string[],
-  verbose: boolean,
-) {
+// Iteration column of a log row: "12" normally, "12d" while the cycling guard
+// has forced Bland's rule (see MAX_CONSECUTIVE_DEGENERATE_PIVOTS).
+const iterationLabel = (iteration: number, guarded: boolean) =>
+  fmtStr(guarded ? `${iteration}d` : `${iteration}`, 5);
+
+function createCyclingGuard(initial: PivotRules, tol: number) {
   const rules: PivotRules = { ...initial };
   let degeneratePivots = 0;
+  let active = false;
   return {
     rules,
+    /** True once the guard has switched this phase to Bland's rule. */
+    get active() {
+      return active;
+    },
     /** Record the step length (minimum ratio) of the pivot just taken. */
     recordPivot(step: number) {
       degeneratePivots = step <= tol ? degeneratePivots + 1 : 0;
-      if (degeneratePivots <= MAX_CONSECUTIVE_DEGENERATE_PIVOTS) return;
+      if (active || degeneratePivots <= MAX_CONSECUTIVE_DEGENERATE_PIVOTS) return;
       if (
         rules.entering === BLAND_RULES.entering &&
         rules.leaving === BLAND_RULES.leaving
@@ -341,16 +348,14 @@ function createCyclingGuard(
         return;
       rules.entering = BLAND_RULES.entering;
       rules.leaving = BLAND_RULES.leaving;
-      const message = `Cycling guard: ${degeneratePivots} consecutive degenerate pivots – switching to Bland's rule (lowest index) for the rest of this phase.
-`;
-      if (verbose) console.log(message);
-      logs.push(message);
+      active = true;
     },
   };
 }
 
 function formatIterationLog(
   iteration: number,
+  guarded: boolean,
   xTableau: Float64Array,
   objective: number,
   basis: boolean[],
@@ -358,7 +363,7 @@ function formatIterationLog(
 ) {
   const x0 = nOrig >= 1 ? (xTableau[0] ?? 0) - (xTableau[nOrig] ?? 0) : 0;
   const y0 = nOrig >= 2 ? (xTableau[1] ?? 0) - (xTableau[nOrig + 1] ?? 0) : 0;
-  return `${fmtInt(iteration, 5)} ${fmtF(x0, 8, 2)} ${fmtF(y0, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
+  return `${iterationLabel(iteration, guarded)} ${fmtF(x0, 8, 2)} ${fmtF(y0, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
 }
 
 function recoverPrimalPointFromDualBasis(
@@ -406,7 +411,7 @@ function simplexCoreStandard(
 
   if (verbose) console.log(header);
   logs.push(header);
-  const guard = createCyclingGuard(pivotRules, tol, logs, verbose);
+  const guard = createCyclingGuard(pivotRules, tol);
 
   let iteration = 0;
   let status: SimplexStatus = "optimal";
@@ -424,7 +429,7 @@ function simplexCoreStandard(
     objective = state.objective;
 
     const [x, y] = pointFromBasis(state.basisIndices);
-    const line = `${fmtInt(iteration, 5)} ${fmtF(x, 8, 2)} ${fmtF(y, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
+    const line = `${iterationLabel(iteration, guard.active)} ${fmtF(x, 8, 2)} ${fmtF(y, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
     if (verbose) console.log(line);
     logs.push(line);
 
@@ -505,7 +510,7 @@ function simplexCore(
   const header = `${"Iter".padStart(5)} ${"x".padStart(8)} ${"y".padStart(8)} ${"Obj".padStart(10)} ${"basis".padEnd(nCols, " ")}\n`;
   if (verbose) console.log(header);
   logs.push(header);
-  const guard = createCyclingGuard(pivotRules, tol, logs, verbose);
+  const guard = createCyclingGuard(pivotRules, tol);
 
   let iteration = 0;
   let xTableau = new Float64Array(nCols);
@@ -527,6 +532,7 @@ function simplexCore(
 
     const line = formatIterationLog(
       iteration,
+      guard.active,
       xTableau,
       objective,
       basis,
