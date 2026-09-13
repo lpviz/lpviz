@@ -358,8 +358,13 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
             [dual],
           ),
         ]),
-        labeled("Entering rule:", "simplexEnteringRule", entering),
-        labeled("Leaving rule (ratio test):", "simplexLeavingRule", leaving),
+        // label + dropdown on one line, selects aligned via a 2-column grid
+        el("div", { className: "settings-select-grid" }, [
+          el("label", { attrs: { for: "simplexEnteringRule" }, text: "Entering:" }),
+          entering,
+          el("label", { attrs: { for: "simplexLeavingRule" }, text: "Leaving:" }),
+          leaving,
+        ]),
       );
       return (s) => {
         dual.checked = s.solverSettings.simplexDualMode;

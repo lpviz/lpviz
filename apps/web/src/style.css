@@ -1348,6 +1348,20 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
   color: #333;
 }
 
+.controlPanel .settings-select-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 6px;
+  margin-top: 10px;
+}
+
+.controlPanel .settings-select-grid label,
+.controlPanel .settings-select-grid select {
+  margin: 0;
+}
+
 .controlPanel input[type="range"] {
   margin-top: 10px;
   margin-bottom: 10px;
