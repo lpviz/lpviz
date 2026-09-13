@@ -98,7 +98,7 @@
         <p>lpviz implements four algorithms that reach the same answer in very different ways. Each has its own page explaining the math, the exact implementation, and what to watch for on screen.</p>
         <div class="card-grid">
           <a href="/docs/simplex"><strong>Simplex method</strong>
-            <p>Walks from vertex to vertex along edges of the region, improving the objective at every pivot. Includes a two-phase setup and a dual simplex mode.</p></a>
+            <p>Walks from vertex to vertex along edges of the region, improving the objective at every pivot. Includes a two-phase setup, selectable pivot rules (Bland, Dantzig), and a dual simplex mode.</p></a>
           <a href="/docs/interior-point"><strong>Interior point method (IPM)</strong>
             <p>A Mehrotra-style predictor–corrector method that cuts smoothly through the interior, loosely tracking the central path.</p></a>
           <a href="/docs/pdhg"><strong>PDHG</strong>
@@ -112,7 +112,7 @@
               <tr><th>Solver</th><th>Family</th><th>Iterates look like</th><th>Key controls</th></tr>
             </thead>
             <tbody>
-              <tr><td><a href="/docs/simplex">Simplex</a></td><td>Active-set / pivoting</td><td>Hops between vertices along edges</td><td>Dual simplex mode</td></tr>
+              <tr><td><a href="/docs/simplex">Simplex</a></td><td>Active-set / pivoting</td><td>Hops between vertices along edges</td><td>Dual simplex mode, entering rule (Bland / Dantzig), ratio-test tie-break</td></tr>
               <tr><td><a href="/docs/interior-point">IPM</a></td><td>Primal-dual interior point</td><td>A smooth arc through the interior</td><td>α<sub>max</sub>, corrector threshold, max iterations</td></tr>
               <tr><td><a href="/docs/pdhg">PDHG</a></td><td>First-order primal-dual</td><td>A spiral tightening around the optimum</td><td>η, τ, Halpern, inequality mode, color by basis</td></tr>
               <tr><td><a href="/docs/central-path">Central path</a></td><td>Log-barrier / Newton</td><td>A smooth curve from the analytic center</td><td>N (number of steps)</td></tr>

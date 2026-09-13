@@ -5,7 +5,7 @@
 ## Documentation
 
 - [Docs overview](https://lpviz.net/docs/): the LP formulation (maximize c'x subject to Ax <= b), quick start, solver comparison, 3D modes, sharing, FAQ
-- [The Simplex Method](https://lpviz.net/docs/simplex): vertex pivoting, two-phase setup, Bland's anti-cycling rule, degenerate pivots, dual simplex mode
+- [The Simplex Method](https://lpviz.net/docs/simplex): vertex pivoting, two-phase setup, selectable pivot rules (Bland's and Dantzig's) with a cycling guard, degenerate pivots, dual simplex mode
 - [Interior Point Methods](https://lpviz.net/docs/interior-point): KKT conditions, Mehrotra predictor-corrector, fraction-to-boundary steps, infeasible starts, the alpha_max and corrector-threshold controls
 - [PDHG](https://lpviz.net/docs/pdhg): saddle-point formulation, step-size stability, spiraling dynamics, Halpern acceleration with adaptive restarts, basis identification
 - [The Central Path](https://lpviz.net/docs/central-path): the logarithmic barrier, analytic centers, Newton path-tracing, connection to interior point methods

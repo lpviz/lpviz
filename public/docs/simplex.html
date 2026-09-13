@@ -6,18 +6,18 @@
     <title>The Simplex Method, Visualized — lpviz Docs</title>
     <meta
       name="description"
-      content="How the Simplex method solves linear programs by walking from vertex to vertex: two-phase setup, Bland's anti-cycling rule, degenerate pivots, and dual simplex — visualized interactively in lpviz."
+      content="How the Simplex method solves linear programs by walking from vertex to vertex: two-phase setup, Bland's and Dantzig's pivot rules, degenerate pivots, and dual simplex — visualized interactively in lpviz."
     />
     <link rel="canonical" href="https://lpviz.net/docs/simplex" />
     <link rel="stylesheet" href="/docs/docs.css" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="lpviz" />
     <meta property="og:title" content="The Simplex Method, Visualized" />
-    <meta property="og:description" content="Watch the Simplex algorithm pivot from vertex to vertex of a polytope you draw: two phases, Bland's rule, unboundedness, and dual simplex, explained." />
+    <meta property="og:description" content="Watch the Simplex algorithm pivot from vertex to vertex of a polytope you draw: two phases, Bland's and Dantzig's pivot rules, unboundedness, and dual simplex, explained." />
     <meta property="og:url" content="https://lpviz.net/docs/simplex" />
     <meta name="twitter:card" content="summary" />
     <meta name="twitter:title" content="The Simplex Method, Visualized — lpviz" />
-    <meta name="twitter:description" content="Two-phase simplex, Bland's rule, and dual simplex on polytopes you draw." />
+    <meta name="twitter:description" content="Two-phase simplex, Bland's and Dantzig's rules, and dual simplex on polytopes you draw." />
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
@@ -95,8 +95,8 @@
         <h2 id="pivoting">The pivot loop</h2>
         <p>At each iteration, Simplex computes the <em>reduced cost</em> of every nonbasic variable — the rate at which the objective would improve per unit increase of that variable. Then:</p>
         <ol>
-          <li><strong>Entering variable:</strong> lpviz uses <strong>Bland's rule</strong> — pick the lowest-index variable with positive reduced cost. Bland's rule is not the fastest pivot rule, but it provably never cycles, so the visualization can never loop forever on a degenerate drawing.</li>
-          <li><strong>Leaving variable (ratio test):</strong> increase the entering variable until some basic variable hits zero; the minimum ratio decides which one leaves (ties broken again by smallest index). Geometrically, this is sliding along an edge until the next constraint becomes tight.</li>
+          <li><strong>Entering variable:</strong> by default lpviz uses <strong>Bland's rule</strong> — pick the lowest-index variable with positive reduced cost (<em>Bland (low)</em> in the Simplex settings). Bland's rule is not the fastest pivot rule, but together with the lowest-index tie-break below it provably never cycles. Two alternatives are available: <em>Dantzig</em> picks the variable with the largest reduced cost — the classic textbook rule, which often needs fewer pivots — and <em>Bland (high)</em> picks the highest index. Neither of those guarantees termination on a degenerate drawing, so lpviz counts consecutive degenerate pivots and switches back to Bland's rule for the rest of the phase when a run of them looks like a cycle; the log notes when this happens.</li>
+          <li><strong>Leaving variable (ratio test):</strong> increase the entering variable until some basic variable hits zero; the minimum ratio decides which one leaves; ties are broken by index — lowest by default, or highest via the <em>Leaving rule</em> setting. Geometrically, this is sliding along an edge until the next constraint becomes tight.</li>
           <li><strong>Unboundedness:</strong> if no basic variable ever hits zero, the edge is a ray on which the objective grows forever — the log reports <em>LP is unbounded</em>. You can trigger this by leaving the region open in the objective direction.</li>
         </ol>
         <p><strong>Degenerate pivots</strong> happen when the minimum ratio is zero: the basis changes but the vertex does not move. In the log you'll see consecutive iterations with identical coordinates but different basis strings — the algorithm is reindexing the same corner before it can leave it. Vertices where more than <var>n</var> constraints meet (easy to create by dragging edges) produce exactly this.</p>
