@@ -1,6 +1,6 @@
 # lpviz
 
-> lpviz (https://lpviz.net) is a free, open-source, interactive web app for visualizing linear programming solvers. Users draw a feasible region (a polytope), aim a linear objective, and watch five algorithms solve the LP iteration by iteration: the Simplex method, a Mehrotra-style primal-dual interior point method (IPM), the primal-dual hybrid gradient method (PDHG, with optional Halpern acceleration and restarts), the ellipsoid method (with deep cuts, an objective ray shoot, and Chebyshev/analytic/volumetric cutting-plane query points), and a direct trace of the central path via log-barrier Newton steps. All computation runs client-side in the browser. A 3-variable mode is available at https://lpviz.net/3d.
+> lpviz (https://lpviz.net) is a free, open-source, interactive web app for visualizing linear programming solvers. Users draw a feasible region (a polytope), aim a linear objective, and watch five algorithms solve the LP iteration by iteration: the Simplex method, a Mehrotra-style primal-dual interior point method (IPM), the primal-dual hybrid gradient method (PDHG, with optional Halpern acceleration and restarts), the ellipsoid method (with deep cuts, an objective ray shoot, and Chebyshev/analytic/volumetric cutting-plane query points), and a direct trace of the central path via log-barrier Newton steps. All computation runs client-side in the browser. A 3-variable mode at https://lpviz.net/3d builds the feasible region as a convex solid and runs the same five solvers in three dimensions.
 
 ## Documentation
 
@@ -10,6 +10,7 @@
 - [PDHG](https://lpviz.net/docs/pdhg): saddle-point formulation, step-size stability, spiraling dynamics, Halpern acceleration with adaptive restarts, basis identification
 - [The Ellipsoid Method](https://lpviz.net/docs/ellipsoid): localizing sets and separation oracles, the minimum-volume ellipsoid update, deep cuts, the objective ray shoot, the rho = sqrt(c'Pc) termination certificate, and the Chebyshev, analytic (ACCPM) and volumetric (Vaidya) cutting-plane query points
 - [The Central Path](https://lpviz.net/docs/central-path): the logarithmic barrier, analytic centers, Newton path-tracing, connection to interior point methods
+- [The 3-Variable Editor](https://lpviz.net/docs/three-variables): sketching a base polygon and extruding it into a solid, sculpting faces/corners/edges, the objective sphere sweep, how each solver behaves in three variables (tubes, ellipsoid wireframes, cutting-plane polyhedra, the draggable start point), view controls, sharing
 
 ## Source and citation
 

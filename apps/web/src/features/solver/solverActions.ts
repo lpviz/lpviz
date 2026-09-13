@@ -45,9 +45,7 @@ export type SolverActions = {
   destroy: () => void;
 };
 
-export function createSolverActions(
-  getCanvasManager: () => ViewportApi | null,
-): SolverActions {
+export function createSolverActions(getCanvasManager: () => ViewportApi | null): SolverActions {
   let requestGeneration = 0;
   let iterateHoverActive = false;
   const present = createResultPresenter({ getCanvasManager });
@@ -56,37 +54,29 @@ export function createSolverActions(
     setState({
       solverSettings: { ...getState().solverSettings, [key]: value },
     });
-  const hasUnboundedObjectiveDirection = (state: State) =>
-    !!(
-      hasPolytopeLines(state.polytope) &&
-      state.objectiveVector &&
-      state.polytope.kind === "unbounded" &&
-      isObjectiveDirectionUnbounded(state.polytope.lines, [
-        state.objectiveVector.x,
-        state.objectiveVector.y,
-      ])
-    );
+  const hasUnboundedObjectiveDirection = (state: State) => !!(hasPolytopeLines(state.polytope) && state.objectiveVector && state.polytope.kind === "unbounded" && isObjectiveDirectionUnbounded(state.polytope.lines, [state.objectiveVector.x, state.objectiveVector.y]));
   const solverControls = createSolverControls({
     updateSolverSetting,
     hasUnboundedObjectiveDirection,
   });
-  const getSolverControl = (mode: SolverMode) =>
-    solverControls.find((c) => c.mode === mode);
+  const getSolverControl = (mode: SolverMode) => solverControls.find((c) => c.mode === mode);
 
   const clearComputedState = () => {
     clearIterateState();
     resetTraceState();
     present.clearResult();
   };
+  // objective + constraint inputs present for the active problem dimension
+  const hasProblemInputs = (state: State): boolean => (state.problemMode === "3d" ? state.objectiveVector3 !== null && state.polytope3 !== null : state.objectiveVector !== null && hasPolytopeLines(state.polytope));
   const invalidatePendingSolveResults = () => {
     requestGeneration++;
   };
   const syncTraceCapacity = () => {
-    const angleStep = Math.max(
-      0.001,
-      getState().solverSettings.objectiveAngleStep || 0.001,
-    );
-    setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / angleStep)));
+    const angleStep = Math.max(0.001, getState().solverSettings.objectiveAngleStep || 0.001);
+    // one full azimuth revolution of traces; the 3D sphere sweep keeps several
+    // pole-to-pole passes alive so the trace family reads as a sphere covering
+    const revolutions = getState().problemMode === "3d" ? 6 : 1;
+    setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / angleStep) * revolutions));
   };
 
   const replay = createReplayController({
@@ -103,12 +93,7 @@ export function createSolverActions(
     replay.cancel();
     const state = getState();
     const solverDefinition = getSolverControl(state.solverMode);
-    if (
-      !solverDefinition ||
-      !state.objectiveVector ||
-      computeDrawingPhase(state) !== "ready_for_solvers" ||
-      !hasPolytopeLines(state.polytope)
-    ) {
+    if (!solverDefinition || !hasProblemInputs(state) || computeDrawingPhase(state) !== "ready_for_solvers") {
       invalidatePendingSolveResults();
       clearComputedState();
       return;
@@ -134,9 +119,7 @@ export function createSolverActions(
       cm.draw();
     } catch (error) {
       if (gen !== requestGeneration) return;
-      present.renderError(
-        error instanceof Error ? error.message : String(error),
-      );
+      present.renderError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -167,10 +150,7 @@ export function createSolverActions(
   };
   const handleProblemChange = () => {
     const s = getState();
-    const ready =
-      computeDrawingPhase(s) === "ready_for_solvers" &&
-      hasPolytopeLines(s.polytope) &&
-      s.objectiveVector !== null;
+    const ready = computeDrawingPhase(s) === "ready_for_solvers" && hasProblemInputs(s);
     if (!ready) {
       invalidatePendingSolveResults();
       stopActiveMotion();
@@ -186,17 +166,16 @@ export function createSolverActions(
   };
   const setTraceEnabled = (enabled: boolean) => {
     const cm = getCanvasManager();
-    setState(
-      { traceEnabled: enabled },
-    );
+    setState({ traceEnabled: enabled });
     if (!enabled) {
       resetTraceState();
       cm?.draw();
     } else syncTraceCapacity();
   };
   const startRotation = () => {
-    if (!getState().objectiveVector)
-      setState({ objectiveVector: { x: 1, y: 0 } });
+    if (getState().problemMode === "3d") {
+      if (!getState().objectiveVector3) setState({ objectiveVector3: { x: 1, y: 0, z: 1 } });
+    } else if (!getState().objectiveVector) setState({ objectiveVector: { x: 1, y: 0 } });
     if (getState().traceEnabled) {
       syncTraceCapacity();
       resetTraceState();
@@ -205,8 +184,7 @@ export function createSolverActions(
     rotation.begin();
   };
   const recomputeIfModeActive = (mode: SolverMode) => {
-    if (!getState().rotateObjectiveMode && getState().solverMode === mode)
-      void computePath();
+    if (!getState().rotateObjectiveMode && getState().solverMode === mode) void computePath();
   };
   const resetTraceAndRedrawIfNeeded = () => {
     if (getState().traceBuffer.length === 0) return;
@@ -222,9 +200,7 @@ export function createSolverActions(
   const setConstraintHighlight = (index: number | null) => {
     const cm = getCanvasManager();
     if (!cm || getState().highlightIndex === index) return;
-    setState(
-      { highlightIndex: index },
-    );
+    setState({ highlightIndex: index });
     cm.draw();
   };
   const setIterateHighlight = (index: number | null) => {
@@ -232,9 +208,7 @@ export function createSolverActions(
     if (!cm) return;
     iterateHoverActive = index !== null;
     if (getState().highlightIteratePathIndex === index) return;
-    setState(
-      { highlightIteratePathIndex: index },
-    );
+    setState({ highlightIteratePathIndex: index });
     cm.draw();
   };
   let wasNavigatingViewport = getState().isNavigatingViewport;

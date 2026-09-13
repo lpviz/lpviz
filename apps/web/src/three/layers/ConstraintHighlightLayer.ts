@@ -6,12 +6,8 @@ import { Group } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import {
-  applyHugeBounds,
-  lineDepthMaterial,
-  replaceLinePositions,
-} from "../helpers/sharedLineMaterials";
+import { is3DSolidActive, shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
@@ -23,12 +19,9 @@ const CLIP_MARGIN_UNITS = 50;
 const DEFAULT_3D_EXTENT = 5000;
 const EPS = 1e-10;
 
-const getConstraintMat = (is3D: boolean) =>
-  lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, is3D);
+const getConstraintMat = (is3D: boolean) => lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, is3D);
 
-function getVisibleBounds(
-  snap: ReturnType<SceneContext["getSnapshot"]>,
-): BoundingBox {
+function getVisibleBounds(snap: ReturnType<SceneContext["getSnapshot"]>): BoundingBox {
   if (snap.mode === "2d") {
     const halfWidth = (snap.orthographic.right - snap.orthographic.left) / 2;
     const halfHeight = (snap.orthographic.top - snap.orthographic.bottom) / 2;
@@ -54,9 +47,7 @@ function getVisibleBounds(
     { x: rect.width / 2, y: rect.height },
     { x: rect.width, y: rect.height },
   ];
-  const pts = screenPoints
-    .map((p) => projectCanvasPointToWorldPlane(snap, rect, p, 0))
-    .filter((p): p is PointXY => p !== null);
+  const pts = screenPoints.map((p) => projectCanvasPointToWorldPlane(snap, rect, p, 0)).filter((p): p is PointXY => p !== null);
   if (pts.length === 0) {
     return {
       minX: -DEFAULT_3D_EXTENT,
@@ -73,10 +64,7 @@ function getVisibleBounds(
   };
 }
 
-function clipLineToBounds(
-  line: Line,
-  b: BoundingBox,
-): [PointXY, PointXY] | null {
+function clipLineToBounds(line: Line, b: BoundingBox): [PointXY, PointXY] | null {
   const [A, B, C] = line;
   if (Math.abs(A) < EPS && Math.abs(B) < EPS) return null;
   if (Math.abs(B) > Math.abs(A)) {
@@ -117,24 +105,7 @@ export class ConstraintHighlightLayer extends LayerBase {
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
     const snap = ctx.getSnapshot();
-    return [
-      raw.completionMode,
-      raw.highlightIndex,
-      raw.polytope,
-      raw.is3DMode,
-      raw.isTransitioning3D,
-      snap.mode,
-      snap.orthographic.left,
-      snap.orthographic.right,
-      snap.orthographic.top,
-      snap.orthographic.bottom,
-      snap.target.x,
-      snap.target.y,
-      snap.unitsPerPixel,
-      snap.width,
-      snap.height,
-      snap.scaleFactor,
-    ];
+    return [raw.completionMode, raw.highlightIndex, raw.polytope, raw.is3DMode, raw.isTransitioning3D, raw.problemMode, raw.editor3Phase, snap.mode, snap.orthographic.left, snap.orthographic.right, snap.orthographic.top, snap.orthographic.bottom, snap.target.x, snap.target.y, snap.unitsPerPixel, snap.width, snap.height, snap.scaleFactor];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -146,7 +117,9 @@ export class ConstraintHighlightLayer extends LayerBase {
       raw.highlightIndex === null ||
       !raw.polytope ||
       !hasPolytopeLines(raw.polytope) ||
-      !shouldRenderSnapshotMode(snap.mode, raw)
+      !shouldRenderSnapshotMode(snap.mode, raw) ||
+      // 3-variable solids highlight faces via Polytope3DLayer instead
+      is3DSolidActive(raw)
     ) {
       this.cSegs.visible = false;
       return;

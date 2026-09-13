@@ -3,10 +3,7 @@ import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
-export function mountAnimationControlsPanel(
-  parent: HTMLElement,
-  ctx: AppContext,
-) {
+export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
   parent.append(root);
   const animate = el("button", { text: "Animate" });
@@ -18,10 +15,7 @@ export function mountAnimationControlsPanel(
   start.addEventListener("click", () => ctx.actions.startRotation());
   const stop = el("button", { text: "Stop Rotation" });
   stop.addEventListener("click", () => ctx.actions.stopRotation());
-  root.append(
-    el("div", { className: "button-group" }, [animate]),
-    el("div", { className: "button-group" }, [start, stop]),
-  );
+  root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation is-hidden" });
   const angle = el("input", {
     attrs: {
@@ -33,12 +27,7 @@ export function mountAnimationControlsPanel(
       autocomplete: "off",
     },
   }) as HTMLInputElement;
-  angle.addEventListener("input", () =>
-    ctx.actions.updateSolverSetting(
-      "objectiveAngleStep",
-      parseFloat(angle.value),
-    ),
-  );
+  angle.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(angle.value)));
   const speed = el("input", {
     attrs: {
       type: "range",
@@ -49,18 +38,11 @@ export function mountAnimationControlsPanel(
       autocomplete: "off",
     },
   }) as HTMLInputElement;
-  speed.addEventListener("input", () =>
-    ctx.actions.updateSolverSetting(
-      "objectiveRotationSpeed",
-      parseFloat(speed.value),
-    ),
-  );
+  speed.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(speed.value)));
   const trace = el("input", {
     attrs: { type: "checkbox", id: "traceCheckbox" },
   }) as HTMLInputElement;
-  trace.addEventListener("change", () =>
-    ctx.actions.setTraceEnabled(trace.checked),
-  );
+  trace.addEventListener("change", () => ctx.actions.setTraceEnabled(trace.checked));
   rot.append(
     el("div", { className: "rotation-layout" }, [
       el("div", { className: "rotation-column" }, [
@@ -91,9 +73,9 @@ export function mountAnimationControlsPanel(
   );
   root.append(rot);
   function render(s: State) {
-    const hasComputedLines = hasPolytopeLines(s.polytope);
+    const hasComputedLines = s.problemMode === "3d" ? s.polytope3?.kind === "bounded" : hasPolytopeLines(s.polytope);
     const hasSolution = (s.originalIteratePath?.count ?? 0) > 0;
-    const hasObjective = s.objectiveVector !== null;
+    const hasObjective = s.problemMode === "3d" ? s.objectiveVector3 !== null : s.objectiveVector !== null;
     const isRotating = s.rotateObjectiveMode;
     const isAnimating = s.replayActive && !isRotating;
 
@@ -104,9 +86,7 @@ export function mountAnimationControlsPanel(
     start.disabled =
       !hasComputedLines || !hasObjective || isAnimating || isRotating;
     stop.disabled = !isRotating;
-    rot.className = isRotating
-      ? "objective-rotation is-block"
-      : "objective-rotation is-hidden";
+    rot.className = isRotating ? "objective-rotation is-block" : "objective-rotation is-hidden";
     trace.checked = s.traceEnabled;
     angle.value = String(s.solverSettings.objectiveAngleStep);
     speed.value = String(s.solverSettings.objectiveRotationSpeed);
@@ -116,8 +96,10 @@ export function mountAnimationControlsPanel(
   on(
     [
       "polytope",
+      "polytope3",
       "originalIteratePath",
       "objectiveVector",
+      "objectiveVector3",
       "rotateObjectiveMode",
       "replayActive",
       "traceEnabled",

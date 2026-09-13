@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>The 3-Variable Editor — lpviz Docs</title>
+    <meta
+      name="description"
+      content="lpviz's 3-variable mode: sketch a base polygon, extrude it into a solid, push and pull faces, cut corners and bevel edges, then watch Simplex, interior point, PDHG, the ellipsoid method and the central path solve the resulting three-variable linear program in 3D."
+    />
+    <link rel="canonical" href="https://lpviz.net/docs/three-variables" />
+    <link rel="stylesheet" href="/docs/docs.css" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="lpviz" />
+    <meta property="og:title" content="The 3-Variable Editor — lpviz" />
+    <meta property="og:description" content="Build a three-variable linear program as a solid and watch five solvers work on it in 3D." />
+    <meta property="og:url" content="https://lpviz.net/docs/three-variables" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="The 3-Variable Editor — lpviz" />
+    <meta name="twitter:description" content="Sketch, extrude, sculpt a solid; solve the LP in three variables." />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "TechArticle",
+            "headline": "The 3-Variable Editor",
+            "description": "How lpviz's 3-variable mode builds a linear program as a convex solid and visualizes its solvers in three dimensions.",
+            "url": "https://lpviz.net/docs/three-variables",
+            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
+          },
+          {
+            "@type": "BreadcrumbList",
+            "itemListElement": [
+              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
+              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
+              { "@type": "ListItem", "position": 3, "name": "3 Variables", "item": "https://lpviz.net/docs/three-variables" }
+            ]
+          }
+        ]
+      }
+    </script>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav aria-label="Documentation">
+        <a class="brand" href="/">lpviz</a>
+        <a href="/docs/">Docs</a>
+        <a href="/docs/simplex">Simplex</a>
+        <a href="/docs/interior-point">Interior Point</a>
+        <a href="/docs/pdhg">PDHG</a>
+        <a href="/docs/ellipsoid">Ellipsoid</a>
+        <a href="/docs/central-path">Central Path</a>
+        <a href="/docs/three-variables" class="is-active" aria-current="page">3 Variables</a>
+      </nav>
+    </header>
+    <main>
+      <article>
+        <p class="breadcrumbs"><a href="/docs/">Docs</a> / 3 Variables</p>
+        <h1>The 3-variable editor</h1>
+        <p class="lede">At <a href="https://lpviz.net/3d">lpviz.net/3d</a> the decision variable has three coordinates. The feasible region is a convex solid instead of a polygon, every face is one inequality constraint, and the same five solvers run on the resulting LP — with their paths drawn as tubes through space rather than lines on a plane.</p>
+
+        <figure>
+          <svg viewBox="0 0 340 230" width="340" height="230" role="img" aria-labelledby="tv-fig">
+            <title id="tv-fig">A convex prism drawn in perspective with a hexagonal base. A simplex path climbs its edges from a bottom corner to the top corner marked as the optimum; an objective arrow points up and to the right.</title>
+            <!-- base hexagon -->
+            <polygon points="70,190 130,214 226,204 268,166 218,140 122,148" fill="currentColor" fill-opacity="0.05" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" />
+            <!-- top hexagon (extruded) -->
+            <polygon points="70,90 130,114 226,104 268,66 218,40 122,48" fill="currentColor" fill-opacity="0.08" stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5" />
+            <!-- vertical edges -->
+            <g stroke="currentColor" stroke-opacity="0.5" stroke-width="1.5">
+              <line x1="70" y1="190" x2="70" y2="90" /><line x1="130" y1="214" x2="130" y2="114" /><line x1="226" y1="204" x2="226" y2="104" />
+              <line x1="268" y1="166" x2="268" y2="66" /><line x1="218" y1="140" x2="218" y2="40" stroke-dasharray="3 3" /><line x1="122" y1="148" x2="122" y2="48" stroke-dasharray="3 3" />
+            </g>
+            <!-- simplex path along edges -->
+            <polyline points="70,190 130,214 226,204 226,104 268,66" fill="none" stroke="var(--simplex)" stroke-width="3" stroke-linejoin="round" />
+            <g fill="var(--simplex)">
+              <circle cx="70" cy="190" r="3.5" /><circle cx="130" cy="214" r="3.5" /><circle cx="226" cy="204" r="3.5" /><circle cx="226" cy="104" r="3.5" />
+            </g>
+            <!-- objective arrow from the centroid -->
+            <line x1="170" y1="128" x2="236" y2="82" stroke="#008000" stroke-width="2" />
+            <polygon points="236,82 224,86 230,94" fill="#008000" />
+            <circle cx="268" cy="66" r="5" fill="currentColor" />
+          </svg>
+          <figcaption>A base polygon extruded into a prism; Simplex walks its edges to the top corner the objective points at.</figcaption>
+        </figure>
+
+        <h2 id="problem">The problem</h2>
+        <p>Nothing about the LP changes except <var>n</var>: maximize <var>c</var>ᵀ<var>x</var> subject to <var>A</var><var>x</var> ≤ <var>b</var> with <var>x</var> ∈ ℝ³. Each row of <var>A</var><var>x</var> ≤ <var>b</var> is now a half-space, so the feasible region is the intersection of half-spaces — a convex polyhedron — and each of its faces is exactly one constraint. The panel at the top of the sidebar lists that system as you build, one inequality per face, in the same form the 2-variable app uses.</p>
+        <p>The editor keeps the solid convex by construction: what you place are its <em>corners</em>, and the solid is always their convex hull. Any edit that would fold a face inward simply produces the hull of the new corners, so the constraint system always describes a genuine convex region.</p>
+
+        <h2 id="building">Building the solid</h2>
+        <p>Modeling proceeds in three short phases, then stays editable.</p>
+        <ol>
+          <li><strong>Sketch the base.</strong> Click the grid to add the vertices of a base polygon on the ground plane, exactly as in the 2-variable app. Close it by clicking the first vertex or pressing <kbd>Enter</kbd>.</li>
+          <li><strong>Extrude.</strong> An orange handle appears at the base's center. Drag it upward to pull the polygon into a prism; the height is the extrusion.</li>
+          <li><strong>Aim the objective.</strong> Move the mouse to aim the objective arrow, anchored at the solid's centroid, and click to lock it in. From here the solvers run and every edit re-solves live.</li>
+        </ol>
+        <p>Once the solid exists you sculpt it directly:</p>
+        <ul>
+          <li><strong>Move a corner</strong> by dragging it. Corners move on the plane facing the camera, so a drag tracks the mouse from any viewpoint.</li>
+          <li><strong>Split a face:</strong> double-click it to plant a new vertex on it, then pull that vertex out along the face's normal. The hull grows a new corner and the old face becomes several.</li>
+          <li><strong>Push or pull a face</strong> by dragging it; it slides along its own normal, which is how you tighten or relax one constraint.</li>
+          <li><strong>Cut a corner</strong> by double-clicking it: a new face chamfers it away.</li>
+          <li><strong>Bevel an edge</strong> by double-clicking it.</li>
+          <li><strong>Delete a corner</strong> with a right-click, or <strong>delete a face</strong> by hovering it and pressing <kbd>X</kbd>. Removing a face relaxes a constraint; the editor refuses the removal if it would make the region unbounded.</li>
+          <li><kbd>S</kbd> toggles snapping to the grid, and <kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd> undo and redo every edit.</li>
+        </ul>
+        <p>Faces facing away from the camera are dimmed and their edges drawn lighter, so the near side of the solid reads as near. Hovering a face highlights it, and hovering a constraint's row in the panel highlights the matching face.</p>
+
+        <h2 id="objective">The objective</h2>
+        <p>The green arrow is <var>c</var>. Drag its tip to re-aim it, or press <kbd>H</kbd> to hide it when it clutters the picture. A light drop line from the tip to the ground plane is a depth cue: without it a single arrow in perspective is ambiguous. The arrow is drawn from the centroid for legibility only; the objective is a direction and the LP does not depend on where it is anchored.</p>
+        <p><em>Rotate Objective</em> sweeps <var>c</var> over the whole sphere rather than around a circle: its azimuth advances by the angle step each frame while its inclination oscillates at an incommensurate frequency, so the directions never repeat and gradually cover every orientation. With <em>Trace</em> on, the solver paths from those directions accumulate into a shell around the solid; the trace keeps several passes so the shell fills in.</p>
+
+        <h2 id="solving">Solving in three variables</h2>
+        <p>Every solver is written for <var>n</var> variables, so all five run unchanged, and the log gains a <strong>z</strong> column.</p>
+        <ul>
+          <li><a href="/docs/simplex"><strong>Simplex</strong></a> walks the solid's edges from vertex to vertex once Phase 1 has found a first feasible corner. Dual simplex hops between intersections of three constraint planes outside the solid, which can land far away when two of the planes are nearly parallel — the same behavior as in two variables, now in space.</li>
+          <li><a href="/docs/interior-point"><strong>IPM</strong></a> and <a href="/docs/pdhg"><strong>PDHG</strong></a> start from the gray ring, which sits at the origin until you drag it anywhere in space (it moves on the plane facing the camera, like a corner); right-click it to reset. For primal Simplex the ring snaps to the nearest corner and the run warm-starts there.</li>
+          <li>The <a href="/docs/ellipsoid"><strong>ellipsoid method</strong></a> draws its covering ellipsoids as wireframes — three great circles each — nesting toward the optimum. The Chebyshev, analytic and volumetric query points draw the ball or ellipsoid inscribed at each query point, and hovering a row of the log shows the polyhedron of cuts that iteration was still working in.</li>
+          <li>The <a href="/docs/central-path"><strong>central path</strong></a> runs from the solid's centroid, which is the strictly interior start its Newton steps need.</li>
+        </ul>
+        <p>Paths are drawn as tubes with a fixed on-screen width, so a trajectory looks the same from every angle and shades like a solid; in the 2-variable app's 3D view the same applies. Hovering a log row highlights the iterate, and <em>Animate</em> replays the run as a sweep along the path.</p>
+
+        <h2 id="view">Moving around</h2>
+        <ul>
+          <li><strong>Orbit</strong> with a right-drag, <strong>pan</strong> by left-dragging empty space, <strong>zoom</strong> with the scroll wheel, and click the zoom button to fit the solid in view.</li>
+          <li>There is no height-scale slider here: <var>z</var> is a real coordinate, not a lifted objective value, so the solid is drawn at true scale.</li>
+          <li>The <em>2D</em> button in the toolbar returns to the 2-variable app.</li>
+        </ul>
+
+        <h2 id="sharing">Sharing</h2>
+        <p>The share button encodes the solid's corners, the objective, the chosen solver and its settings — and the start marker if you moved it — into the link, so a <code>/3d</code> link reproduces the exact scene. Links are plain base64url text that survives being pasted anywhere, and older 2-variable links keep working.</p>
+
+        <nav class="pager" aria-label="Continue reading">
+          <a href="/docs/central-path"><span class="dir">← Previous</span>The Central Path</a>
+          <a class="next" href="/docs/"><span class="dir">Back to</span>Docs overview</a>
+        </nav>
+      </article>
+    </main>
+    <footer class="site-footer">
+      <div>
+        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
+      </div>
+    </footer>
+  </body>
+</html>

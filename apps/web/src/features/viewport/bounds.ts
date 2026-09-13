@@ -1,5 +1,6 @@
 import { computeFlatZ, type IteratePath } from "@/features/core/store";
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, PointXYZ } from "@lpviz/math/types";
+import type { Polytope3Representation } from "@lpviz/polytope/polytope3";
 
 type TraceEntry = IteratePath & {
   objectiveVector: PointXY | null;
@@ -15,23 +16,16 @@ type ZoomFitInputs = {
   objectiveVector: PointXY | null;
   currentObjective: PointXY | null;
   objectiveHidden: boolean;
+  problemMode: "2d" | "3d";
+  polytope3: Polytope3Representation | null;
+  objectiveVector3: PointXYZ | null;
 };
 
 // Accumulates min/max in a single pass with no intermediate arrays: the old
 // per-point {x, y} objects plus Math.min(...spread) over every iterate both
 // allocated heavily and, above ~125k z values (V8's argument limit), threw a
 // RangeError that broke zoom-to-fit outright at high solver iteration counts.
-export function collectZoomFitBounds({
-  vertices,
-  iteratePath,
-  originalIteratePath,
-  iterateObjectiveVector,
-  originalIterateObjectiveVector,
-  traceBuffer,
-  objectiveVector,
-  currentObjective,
-  objectiveHidden,
-}: ZoomFitInputs) {
+export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePath, iterateObjectiveVector, originalIterateObjectiveVector, traceBuffer, objectiveVector, currentObjective, objectiveHidden, problemMode, polytope3, objectiveVector3 }: ZoomFitInputs) {
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -84,6 +78,20 @@ export function collectZoomFitBounds({
   if (!objectiveHidden) {
     if (objectiveVector) addPoint(objectiveVector.x, objectiveVector.y);
     if (currentObjective) addPoint(currentObjective.x, currentObjective.y);
+  }
+
+  // the 3-variable solid and objective carry real z coordinates
+  if (problemMode === "3d") {
+    const addPoint3 = (p: PointXYZ) => {
+      addPoint(p.x, p.y);
+      if (Number.isFinite(p.z)) {
+        hasZ = true;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+    };
+    if (polytope3) for (const v of polytope3.vertices) addPoint3(v);
+    if (!objectiveHidden && objectiveVector3) addPoint3(objectiveVector3);
   }
 
   if (!valid || count === 0) {

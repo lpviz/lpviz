@@ -13,8 +13,8 @@
     "preview": "vite preview --port 3000",
     "test": "bun test",
     "format": "prettier --write --print-width 3000 apps packages package.json tsconfig.base.json tsconfig.json vite.config.ts index.html && bunx tsc --noEmit && bunx knip",
-    "deploy": "npx wrangler deploy --assets=./dist --name lpviz --compatibility-date 2025-09-01",
-    "prdeploy": "npx wrangler versions upload --assets=./dist --name lpviz --compatibility-date 2025-09-01"
+    "deploy": "npx wrangler deploy",
+    "prdeploy": "npx wrangler versions upload"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",

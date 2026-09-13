@@ -10,16 +10,13 @@ import {
 } from "@/features/core/store";
 import type { ResultTextBlock } from "@/features/solver/types";
 import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
-import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
+import { fmtE, fmtF, fmtStr } from "@lpviz/solver-engine/fmt";
 
 // Dispatch an unpacked worker result to the matching apply*Result. Replaces the
 // per-solver applyResult that each SolverControl used to carry (each of which
 // re-narrowed the response by solver — redundant, since the response already
 // discriminates on `solver`).
-export function applySolverResult(
-  response: SolverWorkerSuccessResponse,
-  updateResult: (payload: ResultRenderPayload) => void,
-): void {
+export function applySolverResult(response: SolverWorkerSuccessResponse, updateResult: (payload: ResultRenderPayload) => void): void {
   switch (response.solver) {
     case "ipm":
       return applyIPMResult(response.result, updateResult);
@@ -41,6 +38,7 @@ type VirtualResultRow =
       iteration: number;
       x: number;
       y: number;
+      z?: number;
       objective: number;
       infeasibility: number;
       mu: number;
@@ -51,6 +49,7 @@ type VirtualResultRow =
       restart?: boolean;
       x: number;
       y: number;
+      z?: number;
       objective: number;
       infeasibility: number;
       epsilon: number;
@@ -60,6 +59,7 @@ type VirtualResultRow =
       iteration: number;
       x: number;
       y: number;
+      z?: number;
       objective: number;
       infeasibility: number;
       rho: number;
@@ -125,15 +125,18 @@ export interface CentralPathResult {
   tsolve: number;
 }
 
-// `E` is the ellipse representation: a flat stride-5 Float64Array on the worker
-// side, an EllipsoidPath once unpacked on the client (see resultPacking).
+// `E` is the ellipsoid representation: a flat Float64Array on the worker side
+// (stride 5 for two variables, 9 for three; see ellipsoidStride), an
+// EllipsoidPath once unpacked on the client (see resultPacking).
 export interface EllipsoidResult<I = Float64Array[], E = Float64Array> {
   iterations: I;
   ellipsoids: E;
+  ellipsoidStride?: number;
   // the cutting-plane query points also carry the localizing polyhedron: flat
   // on the worker side, a LocalizingSetPath once unpacked
   polygonPoints?: Float64Array;
   polygonOffsets?: Uint32Array;
+  polygonStride?: number;
   localizingSets?: LocalizingSetPath | null;
   header: string;
   rows: ResultRowsView<Extract<VirtualResultRow, { kind: "ellipsoid" }>>;
@@ -158,39 +161,18 @@ function applyIPMResult(
   );
 }
 
-function applySimplexResult(
-  result: SimplexResult,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applySimplexResult(result: SimplexResult, updateResult: (payload: ResultRenderPayload) => void) {
   const phase1Iterations = result.phase1Iterations ?? [];
-  const iterations =
-    phase1Iterations.length > 0
-      ? [...phase1Iterations, ...result.iterations]
-      : result.iterations;
-  const phases =
-    phase1Iterations.length > 0
-      ? [
-          ...Array.from({ length: phase1Iterations.length }, () => 0),
-          ...Array.from({ length: result.iterations.length }, () => 1),
-        ]
-      : undefined;
+  const iterations = phase1Iterations.length > 0 ? [...phase1Iterations, ...result.iterations] : result.iterations;
+  const phases = phase1Iterations.length > 0 ? [...Array.from({ length: phase1Iterations.length }, () => 0), ...Array.from({ length: result.iterations.length }, () => 1)] : undefined;
   updateIteratePathsWithTrace(flattenIteratesToPath(iterations), phases);
   updateResult({
     type: "blocks",
-    blocks: generateSimplexBlocks(
-      result.logs[0],
-      result.logs[1],
-      result.status,
-      phase1Iterations.length,
-      result.iterations.length,
-    ),
+    blocks: generateSimplexBlocks(result.logs[0], result.logs[1], result.status, phase1Iterations.length, result.iterations.length),
   });
 }
 
-function applyPDHGResult(
-  result: PDHGResult<IteratePath>,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applyPDHGResult(result: PDHGResult<IteratePath>, updateResult: (payload: ResultRenderPayload) => void) {
   // worker-packed results arrive flat with the display z already baked in
   applyCanonicalIterateResult(
     {
@@ -260,12 +242,17 @@ type CanonicalIterateResult = {
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
-  if (row.kind === "ipm" || row.kind === "ellipsoid") {
-    const trailing = row.kind === "ipm" ? row.mu : row.rho;
-    return `${fmtInt(row.iteration, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
+  const label =
+    row.kind === "pdhg" && row.restart ? `${row.iteration}r` : `${row.iteration}`;
+  const trailing =
+    row.kind === "ipm" ? row.mu : row.kind === "ellipsoid" ? row.rho : row.epsilon;
+  // A 3-variable solve adds a z column (the solver headers match), so its
+  // rows use narrower columns to keep fitting the sidebar log beside its
+  // scrollbar: 7 for coordinates, 8 for the exponent columns.
+  if (row.z !== undefined) {
+    return `${fmtStr(label, 5)} ${fmtF(row.x, 7, 2)} ${fmtF(row.y, 7, 2)} ${fmtF(row.z, 7, 2)} ${fmtE(row.objective, 8, 1)} ${fmtE(row.infeasibility, 8, 1)} ${fmtE(trailing, 8, 1, false)}`;
   }
-  const iterationLabel = row.restart ? `${row.iteration}r` : `${row.iteration}`;
-  return `${fmtStr(iterationLabel, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.epsilon, 10, 1, false)}`;
+  return `${fmtStr(label, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
 }
 
 function applyCanonicalIterateResult(
@@ -303,19 +290,9 @@ function applyCanonicalIterateResult(
   updateResult(buildIteratePayload({ header, rows, footer }));
 }
 
-function generateSimplexBlocks(
-  phase1logs: string[] = [],
-  phase2logs: string[] = [],
-  status: SimplexResult["status"] = "optimal",
-  phase1IterationCount = 0,
-  phase2IterationCount = 0,
-): ResultTextBlock[] {
+function generateSimplexBlocks(phase1logs: string[] = [], phase2logs: string[] = [], status: SimplexResult["status"] = "optimal", phase1IterationCount = 0, phase2IterationCount = 0): ResultTextBlock[] {
   const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
-  const createBlock = (
-    className: ResultTextBlock["className"],
-    text: string,
-    index?: number,
-  ): ResultTextBlock => ({
+  const createBlock = (className: ResultTextBlock["className"], text: string, index?: number): ResultTextBlock => ({
     className,
     text: normalizeLog(text),
     index,
@@ -323,63 +300,20 @@ function generateSimplexBlocks(
 
   const phase1Header = phase1logs[0] ?? "No phase 1 logs.";
   const phase1Rows = phase1logs.length > 2 ? phase1logs.slice(1, -1) : [];
-  const phase1Footer =
-    phase1logs.length > 1 ? phase1logs[phase1logs.length - 1] : "";
+  const phase1Footer = phase1logs.length > 1 ? phase1logs[phase1logs.length - 1] : "";
 
   const phase2Header = phase2logs[0] ?? "No phase 2 logs.";
-  const phase2Rows =
-    phase2logs.length <= 1
-      ? []
-      : status === "unbounded" || status === "infeasible"
-        ? phase2logs.slice(1)
-        : phase2logs.slice(1, -1);
-  const phase2Footer =
-    status === "unbounded"
-      ? "Unbounded LP"
-      : status === "infeasible"
-        ? "Infeasible LP"
-        : phase2logs.length > 1
-          ? phase2logs[phase2logs.length - 1]
-          : "";
+  const phase2Rows = phase2logs.length <= 1 ? [] : status === "unbounded" || status === "infeasible" ? phase2logs.slice(1) : phase2logs.slice(1, -1);
+  const phase2Footer = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : phase2logs.length > 1 ? phase2logs[phase2logs.length - 1] : "";
 
   const phase1Title = "Phase 1";
   const phase2Title = "Phase 2";
-  const setupBlocks =
-    phase1logs.length === 0
-      ? []
-      : [
-          createBlock("iterate-header", `${phase1Title}\n${phase1Header}`),
-          ...phase1Rows.map((log, i) =>
-            i < phase1IterationCount
-              ? createBlock("iterate-item", log, i)
-              : createBlock("iterate-item-nohover", log),
-          ),
-          ...(phase1Footer
-            ? [createBlock("iterate-footer", phase1Footer)]
-            : []),
-        ];
+  const setupBlocks = phase1logs.length === 0 ? [] : [createBlock("iterate-header", `${phase1Title}\n${phase1Header}`), ...phase1Rows.map((log, i) => (i < phase1IterationCount ? createBlock("iterate-item", log, i) : createBlock("iterate-item-nohover", log))), ...(phase1Footer ? [createBlock("iterate-footer", phase1Footer)] : [])];
 
-  return [
-    ...setupBlocks,
-    createBlock("iterate-header", `${phase2Title}\n${phase2Header}`),
-    ...phase2Rows.map((log, i) =>
-      i < phase2IterationCount
-        ? createBlock("iterate-item", log, phase1IterationCount + i)
-        : createBlock("iterate-item-nohover", log),
-    ),
-    ...(phase2Footer ? [createBlock("iterate-footer", phase2Footer)] : []),
-  ];
+  return [...setupBlocks, createBlock("iterate-header", `${phase2Title}\n${phase2Header}`), ...phase2Rows.map((log, i) => (i < phase2IterationCount ? createBlock("iterate-item", log, phase1IterationCount + i) : createBlock("iterate-item-nohover", log))), ...(phase2Footer ? [createBlock("iterate-footer", phase2Footer)] : [])];
 }
 
-function buildIteratePayload({
-  header,
-  rows,
-  footer,
-}: {
-  header: string;
-  rows: ResultRowsView;
-  footer?: string;
-}): VirtualResultPayload {
+function buildIteratePayload({ header, rows, footer }: { header: string; rows: ResultRowsView; footer?: string }): VirtualResultPayload {
   return {
     type: "virtual",
     header,

@@ -7,7 +7,10 @@ import { SharedMaterialsController } from "@/three/controllers/SharedMaterialsCo
 import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
+import { ExtrudeHandleLayer } from "@/three/layers/ExtrudeHandleLayer";
 import { GridLayer } from "@/three/layers/GridLayer";
+import { Objective3DLayer } from "@/three/layers/Objective3DLayer";
+import { Polytope3DLayer } from "@/three/layers/Polytope3DLayer";
 import { IterateHighlightLayer } from "@/three/layers/IterateHighlightLayer";
 import { IterateLineLayer } from "@/three/layers/IterateLineLayer";
 import { IteratePointsLayer } from "@/three/layers/IteratePointsLayer";
@@ -21,11 +24,7 @@ import { SolverStartLayer } from "@/three/layers/SolverStartLayer";
 import { TraceLineLayer } from "@/three/layers/TraceLineLayer";
 import { TracePointsLayer } from "@/three/layers/TracePointsLayer";
 
-export function mountCanvasGL(
-  parent: HTMLElement,
-  onBridgeReady: (bridge: ViewportBridge) => void,
-  onBridgeDispose?: () => void,
-) {
+export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: ViewportBridge) => void, onBridgeDispose?: () => void) {
   const canvas = document.createElement("canvas");
   canvas.className = "canvas-stage__gl-canvas";
   canvas.tabIndex = 0;
@@ -39,8 +38,11 @@ export function mountCanvasGL(
   const layers: Layer[] = [
     new GridLayer(),
     new PolytopeBaseLayer(),
+    new Polytope3DLayer(),
     new PolytopeRubberBandLayer(),
     new ObjectiveLayer(),
+    new Objective3DLayer(),
+    new ExtrudeHandleLayer(),
     new ConstraintHighlightLayer(),
     new PolytopeVerticesLayer(),
     new TraceLineLayer(),

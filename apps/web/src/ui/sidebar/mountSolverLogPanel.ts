@@ -1,10 +1,5 @@
 import type { AppContext } from "@/app/appContext";
-import {
-  computeDrawingPhase,
-  getState,
-  on,
-  type State,
-} from "@/features/core/store";
+import { computeDrawingPhase, getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { usageHint } from "@/ui/usageTips";
 
@@ -23,9 +18,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     currentHoveredRow = next;
     currentHoveredRow?.classList.add("hover");
     const idx = currentHoveredRow?.dataset.index;
-    ctx.actions.setIterateHighlight(
-      idx !== undefined && idx !== "" ? Number(idx) : null,
-    );
+    ctx.actions.setIterateHighlight(idx !== undefined && idx !== "" ? Number(idx) : null);
   };
   const syncHoverState = () => {
     hoverRafId = null;
@@ -33,10 +26,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       return;
     }
     const element = document.elementFromPoint(pointerX, pointerY);
-    const row =
-      element instanceof Element
-        ? element.closest<HTMLElement>(".iterate-item")
-        : null;
+    const row = element instanceof Element ? element.closest<HTMLElement>(".iterate-item") : null;
     setHoveredRow(row && result.contains(row) ? row : null);
   };
   const scheduleHoverSync = () => {
@@ -51,12 +41,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       hoverRafId = null;
     }
   };
-  frame.append(
-    result,
-    el("div", { id: "terminal-window" }),
-    el("div", { className: "scanlines" }),
-    el("div", { className: "scanlines scanlines--delay-12" }),
-  );
+  frame.append(result, el("div", { id: "terminal-window" }), el("div", { className: "scanlines" }), el("div", { className: "scanlines scanlines--delay-12" }));
   parent.append(frame);
   result.addEventListener("pointerenter", (e) => {
     pointerInsideResult = true;
@@ -84,9 +69,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     if (s.resultMaxLineChars > 0) {
       if (cachedPadding === null) {
         const containerStyle = window.getComputedStyle(result);
-        cachedPadding =
-          (parseFloat(containerStyle.paddingLeft) || 0) +
-          (parseFloat(containerStyle.paddingRight) || 0);
+        cachedPadding = (parseFloat(containerStyle.paddingLeft) || 0) + (parseFloat(containerStyle.paddingRight) || 0);
       }
       const effectiveWidth = result.clientWidth - cachedPadding;
       const fitKey = `${s.resultMaxLineChars}|${effectiveWidth}`;
@@ -119,7 +102,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     result.replaceChildren();
     currentHoveredRow = null;
     if (s.resultDisplayMode === "usage") {
-      result.append(usageHint(computeDrawingPhase(s)));
+      result.append(usageHint(computeDrawingPhase(s), s.problemMode === "3d" ? s.editor3Phase : undefined));
       return;
     }
     if (s.resultDisplayMode === "blocks" && s.resultBlocks) {
@@ -129,10 +112,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
           el("div", {
             className: block.className,
             text: block.text,
-            attrs:
-              block.index !== undefined
-                ? { "data-index": String(block.index) }
-                : {},
+            attrs: block.index !== undefined ? { "data-index": String(block.index) } : {},
           }),
         );
       result.append(c);
@@ -169,20 +149,11 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   // spacer divs holding the scroll height. Materializing every row (100k at
   // max solver settings) costs seconds of main-thread time per render.
   const VIRTUAL_OVERSCAN_ROWS = 20;
-  function mountVirtualRows(
-    sc: HTMLElement,
-    blocks: State["resultVirtualRows"],
-  ) {
+  function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRows"]) {
     const topSpacer = el("div");
     const rowsEl = el("div", { className: "iterate-rows" });
     const bottomSpacer = el("div");
-    sc.append(
-      el("div", { className: "iterate-virtual-wrapper" }, [
-        topSpacer,
-        rowsEl,
-        bottomSpacer,
-      ]),
-    );
+    sc.append(el("div", { className: "iterate-virtual-wrapper" }, [topSpacer, rowsEl, bottomSpacer]));
     if (blocks.length === 0) return;
 
     let rowHeight = 0;
@@ -200,15 +171,8 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
         probe.remove();
       }
       const viewHeight = sc.clientHeight || result.clientHeight || 600;
-      const start = Math.max(
-        0,
-        Math.floor(sc.scrollTop / rowHeight) - VIRTUAL_OVERSCAN_ROWS,
-      );
-      const end = Math.min(
-        blocks.length,
-        Math.ceil((sc.scrollTop + viewHeight) / rowHeight) +
-          VIRTUAL_OVERSCAN_ROWS,
-      );
+      const start = Math.max(0, Math.floor(sc.scrollTop / rowHeight) - VIRTUAL_OVERSCAN_ROWS);
+      const end = Math.min(blocks.length, Math.ceil((sc.scrollTop + viewHeight) / rowHeight) + VIRTUAL_OVERSCAN_ROWS);
       if (start === windowStart && end === windowEnd) return;
       windowStart = start;
       windowEnd = end;
@@ -221,10 +185,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
           el("div", {
             className: row.className,
             text: row.text,
-            attrs:
-              row.index !== undefined
-                ? { "data-index": String(row.index) }
-                : {},
+            attrs: row.index !== undefined ? { "data-index": String(row.index) } : {},
           }),
         );
       }
@@ -279,24 +240,12 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   sizeObserver.observe(result);
 
   const controller = new AbortController();
-  on(
-    [
-      "resultDisplayMode",
-      "resultBlocks",
-      "resultVirtualHeader",
-      "resultVirtualFooter",
-      "resultVirtualShowEmpty",
-      "resultVirtualRows",
-      "resultMaxLineChars",
-    ],
-    () => render(getState()),
-    controller.signal,
-  );
+  on(["resultDisplayMode", "resultBlocks", "resultVirtualHeader", "resultVirtualFooter", "resultVirtualShowEmpty", "resultVirtualRows", "resultMaxLineChars"], () => render(getState()), controller.signal);
   // The placeholder hint reflects the current drawing phase, so refresh it as
   // the user sketches — but only while the panel is showing that hint, never
   // while a (potentially huge) solver result is mounted.
   on(
-    ["vertices", "completionMode", "objectiveVector", "currentObjective"],
+    ["vertices", "completionMode", "objectiveVector", "currentObjective", "editor3Phase", "objectiveVector3"],
     () => {
       const s = getState();
       if (s.resultDisplayMode === "usage") render(s);
