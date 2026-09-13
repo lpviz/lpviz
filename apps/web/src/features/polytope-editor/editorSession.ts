@@ -3,6 +3,7 @@ import { computeDrawingPhase } from "@/features/core/store";
 import {
   centroid,
   isConvexChain,
+  isConvexPolygon,
   signedArea,
   VRep,
 } from "@lpviz/math/geometry";
@@ -104,11 +105,11 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     ? "closed"
     : state.completionMode;
 
-  if (
-    sourceMode === "open" &&
-    isDraggingGeometry &&
-    !isConvexChain(sourceVertices)
-  ) {
+  const isConvex =
+    sourceMode === "open"
+      ? isConvexChain(sourceVertices)
+      : isConvexPolygon(sourceVertices);
+  if (!isConvex) {
     return { status: "nonconvex" };
   }
 
@@ -122,19 +123,6 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
           ),
           sourceMode,
         );
-
-  const isConvex =
-    sourceMode === "open"
-      ? region.kind !== "bounded"
-        ? isConvexChain(sourceVertices)
-        : VRep.fromPoints(
-            region.vertices.map(([x, y]) => ({ x, y })),
-          ).isConvex()
-      : vertexRep.isConvex();
-
-  if (!isConvex) {
-    return { status: "nonconvex" };
-  }
 
   if (geometry.isDerivedClosed) {
     return {
