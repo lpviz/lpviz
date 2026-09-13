@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { centralPath } from "../src/centralPath";
 import { ipm } from "../src/ipm";
 import { pdhg } from "../src/pdhg";
-import { simplex } from "../src/simplex";
+import { ENTERING_RULES, LEAVING_RULES, simplex } from "../src/simplex";
 
 // square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
 const SQUARE = [
@@ -17,6 +17,72 @@ const SQUARE_VERTICES = [
   [-4, -4],
   [-6, -4],
 ] as [number, number][];
+
+// The square plus x + y <= -8, which passes exactly through the optimum
+// (-4, -4) of the objective (2, 1): three lines meet there, so the ratio test
+// ties and the index rules take visibly different routes.
+const DEGENERATE_SQUARE = [...SQUARE, [1, 1, -8]] as [number, number, number][];
+
+// Seven nearly concurrent lines on which primal simplex with entering rule
+// "last" cycles in Phase 1 (found by fuzzing; see the cycling-guard test).
+const STALL_LINES = [
+  [-0.9697749358075918, -0.24400117597950474, -3.3722141566558337],
+  [-0.9964356544434488, -0.08435630713737943, -3.2387883117373377],
+  [-0.9996118936712689, -0.027857889922603827, -3.1719450077092093],
+  [-0.6891315307597216, -0.7246362765641553, -3.1456714857769295],
+  [-0.29831925841830076, 0.9544661440076098, 1.1470257024838302],
+  [-0.6805175119924961, -0.7327318171551874, -3.1296687759153756],
+  [-0.977278470566636, -0.2119594087719077, -3.3521836075692066],
+] as [number, number, number][];
+const STALL_OBJECTIVE = Float64Array.of(-0.04722023010253906, 0.20946311950683594);
+
+// Every explicit entering/leaving pair, plus {} for the engine defaults.
+const RULE_COMBOS = ENTERING_RULES.flatMap((enteringRule) =>
+  LEAVING_RULES.map((leavingRule) => ({ enteringRule, leavingRule })),
+);
+const RULE_OPTIONS = [{}, ...RULE_COMBOS];
+
+const lcg = (seed: number) => () =>
+  (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+
+// A random convex polygon (3-7 vertices on a circle, so no three edges are
+// concurrent) as inward-pointing constraint lines, or null when two vertices
+// are too close for a well-conditioned edge.
+function randomPolygon(rand: () => number) {
+  const cnt = 3 + Math.floor(rand() * 5);
+  const cx = rand() * 16 - 8;
+  const cy = rand() * 16 - 8;
+  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort(
+    (a, b) => a - b,
+  );
+  if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
+  const R = 1 + rand() * 8;
+  const hull = angles.map(
+    (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
+  );
+  const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
+  const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
+  const lines = hull.map((start, i) => {
+    const end = hull[(i + 1) % hull.length]!;
+    let A = end[1] - start[1];
+    let B = -(end[0] - start[0]);
+    const n = Math.hypot(A, B);
+    A /= n;
+    B /= n;
+    let C = A * start[0] + B * start[1];
+    if (A * centX + B * centY > C) {
+      A = -A;
+      B = -B;
+      C = -C;
+    }
+    return [A, B, C] as [number, number, number];
+  });
+  return { hull, lines };
+}
+
+const flatLogs = (r: { logs: string[][] }) => r.logs.flat().join("");
+const lastIterate = (r: { iterations: Float64Array[] }) =>
+  r.iterations[r.iterations.length - 1]!;
 
 const pdhgDefaults = {
   halpern: false,
@@ -67,13 +133,15 @@ describe("pdhg", () => {
 describe("simplex", () => {
   const opts = (dual: boolean) => ({ tol: 1e-9, verbose: false, dual });
 
-  test("primal and dual agree on the square optimum", () => {
+  test("every pivot-rule combination reaches the square optimum in primal and dual mode", () => {
     for (const dual of [false, true]) {
-      const r = simplex(SQUARE, Float64Array.of(1, 1), opts(dual));
-      expect(r.status).toBe("optimal");
-      const last = r.iterations[r.iterations.length - 1]!;
-      expect(last[0]!).toBeCloseTo(-4, 6);
-      expect(last[1]!).toBeCloseTo(-4, 6);
+      for (const rules of RULE_OPTIONS) {
+        const r = simplex(SQUARE, Float64Array.of(1, 1), { ...opts(dual), ...rules });
+        expect(r.status).toBe("optimal");
+        const last = lastIterate(r);
+        expect(last[0]!).toBeCloseTo(-4, 6);
+        expect(last[1]!).toBeCloseTo(-4, 6);
+      }
     }
   });
 
@@ -116,52 +184,27 @@ describe("simplex", () => {
     expect(r.status).toBe("unbounded");
   });
 
-  test("random polygons: primal and dual match the brute-force optimum", () => {
-    let seed = 7;
-    const rand = () =>
-      (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+  test("random polygons: every pivot rule matches the brute-force optimum", () => {
+    const rand = lcg(7);
     let runs = 0;
     for (let t = 0; t < 60 && runs < 25; t++) {
-      const cnt = 3 + Math.floor(rand() * 5);
-      const cx = rand() * 16 - 8;
-      const cy = rand() * 16 - 8;
-      const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort(
-        (a, b) => a - b,
-      );
-      if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) continue;
-      const R = 1 + rand() * 8;
-      const hull = angles.map(
-        (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
-      );
-      const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-      const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-      const lines = hull.map((start, i) => {
-        const end = hull[(i + 1) % hull.length]!;
-        let A = end[1] - start[1];
-        let B = -(end[0] - start[0]);
-        const n = Math.hypot(A, B);
-        A /= n;
-        B /= n;
-        let C = A * start[0] + B * start[1];
-        if (A * centX + B * centY > C) {
-          A = -A;
-          B = -B;
-          C = -C;
-        }
-        return [A, B, C] as [number, number, number];
-      });
+      const polygon = randomPolygon(rand);
+      if (!polygon) continue;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
       const expected = Math.max(
-        ...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]),
+        ...polygon.hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]),
       );
       runs++;
       for (const dual of [false, true]) {
-        const r = simplex(lines, obj, opts(dual));
-        const last = r.iterations[r.iterations.length - 1]!;
-        const got = obj[0]! * last[0]! + obj[1]! * last[1]!;
-        expect(r.status).toBe("optimal");
-        expect(got).toBeCloseTo(expected, 5);
+        for (const rules of RULE_OPTIONS) {
+          const r = simplex(polygon.lines, obj, { ...opts(dual), ...rules });
+          const last = lastIterate(r);
+          expect(r.status).toBe("optimal");
+          expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
+          // nondegenerate vertices never need the Bland fallback
+          expect(flatLogs(r)).not.toContain("Cycling guard");
+        }
       }
     }
     expect(runs).toBeGreaterThan(10);
@@ -169,103 +212,60 @@ describe("simplex", () => {
 });
 
 describe("simplex pivot rules", () => {
-  const enteringRules = ["coeff", "first", "last"] as const;
-  const leavingRules = ["first", "last"] as const;
+  const opts = { tol: 1e-9, verbose: false, dual: false };
 
-  test("every entering/leaving rule combination reaches the square optimum", () => {
-    for (const dual of [false, true]) {
-      for (const enteringRule of enteringRules) {
-        for (const leavingRule of leavingRules) {
-          const r = simplex(SQUARE, Float64Array.of(1, 1), {
-            tol: 1e-9,
-            verbose: false,
-            dual,
-            enteringRule,
-            leavingRule,
-          });
-          expect(r.status).toBe("optimal");
-          const last = r.iterations[r.iterations.length - 1]!;
-          expect(last[0]!).toBeCloseTo(-4, 6);
-          expect(last[1]!).toBeCloseTo(-4, 6);
-        }
-      }
+  test("index rules take different routes through a degenerate vertex but agree on the optimum", () => {
+    const trajectories = new Map<string, string>();
+    for (const rules of RULE_COMBOS) {
+      const r = simplex(DEGENERATE_SQUARE, Float64Array.of(2, 1), { ...opts, ...rules });
+      expect(r.status).toBe("optimal");
+      const last = lastIterate(r);
+      expect(last[0]!).toBeCloseTo(-4, 6);
+      expect(last[1]!).toBeCloseTo(-4, 6);
+      trajectories.set(`${rules.enteringRule}/${rules.leavingRule}`, flatLogs(r));
     }
+    // the leaving tie-break alone changes the route (exercising the tie branch) ...
+    expect(trajectories.get("first/first")).not.toBe(trajectories.get("first/last"));
+    // ... and so does the entering rule
+    expect(trajectories.get("first/first")).not.toBe(trajectories.get("last/first"));
+    expect(new Set(trajectories.values()).size).toBeGreaterThanOrEqual(3);
   });
 
-  test("rule combinations agree with the brute-force optimum on random polygons", () => {
-    let seed = 101;
-    const rand = () =>
-      (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
-    let runs = 0;
-    for (let t = 0; t < 40 && runs < 12; t++) {
-      const cnt = 3 + Math.floor(rand() * 5);
-      const cx = rand() * 16 - 8;
-      const cy = rand() * 16 - 8;
-      const angles = Array.from(
-        { length: cnt },
-        () => rand() * 2 * Math.PI,
-      ).sort((a, b) => a - b);
-      if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) continue;
-      const R = 1 + rand() * 8;
-      const hull = angles.map(
-        (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
-      );
-      const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-      const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-      const lines = hull.map((start, i) => {
-        const end = hull[(i + 1) % hull.length]!;
-        let A = end[1] - start[1];
-        let B = -(end[0] - start[0]);
-        const n = Math.hypot(A, B);
-        A /= n;
-        B /= n;
-        let C = A * start[0] + B * start[1];
-        if (A * centX + B * centY > C) {
-          A = -A;
-          B = -B;
-          C = -C;
-        }
-        return [A, B, C] as [number, number, number];
-      });
-      const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
-      if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
-      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
-      runs++;
-      for (const dual of [false, true]) {
-        for (const enteringRule of enteringRules) {
-          for (const leavingRule of leavingRules) {
-            const r = simplex(lines, obj, {
-              tol: 1e-9,
-              verbose: false,
-              dual,
-              enteringRule,
-              leavingRule,
-            });
-            const last = r.iterations[r.iterations.length - 1]!;
-            const got = obj[0]! * last[0]! + obj[1]! * last[1]!;
-            expect(r.status).toBe("optimal");
-            expect(got).toBeCloseTo(expected, 5);
-          }
-        }
-      }
-    }
-    expect(runs).toBeGreaterThan(5);
-  });
-
-  test("unknown rule values fall back to the default (first/first)", () => {
+  test("unknown rule values fall back to Bland's rule (first/first)", () => {
     // Crafted share URLs can push arbitrary strings into the settings, so the
-    // solver must degrade to its defaults instead of misbehaving.
-    const r = simplex(SQUARE, Float64Array.of(1, 1), {
-      tol: 1e-9,
-      verbose: false,
-      dual: false,
+    // solver must degrade to its default instead of misbehaving. The degenerate
+    // fixture makes the rules distinguishable (see the previous test).
+    const bogus = simplex(DEGENERATE_SQUARE, Float64Array.of(2, 1), {
+      ...opts,
       enteringRule: "bogus" as unknown as "first",
       leavingRule: "bogus" as unknown as "first",
     });
-    expect(r.status).toBe("optimal");
-    const last = r.iterations[r.iterations.length - 1]!;
-    expect(last[0]!).toBeCloseTo(-4, 6);
-    expect(last[1]!).toBeCloseTo(-4, 6);
+    const bland = simplex(DEGENERATE_SQUARE, Float64Array.of(2, 1), {
+      ...opts,
+      enteringRule: "first",
+      leavingRule: "first",
+    });
+    expect(bogus.status).toBe("optimal");
+    expect(flatLogs(bogus)).toBe(flatLogs(bland));
+  });
+
+  test("the cycling guard rescues a rule combination that would otherwise never terminate", () => {
+    // With entering rule "last", Phase 1 on STALL_LINES cycles through
+    // degenerate pivots until MAX_ITERATIONS without the guard. The region is
+    // open in the objective direction, so the right answer is "unbounded",
+    // which Bland's rule reaches in a handful of pivots.
+    const stall = { tol: 1e-5, verbose: false, dual: false };
+    const bland = simplex(STALL_LINES, STALL_OBJECTIVE, stall);
+    const cycling = simplex(STALL_LINES, STALL_OBJECTIVE, {
+      ...stall,
+      enteringRule: "last",
+      leavingRule: "first",
+    });
+    expect(flatLogs(bland)).not.toContain("Cycling guard");
+    expect(flatLogs(cycling)).toContain("Cycling guard");
+    expect(bland.status).toBe("unbounded");
+    expect(cycling.status).toBe("unbounded");
+    expect(cycling.phase1Iterations!.length + cycling.iterations.length).toBeLessThan(100);
   });
 });
 
@@ -290,9 +290,7 @@ describe("ipm", () => {
   });
 
   test("alphaMax = 1 never produces NaN rows", () => {
-    let seed = 3;
-    const rand = () =>
-      (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(3);
     for (let t = 0; t < 100; t++) {
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       const r = ipm(SQUARE, obj, opts(1));

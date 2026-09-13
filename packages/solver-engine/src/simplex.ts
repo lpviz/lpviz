@@ -279,28 +279,74 @@ function selectLeavingIndex(
   tol: number,
   rule: LeavingRule,
 ): number {
-  let leave = -1;
+  // Pass 1: the minimum ratio over the rows the entering variable drives down.
   let minRatio = Infinity;
-  let chosenOriginalIndex = -1;
   for (let i = 0; i < xB.length; i++) {
     if (direction[i]! <= tol) continue;
-    const ratio = xB[i]! / direction[i]!;
+    minRatio = Math.min(minRatio, xB[i]! / direction[i]!);
+  }
+  if (minRatio === Infinity) return -1;
+
+  // Pass 2: among rows within tol of that minimum, break the tie by original
+  // column index. A second pass keeps the tie set anchored to the true minimum
+  // rather than to whichever near-tie happened to be scanned first.
+  let leave = -1;
+  let chosenIndex = -1;
+  for (let i = 0; i < xB.length; i++) {
+    if (direction[i]! <= tol) continue;
+    if (xB[i]! / direction[i]! - minRatio >= tol) continue;
     const originalIndex = basisIndices[i]!;
-    if (ratio < minRatio - tol) {
-      minRatio = ratio;
-      chosenOriginalIndex = originalIndex;
+    const prefer =
+      leave === -1 ||
+      (rule === "first"
+        ? originalIndex < chosenIndex
+        : originalIndex > chosenIndex);
+    if (prefer) {
       leave = i;
-    } else if (Math.abs(ratio - minRatio) < tol) {
-      const prefer = rule === "first"
-        ? originalIndex < chosenOriginalIndex
-        : originalIndex > chosenOriginalIndex;
-      if (prefer) {
-        chosenOriginalIndex = originalIndex;
-        leave = i;
-      }
+      chosenIndex = originalIndex;
     }
   }
   return leave;
+}
+
+// A pivot is degenerate when the entering variable cannot increase at all
+// (minimum ratio ~ 0): the basis changes but the vertex does not. Cycling is a
+// run of degenerate pivots that revisits a basis, and only Bland's rule
+// (lowest index entering and leaving) is guaranteed to avoid it. Rather than
+// letting the other rules spin until MAX_ITERATIONS, both simplex loops count
+// consecutive degenerate pivots and fall back to Bland's rule for the rest of
+// the phase once the count exceeds this limit. A legitimately degenerate
+// vertex in the app's 2-D/3-D problems needs only a handful of degenerate
+// pivots, and a false trigger merely changes the pivot rule.
+const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
+
+function createCyclingGuard(
+  initial: PivotRules,
+  tol: number,
+  logs: string[],
+  verbose: boolean,
+) {
+  const rules: PivotRules = { ...initial };
+  let degeneratePivots = 0;
+  return {
+    rules,
+    /** Record the step length (minimum ratio) of the pivot just taken. */
+    recordPivot(step: number) {
+      degeneratePivots = step <= tol ? degeneratePivots + 1 : 0;
+      if (degeneratePivots <= MAX_CONSECUTIVE_DEGENERATE_PIVOTS) return;
+      if (
+        rules.entering === BLAND_RULES.entering &&
+        rules.leaving === BLAND_RULES.leaving
+      )
+        return;
+      rules.entering = BLAND_RULES.entering;
+      rules.leaving = BLAND_RULES.leaving;
+      const message = `Cycling guard: ${degeneratePivots} consecutive degenerate pivots – switching to Bland's rule (lowest index) for the rest of this phase.
+`;
+      if (verbose) console.log(message);
+      logs.push(message);
+    },
+  };
 }
 
 function formatIterationLog(
@@ -360,6 +406,7 @@ function simplexCoreStandard(
 
   if (verbose) console.log(header);
   logs.push(header);
+  const guard = createCyclingGuard(pivotRules, tol, logs, verbose);
 
   let iteration = 0;
   let status: SimplexStatus = "optimal";
@@ -385,7 +432,7 @@ function simplexCoreStandard(
       basis,
       state.reducedCosts,
       tol,
-      pivotRules.entering,
+      guard.rules.entering,
     );
     if (enterIndex === -1) break;
 
@@ -397,7 +444,7 @@ function simplexCoreStandard(
       direction,
       state.basisIndices,
       tol,
-      pivotRules.leaving,
+      guard.rules.leaving,
     );
 
     if (leaveBasisIndex === -1) {
@@ -408,6 +455,7 @@ function simplexCoreStandard(
       break;
     }
 
+    guard.recordPivot(state.xB[leaveBasisIndex]! / direction[leaveBasisIndex]!);
     basis[enterIndex] = true;
     basis[state.basisIndices[leaveBasisIndex]!] = false;
   }
@@ -457,6 +505,7 @@ function simplexCore(
   const header = `${"Iter".padStart(5)} ${"x".padStart(8)} ${"y".padStart(8)} ${"Obj".padStart(10)} ${"basis".padEnd(nCols, " ")}\n`;
   if (verbose) console.log(header);
   logs.push(header);
+  const guard = createCyclingGuard(pivotRules, tol, logs, verbose);
 
   let iteration = 0;
   let xTableau = new Float64Array(nCols);
@@ -490,7 +539,7 @@ function simplexCore(
       basis,
       state.reducedCosts,
       tol,
-      pivotRules.entering,
+      guard.rules.entering,
     );
     if (enterIndex === -1) break;
 
@@ -502,7 +551,7 @@ function simplexCore(
       direction,
       basisIndices,
       tol,
-      pivotRules.leaving,
+      guard.rules.leaving,
     );
 
     if (leaveIndexInBasis === -1) {
@@ -513,6 +562,7 @@ function simplexCore(
       break;
     }
 
+    guard.recordPivot(state.xB[leaveIndexInBasis]! / direction[leaveIndexInBasis]!);
     basis[enterIndex] = true;
     basis[basisIndices[leaveIndexInBasis]!] = false;
   }
