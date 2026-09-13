@@ -130,10 +130,14 @@ const USAGE_TIP_SECTIONS_3D: UsageTipSection[] = [
     tips: [
       {
         label: "Run a solver",
-        desc: "pick IPM, PDHG, Simplex, or Central Path",
+        desc: "pick IPM, PDHG, Simplex, Ellipsoid, or Central Path",
       },
       { label: "Replay iterations", desc: "click <strong>Animate</strong>" },
       { label: "Tune a solver", desc: "adjust its sliders" },
+      {
+        label: "Move the start",
+        desc: "drag the gray ring; right-click it to reset",
+      },
       {
         label: "Highlight a facet",
         desc: "hover its row in the top panel",

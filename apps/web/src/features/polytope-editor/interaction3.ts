@@ -121,9 +121,14 @@ export function findEdge3NearClient(canvasManager: ViewportApi, vertices: PointX
 }
 
 export function isObjective3TipAtClient(canvasManager: ViewportApi, tip: PointXYZ, clientX: number, clientY: number): boolean {
+  return isPoint3AtClient(canvasManager, tip, clientX, clientY, OBJECTIVE3_TIP_RADIUS);
+}
+
+// Screen-space hit test for any world point (the solver start marker).
+export function isPoint3AtClient(canvasManager: ViewportApi, point: PointXYZ, clientX: number, clientY: number, radiusPx: number): boolean {
   const rect = canvasManager.getCanvasRect();
-  const screen = projectWorldToLocal(canvasManager, tip);
-  return Math.hypot(clientX - rect.left - screen.x, clientY - rect.top - screen.y) <= OBJECTIVE3_TIP_RADIUS;
+  const screen = projectWorldToLocal(canvasManager, point);
+  return Math.hypot(clientX - rect.left - screen.x, clientY - rect.top - screen.y) <= radiusPx;
 }
 
 // Free 3D point under the pointer, on the camera-facing plane through

@@ -86,6 +86,9 @@ export type DragTarget =
       // point instead of teleporting it there
       grabOffset?: PointXY;
       viewAnchor3D?: DragViewAnchor3D;
+      // 3-variable editor: the marker's position at grab time; the drag moves
+      // it on the camera-facing plane through this point, like a vertex
+      anchor3?: PointXYZ;
     }
   // 3D problem mode: extrude-handle drag sets the prism height; face3 is a
   // push/pull along the picked face's fixed normal (anchor lies on the face,
@@ -628,12 +631,20 @@ export function computeDrawingPhase(state: State): DrawingPhase {
 // nonbasic), so one marker default is truthful for all three.
 const DEFAULT_SOLVER_START: Readonly<PointXY> = { x: 0, y: 0 };
 
+// The dragged start marker: a plane point in the 2-variable editor, a point in
+// space (z set) in the 3-variable one.
+export type SolverStartPoint = PointXY & { z?: number };
+
 /** Whether the draggable start marker applies to the current solver/problem. */
 function solverStartPointApplies(state: State): boolean {
   if (computeDrawingPhase(state) !== "ready_for_solvers") return false;
-  if (!hasPolytopeLines(state.polytope)) return false;
-  if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded")
-    return false;
+  if (state.problemMode === "3d") {
+    if (!state.polytope3 || state.polytope3.kind !== "bounded") return false;
+  } else {
+    if (!hasPolytopeLines(state.polytope)) return false;
+    if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded")
+      return false;
+  }
   if (state.solverMode === "ipm" || state.solverMode === "pdhg") return true;
   // dual simplex has no safe start-point interpretation: a primal point only
   // determines a dual-feasible basis when it is already optimal
@@ -643,11 +654,25 @@ function solverStartPointApplies(state: State): boolean {
 /** Nearest vertex of the feasible region, or null if there are none. */
 export function nearestPolytopeVertex(
   state: State,
-  point: PointXY,
-): PointXY | null {
-  if (!hasPolytopeLines(state.polytope)) return null;
-  let best: PointXY | null = null;
+  point: SolverStartPoint,
+): SolverStartPoint | null {
+  let best: SolverStartPoint | null = null;
   let bestDistance = Infinity;
+  if (state.problemMode === "3d") {
+    for (const vertex of state.polytope3?.vertices ?? []) {
+      const distance = Math.hypot(
+        vertex.x - point.x,
+        vertex.y - point.y,
+        vertex.z - (point.z ?? 0),
+      );
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = { x: vertex.x, y: vertex.y, z: vertex.z };
+      }
+    }
+    return best;
+  }
+  if (!hasPolytopeLines(state.polytope)) return null;
   for (const vertex of state.polytope.vertices) {
     const distance = Math.hypot(vertex[0]! - point.x, vertex[1]! - point.y);
     if (distance < bestDistance) {
@@ -663,10 +688,15 @@ export function nearestPolytopeVertex(
  * region vertex in simplex mode, which is how simplex consumes it), or the
  * solver default when nothing has been dragged yet. Null when hidden.
  */
-export function displayedSolverStartPoint(state: State): PointXY | null {
+export function displayedSolverStartPoint(state: State): SolverStartPoint | null {
   if (!solverStartPointApplies(state)) return null;
   const point = state.solverStartPoint;
-  if (!point) return { ...DEFAULT_SOLVER_START };
+  if (!point) {
+    // IPM and PDHG start at the origin in either dimension
+    return state.problemMode === "3d"
+      ? { ...DEFAULT_SOLVER_START, z: 0 }
+      : { ...DEFAULT_SOLVER_START };
+  }
   if (state.solverMode === "simplex") {
     return nearestPolytopeVertex(state, point) ?? point;
   }

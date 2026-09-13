@@ -146,6 +146,62 @@ describe("compact share links", () => {
     expect(decodeSharedState(withNull)!.solverStartPoint).toBeNull();
   });
 
+  test("round-trips the 3-variable solid and its objective (v3)", () => {
+    const cube = [-3, 3].flatMap((x) =>
+      [-3, 3].flatMap((y) => [0, 6].map((z) => ({ x, y, z }))),
+    );
+    const decoded = roundTrip({
+      ...BASE,
+      vertices3: cube,
+      objective3: { x: 1, y: 0.5, z: -0.25 },
+    })!;
+    expect(decoded.vertices3!.length).toBe(8);
+    cube.forEach((corner, i) => {
+      expect(decoded.vertices3![i]!.x).toBeCloseTo(corner.x, 4);
+      expect(decoded.vertices3![i]!.y).toBeCloseTo(corner.y, 4);
+      expect(decoded.vertices3![i]!.z).toBeCloseTo(corner.z, 4);
+    });
+    expect(decoded.objective3!.z).toBeCloseTo(-0.25, 5);
+    // a 2-variable link carries neither
+    const flat = roundTrip(BASE)!;
+    expect(flat.vertices3).toBeUndefined();
+    expect(flat.objective3).toBeUndefined();
+  });
+
+  test("round-trips the height of a start marker dragged in space", () => {
+    const lifted = roundTrip({
+      ...BASE,
+      solverStartPoint: { x: 1, y: -2, z: 3.5 },
+    })!;
+    expect(lifted.solverStartPoint!.z).toBeCloseTo(3.5, 4);
+    const planar = roundTrip({ ...BASE, solverStartPoint: { x: 1, y: -2 } })!;
+    expect(planar.solverStartPoint!.z).toBeUndefined();
+  });
+
+  test("still reads v2 links, which predate the solid", () => {
+    // a v3 payload without any of the v3 flags has a byte-identical body to
+    // what the v2 encoder wrote, so rewriting the version byte reproduces one
+    const current = encodeSharedState({
+      ...BASE,
+      solverStartPoint: { x: -1.25, y: 0.5 },
+    });
+    const padded = current.replace(/-/g, "+").replace(/_/g, "/");
+    const bytes = Uint8Array.from(
+      atob(padded + "=".repeat((4 - (padded.length % 4)) % 4)),
+      (c) => c.charCodeAt(0),
+    );
+    bytes[0] = 2;
+    const v2 = btoa(String.fromCharCode(...bytes))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+    const decoded = decodeSharedState(v2)!;
+    expect(decoded).not.toBeNull();
+    expect(decoded.vertices.length).toBe(5);
+    expect(decoded.solverStartPoint!.x).toBeCloseTo(-1.25, 4);
+    expect(decoded.vertices3).toBeUndefined();
+  });
+
   test("still reads v1 links, which predate the start point", () => {
     // frozen payload from the v1 encoder: two header bytes instead of three
     const v1 = "AUkF__AE39QDgOIJn5wBwLgCwKkHv6kHgPEEn40G39QDgNRhgJ9JAQLBAg";

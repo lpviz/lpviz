@@ -9,11 +9,13 @@ import { LayerBase } from "./base/LayerBase";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
 // a small gray ring at the effective start point (see
-// displayedSolverStartPoint for the applicability/snapping rules). In 3D it
-// rides at the first iterate's render height — the per-solver convergence
-// lift (mu for IPM, scaled eps for PDHG, zero for simplex) — so it stays
-// attached to the start of the path at any zScale; in 2D everything flattens
-// to the floor. Dragging maps through the z = 0 plane like the vertices.
+// displayedSolverStartPoint for the applicability/snapping rules). In the
+// lifted 3D view of a 2-variable problem it rides at the first iterate's
+// render height — the per-solver convergence lift (mu for IPM, scaled eps for
+// PDHG, zero for simplex) — so it stays attached to the start of the path at
+// any zScale; in 2D everything flattens to the floor. Dragging maps through the
+// z = 0 plane like the vertices. In the 3-variable editor the marker is a
+// point in space with its own z, dragged on the camera-facing plane.
 export class SolverStartLayer extends LayerBase {
   readonly object3D: Points;
   override readonly renderPass = "overlay" as const;
@@ -57,6 +59,10 @@ export class SolverStartLayer extends LayerBase {
       raw.polytope,
       raw.iteratePath,
       raw.iterateObjectiveVector,
+      raw.problemMode,
+      raw.editor3Phase,
+      raw.polytope3,
+      raw.objectiveVector3,
     ];
   }
 
@@ -68,10 +74,11 @@ export class SolverStartLayer extends LayerBase {
       return;
     }
     const first = flatPointXYZ(raw.iteratePath, 0, raw.iterateObjectiveVector);
+    const z = point.z ?? first?.[2] ?? 0;
     this.object3D.geometry.dispose();
     this.object3D.geometry.setAttribute(
       "position",
-      new BufferAttribute(Float32Array.of(point.x, point.y, first?.[2] ?? 0), 3),
+      new BufferAttribute(Float32Array.of(point.x, point.y, z), 3),
     );
     this.object3D.visible = true;
   }

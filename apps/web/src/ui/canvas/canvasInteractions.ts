@@ -2,6 +2,7 @@ import { setCurrentMouse } from "@/features/core/currentMouse";
 import {
   DEFAULT_Z_SCALE,
   computeDrawingPhase,
+  displayedSolverStartPoint,
   getState,
   setState,
   type DrawingPhase,
@@ -25,12 +26,13 @@ import {
   getDragStartTarget,
   getLocalFromClient,
   getLogicalFromClient,
+  SOLVER_START_HIT_RADIUS,
   solverStartNearLocalPoint,
   type ConstraintDragTarget,
 } from "@/features/polytope-editor/interactionState";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import { applyEdgeBevel, applyFaceOffsetDrag, applyFaceRemoval, applyVertexChamfer, baseCentroidForSketch, commitExtrusion, commitObjective3, currentEdges3, deleteVertex3, insertVertex3, MIN_EXTRUDE_HEIGHT, moveVertex3, objectiveAnchor3, setObjectiveVector3 } from "@/features/polytope-editor/editor3";
-import { constrainedPointFromPointer, faceOffsetFromPointer, findEdge3NearClient, findFaceAtClient, findVertex3NearClient, heightFromPointer, isExtrudeHandleAtClient, isObjective3TipAtClient, objectivePointFromPointer } from "@/features/polytope-editor/interaction3";
+import { constrainedPointFromPointer, faceOffsetFromPointer, findEdge3NearClient, findFaceAtClient, findVertex3NearClient, heightFromPointer, isExtrudeHandleAtClient, isObjective3TipAtClient, isPoint3AtClient, objectivePointFromPointer } from "@/features/polytope-editor/interaction3";
 import { collectZoomFitBounds } from "@/features/viewport/bounds";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromLines } from "@lpviz/math/geometry";
@@ -335,6 +337,20 @@ export function attachCanvasInteractions({
   };
 
   // world position of the objective arrow's tip (anchored at the solid's centroid)
+  // the start marker as a point in space (3-variable editor), or null when the
+  // marker does not apply to the current solver
+  const startMarker3 = (state: State): PointXYZ | null => {
+    const start = displayedSolverStartPoint(state);
+    return start ? { x: start.x, y: start.y, z: start.z ?? 0 } : null;
+  };
+  const startMarkerAtClient = (state: State, clientX: number, clientY: number): PointXYZ | null => {
+    const marker = startMarker3(state);
+    return marker && isPoint3AtClient(canvasManager, marker, clientX, clientY, SOLVER_START_HIT_RADIUS) ? marker : null;
+  };
+  // set when a right-click reset the start marker, so the matching right
+  // mouse-up does not also delete the vertex the marker was snapped to
+  let rightClickResetStart = false;
+
   const objective3Tip = (state: State): PointXYZ => {
     const anchor = objectiveAnchor3();
     const vector = state.objectiveVector3 ?? { x: 0, y: 0, z: 0 };
@@ -367,6 +383,8 @@ export function attachCanvasInteractions({
       return null;
     }
     if (state.editor3Phase === "ready") {
+      const marker = startMarkerAtClient(state, clientX, clientY);
+      if (marker) return { kind: "solver-start", anchor3: marker } as const;
       if (state.objectiveVector3 && !state.objectiveHidden && isObjective3TipAtClient(canvasManager, objective3Tip(state), clientX, clientY)) {
         return { kind: "objective3" } as const;
       }
@@ -479,6 +497,17 @@ export function attachCanvasInteractions({
       canvasManager.draw();
       return;
     }
+    if (target.kind === "solver-start") {
+      if (!target.anchor3) return;
+      const point = objectivePointFromPointer(canvasManager, target.anchor3, clientX, clientY);
+      if (!point) return;
+      // store the raw point; the marker layer and the solver request both
+      // derive the effective start (simplex snaps it to the nearest vertex)
+      setState({ solverStartPoint: point });
+      onSolverStartMoved();
+      canvasManager.draw();
+      return;
+    }
     if (target.kind === "objective3") {
       const anchor = objectiveAnchor3();
       const currentVector = getState().objectiveVector3 ?? { x: 0, y: 0, z: 0 };
@@ -499,7 +528,7 @@ export function attachCanvasInteractions({
       return false;
     }
     const interaction = state.editorInteraction;
-    if (interaction.kind === "dragging" && (interaction.target.kind === "extrude-handle" || interaction.target.kind === "face3" || interaction.target.kind === "vertex3" || interaction.target.kind === "objective3")) {
+    if (interaction.kind === "dragging" && (interaction.target.kind === "extrude-handle" || interaction.target.kind === "face3" || interaction.target.kind === "vertex3" || interaction.target.kind === "objective3" || interaction.target.kind === "solver-start")) {
       setCanvasCursor("grabbing");
       applyDragging3D(interaction.target, clientX, clientY);
       return true;
@@ -522,7 +551,7 @@ export function attachCanvasInteractions({
       return true;
     }
     if (state.editor3Phase === "ready") {
-      const overDraggable = (state.objectiveVector3 && !state.objectiveHidden && isObjective3TipAtClient(canvasManager, objective3Tip(state), clientX, clientY)) || findVertex3NearClient(canvasManager, state.vertices3, clientX, clientY) >= 0;
+      const overDraggable = startMarkerAtClient(state, clientX, clientY) !== null || (state.objectiveVector3 && !state.objectiveHidden && isObjective3TipAtClient(canvasManager, objective3Tip(state), clientX, clientY)) || findVertex3NearClient(canvasManager, state.vertices3, clientX, clientY) >= 0;
       const pick = findFaceAtClient(canvasManager, state, clientX, clientY);
       setCanvasCursor(overDraggable || pick ? "grab" : "");
       const hovered = pick ? pick.planeIndex : null;
@@ -638,6 +667,12 @@ export function attachCanvasInteractions({
     rightPointerDownScreen = null;
     const state = getState();
     if (state.problemMode !== "3d" || (state.editor3Phase !== "ready" && state.editor3Phase !== "objective")) return;
+    // a right-click that reset the start marker (or lands on it — the order
+    // of contextmenu and mouseup differs by platform) deletes nothing
+    if (rightClickResetStart || (state.solverStartPoint && startMarkerAtClient(state, event.clientX, event.clientY))) {
+      rightClickResetStart = false;
+      return;
+    }
     if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > CLICK_MOVE_TOLERANCE_PX) return;
     const vertexIndex = findVertex3NearClient(canvasManager, state.vertices3, event.clientX, event.clientY);
     if (vertexIndex < 0) return;
@@ -740,6 +775,16 @@ export function attachCanvasInteractions({
     // pointer.
     if (state.problemMode === "3d" && state.editor3Phase !== "sketch") {
       if (state.editor3Phase !== "ready" && state.editor3Phase !== "objective") return;
+      // right-clicking the start marker resets it to the solver default
+      if (state.solverStartPoint && startMarkerAtClient(state, event.clientX, event.clientY)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        rightClickResetStart = true;
+        setState({ solverStartPoint: null });
+        onSolverStartMoved();
+        canvasManager.draw();
+        return;
+      }
       if (findVertex3NearClient(canvasManager, state.vertices3, event.clientX, event.clientY) < 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();

@@ -43,9 +43,11 @@ const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
-// v3: the 3-variable editor's solid vertices and its 3D objective
+// v3: the 3-variable editor's solid vertices, its 3D objective, and the
+// height of a start marker dragged in space
 const HAS_VERTICES3 = 0x02;
 const HAS_OBJECTIVE3 = 0x04;
+const HAS_SOLVER_START_Z = 0x08;
 const QUERY_POINTS = [
   "ellipsoid",
   "chebyshev",
@@ -167,6 +169,7 @@ export function encodeSharedState(state: SharedAppState): string {
   // that default later moves. Only a point the user actually dragged is pinned.
   const hasSolverStart =
     start != null && Number.isFinite(start.x) && Number.isFinite(start.y);
+  const hasSolverStartZ = hasSolverStart && Number.isFinite(start.z);
   bytes.push(
     completion |
       (solver << 2) |
@@ -185,7 +188,8 @@ export function encodeSharedState(state: SharedAppState): string {
   bytes.push(
     (hasSolverStart ? HAS_SOLVER_START : 0) |
       (hasVertices3 ? HAS_VERTICES3 : 0) |
-      (hasObjective3 ? HAS_OBJECTIVE3 : 0),
+      (hasObjective3 ? HAS_OBJECTIVE3 : 0) |
+      (hasSolverStartZ ? HAS_SOLVER_START_Z : 0),
   );
 
   const vertices = state.vertices ?? [];
@@ -210,6 +214,7 @@ export function encodeSharedState(state: SharedAppState): string {
     // a world coordinate the user placed by hand, so vertex precision applies
     writeZigZag(bytes, quantize(start.x, COORDINATE_SCALE));
     writeZigZag(bytes, quantize(start.y, COORDINATE_SCALE));
+    if (hasSolverStartZ) writeZigZag(bytes, quantize(start.z!, COORDINATE_SCALE));
   }
   if (hasVertices3) {
     // the solid's corners, delta-coded like the polygon's vertices
@@ -313,13 +318,16 @@ export function decodeSharedState(text: string): SharedAppState | null {
       (flags & 0x80) !== 0
         ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE)
         : undefined;
-    const solverStartPoint =
+    const solverStartPoint: { x: number; y: number; z?: number } | null =
       (extended & HAS_SOLVER_START) !== 0
         ? {
             x: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
             y: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
           }
         : null;
+    if (solverStartPoint && (extended & HAS_SOLVER_START_Z) !== 0) {
+      solverStartPoint.z = dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE);
+    }
     let vertices3: { x: number; y: number; z: number }[] | undefined;
     if ((extended & HAS_VERTICES3) !== 0) {
       const count = readVarint(bytes, cursor);

@@ -74,7 +74,13 @@ function objectiveBase(state: State) {
 // solvers then keep their exact legacy initialization).
 function startPointPayload(state: State): { startPoint?: number[] } {
   const point = state.solverStartPoint;
-  return point ? { startPoint: [point.x, point.y] } : {};
+  if (!point) return {};
+  return {
+    startPoint:
+      state.problemMode === "3d"
+        ? [point.x, point.y, point.z ?? 0]
+        : [point.x, point.y],
+  };
 }
 
 const messageBlocks = (
@@ -183,7 +189,14 @@ export function createSolverControls({ updateSolverSetting, hasUnboundedObjectiv
         return {
           solver: "simplex",
           ...base,
-          ...(snapped ? { startVertex: [snapped.x, snapped.y] } : {}),
+          ...(snapped
+            ? {
+                startVertex:
+                  s.problemMode === "3d"
+                    ? [snapped.x, snapped.y, snapped.z ?? 0]
+                    : [snapped.x, snapped.y],
+              }
+            : {}),
           dual: s.solverSettings.simplexDualMode,
           enteringRule: s.solverSettings.simplexEnteringRule,
           leavingRule: s.solverSettings.simplexLeavingRule,

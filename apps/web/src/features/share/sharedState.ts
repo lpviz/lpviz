@@ -36,7 +36,8 @@ export type SharedAppState = {
   solverMode: SolverMode;
   settings: ShareSettings;
   /** Null means the solver's own default start, not "no start point". */
-  solverStartPoint?: { x: number; y: number } | null;
+  // z only for a 3-variable start
+  solverStartPoint?: { x: number; y: number; z?: number } | null;
   zScale?: number;
   is3DMode?: boolean;
   // 3-variable problems (lpviz.net/3d): the solid's vertices (its faces are
@@ -169,7 +170,13 @@ export function buildSharedStatePatch(sharedState: SharedAppState): Partial<Stat
     // always written, so loading a link clears a start point left over from
     // whatever the user was doing before
     solverStartPoint: isFinitePoint(sharedState.solverStartPoint)
-      ? { x: sharedState.solverStartPoint.x, y: sharedState.solverStartPoint.y }
+      ? {
+          x: sharedState.solverStartPoint.x,
+          y: sharedState.solverStartPoint.y,
+          ...(Number.isFinite((sharedState.solverStartPoint as { z?: unknown }).z)
+            ? { z: (sharedState.solverStartPoint as { z: number }).z }
+            : {}),
+        }
       : null,
     ...(Number.isFinite(sharedState.zScale)
       ? { zScale: Math.max(0.01, Math.min(100, sharedState.zScale!)) }
