@@ -13,34 +13,49 @@ const MAX_ITERATIONS = 100_000;
 type SimplexStatus = "optimal" | "unbounded" | "infeasible";
 
 /**
- * Pivot-selection heuristics for the entering variable:
- *  - "coeff": the non-basic column with the highest (positive) reduced cost
- *    — the Dantzig / "largest coefficient" rule; ties break to the lowest
- *    column index.
+ * Pivot-selection rules for the entering variable (the UI labels them
+ * Dantzig / Bland (low) / Bland (high)):
+ *  - "coeff": the non-basic column with the largest positive reduced cost
+ *    (Dantzig's rule); ties break to the lowest column index.
  *  - "first": the lowest-index non-basic column with a positive reduced cost
- *    — Bland's-rule-style entering.
+ *    (Bland's rule). Paired with leaving rule "first" it provably never
+ *    cycles, which is why it is the default.
  *  - "last": the highest-index such column.
  */
-export type EnteringRule = "coeff" | "first" | "last";
+export const ENTERING_RULES = ["coeff", "first", "last"] as const;
+export type EnteringRule = (typeof ENTERING_RULES)[number];
 
 /**
- * Tie-break for the ratio test (leaving variable): among rows achieving the
- * minimum ratio, "first" keeps the lowest original column index and "last"
- * the highest.
+ * Tie-break for the ratio test (leaving variable): among rows within `tol` of
+ * the minimum ratio, "first" keeps the lowest original column index and
+ * "last" the highest.
  */
-export type LeavingRule = "first" | "last";
+export const LEAVING_RULES = ["first", "last"] as const;
+export type LeavingRule = (typeof LEAVING_RULES)[number];
 
-const DEFAULT_ENTERING_RULE: EnteringRule = "first";
-const DEFAULT_LEAVING_RULE: LeavingRule = "first";
+type PivotRules = { entering: EnteringRule; leaving: LeavingRule };
 
-function resolveEnteringRule(rule: unknown): EnteringRule {
-  return rule === "coeff" || rule === "first" || rule === "last"
-    ? rule
-    : DEFAULT_ENTERING_RULE;
-}
+// Bland's rule on both sides: the default, and the only combination with a
+// termination guarantee.
+const BLAND_RULES: PivotRules = { entering: "first", leaving: "first" };
 
-function resolveLeavingRule(rule: unknown): LeavingRule {
-  return rule === "first" || rule === "last" ? rule : DEFAULT_LEAVING_RULE;
+export const isEnteringRule = (value: unknown): value is EnteringRule =>
+  (ENTERING_RULES as readonly unknown[]).includes(value);
+export const isLeavingRule = (value: unknown): value is LeavingRule =>
+  (LEAVING_RULES as readonly unknown[]).includes(value);
+
+// Unknown values (e.g. from a hand-edited share link) degrade to the default.
+function resolvePivotRules(
+  opts: Pick<SimplexOptions, "enteringRule" | "leavingRule">,
+): PivotRules {
+  return {
+    entering: isEnteringRule(opts.enteringRule)
+      ? opts.enteringRule
+      : BLAND_RULES.entering,
+    leaving: isLeavingRule(opts.leavingRule)
+      ? opts.leavingRule
+      : BLAND_RULES.leaving,
+  };
 }
 
 interface SimplexOptions {
@@ -54,9 +69,9 @@ interface SimplexOptions {
    * slackness), so dual simplex mode ignores it.
    */
   startVertex?: number[];
-  /** Entering-variable pivot rule. Defaults to "first" (lowest index). */
+  /** Entering-variable pivot rule (see ENTERING_RULES). Defaults to "first" (Bland). */
   enteringRule?: EnteringRule;
-  /** Leaving-variable ratio-test tie-break. Defaults to "first". */
+  /** Ratio-test tie-break (see LEAVING_RULES). Defaults to "first" (lowest index). */
   leavingRule?: LeavingRule;
 }
 
@@ -331,11 +346,10 @@ function simplexCoreStandard(
     verbose: boolean;
     pointFromBasis: (basisIndices: number[]) => [number, number];
     completionLabel: string;
-    enteringRule: EnteringRule;
-    leavingRule: LeavingRule;
+    pivotRules: PivotRules;
   },
 ) {
-  const { tol, verbose, pointFromBasis, completionLabel } = cfg;
+  const { tol, verbose, pointFromBasis, completionLabel, pivotRules } = cfg;
   const mRows = A.rows;
   const nCols = A.cols;
   let basis = basisInit.slice();
@@ -371,7 +385,7 @@ function simplexCoreStandard(
       basis,
       state.reducedCosts,
       tol,
-      cfg.enteringRule,
+      pivotRules.entering,
     );
     if (enterIndex === -1) break;
 
@@ -383,7 +397,7 @@ function simplexCoreStandard(
       direction,
       state.basisIndices,
       tol,
-      cfg.leavingRule,
+      pivotRules.leaving,
     );
 
     if (leaveBasisIndex === -1) {
@@ -424,11 +438,10 @@ function simplexCore(
     phase1: boolean;
     nOrig: number;
     m: number;
-    enteringRule: EnteringRule;
-    leavingRule: LeavingRule;
+    pivotRules: PivotRules;
   },
 ) {
-  const { tol, verbose, phase1, nOrig, m } = cfg;
+  const { tol, verbose, phase1, nOrig, m, pivotRules } = cfg;
   const mRows = A.rows;
   const nCols = A.cols;
 
@@ -477,7 +490,7 @@ function simplexCore(
       basis,
       state.reducedCosts,
       tol,
-      cfg.enteringRule,
+      pivotRules.entering,
     );
     if (enterIndex === -1) break;
 
@@ -489,7 +502,7 @@ function simplexCore(
       direction,
       basisIndices,
       tol,
-      cfg.leavingRule,
+      pivotRules.leaving,
     );
 
     if (leaveIndexInBasis === -1) {
@@ -527,6 +540,13 @@ function simplexCore(
   };
 }
 
+// Drives any artificial variable still basic at the end of Phase 1 out of the
+// basis by swapping in the lowest-index original column with a nonzero pivot.
+// This is deliberately independent of the selected pivot rules: it is a basis
+// repair step, not an objective-improving pivot, so the rules only govern the
+// two simplex loops. (Primal mode reaches this loop only for zero-area regions,
+// which the app rejects; dual mode reaches it when the objective is exactly
+// parallel to a constraint normal.)
 function pivotOutArtificialVariables(
   phase1Matrix: DenseMatrix,
   bVec: Float64Array,
@@ -584,11 +604,9 @@ function solveDualMode(
   primalA: DenseMatrix,
   primalB: Float64Array,
   objective: Float64Array,
-  opts: Pick<SimplexOptions, "tol" | "verbose" | "enteringRule" | "leavingRule">,
+  cfg: { tol: number; verbose: boolean; pivotRules: PivotRules },
 ) {
-  const { tol, verbose } = opts;
-  const enteringRule = resolveEnteringRule(opts.enteringRule);
-  const leavingRule = resolveLeavingRule(opts.leavingRule);
+  const { tol, verbose, pivotRules } = cfg;
   const dualAFull = transposeMatrix(primalA);
   const bDualFull = Float64Array.from(objective);
 
@@ -645,8 +663,7 @@ function solveDualMode(
     verbose,
     pointFromBasis: dualPointFromBasis,
     completionLabel: "Phase 1",
-    enteringRule,
-    leavingRule,
+    pivotRules,
   });
 
   if (Math.abs(phase1.objective) > tol) {
@@ -681,8 +698,7 @@ function solveDualMode(
     verbose,
     pointFromBasis: dualPointFromBasis,
     completionLabel: "Phase 2",
-    enteringRule,
-    leavingRule,
+    pivotRules,
   });
 
   // An unbounded dual means the primal LP being visualized is infeasible.
@@ -774,8 +790,7 @@ function warmStartBasisFromVertex(
 
 export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
   const { tol, verbose, dual, startVertex } = opts;
-  const enteringRule = resolveEnteringRule(opts.enteringRule);
-  const leavingRule = resolveLeavingRule(opts.leavingRule);
+  const pivotRules = resolvePivotRules(opts);
   const { A: aOriginal, b } = linesToDenseAb(lines);
   const m = aOriginal.rows;
   const n = aOriginal.cols;
@@ -786,8 +801,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
       ...solveDualMode(lines, aOriginal, b, cObjective, {
         tol,
         verbose,
-        enteringRule,
-        leavingRule,
+        pivotRules,
       }),
       mode: "dual" as const,
     };
@@ -845,8 +859,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
         phase1: false,
         nOrig: n,
         m,
-        enteringRule,
-        leavingRule,
+        pivotRules,
       },
     );
     return {
@@ -871,8 +884,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
     phase1: true,
     nOrig: n,
     m,
-    enteringRule,
-    leavingRule,
+    pivotRules,
   });
 
   const phase2Basis = pivotOutArtificialVariables(
@@ -895,8 +907,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
       phase1: false,
       nOrig: n,
       m,
-      enteringRule,
-      leavingRule,
+      pivotRules,
     },
   );
 
