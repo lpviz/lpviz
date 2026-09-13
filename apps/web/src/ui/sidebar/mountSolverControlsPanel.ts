@@ -10,6 +10,12 @@ import {
 import { el } from "@/ui/dom";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import {
+  ENTERING_RULES,
+  LEAVING_RULES,
+  type EnteringRule,
+  type LeavingRule,
+} from "@lpviz/solver-engine/simplex";
 
 const MAXIT_LOG_MIN = 0,
   MAXIT_LOG_MAX = 5,
@@ -23,6 +29,26 @@ const sliderValueToMaxit = (value: string) =>
   Math.max(1, Math.round(10 ** parseFloat(value)));
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const fmt = (value: number) => NUMBER_FORMAT.format(value);
+
+// The rule vocabulary comes from the engine; a Record turns a rule without a
+// label into a compile error.
+const ENTERING_RULE_LABELS: Record<EnteringRule, string> = {
+  coeff: "Dantzig",
+  first: "Bland (low)",
+  last: "Bland (high)",
+};
+const LEAVING_RULE_LABELS: Record<LeavingRule, string> = {
+  first: "Lowest index",
+  last: "Highest index",
+};
+const ENTERING_RULE_OPTIONS = ENTERING_RULES.map((value) => ({
+  value,
+  text: ENTERING_RULE_LABELS[value],
+}));
+const LEAVING_RULE_OPTIONS = LEAVING_RULES.map((value) => ({
+  value,
+  text: LEAVING_RULE_LABELS[value],
+}));
 
 type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG">;
 type SettingsSync = (state: State) => void;
@@ -306,27 +332,18 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
         ctx.actions.recomputeIfModeActive("simplex");
       });
       dual.checked = st.simplexDualMode;
-      const enteringOptions = [
-        { value: "coeff", text: "Highest objective coeff" },
-        { value: "first", text: "Lowest index" },
-        { value: "last", text: "Highest index" },
-      ] as const;
       const entering = dropdown(
         "simplexEnteringRule",
-        enteringOptions,
+        ENTERING_RULE_OPTIONS,
         st.simplexEnteringRule,
         (v) => {
           ctx.actions.updateSolverSetting("simplexEnteringRule", v);
           ctx.actions.recomputeIfModeActive("simplex");
         },
       );
-      const leavingOptions = [
-        { value: "first", text: "Lowest index" },
-        { value: "last", text: "Highest index" },
-      ] as const;
       const leaving = dropdown(
         "simplexLeavingRule",
-        leavingOptions,
+        LEAVING_RULE_OPTIONS,
         st.simplexLeavingRule,
         (v) => {
           ctx.actions.updateSolverSetting("simplexLeavingRule", v);
@@ -341,13 +358,13 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
             [dual],
           ),
         ]),
-        labeled("Entering rule:", "simplexEnteringRule", entering, undefined, true),
-        labeled("Leaving rule (ratio test):", "simplexLeavingRule", leaving, undefined, true),
+        labeled("Entering rule:", "simplexEnteringRule", entering),
+        labeled("Leaving rule (ratio test):", "simplexLeavingRule", leaving),
       );
       return (s) => {
         dual.checked = s.solverSettings.simplexDualMode;
-        setInputValue(entering, String(s.solverSettings.simplexEnteringRule));
-        setInputValue(leaving, String(s.solverSettings.simplexLeavingRule));
+        setInputValue(entering, s.solverSettings.simplexEnteringRule);
+        setInputValue(leaving, s.solverSettings.simplexLeavingRule);
       };
     }
 

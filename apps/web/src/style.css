@@ -1340,6 +1340,14 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
   width: 100%;
 }
 
+.controlPanel select {
+  margin-top: 5px;
+  margin-bottom: 10px;
+  width: 100%;
+  font: inherit;
+  color: #333;
+}
+
 .controlPanel input[type="range"] {
   margin-top: 10px;
   margin-bottom: 10px;
