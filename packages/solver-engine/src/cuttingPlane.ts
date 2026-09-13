@@ -1,16 +1,21 @@
 import { linesToDenseAb } from "@lpviz/math/blas";
+import { solveDenseSystem } from "@lpviz/math/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import type { LinesND, VecN } from "@lpviz/math/types";
 import {
-  ELLIPSOID_STRIDE,
   appendIncumbent,
   clipPolygon,
+  ellipsoidLogHeader,
+  ellipsoidRow,
+  ellipsoidStride,
   mostViolatedConstraint,
   objectiveRayStep,
   packPolygons,
   regionBoundingBox,
+  writeEllipsoid,
   type EllipsoidResultData,
   type EllipsoidRow,
+  type RegionVertices,
 } from "./ellipsoid";
 import { formatMilliseconds } from "./time";
 
@@ -48,16 +53,14 @@ type Termination = "converged" | "maxit" | "exhausted" | "degenerate";
 
 type QueryResult = {
   point: Float64Array;
-  // The ellipse drawn for this iterate. Note it is *inscribed* at the query
-  // point, where the ellipsoid method's is a covering ellipsoid — the two look
-  // alike and mean opposite things. In particular the next query point is
-  // routinely outside this ellipse, which is expected: it is a local measure of
-  // how much room surrounds the query point, not the region still under
-  // consideration. That region is the polyhedron of accumulated cuts, which
-  // only ever shrinks (see the test of the same name).
-  p11: number;
-  p12: number;
-  p22: number;
+  // The ellipsoid drawn for this iterate, as its n x n shape matrix. Note it is
+  // *inscribed* at the query point, where the ellipsoid method's is a covering
+  // ellipsoid — the two look alike and mean opposite things. In particular the
+  // next query point is routinely outside this ellipsoid, which is expected: it
+  // is a local measure of how much room surrounds the query point, not the
+  // region still under consideration. That region is the polyhedron of
+  // accumulated cuts, which only ever shrinks (see the test of the same name).
+  P: Float64Array;
   leverage: Float64Array | null;
 };
 
@@ -87,10 +90,15 @@ type QueryResult = {
  * support function is not available in closed form, so the upper bound
  * `max c'x over L` that drives `rho` and the stopping gap is an actual LP,
  * solved exactly each iteration.
+ *
+ * Everything is written for n variables (the app uses 2 and 3): the barriers'
+ * Hessians are n x n, the Newton directions come from a dense solve, and the
+ * localizing set is emitted as a polygon for n = 2 and as its half-spaces for
+ * n = 3, where the viewport enumerates the polyhedron itself.
  */
 export function cuttingPlane(
-  vertices: Vertices,
-  lines: Lines,
+  vertices: RegionVertices,
+  lines: LinesND,
   objective: VecN,
   opts: CuttingPlaneOptions,
 ): EllipsoidResultData {
@@ -102,14 +110,14 @@ export function cuttingPlane(
 
   const { A, b } = linesToDenseAb(lines);
   const n = A.cols;
-  if (n !== 2) {
+  if (n < 2) {
     throw new Error(
-      "The cutting-plane query points are implemented for two variables.",
+      "The cutting-plane query points require at least two variables.",
     );
   }
 
   const c = Float64Array.from({ length: n }, (_, j) => objective[j] ?? 0);
-  const objectiveNormSquared = c[0]! * c[0]! + c[1]! * c[1]!;
+  const objectiveNormSquared = dot(c, c);
   const { center: boxCenter, halfExtents } = regionBoundingBox(
     vertices,
     n,
@@ -117,26 +125,44 @@ export function cuttingPlane(
   );
 
   // the initial localizing set: the same inflated bounding box the ellipsoid
-  // method circumscribes, kept as a box here
-  const minX = boxCenter[0]! - halfExtents[0]!;
-  const maxX = boxCenter[0]! + halfExtents[0]!;
-  const minY = boxCenter[1]! - halfExtents[1]!;
-  const maxY = boxCenter[1]! + halfExtents[1]!;
-  const localizing: number[][] = [
-    [1, 0, maxX],
-    [-1, 0, -minX],
-    [0, 1, maxY],
-    [0, -1, -minY],
-  ];
+  // method circumscribes, kept as a box here — two half-spaces per axis
+  const localizing: number[][] = [];
+  for (let j = 0; j < n; j++) {
+    const lo = boxCenter[j]! - halfExtents[j]!;
+    const hi = boxCenter[j]! + halfExtents[j]!;
+    const upper = new Array<number>(n + 1).fill(0);
+    upper[j] = 1;
+    upper[n] = hi;
+    const lower = new Array<number>(n + 1).fill(0);
+    lower[j] = -1;
+    lower[n] = -lo;
+    localizing.push(upper, lower);
+  }
   const boxRowCount = localizing.length;
-  const boxPolygon = [minX, minY, maxX, minY, maxX, maxY, minX, maxY];
+  // In 2D the drawn localizing set is the clipped box polygon; in higher
+  // dimensions it is the half-space list itself (see EllipsoidResultData).
+  const boxPolygon =
+    n === 2
+      ? [
+          localizing[1]![2]! * -1,
+          localizing[3]![2]! * -1,
+          localizing[0]![2]!,
+          localizing[3]![2]! * -1,
+          localizing[0]![2]!,
+          localizing[2]![2]!,
+          localizing[1]![2]! * -1,
+          localizing[2]![2]!,
+        ]
+      : null;
+  const polygonStride = boxPolygon ? 2 : n + 1;
   const polygons: number[][] = [];
 
   const iterations: Float64Array[] = [];
   const rows: EllipsoidRow[] = [];
   const rho: number[] = [];
+  const stride = ellipsoidStride(n);
   // one slot spare for the incumbent appended at the end
-  const ellipsoids = new Float64Array((maxit + 1) * ELLIPSOID_STRIDE);
+  const ellipsoids = new Float64Array((maxit + 1) * stride);
 
   const best = new Float64Array(n);
   let bestObjective = -Infinity;
@@ -144,11 +170,11 @@ export function cuttingPlane(
   let termination: Termination = "maxit";
   const startTime = performance.now();
 
-  const header = " Iter        x        y        Obj     Infeas          ρ";
+  const header = ellipsoidLogHeader(n);
   if (verbose) console.log(header);
 
   while (iterations.length < maxit) {
-    const query = computeQueryPoint(queryPoint, localizing);
+    const query = computeQueryPoint(queryPoint, localizing, n);
     if (!query) {
       termination = "exhausted";
       break;
@@ -159,7 +185,7 @@ export function cuttingPlane(
       dropRedundantCuts(localizing, boxRowCount, query.leverage);
     }
 
-    const objectiveValue = c[0]! * point[0]! + c[1]! * point[1]!;
+    const objectiveValue = dot(c, point);
     const { row: worstRow, violation } = mostViolatedConstraint(A, b, point);
     const feasible = violation <= FEASIBILITY_TOLERANCE;
     if (feasible && objectiveValue > bestObjective) {
@@ -177,7 +203,7 @@ export function cuttingPlane(
 
     // rho keeps the meaning it has for the ellipsoid method: how much better
     // than the query point anything still under consideration could be
-    const bound = solveSmallLp([c[0]!, c[1]!], localizing, LP_BOUND);
+    const bound = solveSmallLp(Array.from(c), localizing, LP_BOUND);
     if (bound.status === "infeasible") {
       termination = "exhausted";
       break;
@@ -187,33 +213,30 @@ export function cuttingPlane(
 
     // the localizing set as it stood when this point was queried: the box, cut
     // by everything learned so far
-    let polygon = boxPolygon;
-    for (let i = boxRowCount; i < localizing.length; i++) {
-      const cut = localizing[i]!;
-      polygon = clipPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
-      if (polygon.length === 0) break;
+    if (boxPolygon) {
+      let polygon = boxPolygon;
+      for (let i = boxRowCount; i < localizing.length; i++) {
+        const cut = localizing[i]!;
+        polygon = clipPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
+        if (polygon.length === 0) break;
+      }
+      polygons.push(polygon === boxPolygon ? [...boxPolygon] : polygon);
+    } else {
+      polygons.push(localizing.flat());
     }
-    polygons.push(polygon === boxPolygon ? [...boxPolygon] : polygon);
 
-    const base = iterations.length * ELLIPSOID_STRIDE;
-    ellipsoids[base] = point[0]!;
-    ellipsoids[base + 1] = point[1]!;
-    ellipsoids[base + 2] = query.p11;
-    ellipsoids[base + 3] = query.p12;
-    ellipsoids[base + 4] = query.p22;
-    const row: EllipsoidRow = {
-      kind: "ellipsoid",
-      iteration: iterations.length + 1,
-      x: point[0]!,
-      y: point[1]!,
-      objective: objectiveValue,
-      infeasibility: Math.max(0, violation),
-      rho: objectiveRadius,
-    };
+    writeEllipsoid(ellipsoids, iterations.length * stride, point, query.P, n);
+    const row = ellipsoidRow(
+      iterations.length + 1,
+      point,
+      objectiveValue,
+      Math.max(0, violation),
+      objectiveRadius,
+    );
     if (verbose) console.log(row);
     rows.push(row);
     rho.push(objectiveRadius);
-    iterations.push(Float64Array.of(point[0]!, point[1]!));
+    iterations.push(point.slice());
 
     const gap = bound.value - bestObjective;
     if (
@@ -228,14 +251,16 @@ export function cuttingPlane(
     if (!feasible) {
       // the violated constraint itself, which is as deep a cut as the oracle
       // can return
-      localizing.push([
-        A.data[worstRow * n]!,
-        A.data[worstRow * n + 1]!,
-        b[worstRow]!,
-      ]);
+      const cut = new Array<number>(n + 1);
+      for (let j = 0; j < n; j++) cut[j] = A.data[worstRow * n + j]!;
+      cut[n] = b[worstRow]!;
+      localizing.push(cut);
     } else {
       // discard everything no better than the incumbent
-      localizing.push([-c[0]!, -c[1]!, -bestObjective]);
+      const cut = new Array<number>(n + 1);
+      for (let j = 0; j < n; j++) cut[j] = -c[j]!;
+      cut[n] = -bestObjective;
+      localizing.push(cut);
     }
   }
 
@@ -256,8 +281,9 @@ export function cuttingPlane(
 
   return {
     iterations,
-    ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
-    ...packPolygons(polygons),
+    ellipsoids: ellipsoids.slice(0, iterations.length * stride),
+    ellipsoidStride: stride,
+    ...packPolygons(polygons, polygonStride),
     rho,
     header,
     rows,
@@ -268,60 +294,72 @@ export function cuttingPlane(
 function computeQueryPoint(
   kind: QueryPoint,
   rows: LpRow[],
+  n: number,
 ): QueryResult | null {
-  const ball = chebyshevCenter(rows, 2, LP_BOUND);
+  const ball = chebyshevCenter(rows, n, LP_BOUND);
   if (!ball || !(ball.radius > MIN_CHEBYSHEV_RADIUS)) return null;
-  if (!Number.isFinite(ball.center[0]!) || !Number.isFinite(ball.center[1]!)) {
-    return null;
-  }
+  if (!ball.center.every((value) => Number.isFinite(value))) return null;
 
   if (kind === "chebyshev") {
-    const radiusSquared = ball.radius * ball.radius;
-    return {
-      point: ball.center,
-      p11: radiusSquared,
-      p12: 0,
-      p22: radiusSquared,
-      leverage: null,
-    };
+    const P = new Float64Array(n * n);
+    for (let j = 0; j < n; j++) P[j * n + j] = ball.radius * ball.radius;
+    return { point: ball.center, P, leverage: null };
   }
 
   // the inscribed ball's center is strictly interior, which is exactly what
   // both barriers need to start from — no cut-restoration step required
   const center =
     kind === "analytic"
-      ? analyticCenter(rows, ball.center)
-      : volumetricCenter(rows, ball.center);
+      ? analyticCenter(rows, ball.center, n)
+      : volumetricCenter(rows, ball.center, n);
   if (!center) return null;
 
-  const hessian = barrierHessian(rows, center, kind === "volumetric");
+  const hessian = barrierHessian(rows, center, kind === "volumetric", n);
   if (!hessian) return null;
-  const inverse = invertSymmetric2(hessian.h11, hessian.h12, hessian.h22);
-  if (!inverse) return null;
+  const P = invertPositiveDefinite(hessian.H, n);
+  if (!P) return null;
 
-  return {
-    point: center,
-    p11: inverse.a11,
-    p12: inverse.a12,
-    p22: inverse.a22,
-    leverage: hessian.leverage,
-  };
+  return { point: center, P, leverage: hessian.leverage };
 }
 
-function slacksOf(rows: LpRow[], x: Float64Array): Float64Array | null {
+function dot(a: Float64Array, x: Float64Array) {
+  let sum = 0;
+  for (let j = 0; j < a.length; j++) sum += a[j]! * x[j]!;
+  return sum;
+}
+
+function slacksOf(
+  rows: LpRow[],
+  x: Float64Array,
+  n: number,
+): Float64Array | null {
   const slacks = new Float64Array(rows.length);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const slack = row[2]! - row[0]! * x[0]! - row[1]! * x[1]!;
+    let slack = row[n]!;
+    for (let j = 0; j < n; j++) slack -= row[j]! * x[j]!;
     if (!(slack > MIN_SLACK)) return null;
     slacks[i] = slack;
   }
   return slacks;
 }
 
+// H(x) = sum a_i a_i' / s_i^2 as a dense symmetric n x n matrix
+function accumulateOuter(
+  H: Float64Array,
+  row: LpRow,
+  weight: number,
+  n: number,
+): void {
+  for (let j = 0; j < n; j++) {
+    const aj = row[j]! * weight;
+    for (let k = 0; k < n; k++) H[j * n + k] += aj * row[k]!;
+  }
+}
+
 // -sum log(slack), the analytic center's objective
-function logBarrier(rows: LpRow[], x: Float64Array): number {
-  const slacks = slacksOf(rows, x);
+function logBarrier(rows: LpRow[], x: Float64Array, n: number): number {
+  const slacks = slacksOf(rows, x, n);
   if (!slacks) return Infinity;
   let value = 0;
   for (let i = 0; i < slacks.length; i++) value -= Math.log(slacks[i]!);
@@ -329,75 +367,111 @@ function logBarrier(rows: LpRow[], x: Float64Array): number {
 }
 
 // ½ log det H(x), Vaidya's volumetric barrier
-function volumetricBarrier(rows: LpRow[], x: Float64Array): number {
-  const slacks = slacksOf(rows, x);
+function volumetricBarrier(rows: LpRow[], x: Float64Array, n: number): number {
+  const slacks = slacksOf(rows, x, n);
   if (!slacks) return Infinity;
-  let h11 = 0;
-  let h12 = 0;
-  let h22 = 0;
+  const H = new Float64Array(n * n);
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
-    const inverseSquare = 1 / (slacks[i]! * slacks[i]!);
-    h11 += row[0]! * row[0]! * inverseSquare;
-    h12 += row[0]! * row[1]! * inverseSquare;
-    h22 += row[1]! * row[1]! * inverseSquare;
+    accumulateOuter(H, rows[i]!, 1 / (slacks[i]! * slacks[i]!), n);
   }
-  const determinant = h11 * h22 - h12 * h12;
-  return determinant > 0 ? 0.5 * Math.log(determinant) : Infinity;
+  const logDet = logDetPositiveDefinite(H, n);
+  return logDet === null ? Infinity : 0.5 * logDet;
 }
 
 // H(x) = sum a_i a_i' / s_i^2, plus (for Vaidya) each face's leverage score
 // sigma_i = a_i' H^-1 a_i / s_i^2 and the leverage-weighted matrix Q that
 // stands in for the volumetric barrier's Hessian.
-function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean) {
-  const slacks = slacksOf(rows, x);
+function barrierHessian(
+  rows: LpRow[],
+  x: Float64Array,
+  weighted: boolean,
+  n: number,
+) {
+  const slacks = slacksOf(rows, x, n);
   if (!slacks) return null;
 
-  let h11 = 0;
-  let h12 = 0;
-  let h22 = 0;
+  const H = new Float64Array(n * n);
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
-    const inverseSquare = 1 / (slacks[i]! * slacks[i]!);
-    h11 += row[0]! * row[0]! * inverseSquare;
-    h12 += row[0]! * row[1]! * inverseSquare;
-    h22 += row[1]! * row[1]! * inverseSquare;
+    accumulateOuter(H, rows[i]!, 1 / (slacks[i]! * slacks[i]!), n);
   }
-  const inverse = invertSymmetric2(h11, h12, h22);
+  const inverse = invertPositiveDefinite(H, n);
   if (!inverse) return null;
 
   const leverage = new Float64Array(rows.length);
+  const scratch = new Float64Array(n);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const quadratic =
-      inverse.a11 * row[0]! * row[0]! +
-      2 * inverse.a12 * row[0]! * row[1]! +
-      inverse.a22 * row[1]! * row[1]!;
+    // a_i' H^-1 a_i
+    for (let j = 0; j < n; j++) {
+      let sum = 0;
+      for (let k = 0; k < n; k++) sum += inverse[j * n + k]! * row[k]!;
+      scratch[j] = sum;
+    }
+    let quadratic = 0;
+    for (let j = 0; j < n; j++) quadratic += row[j]! * scratch[j]!;
     leverage[i] = quadratic / (slacks[i]! * slacks[i]!);
   }
-  if (!weighted) return { h11, h12, h22, leverage, slacks };
+  if (!weighted) return { H, leverage, slacks };
 
-  let q11 = 0;
-  let q12 = 0;
-  let q22 = 0;
+  const Q = new Float64Array(n * n);
   for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
-    const weight = leverage[i]! / (slacks[i]! * slacks[i]!);
-    q11 += row[0]! * row[0]! * weight;
-    q12 += row[0]! * row[1]! * weight;
-    q22 += row[1]! * row[1]! * weight;
+    accumulateOuter(Q, rows[i]!, leverage[i]! / (slacks[i]! * slacks[i]!), n);
   }
-  return { h11: q11, h12: q12, h22: q22, leverage, slacks };
+  return { H: Q, leverage, slacks };
 }
 
-function invertSymmetric2(a11: number, a12: number, a22: number) {
-  const determinant = a11 * a22 - a12 * a12;
-  if (!(determinant > 0) || !Number.isFinite(determinant)) return null;
-  return {
-    a11: a22 / determinant,
-    a12: -a12 / determinant,
-    a22: a11 / determinant,
-  };
+// Lower Cholesky factor of a symmetric matrix, or null when it is not
+// (numerically) positive definite — which is also the positive-definiteness
+// test every caller needs before trusting an inverse or a log-determinant.
+function cholesky(H: Float64Array, n: number): Float64Array | null {
+  const L = new Float64Array(n * n);
+  for (let j = 0; j < n; j++) {
+    let diagonal = H[j * n + j]!;
+    for (let k = 0; k < j; k++) diagonal -= L[j * n + k]! * L[j * n + k]!;
+    if (!(diagonal > 0) || !Number.isFinite(diagonal)) return null;
+    const ljj = Math.sqrt(diagonal);
+    L[j * n + j] = ljj;
+    for (let i = j + 1; i < n; i++) {
+      let sum = H[i * n + j]!;
+      for (let k = 0; k < j; k++) sum -= L[i * n + k]! * L[j * n + k]!;
+      L[i * n + j] = sum / ljj;
+    }
+  }
+  return L;
+}
+
+function logDetPositiveDefinite(H: Float64Array, n: number): number | null {
+  const L = cholesky(H, n);
+  if (!L) return null;
+  let logDet = 0;
+  for (let j = 0; j < n; j++) logDet += 2 * Math.log(L[j * n + j]!);
+  return Number.isFinite(logDet) ? logDet : null;
+}
+
+// H^-1 for symmetric positive definite H, column by column.
+function invertPositiveDefinite(
+  H: Float64Array,
+  n: number,
+): Float64Array | null {
+  if (!cholesky(H, n)) return null;
+  const inverse = new Float64Array(n * n);
+  const unit = new Float64Array(n);
+  const column = new Float64Array(n);
+  const lu = new Float64Array(n * n);
+  try {
+    for (let k = 0; k < n; k++) {
+      unit.fill(0);
+      unit[k] = 1;
+      solveDenseSystem(H, n, unit, column, lu);
+      for (let j = 0; j < n; j++) {
+        if (!Number.isFinite(column[j]!)) return null;
+        inverse[j * n + k] = column[j]!;
+      }
+    }
+  } catch {
+    return null;
+  }
+  return inverse;
 }
 
 // Damped Newton on a self-concordant barrier: full steps once the Newton
@@ -405,23 +479,21 @@ function invertSymmetric2(a11: number, a12: number, a22: number) {
 // strictly inside, which the barrier's +Infinity outside enforces on its own).
 function minimizeBarrier(
   start: Float64Array,
+  n: number,
   gradientAndStep: (
     x: Float64Array,
-  ) => { g0: number; g1: number; d0: number; d1: number } | null,
+  ) => { gradient: Float64Array; direction: Float64Array } | null,
   value: (x: Float64Array) => number,
 ): Float64Array | null {
   const x = start.slice();
-  const candidate = new Float64Array(2);
+  const candidate = new Float64Array(n);
   let current = value(x);
   if (!Number.isFinite(current)) return null;
 
   for (let step = 0; step < MAX_NEWTON_STEPS; step++) {
-    const direction = gradientAndStep(x);
-    if (!direction) return null;
-    const decrementSquared = -(
-      direction.g0 * direction.d0 +
-      direction.g1 * direction.d1
-    );
+    const newton = gradientAndStep(x);
+    if (!newton) return null;
+    const decrementSquared = -dot(newton.gradient, newton.direction);
     if (!(decrementSquared > NEWTON_DECREMENT_TOLERANCE)) break;
     const decrement = Math.sqrt(decrementSquared);
 
@@ -429,8 +501,9 @@ function minimizeBarrier(
       decrement > DAMPED_NEWTON_THRESHOLD ? 1 / (1 + decrement) : 1;
     let accepted = false;
     for (let attempt = 0; attempt < MAX_BACKTRACKS; attempt++) {
-      candidate[0] = x[0]! + t * direction.d0;
-      candidate[1] = x[1]! + t * direction.d1;
+      for (let j = 0; j < n; j++) {
+        candidate[j] = x[j]! + t * newton.direction[j]!;
+      }
       const next = value(candidate);
       if (Number.isFinite(next) && next < current) {
         x.set(candidate);
@@ -445,62 +518,65 @@ function minimizeBarrier(
   return x;
 }
 
-function analyticCenter(rows: LpRow[], start: Float64Array) {
+// Newton direction d = -H^-1 g, or null when H is not positive definite.
+function newtonDirection(
+  H: Float64Array,
+  gradient: Float64Array,
+  n: number,
+): Float64Array | null {
+  if (!cholesky(H, n)) return null;
+  const direction = new Float64Array(n);
+  try {
+    solveDenseSystem(H, n, gradient, direction);
+  } catch {
+    return null;
+  }
+  for (let j = 0; j < n; j++) {
+    if (!Number.isFinite(direction[j]!)) return null;
+    direction[j] = -direction[j]!;
+  }
+  return direction;
+}
+
+function analyticCenter(rows: LpRow[], start: Float64Array, n: number) {
   return minimizeBarrier(
     start,
+    n,
     (x) => {
-      const hessian = barrierHessian(rows, x, false);
+      const hessian = barrierHessian(rows, x, false, n);
       if (!hessian) return null;
-      const inverse = invertSymmetric2(hessian.h11, hessian.h12, hessian.h22);
-      if (!inverse) return null;
-      let g0 = 0;
-      let g1 = 0;
+      // grad -sum log s_i = sum a_i / s_i
+      const gradient = new Float64Array(n);
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]!;
         const inverseSlack = 1 / hessian.slacks[i]!;
-        g0 += row[0]! * inverseSlack;
-        g1 += row[1]! * inverseSlack;
+        for (let j = 0; j < n; j++) gradient[j] += row[j]! * inverseSlack;
       }
-      return {
-        g0,
-        g1,
-        d0: -(inverse.a11 * g0 + inverse.a12 * g1),
-        d1: -(inverse.a12 * g0 + inverse.a22 * g1),
-      };
+      const direction = newtonDirection(hessian.H, gradient, n);
+      return direction ? { gradient, direction } : null;
     },
-    (x) => logBarrier(rows, x),
+    (x) => logBarrier(rows, x, n),
   );
 }
 
-function volumetricCenter(rows: LpRow[], start: Float64Array) {
+function volumetricCenter(rows: LpRow[], start: Float64Array, n: number) {
   return minimizeBarrier(
     start,
+    n,
     (x) => {
-      const weighted = barrierHessian(rows, x, true);
+      const weighted = barrierHessian(rows, x, true, n);
       if (!weighted) return null;
-      const inverse = invertSymmetric2(
-        weighted.h11,
-        weighted.h12,
-        weighted.h22,
-      );
-      if (!inverse) return null;
       // grad ½logdet H = sum sigma_i a_i / s_i
-      let g0 = 0;
-      let g1 = 0;
+      const gradient = new Float64Array(n);
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]!;
         const weight = weighted.leverage[i]! / weighted.slacks[i]!;
-        g0 += row[0]! * weight;
-        g1 += row[1]! * weight;
+        for (let j = 0; j < n; j++) gradient[j] += row[j]! * weight;
       }
-      return {
-        g0,
-        g1,
-        d0: -(inverse.a11 * g0 + inverse.a12 * g1),
-        d1: -(inverse.a12 * g0 + inverse.a22 * g1),
-      };
+      const direction = newtonDirection(weighted.H, gradient, n);
+      return direction ? { gradient, direction } : null;
     },
-    (x) => volumetricBarrier(rows, x),
+    (x) => volumetricBarrier(rows, x, n),
   );
 }
 

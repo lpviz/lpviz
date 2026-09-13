@@ -127,7 +127,7 @@ export function pdhgIneq(
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
 
   let epsilonK = pdhgIneqEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm);
-  const header = n >= 3 ? " Iter        x        y        z        Obj     Infeas        eps" : " Iter        x        y        Obj     Infeas        eps";
+  const header = n >= 3 ? " Iter       x       y       z      Obj   Infeas      eps" : " Iter        x        y        Obj     Infeas        eps";
 
   const iterates: Vec2Ns = [];
   const eps: number[] = [];

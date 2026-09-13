@@ -117,7 +117,7 @@ function pdhgStandardForm(
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
 
   let epsilonK = pdhgEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm);
-  const header = nOrig >= 3 ? " Iter        x        y        z        Obj     Infeas        eps" : " Iter        x        y        Obj     Infeas        eps";
+  const header = nOrig >= 3 ? " Iter       x       y       z      Obj   Infeas      eps" : " Iter        x        y        Obj     Infeas        eps";
 
   const rows: Array<{
     kind: "pdhg";

@@ -106,7 +106,7 @@ function ipmCore(
     s: [],
     y: [],
     mu: [],
-    header: n >= 3 ? " Iter        x        y        z        Obj     Infeas          µ" : " Iter        x        y        Obj     Infeas          µ",
+    header: n >= 3 ? " Iter       x       y       z      Obj   Infeas        µ" : " Iter        x        y        Obj     Infeas          µ",
     rows: [],
   };
   const res = { iterates: { solution } };

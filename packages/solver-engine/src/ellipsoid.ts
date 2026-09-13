@@ -1,6 +1,10 @@
 import { linesToDenseAb } from "@lpviz/math/blas";
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import type { LinesND, VecN } from "@lpviz/math/types";
 import { formatMilliseconds } from "./time";
+
+// The drawn region's extreme points, in any dimension: the 2D editor's
+// [x, y] pairs or the 3D editor's [x, y, z] triples.
+export type RegionVertices = readonly (readonly number[])[];
 
 const MAX_ITERATIONS_LIMIT = 100_000;
 // Half-extent used for the initial ellipsoid when the caller has no vertices to
@@ -15,16 +19,36 @@ const FEASIBILITY_TOLERANCE = 1e-9;
 const RAY_BLOCKING_TOLERANCE = 1e-12;
 // closer than this to the last iterate, the incumbent is that iterate
 const INCUMBENT_MERGE_TOLERANCE = 1e-9;
-// [cx, cy, p11, p12, p22] per iteration: the center and the symmetric shape
-// matrix P of E = { x : (x - c)' P^-1 (x - c) <= 1 }. lpviz LPs have n = 2, so
-// this is the ellipse itself; for n > 2 it is the (x, y) block of P.
-export const ELLIPSOID_STRIDE = 5;
+// Per iteration: the center c (n values) followed by the upper triangle of the
+// symmetric shape matrix P of E = { x : (x - c)' P^-1 (x - c) <= 1 }, row by
+// row — [cx, cy, p11, p12, p22] for the 2-variable editor (stride 5) and
+// [cx, cy, cz, p11, p12, p13, p22, p23, p33] for the 3-variable one (stride 9).
+export function ellipsoidStride(n: number): number {
+  return n + (n * (n + 1)) / 2;
+}
+
+// Write one packed ellipsoid at `base` (see ellipsoidStride for the layout).
+export function writeEllipsoid(
+  out: Float64Array,
+  base: number,
+  center: Float64Array,
+  P: Float64Array,
+  n: number,
+): void {
+  for (let j = 0; j < n; j++) out[base + j] = center[j]!;
+  let at = base + n;
+  for (let j = 0; j < n; j++) {
+    for (let k = j; k < n; k++) out[at++] = P[j * n + k]!;
+  }
+}
 
 export interface EllipsoidRow {
   kind: "ellipsoid";
   iteration: number;
   x: number;
   y: number;
+  // present for 3-variable problems only
+  z?: number;
   objective: number;
   infeasibility: number;
   rho: number;
@@ -42,13 +66,19 @@ interface EllipsoidOptions {
 export interface EllipsoidResultData {
   iterations: Float64Array[];
   ellipsoids: Float64Array;
-  // The localizing set per iteration, as a closed polygon: [x, y] pairs for
-  // iterate `i` live at `polygonPoints[polygonOffsets[i] * 2 ...
-  // polygonOffsets[i + 1] * 2)`. Empty for the ellipsoid method, whose
-  // localizing set *is* the drawn ellipsoid; the cutting-plane methods emit the
-  // polyhedron of accumulated cuts, which the ellipse alone cannot show.
+  // see ellipsoidStride: 5 for two variables, 9 for three
+  ellipsoidStride: number;
+  // The localizing set per iteration. Element `i` spans
+  // `polygonPoints[polygonOffsets[i] * polygonStride ... polygonOffsets[i + 1]
+  // * polygonStride)`. For two variables it is the closed polygon's [x, y]
+  // vertices (stride 2); for three it is the half-spaces [a1, a2, a3, b] of the
+  // polyhedron (stride 4), which the viewport turns into a wireframe when a row
+  // is hovered. Empty for the ellipsoid method, whose localizing set *is* the
+  // drawn ellipsoid; the cutting-plane methods emit the polyhedron of
+  // accumulated cuts, which the ellipse alone cannot show.
   polygonPoints: Float64Array;
   polygonOffsets: Uint32Array;
+  polygonStride: number;
   rho: number[];
   header: string;
   rows: EllipsoidRow[];
@@ -58,24 +88,29 @@ export interface EllipsoidResultData {
 // A factory, never a shared constant: these buffers are transferred to the main
 // thread, which detaches them. Handing out the same instance twice means the
 // second solve reads a detached ArrayBuffer and the whole result fails.
-export const emptyPolygons = () => ({
+export const emptyPolygons = (stride = 2) => ({
   polygonPoints: new Float64Array(0),
   polygonOffsets: new Uint32Array(1),
+  polygonStride: stride,
 });
 
-// Flatten per-iteration polygons into the transferable pair above.
-export function packPolygons(polygons: readonly (readonly number[])[]) {
+// Flatten per-iteration localizing sets (each a flat list of `stride`-wide
+// entries) into the transferable triple above.
+export function packPolygons(
+  polygons: readonly (readonly number[])[],
+  stride = 2,
+) {
   const total = polygons.reduce((sum, polygon) => sum + polygon.length, 0);
   const polygonPoints = new Float64Array(total);
   const polygonOffsets = new Uint32Array(polygons.length + 1);
   let at = 0;
   polygons.forEach((polygon, index) => {
-    polygonOffsets[index] = at / 2;
+    polygonOffsets[index] = at / stride;
     polygonPoints.set(polygon, at);
     at += polygon.length;
   });
-  polygonOffsets[polygons.length] = at / 2;
-  return { polygonPoints, polygonOffsets };
+  polygonOffsets[polygons.length] = at / stride;
+  return { polygonPoints, polygonOffsets, polygonStride: stride };
 }
 
 /**
@@ -158,8 +193,8 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
  * optimality gap. That gap is never larger than rho and closes sooner.
  */
 export function ellipsoid(
-  vertices: Vertices,
-  lines: Lines,
+  vertices: RegionVertices,
+  lines: LinesND,
   objective: VecN,
   opts: EllipsoidOptions,
 ): EllipsoidResultData {
@@ -193,8 +228,9 @@ export function ellipsoid(
   const iterations: Float64Array[] = [];
   const rows: EllipsoidRow[] = [];
   const rho: number[] = [];
+  const stride = ellipsoidStride(n);
   // one slot spare for the incumbent appended at the end
-  const ellipsoids = new Float64Array((maxit + 1) * ELLIPSOID_STRIDE);
+  const ellipsoids = new Float64Array((maxit + 1) * stride);
 
   const g = new Float64Array(n);
   const Pg = new Float64Array(n);
@@ -206,7 +242,7 @@ export function ellipsoid(
   let termination: Termination = "maxit";
   const startTime = performance.now();
 
-  const header = " Iter        x        y        Obj     Infeas          ρ";
+  const header = ellipsoidLogHeader(n);
   if (verbose) console.log(header);
 
   const record = (
@@ -214,26 +250,18 @@ export function ellipsoid(
     infeasibility: number,
     objectiveRadius: number,
   ) => {
-    const base = iterations.length * ELLIPSOID_STRIDE;
-    ellipsoids[base] = center[0]!;
-    ellipsoids[base + 1] = center[1]!;
-    ellipsoids[base + 2] = P[0]!;
-    ellipsoids[base + 3] = P[1]!;
-    ellipsoids[base + 4] = P[n + 1]!;
-
-    const row: EllipsoidRow = {
-      kind: "ellipsoid",
-      iteration: iterations.length + 1,
-      x: center[0]!,
-      y: center[1]!,
-      objective: objectiveValue,
+    writeEllipsoid(ellipsoids, iterations.length * stride, center, P, n);
+    const row = ellipsoidRow(
+      iterations.length + 1,
+      center,
+      objectiveValue,
       infeasibility,
-      rho: objectiveRadius,
-    };
+      objectiveRadius,
+    );
     if (verbose) console.log(row);
     rows.push(row);
     rho.push(objectiveRadius);
-    iterations.push(Float64Array.of(center[0]!, center[1]!));
+    iterations.push(center.slice());
   };
 
   while (iterations.length < maxit) {
@@ -349,14 +377,44 @@ export function ellipsoid(
     iterations,
     // sliced, not a subarray: the packed response transfers this buffer, and a
     // view would drag the whole maxit-sized allocation across with it
-    ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
+    ellipsoids: ellipsoids.slice(0, iterations.length * stride),
+    ellipsoidStride: stride,
     // the ellipsoid *is* this method's localizing set, so there is no separate
     // polyhedron to draw
-    ...emptyPolygons(),
+    ...emptyPolygons(n === 2 ? 2 : n + 1),
     rho,
     header,
     rows,
     footer,
+  };
+}
+
+// Three variables use narrower columns (7 for coordinates, 8 for the rest) so
+// a row still fits the sidebar log beside its scrollbar; formatVirtualResultRow
+// on the client lays its rows out to match.
+export function ellipsoidLogHeader(n: number): string {
+  return n >= 3
+    ? " Iter       x       y       z      Obj   Infeas        ρ"
+    : " Iter        x        y        Obj     Infeas          ρ";
+}
+
+// One log row for the point `x`; the z column exists only for three variables.
+export function ellipsoidRow(
+  iteration: number,
+  x: Float64Array,
+  objective: number,
+  infeasibility: number,
+  rho: number,
+): EllipsoidRow {
+  return {
+    kind: "ellipsoid",
+    iteration,
+    x: x[0]!,
+    y: x[1]!,
+    ...(x.length >= 3 ? { z: x[2]! } : {}),
+    objective,
+    infeasibility,
+    rho,
   };
 }
 
@@ -383,7 +441,7 @@ function onInitialBoundary(
  * cutting-plane methods take the box itself as their initial localizing set.
  */
 export function regionBoundingBox(
-  vertices: Vertices,
+  vertices: RegionVertices,
   n: number,
   scale: number,
 ) {
@@ -392,7 +450,9 @@ export function regionBoundingBox(
   const inflation = Math.max(MIN_INITIAL_SCALE, scale);
 
   if (vertices.length > 0) {
-    const planar = Math.min(n, 2);
+    // axes the vertices actually span; any further axis (a 3-variable LP fed
+    // planar vertices) gets the largest spanned extent instead
+    const planar = Math.min(n, vertices[0]!.length);
     for (let axis = 0; axis < planar; axis++) {
       let lo = Infinity;
       let hi = -Infinity;
@@ -423,7 +483,7 @@ export function regionBoundingBox(
 
 // The smallest axis-aligned ellipsoid around that box: semi-axis
 // sqrt(n) * halfExtent puts every box corner exactly on the boundary.
-function initialEllipsoid(vertices: Vertices, n: number, scale: number) {
+function initialEllipsoid(vertices: RegionVertices, n: number, scale: number) {
   const { center, halfExtents } = regionBoundingBox(vertices, n, scale);
   const P = new Float64Array(n * n);
   for (let j = 0; j < n; j++) {
@@ -459,37 +519,32 @@ export function appendIncumbent(
   upperBound: number,
 ): void {
   if (bestObjective === -Infinity) return;
+  const n = best.length;
+  const stride = ellipsoidStride(n);
   const count = result.iterations.length;
   const previous = count > 0 ? result.iterations[count - 1]! : null;
   if (
     previous &&
-    Math.abs(previous[0]! - best[0]!) < INCUMBENT_MERGE_TOLERANCE &&
-    Math.abs(previous[1]! - best[1]!) < INCUMBENT_MERGE_TOLERANCE
+    best.every(
+      (value, j) => Math.abs(previous[j]! - value) < INCUMBENT_MERGE_TOLERANCE,
+    )
   ) {
     return;
   }
 
-  const base = count * ELLIPSOID_STRIDE;
-  if (base + ELLIPSOID_STRIDE > result.ellipsoids.length) return;
+  const base = count * stride;
+  if (base + stride > result.ellipsoids.length) return;
   if (count > 0) {
-    result.ellipsoids.copyWithin(base, base - ELLIPSOID_STRIDE, base);
+    result.ellipsoids.copyWithin(base, base - stride, base);
     // the localization stays where it was while the path steps to the answer
     if (result.polygons && result.polygons.length === count) {
       result.polygons.push([...result.polygons[count - 1]!]);
     }
   }
-  result.iterations.push(Float64Array.of(best[0]!, best[1]!));
+  result.iterations.push(best.slice());
   const gap = Math.max(0, upperBound - bestObjective);
   result.rho.push(gap);
-  result.rows.push({
-    kind: "ellipsoid",
-    iteration: count + 1,
-    x: best[0]!,
-    y: best[1]!,
-    objective: bestObjective,
-    infeasibility: 0,
-    rho: gap,
-  });
+  result.rows.push(ellipsoidRow(count + 1, best, bestObjective, 0, gap));
 }
 
 // The separation oracle every method in this family shares: the constraint
