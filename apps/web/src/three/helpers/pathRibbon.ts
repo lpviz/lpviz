@@ -2,16 +2,17 @@ import {
   BufferAttribute,
   BufferGeometry,
   Color,
-  DataTexture,
   DoubleSide,
-  FloatType,
   GLSL3,
   Mesh,
-  NearestFilter,
-  RGBAFormat,
   ShaderMaterial,
   Vector2,
 } from "three";
+import {
+  DUMMY_COLOR_TEXTURE,
+  PATH_TEXEL_GLSL,
+  PathTextures,
+} from "./pathTextures";
 import { applyHugeBounds } from "./sharedLineMaterials";
 
 // Constant screen-width polyline rendering with true fat-line styling at a
@@ -33,12 +34,10 @@ import { applyHugeBounds } from "./sharedLineMaterials";
 // a mitre-less join rather than as a defect.
 //
 // The path lives in a float texture indexed by gl_VertexID (four vertices per
-// segment, no vertex attributes at all), so a path costs one RGBA32F texel per
-// point of GPU memory and geometries share a single static index buffer.
-
-const TEX_WIDTH = 4096;
-const TEX_WIDTH_MASK = TEX_WIDTH - 1;
-const TEX_WIDTH_SHIFT = 12;
+// segment, no vertex attributes at all; see pathTextures.ts), so a path costs
+// one RGBA32F texel per point of GPU memory and geometries share a single
+// static index buffer. In 3D the iterate path renders as a tube instead (see
+// pathTube.ts), built on the same textures.
 
 // Shared by reference across every ribbon material; updated on resize via
 // tickSharedLineMaterialResolutions (CSS pixels, matching LineMaterial).
@@ -66,10 +65,9 @@ uniform int pointCount;
 uniform vec2 resolution;
 uniform float linewidth;
 out vec3 vColor;
-
+${PATH_TEXEL_GLSL}
 vec3 fetchPoint(int i) {
-  i = clamp(i, 0, pointCount - 1);
-  return texelFetch(pathTex, ivec2(i & ${TEX_WIDTH_MASK}, i >> ${TEX_WIDTH_SHIFT}), 0).xyz;
+  return texelFetch(pathTex, pathTexel(i, pointCount), 0).xyz;
 }
 
 void main() {
@@ -81,11 +79,7 @@ void main() {
   int i = segment + end;
   float side = ((corner & 1) == 0) ? 1.0 : -1.0;
 
-  ivec2 texel = ivec2(
-    clamp(i, 0, pointCount - 1) & ${TEX_WIDTH_MASK},
-    clamp(i, 0, pointCount - 1) >> ${TEX_WIDTH_SHIFT}
-  );
-  vColor = mix(vec3(1.0), texelFetch(colorTex, texel, 0).rgb, useVertexColor);
+  vColor = mix(vec3(1.0), texelFetch(colorTex, pathTexel(i, pointCount), 0).rgb, useVertexColor);
 
   mat4 mvp = projectionMatrix * modelViewMatrix;
   vec4 clipA = mvp * vec4(fetchPoint(segment), 1.0);
@@ -158,21 +152,11 @@ export type PathRibbonStyle = {
 
 const WHITE = new Color(1, 1, 1);
 
-// bound when a ribbon has no per-point colors, keeping a single program
-const dummyColorTexture = new DataTexture(
-  new Uint8Array([255, 255, 255, 255]),
-  1,
-  1,
-  RGBAFormat,
-);
-dummyColorTexture.needsUpdate = true;
-
 export class PathRibbon {
   readonly mesh: Mesh;
   private material: ShaderMaterial;
   private geometry: BufferGeometry;
-  private texture: DataTexture | null = null;
-  private colorTexture: DataTexture | null = null;
+  private textures = new PathTextures();
   private baseColor: Color;
 
   constructor(style: PathRibbonStyle) {
@@ -186,7 +170,7 @@ export class PathRibbon {
       fragmentShader: FRAGMENT_SHADER,
       uniforms: {
         pathTex: { value: null },
-        colorTex: { value: dummyColorTexture },
+        colorTex: { value: DUMMY_COLOR_TEXTURE },
         useVertexColor: { value: 0 },
         pointCount: { value: 0 },
         resolution: { value: sharedResolution },
@@ -213,79 +197,30 @@ export class PathRibbon {
   }
 
   // points: per-point [x, y, z]; colors: optional per-point linear RGBA bytes.
-  // Path/color textures are reused in place when large enough (grow-only):
-  // solver steps replace paths dozens of times per second, and allocating a
-  // texture per step churns both the GC and the GL driver.
   setPath(
     points: Float32Array,
     pointCount: number,
     colors?: Uint8Array | null,
   ): void {
-    const rows = Math.max(1, Math.ceil(pointCount / TEX_WIDTH));
-    if (!this.texture || (this.texture.image.height as number) < rows) {
-      this.texture?.dispose();
-      this.texture = new DataTexture(
-        new Float32Array(TEX_WIDTH * rows * 4),
-        TEX_WIDTH,
-        rows,
-        RGBAFormat,
-        FloatType,
-      );
-      this.texture.minFilter = NearestFilter;
-      this.texture.magFilter = NearestFilter;
-      this.texture.generateMipmaps = false;
-    }
-    const data = this.texture.image.data as Float32Array;
-    for (let i = 0; i < pointCount; i++) {
-      data[i * 4] = points[i * 3]!;
-      data[i * 4 + 1] = points[i * 3 + 1]!;
-      data[i * 4 + 2] = points[i * 3 + 2]!;
-      data[i * 4 + 3] = 1;
-    }
-    // stale texels beyond pointCount are never fetched (indices clamp)
-    this.texture.needsUpdate = true;
-
-    this.material.uniforms.pathTex!.value = this.texture;
+    this.textures.upload(points, pointCount, colors);
+    this.material.uniforms.pathTex!.value = this.textures.path;
     this.material.uniforms.pointCount!.value = pointCount;
 
     // with per-point colors the uniform must not tint them
     (this.material.uniforms.color!.value as Color).copy(
       colors ? WHITE : this.baseColor,
     );
-    if (colors) {
-      if (
-        !this.colorTexture ||
-        (this.colorTexture.image.height as number) < rows
-      ) {
-        this.colorTexture?.dispose();
-        this.colorTexture = new DataTexture(
-          new Uint8Array(TEX_WIDTH * rows * 4),
-          TEX_WIDTH,
-          rows,
-          RGBAFormat,
-        );
-        this.colorTexture.minFilter = NearestFilter;
-        this.colorTexture.magFilter = NearestFilter;
-        this.colorTexture.generateMipmaps = false;
-      }
-      (this.colorTexture.image.data as Uint8Array).set(
-        colors.subarray(0, pointCount * 4),
-      );
-      this.colorTexture.needsUpdate = true;
-      this.material.uniforms.colorTex!.value = this.colorTexture;
-      this.material.uniforms.useVertexColor!.value = 1;
-    } else {
-      this.material.uniforms.colorTex!.value = dummyColorTexture;
-      this.material.uniforms.useVertexColor!.value = 0;
-    }
+    this.material.uniforms.colorTex!.value = colors
+      ? this.textures.color
+      : DUMMY_COLOR_TEXTURE;
+    this.material.uniforms.useVertexColor!.value = colors ? 1 : 0;
 
     this.geometry.setIndex(ensureSharedIndex(pointCount));
     this.geometry.setDrawRange(0, Math.max(0, pointCount - 1) * 6);
   }
 
   dispose(): void {
-    this.texture?.dispose();
-    this.colorTexture?.dispose();
+    this.textures.dispose();
     this.material.dispose();
     this.geometry.dispose();
   }
