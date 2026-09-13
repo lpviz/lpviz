@@ -1,4 +1,9 @@
 import type { EllipsoidPath, LocalizingSetPath } from "@/features/core/store";
+import {
+  assembleFaces3,
+  enumerateEdges3,
+  enumerateVertices3,
+} from "@lpviz/polytope/polytope3";
 import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -55,6 +60,35 @@ function buildUnitCirclePositions(): Float32Array {
   return positions;
 }
 
+// The 3-variable counterpart: a unit sphere as its three great circles (one
+// per coordinate plane), which the same Cholesky map turns into an ellipsoid.
+// Three circles read as a sphere at these line weights; a denser wire would
+// bury the path once ten of them nest.
+function buildUnitSpherePositions(): Float32Array {
+  const positions = new Float32Array(CIRCLE_SEGMENTS * 6 * 3);
+  let at = 0;
+  const put = (x: number, y: number, z: number) => {
+    positions[at++] = x;
+    positions[at++] = y;
+    positions[at++] = z;
+  };
+  for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+    const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2;
+    const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2;
+    put(Math.cos(a), Math.sin(a), 0);
+    put(Math.cos(b), Math.sin(b), 0);
+    put(Math.cos(a), 0, Math.sin(a));
+    put(Math.cos(b), 0, Math.sin(b));
+    put(0, Math.cos(a), Math.sin(a));
+    put(0, Math.cos(b), Math.sin(b));
+  }
+  return positions;
+}
+
+// Packed layouts (see ellipsoidStride in the engine): 5 = 2-variable ellipse,
+// 9 = 3-variable ellipsoid.
+const STRIDE_3D = 9;
+
 // Evenly spaced indices in [0, active], newest last, without duplicates.
 function sampleIndices(active: number, out: number[]): void {
   out.length = 0;
@@ -69,23 +103,53 @@ function sampleIndices(active: number, out: number[]): void {
   }
 }
 
-// The lower-triangular Cholesky factor of the 2x2 shape matrix, written into
-// `matrix` together with the center and the height `z` of the matching iterate
-// (so in 3D each ellipse sits at its own iterate rather than flat on the
-// floor). Returns false when P is not (numerically) positive definite, in which
-// case the ellipse is skipped rather than drawn with a NaN transform.
+// The lower-triangular Cholesky factor of the shape matrix, written into
+// `matrix` together with the center. For a 2-variable ellipse the height is
+// the matching iterate's `z` (so in the lifted view each ellipse sits at its
+// own iterate rather than flat on the floor); a 3-variable ellipsoid carries
+// its own center height. Returns false when P is not (numerically) positive
+// definite, in which case the shape is skipped rather than drawn with a NaN
+// transform.
 function writeEllipseMatrix(
   matrix: Matrix4,
   ellipsoids: EllipsoidPath,
   index: number,
   z: number,
 ): boolean {
+  const d = ellipsoids.data;
   const base = index * ellipsoids.stride;
-  const cx = ellipsoids.data[base]!;
-  const cy = ellipsoids.data[base + 1]!;
-  const p11 = ellipsoids.data[base + 2]!;
-  const p12 = ellipsoids.data[base + 3]!;
-  const p22 = ellipsoids.data[base + 4]!;
+  if (ellipsoids.stride === STRIDE_3D) {
+    const [cx, cy, cz, p11, p12, p13, p22, p23, p33] = [
+      d[base]!, d[base + 1]!, d[base + 2]!, d[base + 3]!, d[base + 4]!,
+      d[base + 5]!, d[base + 6]!, d[base + 7]!, d[base + 8]!,
+    ];
+    if (!(p11 > 0)) return false;
+    const l11 = Math.sqrt(p11);
+    const l21 = p12 / l11;
+    const l31 = p13 / l11;
+    const inner22 = p22 - l21 * l21;
+    if (!(inner22 > 0)) return false;
+    const l22 = Math.sqrt(inner22);
+    const l32 = (p23 - l21 * l31) / l22;
+    const inner33 = p33 - l31 * l31 - l32 * l32;
+    if (!(inner33 > 0)) return false;
+    const l33 = Math.sqrt(inner33);
+    if (![cx, cy, cz, l33].every(Number.isFinite)) return false;
+    // prettier-ignore
+    matrix.set(
+      l11, 0,   0,   cx,
+      l21, l22, 0,   cy,
+      l31, l32, l33, cz,
+      0,   0,   0,   1,
+    );
+    return true;
+  }
+
+  const cx = d[base]!;
+  const cy = d[base + 1]!;
+  const p11 = d[base + 2]!;
+  const p12 = d[base + 3]!;
+  const p22 = d[base + 4]!;
 
   if (!(p11 > 0)) return false;
   const l11 = Math.sqrt(p11);
@@ -109,12 +173,15 @@ function writeEllipseMatrix(
 // Each ellipse contains every feasible point at least as good as the incumbent
 // at that iteration, so watching them nest is watching the method localize the
 // optimum. Follows the active iterate: the last one solved, or the one being
-// hovered in the log / replayed.
+// hovered in the log / replayed. In the 3-variable editor the same slots carry
+// wireframe ellipsoids (three great circles each) and the hovered localizing
+// set is the polyhedron's edge wireframe.
 export class EllipsoidLayer extends LayerBase {
   readonly object3D: Group;
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
+  private readonly sphereGeometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
   private readonly polygonGeometry: LineSegmentsGeometry;
   private readonly polygon: LineSegments2;
@@ -128,6 +195,10 @@ export class EllipsoidLayer extends LayerBase {
     geometry.setPositions(buildUnitCirclePositions());
     applyHugeBounds(geometry);
     this.geometry = geometry;
+    const sphereGeometry = new LineSegmentsGeometry();
+    sphereGeometry.setPositions(buildUnitSpherePositions());
+    applyHugeBounds(sphereGeometry);
+    this.sphereGeometry = sphereGeometry;
 
     const group = new Group();
     this.polygonGeometry = new LineSegmentsGeometry();
@@ -200,6 +271,7 @@ export class EllipsoidLayer extends LayerBase {
 
     sampleIndices(active, this.indices);
     const is3D = snap.mode === "3d";
+    const solid = ellipsoids.stride === STRIDE_3D;
     let used = 0;
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
@@ -214,6 +286,7 @@ export class EllipsoidLayer extends LayerBase {
       ) {
         continue;
       }
+      segments.geometry = solid ? this.sphereGeometry : this.geometry;
       segments.matrix.copy(this.matrix);
       segments.matrixWorldNeedsUpdate = true;
       // slot styling ramps with recency, not with the slot's own index, so a
@@ -266,7 +339,8 @@ export class EllipsoidLayer extends LayerBase {
     this.polygon.visible = true;
   }
 
-  // The localizing polygon as segment endpoint pairs, closed back to the start.
+  // The localizing set as segment endpoint pairs: the closed polygon in 2D, or
+  // the wireframe of the half-space polyhedron in 3D.
   private writePolygon(
     sets: LocalizingSetPath | null,
     index: number,
@@ -276,6 +350,7 @@ export class EllipsoidLayer extends LayerBase {
     const start = sets.offsets[index]!;
     const end = sets.offsets[index + 1]!;
     const count = end - start;
+    if (sets.stride === 4) return this.writePolyhedron(sets, start, count);
     if (count < 2) return 0;
 
     const needed = count * 6;
@@ -296,6 +371,37 @@ export class EllipsoidLayer extends LayerBase {
     return needed;
   }
 
+  // Enumerate the polyhedron cut out by `count` half-spaces and write its
+  // edges. Only the hovered iterate is drawn, so the O(m^3) vertex enumeration
+  // runs once per hover, not per frame.
+  private writePolyhedron(sets: LocalizingSetPath, start: number, count: number): number {
+    const planes: number[][] = [];
+    for (let i = 0; i < count; i++) {
+      const at = (start + i) * 4;
+      planes.push([sets.points[at]!, sets.points[at + 1]!, sets.points[at + 2]!, sets.points[at + 3]!]);
+    }
+    const vertices = enumerateVertices3(planes);
+    if (vertices.length < 4) return 0;
+    const edges = enumerateEdges3(assembleFaces3(planes, vertices));
+    const needed = edges.length * 6;
+    if (needed === 0) return 0;
+    if (this.polygonScratch.length < needed) {
+      this.polygonScratch = new Float32Array(needed);
+    }
+    for (let i = 0; i < edges.length; i++) {
+      const a = vertices[edges[i]!.a]!;
+      const b = vertices[edges[i]!.b]!;
+      const base = i * 6;
+      this.polygonScratch[base] = a.x;
+      this.polygonScratch[base + 1] = a.y;
+      this.polygonScratch[base + 2] = a.z;
+      this.polygonScratch[base + 3] = b.x;
+      this.polygonScratch[base + 4] = b.y;
+      this.polygonScratch[base + 5] = b.z;
+    }
+    return needed;
+  }
+
   private hideFrom(slot: number): void {
     for (let i = slot; i < this.slots.length; i++) {
       this.slots[i]!.visible = false;
@@ -304,6 +410,7 @@ export class EllipsoidLayer extends LayerBase {
 
   dispose(): void {
     this.geometry.dispose();
+    this.sphereGeometry.dispose();
     this.polygonGeometry.dispose();
   }
 }

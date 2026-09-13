@@ -10,7 +10,7 @@ import {
 } from "@/features/core/store";
 import type { ResultTextBlock } from "@/features/solver/types";
 import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
-import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
+import { fmtE, fmtF, fmtStr } from "@lpviz/solver-engine/fmt";
 
 // Dispatch an unpacked worker result to the matching apply*Result. Replaces the
 // per-solver applyResult that each SolverControl used to carry (each of which
@@ -125,15 +125,18 @@ export interface CentralPathResult {
   tsolve: number;
 }
 
-// `E` is the ellipse representation: a flat stride-5 Float64Array on the worker
-// side, an EllipsoidPath once unpacked on the client (see resultPacking).
+// `E` is the ellipsoid representation: a flat Float64Array on the worker side
+// (stride 5 for two variables, 9 for three; see ellipsoidStride), an
+// EllipsoidPath once unpacked on the client (see resultPacking).
 export interface EllipsoidResult<I = Float64Array[], E = Float64Array> {
   iterations: I;
   ellipsoids: E;
+  ellipsoidStride?: number;
   // the cutting-plane query points also carry the localizing polyhedron: flat
   // on the worker side, a LocalizingSetPath once unpacked
   polygonPoints?: Float64Array;
   polygonOffsets?: Uint32Array;
+  polygonStride?: number;
   localizingSets?: LocalizingSetPath | null;
   header: string;
   rows: ResultRowsView<Extract<VirtualResultRow, { kind: "ellipsoid" }>>;
@@ -239,14 +242,17 @@ type CanonicalIterateResult = {
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
-  // the z column exists only for 3-variable solves (matches the solver header)
-  const zColumn = row.z !== undefined ? ` ${fmtF(row.z, 8, 2)}` : "";
-  if (row.kind === "ipm" || row.kind === "ellipsoid") {
-    const trailing = row.kind === "ipm" ? row.mu : row.rho;
-    return `${fmtInt(row.iteration, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)}${zColumn} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
+  const label =
+    row.kind === "pdhg" && row.restart ? `${row.iteration}r` : `${row.iteration}`;
+  const trailing =
+    row.kind === "ipm" ? row.mu : row.kind === "ellipsoid" ? row.rho : row.epsilon;
+  // A 3-variable solve adds a z column (the solver headers match), so its
+  // rows use narrower columns to keep fitting the sidebar log beside its
+  // scrollbar: 7 for coordinates, 8 for the exponent columns.
+  if (row.z !== undefined) {
+    return `${fmtStr(label, 5)} ${fmtF(row.x, 7, 2)} ${fmtF(row.y, 7, 2)} ${fmtF(row.z, 7, 2)} ${fmtE(row.objective, 8, 1)} ${fmtE(row.infeasibility, 8, 1)} ${fmtE(trailing, 8, 1, false)}`;
   }
-  const iterationLabel = row.restart ? `${row.iteration}r` : `${row.iteration}`;
-  return `${fmtStr(iterationLabel, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)}${zColumn} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.epsilon, 10, 1, false)}`;
+  return `${fmtStr(label, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
 }
 
 function applyCanonicalIterateResult(

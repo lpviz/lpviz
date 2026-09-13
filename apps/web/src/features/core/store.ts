@@ -149,6 +149,9 @@ export interface LocalizingSetPath {
   points: Float64Array;
   offsets: Uint32Array;
   count: number;
+  // 2: closed polygon vertices [x, y]; 4: half-spaces [a1, a2, a3, b] of the
+  // 3-variable polyhedron, enumerated by the viewport when drawn
+  stride: number;
 }
 
 interface TraceEntry extends IteratePath {
@@ -340,7 +343,7 @@ export type State = {
   solverSettings: SolverSettings;
   // Where IPM/PDHG/primal-simplex begin iterating; null = the solver default
   // (origin). Draggable via the canvas marker.
-  solverStartPoint: PointXY | null;
+  solverStartPoint: SolverStartPoint | null;
   iteratePath: IteratePath;
   iterateEllipsoids: EllipsoidPath | null;
   iterateLocalizingSets: LocalizingSetPath | null;

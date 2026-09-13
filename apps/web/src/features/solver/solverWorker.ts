@@ -1,7 +1,7 @@
-import type { Lines, LinesND, VecN, Vertices } from "@lpviz/math/types";
+import type { LinesND, VecN, Vertices } from "@lpviz/math/types";
 import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
-import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
+import { ellipsoid, type RegionVertices } from "@lpviz/solver-engine/ellipsoid";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
 import { simplex, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
@@ -63,9 +63,9 @@ export type SolverWorkerPayload =
     }
   | {
       solver: "ellipsoid";
-      vertices: Vertices;
-      // 2-variable only, hence Lines rather than LinesND
-      lines: Lines;
+      // the drawn region's extreme points, 2- or 3-dimensional
+      vertices: RegionVertices;
+      lines: LinesND;
       objective: VecN;
       maxit: number;
       deepCuts: boolean;
@@ -188,8 +188,8 @@ async function runIPM(
 // interior point they query. They return the same shape, so everything
 // downstream — packing, the log, the drawn ellipse — is shared.
 async function runEllipsoid(
-  vertices: Vertices,
-  lines: Lines,
+  vertices: RegionVertices,
+  lines: LinesND,
   objective: VecN,
   maxit: number,
   deepCuts: boolean,

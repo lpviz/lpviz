@@ -217,22 +217,22 @@ export function createSolverControls({ updateSolverSetting, hasUnboundedObjectiv
           "ellipsoidInitialScale",
         ]),
       buildRequest: (s) => {
-        // the ellipsoid method is 2-variable only, so it reads the planar
-        // region directly rather than through the dimension-agnostic base
-        if (
-          s.problemMode === "3d" ||
-          !s.objectiveVector ||
-          !hasPolytopeLines(s.polytope)
-        ) {
-          return null;
-        }
+        const base = objectiveBase(s);
+        if (!base) return null;
+        // the drawn region's extreme points bound the initial ellipsoid; the
+        // 3-variable solid supplies its hull corners
+        const vertices =
+          s.problemMode === "3d"
+            ? s.polytope3!.vertices.map((v) => [v.x, v.y, v.z])
+            : hasPolytopeLines(s.polytope)
+              ? s.polytope.vertices
+              : null;
+        if (!vertices) return null;
         const ss = s.solverSettings;
         return {
           solver: "ellipsoid",
-          // the drawn region bounds the initial ellipsoid
-          vertices: s.polytope.vertices,
-          lines: s.polytope.lines,
-          objective: Float64Array.of(s.objectiveVector.x, s.objectiveVector.y),
+          vertices,
+          ...base,
           maxit: Math.max(1, ss.maxitEllipsoid || 1),
           deepCuts: ss.ellipsoidDeepCuts,
           rayShoot: ss.ellipsoidRayShoot,

@@ -1,4 +1,3 @@
-import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { IteratePath } from "@/features/core/store";
 import type { VecN } from "@lpviz/math/types";
 import type { SolverEngineSuccessResponse, SolverWorkerPayload, SolverWorkerResponse } from "./solverWorker";
@@ -52,6 +51,9 @@ export type PackedSolverWorkerResponse =
       // localizing polygons, only for the cutting-plane query points
       polygonPoints?: Float64Array;
       polygonOffsets?: Uint32Array;
+      // see EllipsoidResultData: both depend on the variable count
+      polygonStride?: number;
+      ellipsoidStride?: number;
     };
 
 function packIterations(entries: Float64Array[], zOf: (entry: Float64Array, index: number) => number): Float64Array {
@@ -173,15 +175,18 @@ export function packSolverResponse(response: SolverEngineSuccessResponse, reques
     const result = response.result;
     const objective = request.objective as VecN;
     const rho = result.rho;
+    // 2D lifts the path by rho (the objective range still inside the
+    // ellipsoid); a 3-variable solve has a real z instead
     const iterations = packIterations(
       result.iterations,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        (rho?.[index] ?? 0),
+      is3Var
+        ? (entry) => entry[2] ?? 0
+        : (entry, index) =>
+            objective[0]! * entry[0]! +
+            objective[1]! * entry[1]! +
+            (rho?.[index] ?? 0),
     );
-    // the ellipsoid method is 2-variable only, so its rows carry no z
-    const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false, false);
+    const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false, is3Var);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
       success: true,
@@ -193,8 +198,10 @@ export function packSolverResponse(response: SolverEngineSuccessResponse, reques
       header: result.header,
       footer: result.footer,
       ellipsoids: result.ellipsoids,
+      ellipsoidStride: result.ellipsoidStride,
       polygonPoints: result.polygonPoints,
       polygonOffsets: result.polygonOffsets,
+      polygonStride: result.polygonStride,
     };
     return {
       wire,
@@ -263,6 +270,7 @@ export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWo
 
   if (wire.solver === "ellipsoid") {
     const packedEllipsoids = wire.ellipsoids ?? new Float64Array(0);
+    const ellipsoidStride = wire.ellipsoidStride ?? 5;
     const polygonPoints = wire.polygonPoints ?? new Float64Array(0);
     const polygonOffsets = wire.polygonOffsets ?? new Uint32Array(1);
     return {
@@ -273,8 +281,8 @@ export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWo
         iterations: iteratePath,
         ellipsoids: {
           data: packedEllipsoids,
-          count: Math.floor(packedEllipsoids.length / ELLIPSOID_STRIDE),
-          stride: ELLIPSOID_STRIDE,
+          count: Math.floor(packedEllipsoids.length / ellipsoidStride),
+          stride: ellipsoidStride,
         },
         localizingSets:
           polygonOffsets.length > 1
@@ -282,6 +290,7 @@ export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWo
                 points: polygonPoints,
                 offsets: polygonOffsets,
                 count: polygonOffsets.length - 1,
+                stride: wire.polygonStride ?? 2,
               }
             : null,
         header: wire.header,
@@ -294,6 +303,7 @@ export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWo
                   iteration: index + 1,
                   x: x[index]!,
                   y: y[index]!,
+                  ...(z ? { z: z[index]! } : {}),
                   objective: objective[index]!,
                   infeasibility: infeasibility[index]!,
                   rho: extra[index]!,
