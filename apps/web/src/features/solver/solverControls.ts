@@ -1,4 +1,5 @@
 import {
+  DEFAULT_SOLVER_SETTINGS,
   getState,
   nearestPolytopeVertex,
   type SolverMode,
@@ -9,6 +10,7 @@ import type { ShareSettings } from "@/features/share/sharedState";
 import type { ResultRenderPayload } from "@/features/solver/solverService";
 import type { SolverWorkerPayload } from "@/features/solver/solverWorker";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type SolverSettingUpdater = <K extends keyof SolverSettings>(
   key: K,
@@ -26,6 +28,23 @@ export type SolverControl = {
 
 // Every share key is also a solver-settings key.
 type SharedKey = keyof ShareSettings & keyof SolverSettings;
+
+// The share payload is untrusted (see sharedState.ts). A value reaches the
+// store only when it has the default's shape: a finite number, a boolean, or
+// one of the engine's rule names. Anything else is dropped so a hand-edited
+// link can neither blank a <select> nor throw inside the settings panel's
+// store subscriber.
+function isValidSharedSetting<K extends SharedKey>(
+  key: K,
+  value: unknown,
+): value is SolverSettings[K] {
+  if (key === "simplexEnteringRule") return isEnteringRule(value);
+  if (key === "simplexLeavingRule") return isLeavingRule(value);
+  const fallback: unknown = DEFAULT_SOLVER_SETTINGS[key];
+  return typeof fallback === "number"
+    ? Number.isFinite(value)
+    : typeof value === typeof fallback;
+}
 
 const hasFeasibleRegion = (state: State): boolean =>
   hasPolytopeLines(state.polytope) &&
@@ -82,8 +101,8 @@ export function createSolverControls({
     keys: readonly SharedKey[],
   ): void => {
     for (const k of keys) {
-      const v = settings[k];
-      if (v !== undefined) updateSolverSetting(k, v as SolverSettings[SharedKey]);
+      const v: unknown = settings[k];
+      if (isValidSharedSetting(k, v)) updateSolverSetting(k, v);
     }
   };
 

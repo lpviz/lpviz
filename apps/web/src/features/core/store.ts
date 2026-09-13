@@ -197,7 +197,7 @@ export type SolverSettings = {
   replaySpeed: number;
 };
 
-const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
+export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
   alphaMax: 0.1,
   correctorThreshold: 0.9,
   maxitIPM: 1000,
