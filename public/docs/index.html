@@ -42,7 +42,8 @@
               { "@type": "TechArticle", "name": "Interior Point Methods", "url": "https://lpviz.net/docs/interior-point" },
               { "@type": "TechArticle", "name": "PDHG: Primal-Dual Hybrid Gradient", "url": "https://lpviz.net/docs/pdhg" },
               { "@type": "TechArticle", "name": "The Ellipsoid Method", "url": "https://lpviz.net/docs/ellipsoid" },
-              { "@type": "TechArticle", "name": "The Central Path", "url": "https://lpviz.net/docs/central-path" }
+              { "@type": "TechArticle", "name": "The Central Path", "url": "https://lpviz.net/docs/central-path" },
+              { "@type": "TechArticle", "name": "The 3-Variable Editor", "url": "https://lpviz.net/docs/three-variables" }
             ]
           }
         ]
@@ -59,6 +60,7 @@
         <a href="/docs/pdhg">PDHG</a>
         <a href="/docs/ellipsoid">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
+        <a href="/docs/three-variables">3 Variables</a>
       </nav>
     </header>
     <main>
@@ -140,11 +142,11 @@
         <p>lpviz has two distinct "3D" features:</p>
         <ul>
           <li><strong>3D view</strong> (the <em>3D</em> button in the 2-variable app) tilts the camera and lifts every point to a height equal to its objective value, so a solver's path literally climbs the objective plane. <kbd>Shift</kbd>+scroll adjusts the height scale.</li>
-          <li><strong><a href="https://lpviz.net/3d">3-variable mode</a></strong> (at <code>lpviz.net/3d</code>) is a full LP editor in ℝ³: sketch a base polygon, extrude it into a solid, then push/pull faces, cut corners, and bevel edges — every face is one inequality constraint. All the solvers run on the resulting 3-variable LP, except the polyhedral query points of the <a href="/docs/ellipsoid">ellipsoid mode</a>, which are implemented for two variables.</li>
+          <li><strong><a href="https://lpviz.net/3d">3-variable mode</a></strong> (at <code>lpviz.net/3d</code>) is a full LP editor in ℝ³: sketch a base polygon, extrude it into a solid, then push/pull faces, cut corners, and bevel edges — every face is one inequality constraint. All five solvers, including the ellipsoid method's cutting-plane query points, run on the resulting 3-variable LP, and the draggable start marker becomes a point in space. See <a href="/docs/three-variables">the 3-variable editor</a>.</li>
         </ul>
 
         <h2 id="sharing">Sharing and reproducibility</h2>
-        <p>The share button encodes your entire setup — region, objective, solver, and settings — into the URL, so a link reproduces the exact visualization. This makes lpviz handy for teaching: build a scenario, share the link, and everyone sees the same iterations. All computation runs client-side; nothing you draw ever leaves your browser.</p>
+        <p>The share button encodes your entire setup — region, objective, solver, settings, and a dragged start point (in 3-variable mode, the solid itself) — into the URL, so a link reproduces the exact visualization. This makes lpviz handy for teaching: build a scenario, share the link, and everyone sees the same iterations. All computation runs client-side; nothing you draw ever leaves your browser.</p>
 
         <h2 id="faq">FAQ</h2>
         <dl>

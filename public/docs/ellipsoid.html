@@ -51,6 +51,7 @@
         <a href="/docs/pdhg">PDHG</a>
         <a href="/docs/ellipsoid" class="is-active" aria-current="page">Ellipsoid</a>
         <a href="/docs/central-path">Central Path</a>
+        <a href="/docs/three-variables">3 Variables</a>
       </nav>
     </header>
     <main>
@@ -90,7 +91,7 @@
         <ol>
           <li><strong>Ask the oracle.</strong> Find the constraint the center violates most. If there is one, that constraint is the cut — everything feasible lies on its far side. This is a <em>feasibility cut</em>.</li>
           <li><strong>Otherwise cut with the objective.</strong> A feasible center is a new incumbent, so every point with <var>c</var>ᵀ<var>x</var> ≤ (incumbent value) can be discarded: they cannot beat what is already in hand. This is the <em>sliding objective</em> variant — the objective cut slides upward as the incumbent improves.</li>
-          <li><strong>Update.</strong> Replace <var>E</var> by the minimum-volume ellipsoid containing the retained piece. In two variables that costs a handful of arithmetic operations; there is no linear system to solve.</li>
+          <li><strong>Update.</strong> Replace <var>E</var> by the minimum-volume ellipsoid containing the retained piece. In two or three variables that costs a handful of arithmetic operations; there is no linear system to solve.</li>
         </ol>
         <p>The update has a closed form that is worth internalizing, because it explains the shape of everything you see. For a cut through the center in <var>n</var> = 2 variables, the new ellipse has semi-axis <sup>2</sup>⁄<sub>3</sub> along the cut normal and <sup>2</sup>⁄<sub>√3</sub> ≈ 1.155 across it. The area falls to about 77% — but the axis <em>across</em> the cut <em>grows</em> by 15%. Successive ellipses therefore do not nest; they become longer and thinner, tilted away from the cut just made. That elongation rotates the direction of the next cut, and the rotation is what makes the path spiral.</p>
 
