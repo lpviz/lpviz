@@ -62,6 +62,7 @@ describe("compact share links", () => {
       objective: { x: -0.739752, y: 1.907456 },
     };
     const decoded = roundTrip(state)!;
+    expect(decoded.vertices.length).toBe(state.vertices.length);
     decoded.vertices.forEach((vertex, i) => {
       expect(vertex.x).toBeCloseTo(state.vertices[i]!.x, 4);
       expect(vertex.y).toBeCloseTo(state.vertices[i]!.y, 4);
