@@ -642,6 +642,22 @@ describe("centralPath", () => {
       expect(Number.isFinite(p[2]!)).toBe(true);
     }
   });
+
+  test("a 255-gon traces every point quickly", () => {
+    for (const seed of [3, 9]) {
+      const { hull, lines } = largePolygon(lcg(seed), 255);
+      const obj = Float64Array.of(7, -1.4);
+      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      const start = performance.now();
+      const r = centralPath(hull, lines, obj, { niter: 75, verbose: false });
+      const elapsed = performance.now() - start;
+      expect(r.iterations.length).toBe(75);
+      const last = r.iterations[r.iterations.length - 1]!;
+      // µ ends at 1e-5, so the path ends within ~m·µ of the LP optimum
+      expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 1);
+      expect(elapsed).toBeLessThan(1000);
+    }
+  });
 });
 
 describe("draggable start point", () => {
