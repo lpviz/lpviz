@@ -4,7 +4,7 @@ import {
   linesToDenseAb,
   transposedMatVec,
 } from "@lpviz/math/blas";
-import { solveDenseSystem } from "@lpviz/math/lapack";
+import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, Vec2N, Vec2Ns, VecN } from "@lpviz/math/types";
 import { fmtE, fmtF, fmtStr } from "./fmt";
 
@@ -180,64 +180,166 @@ function basisString(basis: boolean[]) {
   return basis.map((isBasic) => (isBasic ? 1 : 0)).join("");
 }
 
-function buildBasisState(
+const REFACTOR_INTERVAL = 20;
+const UNSTABLE_PIVOT = 1e-6;
+
+class BasisInverse {
+  readonly m: number;
+  readonly basisIndices: number[];
+  private readonly inverse: Float64Array;
+  private readonly work: Float64Array;
+  private readonly matrix: Float64Array;
+  private transposed: Float64Array | null = null;
+  private pivotsSinceRefactor = 0;
+
+  constructor(
+    private readonly A: DenseMatrix,
+    basisIndices: readonly number[],
+  ) {
+    this.m = A.rows;
+    if (basisIndices.length !== this.m) {
+      throw new Error(
+        `Basis size ${basisIndices.length} does not match number of constraints ${this.m}.`,
+      );
+    }
+    this.basisIndices = basisIndices.slice();
+    this.inverse = new Float64Array(this.m * this.m);
+    this.work = new Float64Array(this.m * this.m);
+    this.matrix = new Float64Array(this.m * this.m);
+    this.refactor();
+  }
+
+  /** True once any eta update has been applied since the last rebuild. */
+  get stale(): boolean {
+    return this.pivotsSinceRefactor > 0;
+  }
+
+  static fromFlags(A: DenseMatrix, basis: readonly boolean[]): BasisInverse {
+    const indices: number[] = [];
+    for (let i = 0; i < basis.length; i++) if (basis[i]) indices.push(i);
+    return new BasisInverse(A, indices);
+  }
+
+  refactor(): void {
+    const { m, A } = this;
+    for (let col = 0; col < m; col++) {
+      const source = this.basisIndices[col]!;
+      for (let row = 0; row < m; row++) {
+        this.matrix[row * m + col] = A.data[row * A.cols + source]!;
+      }
+    }
+    invertDenseMatrix(this.matrix, m, this.inverse, this.work);
+    this.transposed = null;
+    this.pivotsSinceRefactor = 0;
+  }
+
+  /** out = B⁻¹ v */
+  solveExact(v: Float64Array, out: Float64Array): Float64Array {
+    if (this.stale) throw new Error("solveExact needs a fresh factorization");
+    return solveDenseSystem(this.matrix, this.m, v, out, this.work);
+  }
+
+  /** out = B⁻ᵀ v, direct solve; see solveExact. */
+  solveTransposeExact(v: Float64Array, out: Float64Array): Float64Array {
+    if (this.stale) throw new Error("solveExact needs a fresh factorization");
+    const { m } = this;
+    if (!this.transposed) {
+      this.transposed = new Float64Array(m * m);
+      for (let row = 0; row < m; row++) {
+        for (let col = 0; col < m; col++) {
+          this.transposed[col * m + row] = this.matrix[row * m + col]!;
+        }
+      }
+    }
+    return solveDenseSystem(this.transposed, m, v, out, this.work);
+  }
+
+  /** out = B⁻¹ v */
+  apply(v: Float64Array, out: Float64Array): Float64Array {
+    const { m, inverse } = this;
+    for (let i = 0; i < m; i++) {
+      let sum = 0;
+      const offset = i * m;
+      for (let k = 0; k < m; k++) sum += inverse[offset + k]! * v[k]!;
+      out[i] = sum;
+    }
+    return out;
+  }
+
+  /** out = B⁻ᵀ v */
+  applyTranspose(v: Float64Array, out: Float64Array): Float64Array {
+    const { m, inverse } = this;
+    out.fill(0);
+    for (let i = 0; i < m; i++) {
+      const scale = v[i]!;
+      if (scale === 0) continue;
+      const offset = i * m;
+      for (let k = 0; k < m; k++) out[k] += inverse[offset + k]! * scale;
+    }
+    return out;
+  }
+
+  pivot(leavingRow: number, direction: Float64Array, enteringIndex: number): void {
+    const { m, inverse } = this;
+    const pivotValue = direction[leavingRow]!;
+    const rowR = leavingRow * m;
+    const scale = 1 / pivotValue;
+    for (let k = 0; k < m; k++) inverse[rowR + k] *= scale;
+    for (let i = 0; i < m; i++) {
+      if (i === leavingRow) continue;
+      const factor = direction[i]!;
+      if (factor === 0) continue;
+      const rowI = i * m;
+      for (let k = 0; k < m; k++) inverse[rowI + k] -= factor * inverse[rowR + k]!;
+    }
+    this.basisIndices[leavingRow] = enteringIndex;
+    if (
+      ++this.pivotsSinceRefactor >= REFACTOR_INTERVAL ||
+      Math.abs(pivotValue) < UNSTABLE_PIVOT
+    ) {
+      this.refactor();
+    }
+  }
+}
+
+function basisState(
   cVec: Float64Array,
   A: DenseMatrix,
   bVec: Float64Array,
-  basis: boolean[],
+  factor: BasisInverse,
+  scratch: {
+    xB: Float64Array;
+    cB: Float64Array;
+    duals: Float64Array;
+    aty: Float64Array;
+  },
+  exact = false,
 ) {
-  const mRows = A.rows;
+  const { m, basisIndices } = factor;
   const nCols = A.cols;
-  const basisIndices: number[] = [];
-
-  for (let i = 0; i < nCols; i++) {
-    if (basis[i]) basisIndices.push(i);
-  }
-  if (basisIndices.length !== mRows) {
-    throw new Error(
-      `Basis size ${basisIndices.length} does not match number of constraints ${mRows}. Basis: ${basisString(basis)}`,
-    );
-  }
-
-  const B = createDenseMatrix(mRows, mRows);
-  for (let basisCol = 0; basisCol < mRows; basisCol++) {
-    const sourceCol = basisIndices[basisCol]!;
-    for (let row = 0; row < mRows; row++) {
-      B.data[row * mRows + basisCol] = A.data[row * nCols + sourceCol]!;
-    }
-  }
-
-  const xB = new Float64Array(mRows);
-  solveDenseSystem(B.data, mRows, bVec, xB);
-
+  if (exact) factor.solveExact(bVec, scratch.xB);
+  else factor.apply(bVec, scratch.xB);
   const xTableau = new Float64Array(nCols);
-  for (let basisIndex = 0; basisIndex < mRows; basisIndex++) {
-    xTableau[basisIndices[basisIndex]!] = xB[basisIndex]!;
+  for (let i = 0; i < m; i++) {
+    xTableau[basisIndices[i]!] = scratch.xB[i]!;
+    scratch.cB[i] = cVec[basisIndices[i]!]!;
   }
-
-  const cB = new Float64Array(mRows);
-  for (let i = 0; i < mRows; i++) {
-    cB[i] = cVec[basisIndices[i]!]!;
-  }
-
-  const BT = transposeMatrix(B);
-  const y = new Float64Array(mRows);
-  solveDenseSystem(BT.data, mRows, cB, y);
-
-  const aty = new Float64Array(nCols);
-  transposedMatVec(A, y, aty);
+  if (exact) factor.solveTransposeExact(scratch.cB, scratch.duals);
+  else factor.applyTranspose(scratch.cB, scratch.duals);
+  transposedMatVec(A, scratch.duals, scratch.aty);
   const reducedCosts = new Float64Array(nCols);
-  for (let j = 0; j < nCols; j++) {
-    reducedCosts[j] = cVec[j]! - aty[j]!;
-  }
+  for (let j = 0; j < nCols; j++) reducedCosts[j] = cVec[j]! - scratch.aty[j]!;
+  return { xTableau, reducedCosts, objective: dot(cVec, xTableau) };
+}
 
+function basisScratch(m: number, nCols: number) {
   return {
-    B,
-    xB,
-    xTableau,
-    basisIndices,
-    reducedCosts,
-    objective: dot(cVec, xTableau),
+    xB: new Float64Array(m),
+    cB: new Float64Array(m),
+    duals: new Float64Array(m),
+    aty: new Float64Array(nCols),
+    enterColumn: new Float64Array(m),
+    direction: new Float64Array(m),
   };
 }
 
@@ -416,38 +518,51 @@ function simplexCoreStandard(
   let iteration = 0;
   let status: SimplexStatus = "optimal";
   let objective = 0;
-  const enterColumn = new Float64Array(mRows);
-  const direction = new Float64Array(mRows);
+  const factor = BasisInverse.fromFlags(A, basis);
+  const scratch = basisScratch(mRows, nCols);
+  const { xB, enterColumn, direction } = scratch;
 
   while (true) {
     if (++iteration > MAX_ITERATIONS)
       throw new Error(`Simplex stalled after ${MAX_ITERATIONS} iterations`);
 
-    const state = buildBasisState(cVec, A, bVec, basis);
-    iterations.push(state.xTableau.slice());
-    basisHistory.push(state.basisIndices.slice());
-    objective = state.objective;
-
-    const [x, y] = pointFromBasis(state.basisIndices);
-    const line = `${iterationLabel(iteration, guard.active)} ${fmtF(x, 8, 2)} ${fmtF(y, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
-    if (verbose) console.log(line);
-    logs.push(line);
-
-    const enterIndex = selectEnteringIndex(
+    let state = basisState(cVec, A, bVec, factor, scratch);
+    let enterIndex = selectEnteringIndex(
       basis,
       state.reducedCosts,
       tol,
       guard.rules.entering,
     );
+
+    if (enterIndex === -1 && factor.stale) {
+      factor.refactor();
+      state = basisState(cVec, A, bVec, factor, scratch, true);
+      enterIndex = selectEnteringIndex(
+        basis,
+        state.reducedCosts,
+        tol,
+        guard.rules.entering,
+      );
+    }
+    iterations.push(state.xTableau);
+    const sortedBasis = [...factor.basisIndices].sort((a, b) => a - b);
+    basisHistory.push(sortedBasis);
+    objective = state.objective;
+
+    const [x, y] = pointFromBasis(sortedBasis);
+    const line = `${iterationLabel(iteration, guard.active)} ${fmtF(x, 8, 2)} ${fmtF(y, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
+    if (verbose) console.log(line);
+    logs.push(line);
+
     if (enterIndex === -1) break;
 
     extractColumn(A, enterIndex, enterColumn);
-    solveDenseSystem(state.B.data, state.B.rows, enterColumn, direction);
+    factor.apply(enterColumn, direction);
 
     const leaveBasisIndex = selectLeavingIndex(
-      state.xB,
+      xB,
       direction,
-      state.basisIndices,
+      factor.basisIndices,
       tol,
       guard.rules.leaving,
     );
@@ -460,9 +575,10 @@ function simplexCoreStandard(
       break;
     }
 
-    guard.recordPivot(state.xB[leaveBasisIndex]! / direction[leaveBasisIndex]!);
+    guard.recordPivot(xB[leaveBasisIndex]! / direction[leaveBasisIndex]!);
     basis[enterIndex] = true;
-    basis[state.basisIndices[leaveBasisIndex]!] = false;
+    basis[factor.basisIndices[leaveBasisIndex]!] = false;
+    factor.pivot(leaveBasisIndex, direction, enterIndex);
   }
 
   const finalBasis = basis.slice();
@@ -516,19 +632,35 @@ function simplexCore(
   let xTableau = new Float64Array(nCols);
   let objective = 0;
   let status: SimplexStatus = "optimal";
-  let basisIndices: number[] = [];
-  const enterColumn = new Float64Array(mRows);
-  const direction = new Float64Array(mRows);
+  const factor = BasisInverse.fromFlags(A, basis);
+  const scratch = basisScratch(mRows, nCols);
+  const { xB, enterColumn, direction } = scratch;
 
   while (true) {
     if (++iteration > MAX_ITERATIONS)
       throw new Error(`Simplex stalled after ${MAX_ITERATIONS} iterations`);
 
-    const state = buildBasisState(cVec, A, bVec, basis);
-    basisIndices = state.basisIndices;
+    let state = basisState(cVec, A, bVec, factor, scratch);
+    let enterIndex = selectEnteringIndex(
+      basis,
+      state.reducedCosts,
+      tol,
+      guard.rules.entering,
+    );
+
+    if (enterIndex === -1 && factor.stale) {
+      factor.refactor();
+      state = basisState(cVec, A, bVec, factor, scratch, true);
+      enterIndex = selectEnteringIndex(
+        basis,
+        state.reducedCosts,
+        tol,
+        guard.rules.entering,
+      );
+    }
     xTableau = state.xTableau;
     objective = state.objective;
-    iterations.push(xTableau.slice());
+    iterations.push(xTableau);
 
     const line = formatIterationLog(
       iteration,
@@ -541,21 +673,15 @@ function simplexCore(
     if (verbose) console.log(line);
     logs.push(line);
 
-    const enterIndex = selectEnteringIndex(
-      basis,
-      state.reducedCosts,
-      tol,
-      guard.rules.entering,
-    );
     if (enterIndex === -1) break;
 
     extractColumn(A, enterIndex, enterColumn);
-    solveDenseSystem(state.B.data, state.B.rows, enterColumn, direction);
+    factor.apply(enterColumn, direction);
 
     const leaveIndexInBasis = selectLeavingIndex(
-      state.xB,
+      xB,
       direction,
-      basisIndices,
+      factor.basisIndices,
       tol,
       guard.rules.leaving,
     );
@@ -568,9 +694,10 @@ function simplexCore(
       break;
     }
 
-    guard.recordPivot(state.xB[leaveIndexInBasis]! / direction[leaveIndexInBasis]!);
+    guard.recordPivot(xB[leaveIndexInBasis]! / direction[leaveIndexInBasis]!);
     basis[enterIndex] = true;
-    basis[basisIndices[leaveIndexInBasis]!] = false;
+    basis[factor.basisIndices[leaveIndexInBasis]!] = false;
+    factor.pivot(leaveIndexInBasis, direction, enterIndex);
   }
 
   const finalBasis = basis.slice();
@@ -611,27 +738,22 @@ function pivotOutArtificialVariables(
   tol: number,
 ) {
   const basis = basisInit.slice();
-  const zeroCosts = new Float64Array(phase1Matrix.cols);
   const column = new Float64Array(phase1Matrix.rows);
   const direction = new Float64Array(phase1Matrix.rows);
+  const factor = BasisInverse.fromFlags(phase1Matrix, basis);
 
   while (true) {
-    const basisIndices = basis.flatMap((isBasic, index) =>
-      isBasic ? [index] : [],
-    );
-    const artificialIndex = basisIndices.find(
+    const rowIndex = factor.basisIndices.findIndex(
       (index) => index >= originalColumnCount,
     );
-    if (artificialIndex === undefined) break;
-
-    const rowIndex = basisIndices.indexOf(artificialIndex);
-    const state = buildBasisState(zeroCosts, phase1Matrix, bVec, basis);
+    if (rowIndex === -1) break;
+    const artificialIndex = factor.basisIndices[rowIndex]!;
     let replacement = -1;
 
     for (let j = 0; j < originalColumnCount; j++) {
       if (basis[j]) continue;
       extractColumn(phase1Matrix, j, column);
-      solveDenseSystem(state.B.data, state.B.rows, column, direction);
+      factor.apply(column, direction);
       if (Math.abs(direction[rowIndex]!) > tol) {
         replacement = j;
         break;
@@ -646,6 +768,7 @@ function pivotOutArtificialVariables(
 
     basis[artificialIndex] = false;
     basis[replacement] = true;
+    factor.pivot(rowIndex, direction, replacement);
   }
 
   const phase2Basis = basis.slice(0, originalColumnCount);
@@ -828,9 +951,16 @@ function warmStartBasisFromVertex(
   for (let i = 0; i < m; i++) if (!activeSet.has(i)) basis[2 * n + i] = true;
 
   try {
-    const state = buildBasisState(cPhase2, aPhase2, b, basis);
-    for (let i = 0; i < state.xB.length; i++) {
-      if (state.xB[i]! < -tol) return null; // basis is not primal feasible
+    const scratch = basisScratch(m, aPhase2.cols);
+    const state = basisState(
+      cPhase2,
+      aPhase2,
+      b,
+      BasisInverse.fromFlags(aPhase2, basis),
+      scratch,
+    );
+    for (let i = 0; i < m; i++) {
+      if (scratch.xB[i]! < -tol) return null; // basis is not primal feasible
     }
     for (let j = 0; j < n; j++) {
       const value = (state.xTableau[j] ?? 0) - (state.xTableau[n + j] ?? 0);

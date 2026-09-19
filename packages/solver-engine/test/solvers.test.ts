@@ -85,6 +85,31 @@ const flatLogs = (r: { logs: string[][] }) => r.logs.flat().join("");
 // a log row whose iteration number carries the cycling-guard marker, e.g. "  27d"
 const GUARDED_ROW = /^\s*\d+d /m;
 const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
+// A convex polygon with `count` vertices on a wobbly circle — the size PR #69's
+// random generator produces, and the size at which per-pivot / per-iteration
+// dense factorizations used to cost seconds.
+function largePolygon(rand: () => number, count: number) {
+  const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort(
+    (a, b) => a - b,
+  );
+  const hull = angles.map(
+    (a) => [10 * Math.cos(a), 10 * Math.sin(a)] as [number, number],
+  );
+  const lines = hull.map((start, i) => {
+    const end = hull[(i + 1) % hull.length]!;
+    let A = end[1] - start[1];
+    let B = -(end[0] - start[0]);
+    const n = Math.hypot(A, B);
+    A /= n;
+    B /= n;
+    const C = A * start[0] + B * start[1];
+    // the polygon is CCW around the origin, so its interior is on the left
+    // of every edge and A x + B y <= C already holds inside
+    return [A, B, C] as [number, number, number];
+  });
+  return { hull, lines };
+}
+
 const lastIterate = (r: { iterations: Float64Array[] }) =>
   r.iterations[r.iterations.length - 1]!;
 
@@ -213,6 +238,27 @@ describe("simplex", () => {
     }
     expect(runs).toBeGreaterThan(10);
   });
+
+  // Regression: a 255-constraint Phase 1 takes a pivot per artificial variable,
+  // which used to cost two dense O(m³) solves each — seconds per run. The
+  // maintained basis inverse is refactored every 100 pivots, so this run also
+  // crosses that boundary several times and must still land on the optimum.
+  test("a 255-gon solves in well under a second and matches brute force", () => {
+    const rand = lcg(11);
+    const { hull, lines } = largePolygon(rand, 255);
+    const obj = Float64Array.of(7, -1.4);
+    const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+    const start = performance.now();
+    const r = simplex(lines, obj, opts(false));
+    const elapsed = performance.now() - start;
+    expect(r.status).toBe("optimal");
+    expect(r.phase1Iterations!.length).toBeGreaterThan(200);
+    const last = lastIterate(r);
+    expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
+    // ~80ms here; the pre-fix code took ~3s, so this trips on a regression
+    // without being sensitive to a slow CI machine
+    expect(elapsed).toBeLessThan(1500);
+  });
 });
 
 describe("simplex pivot rules", () => {
@@ -312,6 +358,25 @@ describe("ipm", () => {
         expect(Number.isFinite(row.objective)).toBe(true);
       }
     }
+  });
+
+  // Regression: the Newton step used to be solved from the dense (n + 2m)²
+  // KKT matrix, a 512×512 LU twice per iteration on a 255-gon (~8s per run).
+  // The normal-equations reduction must reach the same optimum in milliseconds.
+  test("a 255-gon converges in well under a second to the brute-force optimum", () => {
+    const rand = lcg(11);
+    const { hull, lines } = largePolygon(rand, 255);
+    const obj = Float64Array.of(7, -1.4);
+    const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+    const start = performance.now();
+    const r = ipm(lines, obj, { ...opts(0.1), maxit: 1000 });
+    const elapsed = performance.now() - start;
+    const sol = r.iterates.solution;
+    expect(sol.footer!.startsWith("Converged")).toBe(true);
+    const last = sol.x[sol.x.length - 1]!;
+    expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 3);
+    // ~10ms here against ~8s before the fix
+    expect(elapsed).toBeLessThan(1500);
   });
 });
 
@@ -575,6 +640,22 @@ describe("centralPath", () => {
       expect(Number.isFinite(p[0]!)).toBe(true);
       expect(Number.isFinite(p[1]!)).toBe(true);
       expect(Number.isFinite(p[2]!)).toBe(true);
+    }
+  });
+
+  test("a 255-gon traces every point quickly", () => {
+    for (const seed of [3, 9]) {
+      const { hull, lines } = largePolygon(lcg(seed), 255);
+      const obj = Float64Array.of(7, -1.4);
+      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      const start = performance.now();
+      const r = centralPath(hull, lines, obj, { niter: 75, verbose: false });
+      const elapsed = performance.now() - start;
+      expect(r.iterations.length).toBe(75);
+      const last = r.iterations[r.iterations.length - 1]!;
+      // µ ends at 1e-5, so the path ends within ~m·µ of the LP optimum
+      expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 1);
+      expect(elapsed).toBeLessThan(1000);
     }
   });
 });

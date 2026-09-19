@@ -104,7 +104,6 @@ function ipmCore(
   } = opts;
   const m = A.rows;
   const n = A.cols;
-  const systemSize = n + 2 * m;
 
   const solution: IPMSolutionData = {
     x: [],
@@ -138,12 +137,16 @@ function ipmCore(
   const aty = new Float64Array(n);
   const rP = new Float64Array(m);
   const rD = new Float64Array(n);
-  const K = new Float64Array(systemSize * systemSize);
-  const rhsAff = new Float64Array(systemSize);
-  const rhsCor = new Float64Array(systemSize);
-  const deltaAff = new Float64Array(systemSize);
-  const deltaCor = new Float64Array(systemSize);
-  const luScratch = new Float64Array(systemSize * systemSize);
+  const rC = new Float64Array(m);
+  const zeroP = new Float64Array(m);
+  const zeroD = new Float64Array(n);
+  const normal = createNormalEquations(A, s, y);
+  const dxAff = new Float64Array(n);
+  const dsAff = new Float64Array(m);
+  const dyAff = new Float64Array(m);
+  const dxCor = new Float64Array(n);
+  const dsCor = new Float64Array(m);
+  const dyCor = new Float64Array(m);
   const dx = new Float64Array(n);
   const ds = new Float64Array(m);
   const dy = new Float64Array(m);
@@ -179,22 +182,16 @@ function ipmCore(
       break;
     }
 
-    buildKktSystem(K, A, s, y);
-    for (let i = 0; i < m; i++) rhsAff[i] = rP[i]!;
-    for (let j = 0; j < n; j++) rhsAff[m + j] = rD[j]!;
-    for (let i = 0; i < m; i++) rhsAff[m + n + i] = -s[i]! * y[i]!;
+    normal.form();
+    for (let i = 0; i < m; i++) rC[i] = -s[i]! * y[i]!;
 
     try {
-      solveDenseSystem(K, systemSize, rhsAff, deltaAff, luScratch);
+      normal.solve(rP, rD, rC, dxAff, dsAff, dyAff);
     } catch (error) {
       failureMessage = `IPM linear solve failed: ${error instanceof Error ? error.message : String(error)}`;
       if (verbose) console.log(failureMessage);
       break;
     }
-
-    const dxAff = deltaAff.subarray(0, n);
-    const dsAff = deltaAff.subarray(n, n + m);
-    const dyAff = deltaAff.subarray(n + m, systemSize);
 
     const alphaP = alphaStep(s, dsAff);
     const alphaD = alphaStep(y, dyAff);
@@ -210,23 +207,22 @@ function ipmCore(
         mu > 0
           ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER))
           : SIGMA_MIN;
-      rhsCor.fill(0);
       for (let i = 0; i < m; i++) {
-        rhsCor[m + n + i] = -(dsAff[i]! * dyAff[i]! - sigma * mu);
+        rC[i] = -(dsAff[i]! * dyAff[i]! - sigma * mu);
       }
 
       try {
-        solveDenseSystem(K, systemSize, rhsCor, deltaCor, luScratch);
+        normal.solve(zeroP, zeroD, rC, dxCor, dsCor, dyCor);
       } catch (error) {
         failureMessage = `IPM corrector solve failed: ${error instanceof Error ? error.message : String(error)}`;
         if (verbose) console.log(failureMessage);
         break;
       }
 
-      for (let j = 0; j < n; j++) dx[j] = dxAff[j]! + deltaCor[j]!;
+      for (let j = 0; j < n; j++) dx[j] = dxAff[j]! + dxCor[j]!;
       for (let i = 0; i < m; i++) {
-        ds[i] = dsAff[i]! + deltaCor[n + i]!;
-        dy[i] = dyAff[i]! + deltaCor[n + m + i]!;
+        ds[i] = dsAff[i]! + dsCor[i]!;
+        dy[i] = dyAff[i]! + dyCor[i]!;
       }
     } else {
       dx.set(dxAff);
@@ -248,38 +244,57 @@ function ipmCore(
   return res;
 }
 
-function buildKktSystem(
-  K: Float64Array,
+//   [ A  -I   0 ] [dx]   [rP]        (primal residual)
+//   [ 0   0  Aᵀ ] [ds] = [rD]        (dual residual)
+//   [ 0   Y   S ] [dy]   [rC]        (complementarity)
+//
+//   (Aᵀ D A) dx = Aᵀ((rC + y∘rP)/s) − rD,   D = diag(y/s),
+function createNormalEquations(
   A: { rows: number; cols: number; data: Float64Array },
   s: Float64Array,
   y: Float64Array,
 ) {
   const m = A.rows;
   const n = A.cols;
-  const size = n + 2 * m;
-  K.fill(0);
-
-  for (let i = 0; i < m; i++) {
-    const rowOffset = i * size;
-    const aOffset = i * n;
-    for (let j = 0; j < n; j++) {
-      K[rowOffset + j] = A.data[aOffset + j]!;
-    }
-    K[rowOffset + n + i] = -1;
-  }
-
-  for (let j = 0; j < n; j++) {
-    const rowOffset = (m + j) * size;
-    for (let i = 0; i < m; i++) {
-      K[rowOffset + n + m + i] = A.data[i * n + j]!;
-    }
-  }
-
-  for (let i = 0; i < m; i++) {
-    const rowOffset = (m + n + i) * size;
-    K[rowOffset + n + i] = y[i]!;
-    K[rowOffset + n + m + i] = s[i]!;
-  }
+  const M = new Float64Array(n * n);
+  const luScratch = new Float64Array(n * n);
+  const rhs = new Float64Array(n);
+  const weighted = new Float64Array(m);
+  return {
+    form() {
+      M.fill(0);
+      for (let i = 0; i < m; i++) {
+        const d = y[i]! / s[i]!;
+        const offset = i * n;
+        for (let j = 0; j < n; j++) {
+          const dj = d * A.data[offset + j]!;
+          for (let k = 0; k < n; k++) {
+            M[j * n + k] += dj * A.data[offset + k]!;
+          }
+        }
+      }
+    },
+    solve(
+      rP: Float64Array,
+      rD: Float64Array,
+      rC: Float64Array,
+      dx: Float64Array,
+      ds: Float64Array,
+      dy: Float64Array,
+    ) {
+      for (let i = 0; i < m; i++) {
+        weighted[i] = (rC[i]! + y[i]! * rP[i]!) / s[i]!;
+      }
+      transposedMatVec(A, weighted, rhs);
+      for (let j = 0; j < n; j++) rhs[j] -= rD[j]!;
+      solveDenseSystem(M, n, rhs, dx, luScratch);
+      matVec(A, dx, ds);
+      for (let i = 0; i < m; i++) {
+        ds[i] -= rP[i]!;
+        dy[i] = (rC[i]! - y[i]! * ds[i]!) / s[i]!;
+      }
+    },
+  };
 }
 
 function alphaStep(values: Float64Array, delta: Float64Array) {

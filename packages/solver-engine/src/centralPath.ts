@@ -9,6 +9,7 @@ const LINE_SEARCH_SHRINK_FACTOR = 0.5;
 const LINE_SEARCH_SUFFICIENT_DECREASE = 0.01;
 const MAX_LINE_SEARCH_ITERATIONS = 100;
 const DEFAULT_CONVERGENCE_TOLERANCE = 1e-4;
+const NEWTON_DECREMENT_RELATIVE_TOLERANCE = 1e-12;
 const DEFAULT_MAX_NEWTON_ITERATIONS = 2000;
 const BARRIER_PARAM_START = 3.0;
 const BARRIER_PARAM_END = -5.0;
@@ -95,23 +96,14 @@ function performLineSearch(
   c: Float64Array,
   mu: number,
   currentPoint: Float64Array,
+  currentObjective: number,
   newtonStep: Float64Array,
-  gradient: Float64Array,
+  gradientDotStep: number,
   candidatePoint: Float64Array,
   axScratch: Float64Array,
   slackScratch: Float64Array,
 ) {
   let stepSize = 1;
-  const currentObjective = computeObjective(
-    A,
-    b,
-    c,
-    mu,
-    currentPoint,
-    axScratch,
-    slackScratch,
-  );
-  const gradientDotStep = dot(gradient, newtonStep);
 
   for (let i = 0; i < MAX_LINE_SEARCH_ITERATIONS; i++) {
     for (let j = 0; j < currentPoint.length; j++) {
@@ -183,7 +175,21 @@ function centralPathXk(
     }
 
     const gradientInfinityNorm = infinityNorm(gradient);
-    if (gradientInfinityNorm < epsilon) {
+    const decrement = dot(gradient, newtonStep);
+    const currentObjective = computeObjective(
+      A,
+      b,
+      c,
+      mu,
+      currentPoint,
+      axScratch,
+      slackScratch,
+    );
+    if (
+      gradientInfinityNorm < epsilon ||
+      decrement <=
+        NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(currentObjective))
+    ) {
       if (verbose)
         console.log(`Converged in ${iteration} iterations with mu = ${mu}`);
       return Float64Array.from(currentPoint);
@@ -195,8 +201,9 @@ function centralPathXk(
       c,
       mu,
       currentPoint,
+      currentObjective,
       newtonStep,
-      gradient,
+      decrement,
       candidatePoint,
       axScratch,
       slackScratch,
