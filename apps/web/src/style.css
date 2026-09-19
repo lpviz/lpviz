@@ -100,7 +100,7 @@ body {
 
 .problem-gallery.is-expanded {
   width: var(--problem-gallery-expanded-width);
-  height: 96px;
+  height: var(--problem-gallery-expanded-height, 96px);
   background: rgba(250, 250, 250, 0.92);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
 }
@@ -223,6 +223,15 @@ body {
   stroke: #c0392b;
   stroke-width: 2;
   stroke-linecap: round;
+}
+
+/* the random item: two shape layers crossfade as it reshuffles */
+.problem-gallery__shape {
+  transition: opacity 260ms ease;
+}
+
+.problem-gallery__shape.is-faded {
+  opacity: 0;
 }
 
 /* ================================

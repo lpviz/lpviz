@@ -96,6 +96,7 @@ const getPerspectiveDistanceToFitBounds3D = (
   sidebarWidth: number,
   bounds: BoundingBox,
   padding = 50,
+  topInset = 0,
 ) => {
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
@@ -108,7 +109,7 @@ const getPerspectiveDistanceToFitBounds3D = (
   // the target plane and derive the distance from the full-viewport FOV.
   const viewport = getViewportSize(snapshot, rect);
   const availWidth = Math.max(100, viewport.width - sidebarWidth - 2 * padding);
-  const availHeight = Math.max(100, viewport.height - 2 * padding);
+  const availHeight = Math.max(100, viewport.height - topInset - 2 * padding);
   const unitsPerPixel = Math.max(width / availWidth, height / availHeight);
 
   return Math.max(
@@ -129,10 +130,11 @@ const getPerspectiveDistanceToFitBox3D = (
   target: PointXYZ,
   viewAngle: PointXYZ,
   padding = 50,
+  topInset = 0,
 ) => {
   const viewport = getViewportSize(snapshot, rect);
   const availWidth = Math.max(100, viewport.width - sidebarWidth - 2 * padding);
-  const availHeight = Math.max(100, viewport.height - 2 * padding);
+  const availHeight = Math.max(100, viewport.height - topInset - 2 * padding);
   const verticalFov = snapshot.perspective.fov * (Math.PI / 180);
   const tanHalfFull = Math.max(EPS, Math.tan(verticalFov / 2));
   // Pixels per unit of (offset / depth): px = offset / depth * K
@@ -201,6 +203,10 @@ const getPerspectiveDistanceToFitBox3D = (
   return hi;
 };
 
+// The camera fills the whole viewport but the sidebar covers its left edge
+// and an open gallery its top edge, so the target — what the camera looks
+// straight at — is moved left and up in the target plane by half of each, and
+// the fitted content lands centered in the part of the viewport that shows.
 const offsetTargetForVisibleViewport3D = (
   snapshot: ViewportRenderSnapshot,
   rect: ViewportRect,
@@ -208,8 +214,9 @@ const offsetTargetForVisibleViewport3D = (
   viewAngle: PointXYZ,
   distance: number,
   sidebarWidth: number,
+  topInset = 0,
 ): PointXYZ => {
-  if (sidebarWidth <= 0) {
+  if (sidebarWidth <= 0 && topInset <= 0) {
     return target;
   }
 
@@ -220,13 +227,14 @@ const offsetTargetForVisibleViewport3D = (
       Math.tan(verticalFov / 2) *
       Math.max(MIN_PERSPECTIVE_DISTANCE, distance)) /
     Math.max(1, viewport.height);
-  const offset = (sidebarWidth / 2) * unitsPerPixelAtTarget;
+  const rightOffset = (sidebarWidth / 2) * unitsPerPixelAtTarget;
+  const upOffset = (topInset / 2) * unitsPerPixelAtTarget;
   configureFitBasisFromViewAngle(viewAngle);
 
   return {
-    x: target.x - fitRight.x * offset,
-    y: target.y - fitRight.y * offset,
-    z: target.z - fitRight.z * offset,
+    x: target.x - fitRight.x * rightOffset + fitUp.x * upOffset,
+    y: target.y - fitRight.y * rightOffset + fitUp.y * upOffset,
+    z: target.z - fitRight.z * rightOffset + fitUp.z * upOffset,
   };
 };
 
@@ -331,6 +339,7 @@ export function fitViewport3DToBounds(
   rawBounds: BoundingBox,
   padding = 50,
   zBounds?: ViewportZBounds,
+  topInset = 0,
 ): Viewport3DViewState | null {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
@@ -353,6 +362,7 @@ export function fitViewport3DToBounds(
         fitTarget,
         viewAngle,
         padding,
+        topInset,
       )
     : getPerspectiveDistanceToFitBounds3D(
         snapshot,
@@ -360,6 +370,7 @@ export function fitViewport3DToBounds(
         sidebarWidth,
         bounds,
         padding,
+        topInset,
       );
   const distance = clampPerspectiveDistance3D(
     snapshot,
@@ -373,6 +384,7 @@ export function fitViewport3DToBounds(
     viewAngle,
     distance,
     sidebarWidth,
+    topInset,
   );
 
   return {

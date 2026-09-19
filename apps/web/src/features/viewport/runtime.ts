@@ -77,6 +77,8 @@ export type ViewportApi = {
     bounds: BoundingBox,
     padding?: number,
     zBounds?: ViewportZBounds,
+    // pixels along the top edge covered by an overlay (the open gallery)
+    topInset?: number,
   ) => void;
   resetView: () => void;
   setControlsBlocked: (blocked: boolean) => void;
@@ -581,7 +583,7 @@ export async function createViewportRuntime({
         { emit: false },
       );
     },
-    zoomToFit: (bounds, padding, zBounds) => {
+    zoomToFit: (bounds, padding, zBounds, topInset) => {
       if (shouldUseExternal2DViewport()) {
         const { state, sidebarWidth } = getViewport2DControlsConfig();
         setViewport2DControlsState(
@@ -592,6 +594,7 @@ export async function createViewportRuntime({
             managerSnapshot,
             bounds,
             padding,
+            topInset,
           ),
         );
         return;
@@ -611,6 +614,7 @@ export async function createViewportRuntime({
                 maxZ: (zBounds.maxZ * state.zScale) / 100,
               }
             : undefined,
+          topInset,
         );
         if (!nextView) {
           return;

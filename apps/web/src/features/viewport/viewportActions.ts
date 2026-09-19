@@ -9,6 +9,13 @@ export function createViewportActions(
   initialSidebarWidth: number,
 ) {
   let currentSidebarWidth = initialSidebarWidth;
+  // Pixels along the top of the canvas covered by the problem gallery while
+  // it is open. Zoom-to-fit keeps the region below it, so a preset picked from
+  // the open strip does not land its top vertices under the strip.
+  let topInset = 0;
+  const setTopInset = (px: number) => {
+    topInset = Math.max(0, px);
+  };
   const syncSidebarViewport = () => {
     const cm = getCanvasManager();
     if (!cm) return;
@@ -29,6 +36,7 @@ export function createViewportActions(
       isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds,
       50,
       zoomFit?.zBounds,
+      topInset,
     );
     cm.setSidebarWidth(currentSidebarWidth);
   };
@@ -60,6 +68,7 @@ export function createViewportActions(
   return {
     resetView,
     zoomToFit,
+    setTopInset,
     toggle3D,
     setZScale,
     setSidebarWidth,
