@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildViewport2DSnapshot,
   buildViewport2DStateFromTarget,
+  fitViewport2DToBounds,
   toCanvasCoords2D,
   toLogicalCoords2D,
   zoomViewport2DStateAtCanvasPoint,
@@ -65,5 +66,29 @@ describe("2D projection round-trips", () => {
     const worldAfter = toLogicalCoords2D(after, rect, cursor.x, cursor.y);
     expect(worldAfter.x).toBeCloseTo(worldBefore.x, 4);
     expect(worldAfter.y).toBeCloseTo(worldBefore.y, 4);
+  });
+});
+
+describe("fitViewport2DToBounds", () => {
+  const bounds = { minX: -10, maxX: 10, minY: -30, maxY: 30 };
+  const base = buildViewport2DStateFromTarget({ x: 0, y: 0 }, 1, 30, 0);
+  const canvasOf = (state: typeof base, point: { x: number; y: number }) =>
+    toCanvasCoords2D(buildViewport2DSnapshot(state, 0, rect, fallback), rect, point);
+
+  test("with no inset the content is centered and fills the padded height", () => {
+    const fitted = fitViewport2DToBounds(base, 0, rect, fallback, bounds, 50);
+    const top = canvasOf(fitted, { x: 0, y: bounds.maxY });
+    const bottom = canvasOf(fitted, { x: 0, y: bounds.minY });
+    expect(top.y).toBeCloseTo(50, 6);
+    expect(bottom.y).toBeCloseTo(rect.height - 50, 6);
+  });
+
+  test("a top inset keeps the content below it and centers it in what remains", () => {
+    const inset = 104;
+    const fitted = fitViewport2DToBounds(base, 0, rect, fallback, bounds, 50, inset);
+    const top = canvasOf(fitted, { x: 0, y: bounds.maxY });
+    const bottom = canvasOf(fitted, { x: 0, y: bounds.minY });
+    expect(top.y).toBeCloseTo(inset + 50, 6);
+    expect(bottom.y).toBeCloseTo(rect.height - 50, 6);
   });
 });

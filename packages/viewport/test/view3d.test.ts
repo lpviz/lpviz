@@ -104,6 +104,21 @@ describe("fitViewport3DToBounds", () => {
     });
   }
 
+  test("a top inset keeps the projected content below the covered strip", () => {
+    const inset = 104;
+    for (const { viewAngle, bounds, zBounds } of cases) {
+      const snap = snapshotAtAngle(viewAngle);
+      const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds, inset);
+      expect(view).not.toBeNull();
+      const fitted = buildViewport3DSnapshot(snap, view!.pose, rect);
+      const ext = projectedExtent(fitted, bounds, zBounds);
+      expect(ext.minPx).toBeGreaterThanOrEqual(SIDEBAR + PAD - 1);
+      expect(ext.maxPx).toBeLessThanOrEqual(W - PAD + 1);
+      expect(ext.minPy).toBeGreaterThanOrEqual(inset + PAD - 1);
+      expect(ext.maxPy).toBeLessThanOrEqual(H - PAD + 1);
+    }
+  });
+
   test("a degenerate (single point) bounds still produces a fit", () => {
     const snap = snapshotAtAngle({ x: 0, y: 0, z: 0 });
     const view = fitViewport3DToBounds(snap, rect, SIDEBAR, {
