@@ -6,6 +6,7 @@ import {
   expandDegenerateBounds,
   hasOpenBoundaryClosure,
   isConvexChain,
+  isConvexPolygon,
   verticesFromLines,
 } from "../src/geometry";
 import type { Lines, Vertices } from "../src/types";
@@ -42,7 +43,44 @@ describe("VRep.isConvex", () => {
     ];
     expect(VRep.fromPoints(spike).isConvex()).toBe(false);
   });
+
+  // Regression: a polygon that winds around itself turns the same way at every
+  // vertex, so a turn-sign test calls it convex. Dragging vertices through
+  // (allowed, flagged) nonconvex states can land on such a shape, and it then
+  // reached the constraint builder as a valid region.
+  test("rejects a self-overlapping polygon whose turns all agree", () => {
+    const pentagram = starPolygon(5, 2);
+    expect(VRep.fromPoints(pentagram).isConvex()).toBe(false);
+    expect(isConvexPolygon(starPolygon(7, 3))).toBe(false);
+    expect(isConvexPolygon(starPolygon(7, 2))).toBe(false);
+    // a triangle traversed twice: the turns agree and every vertex lies on
+    // every edge line's inner side, only the turning count gives it away
+    const triangle = starPolygon(3, 1);
+    expect(isConvexPolygon([...triangle, ...triangle])).toBe(false);
+  });
+
+  test("accepts a convex polygon with a vertex inserted on an edge", () => {
+    const withInserted = [
+      { x: 0, y: 0 },
+      { x: 2, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: 3 },
+      { x: 0, y: 3 },
+    ];
+    expect(isConvexPolygon(withInserted)).toBe(true);
+    expect(isConvexPolygon(starPolygon(9, 1))).toBe(true);
+  });
 });
+
+// The vertices of a regular n-gon visited every `step`-th one: a convex
+// polygon for step 1, a star that winds `step` times around the center
+// otherwise (gcd(n, step) = 1 keeps it one closed chain).
+function starPolygon(count: number, step: number) {
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (2 * Math.PI * ((i * step) % count)) / count;
+    return { x: 10 * Math.cos(angle), y: 10 * Math.sin(angle) };
+  });
+}
 
 describe("isConvexChain", () => {
   test("rejects a chain doubling back on itself", () => {
@@ -51,6 +89,21 @@ describe("isConvexChain", () => {
         { x: 0, y: 0 },
         { x: 2, y: 0 },
         { x: 1, y: 0 },
+      ]),
+    ).toBe(false);
+  });
+
+  test("rejects a chain that spirals through more than one revolution", () => {
+    // an inward spiral: every turn a left turn, five of them at 90 degrees
+    expect(
+      isConvexChain([
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 10 },
+        { x: 0, y: 10 },
+        { x: 0, y: 2 },
+        { x: 8, y: 2 },
+        { x: 8, y: 8 },
       ]),
     ).toBe(false);
   });

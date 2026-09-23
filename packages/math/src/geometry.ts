@@ -25,35 +25,64 @@ export function expandDegenerateBounds(
   return { minX, maxX, minY, maxY };
 }
 
+const FULL_TURN = 2 * Math.PI;
+const TURNING_TOLERANCE = 1e-6;
+
+function isConvexSequence(
+  points: ReadonlyArray<PointXY>,
+  closed: boolean,
+  tol: number,
+): boolean {
+  const n = points.length;
+  if (n < 3) return true;
+  const turnCount = closed ? n : n - 2;
+
+  let orientation = 0;
+  let turning = 0;
+  for (let i = 0; i < turnCount; i++) {
+    const p0 = points[i];
+    const p1 = points[(i + 1) % n];
+    const p2 = points[(i + 2) % n];
+    const ax = p1.x - p0.x;
+    const ay = p1.y - p0.y;
+    const bx = p2.x - p1.x;
+    const by = p2.y - p1.y;
+    const cross = ax * by - ay * bx;
+    const dot = ax * bx + ay * by;
+    if (Math.abs(cross) <= tol) {
+      // straight continuation (or a repeated point) is fine; a reversal is not
+      if (dot < -tol) return false;
+      continue;
+    }
+    const sign = Math.sign(cross);
+    if (orientation === 0) orientation = sign;
+    else if (sign !== orientation) return false;
+    turning += Math.atan2(cross, dot);
+  }
+  // every turn degenerate: the points are collinear, and the region derivation
+  // reports the degenerate shape itself
+  if (orientation === 0) return true;
+
+  const revolutions = Math.abs(turning) / FULL_TURN;
+  return closed
+    ? Math.abs(revolutions - 1) <= TURNING_TOLERANCE
+    : revolutions <= 1 + TURNING_TOLERANCE;
+}
+
+/** A polyline that is part of the boundary of some convex polygon. */
 export function isConvexChain(
   points: ReadonlyArray<PointXY>,
   tol = 1e-9,
 ): boolean {
-  if (points.length < 3) return true;
+  return isConvexSequence(points, false, tol);
+}
 
-  let prevCross = 0;
-  for (let i = 0; i < points.length - 2; i++) {
-    const p0 = points[i];
-    const p1 = points[i + 1];
-    const p2 = points[i + 2];
-    const cross = (p1.x - p0.x) * (p2.y - p1.y) - (p1.y - p0.y) * (p2.x - p1.x);
-    if (Math.abs(cross) <= tol) {
-      // a 180-degree reversal also has zero cross product; reject it
-      const dot =
-        (p1.x - p0.x) * (p2.x - p1.x) + (p1.y - p0.y) * (p2.y - p1.y);
-      if (dot < -tol) return false;
-      continue;
-    }
-    if (prevCross === 0) {
-      prevCross = cross;
-      continue;
-    }
-    if (Math.sign(cross) !== Math.sign(prevCross)) {
-      return false;
-    }
-  }
-
-  return true;
+/** A closed polygon that is convex (and therefore simple). */
+export function isConvexPolygon(
+  points: ReadonlyArray<PointXY>,
+  tol = 1e-9,
+): boolean {
+  return isConvexSequence(points, true, tol);
 }
 
 export function centroid(vertices: Vertices) {
@@ -126,25 +155,7 @@ export class VRep {
   }
 
   isConvex(tol = 1e-9): boolean {
-    if (this.points.length < 3) return true;
-    let prevCross = 0;
-    for (let i = 0, n = this.points.length; i < n; i++) {
-      const p0 = this.points[i];
-      const p1 = this.points[(i + 1) % n];
-      const p2 = this.points[(i + 2) % n];
-      const cross =
-        (p1.x - p0.x) * (p2.y - p1.y) - (p1.y - p0.y) * (p2.x - p1.x);
-      if (Math.abs(cross) > tol) {
-        if (prevCross === 0) prevCross = cross;
-        else if (Math.sign(cross) !== Math.sign(prevCross)) return false;
-      } else {
-        // a 180-degree reversal also has zero cross product; reject it
-        const dot =
-          (p1.x - p0.x) * (p2.x - p1.x) + (p1.y - p0.y) * (p2.y - p1.y);
-        if (dot < -tol) return false;
-      }
-    }
-    return true;
+    return isConvexPolygon(this.points, tol);
   }
 
   contains(point: PointXY): boolean {

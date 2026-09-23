@@ -176,6 +176,12 @@ export function zoomViewport2DStateAtCanvasPoint(
   );
 }
 
+/**
+ * `topInset` is a strip of pixels along the top edge that overlays cover (the
+ * problem gallery when it is open); the content is fitted below it, so the
+ * available height shrinks by the inset and the content's center sits half
+ * an inset below the viewport's.
+ */
 export function fitViewport2DToBounds(
   state: Viewport2DState,
   sidebarWidth: number,
@@ -183,6 +189,7 @@ export function fitViewport2DToBounds(
   fallbackSnapshot: ViewportRenderSnapshot,
   rawBounds: BoundingBox,
   padding = 50,
+  topInset = 0,
 ): Viewport2DState {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
@@ -194,15 +201,22 @@ export function fitViewport2DToBounds(
     100,
     viewportSize.width - sidebarWidth - 2 * padding,
   );
-  const availHeight = Math.max(100, viewportSize.height - 2 * padding);
+  const availHeight = Math.max(
+    100,
+    viewportSize.height - topInset - 2 * padding,
+  );
   const scaleX = availWidth / (width * state.gridSpacing);
   const scaleY = availHeight / (height * state.gridSpacing);
+  const scaleFactor = clampScaleFactor2D(Math.min(scaleX, scaleY));
+  // the view center sits half an inset above the content center (world y is
+  // up), which puts the content half an inset lower on screen
+  const unitsPerPixel = 1 / (state.gridSpacing * scaleFactor);
 
   return {
     gridSpacing: state.gridSpacing,
-    scaleFactor: clampScaleFactor2D(Math.min(scaleX, scaleY)),
+    scaleFactor,
     offsetX: -(bounds.minX + bounds.maxX) / 2,
-    offsetY: -(bounds.minY + bounds.maxY) / 2,
+    offsetY: -((bounds.minY + bounds.maxY) / 2 + (topInset / 2) * unitsPerPixel),
   };
 }
 

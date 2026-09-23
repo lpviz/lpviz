@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { State } from "@/features/core/store";
-import { getEditorContext, getEditorTransition } from "./editorSession";
+import {
+  computeEditorRegionForState,
+  getEditorContext,
+  getEditorTransition,
+} from "./editorSession";
 
 // Characterization tests for the pure editor FSM. These pin today's behavior so
 // the Phase 4 interaction rework (routing drags through getEditorTransition) is
@@ -186,5 +190,60 @@ describe("getEditorTransition: delete-vertex", () => {
       { x: 2, y: 3 },
     ]);
     expect(t.result.completionMode).toBe("draft");
+  });
+});
+
+describe("computeEditorRegionForState", () => {
+  // the vertices of a regular pentagon visited every second one: every turn
+  // agrees, the boundary winds twice around the center
+  const PENTAGRAM = [0, 2, 4, 1, 3].map((i) => ({
+    x: 10 * Math.cos((2 * Math.PI * i) / 5),
+    y: 10 * Math.sin((2 * Math.PI * i) / 5),
+  }));
+
+  test("a self-overlapping closed polygon is nonconvex, not a region", () => {
+    const result = computeEditorRegionForState(
+      st({
+        vertices: PENTAGRAM,
+        completionMode: "closed",
+        interiorPoint: { x: 0, y: 0 },
+        objectiveVector: { x: 1, y: 0 },
+      }),
+    );
+    expect(result.status).toBe("nonconvex");
+  });
+
+  // an open region's end dragged past the point where its rays cross: the
+  // chain overshoots the closed region it now bounds, and is trimmed to it on
+  // release rather than flagged — so it must still count as a valid chain
+  test("an open chain that closes on itself is still a region", () => {
+    const result = computeEditorRegionForState(
+      st({
+        vertices: [
+          { x: -6.125, y: 10.1875 },
+          { x: -12.175, y: 8.1875 },
+          { x: -0.925, y: 14.6875 },
+          { x: 10.275, y: 9.8375 },
+        ],
+        completionMode: "open",
+        objectiveVector: { x: 1, y: 0 },
+      }),
+    );
+    expect(result.status).toBe("ready");
+  });
+
+  test("a convex triangle is a region", () => {
+    const result = computeEditorRegionForState(
+      st({
+        vertices: TRI,
+        completionMode: "closed",
+        interiorPoint: { x: 2, y: 1 },
+        objectiveVector: { x: 1, y: 0 },
+      }),
+    );
+    expect(result.status).toBe("ready");
+    if (result.status === "ready") {
+      expect(result.polytope.inequalities).toHaveLength(3);
+    }
   });
 });
