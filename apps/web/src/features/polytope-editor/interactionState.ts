@@ -63,6 +63,11 @@ export function findEdgeNearPoint(
     completionMode === "closed"
       ? vertices.length
       : Math.max(0, vertices.length - 1);
+  // a small polytope seen up close puts several edges inside the tolerance at
+  // once, so pick the closest rather than whichever comes first in index order
+  let nearestIndex: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
   for (let index = 0; index < edgeCount; index++) {
     const start = vertices[index];
     const end =
@@ -78,14 +83,16 @@ export function findEdgeNearPoint(
     const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2;
     if (t < 0 || t > 1) continue;
 
-    const projection = { x: start.x + t * dx, y: start.y + t * dy };
-    if (
-      Math.hypot(point.x - projection.x, point.y - projection.y) < tolerance
-    ) {
-      return index;
+    const distance = Math.hypot(
+      point.x - (start.x + t * dx),
+      point.y - (start.y + t * dy),
+    );
+    if (distance < tolerance && distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = index;
     }
   }
-  return null;
+  return nearestIndex;
 }
 
 function getVisibleBounds(canvasManager: ViewportApi): Bounds {

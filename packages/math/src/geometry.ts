@@ -180,31 +180,40 @@ export class VRep {
     return inside;
   }
 
-  isPointNearEdge(point: PointXY, edgeIndex: number, tolerance = 0.5): boolean {
-    if (this.points.length < 2) return false;
+  distanceToEdge(point: PointXY, edgeIndex: number): number {
     const start = this.points[edgeIndex];
     const end = this.points[(edgeIndex + 1) % this.points.length];
-    if (!start || !end) return false;
+    if (!start || !end) return Number.POSITIVE_INFINITY;
 
     const dx = end.x - start.x;
     const dy = end.y - start.y;
     const len2 = dx * dx + dy * dy;
-    if (len2 === 0) return false;
+    if (len2 === 0) return Number.POSITIVE_INFINITY;
 
     const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2;
-    if (t < 0 || t > 1) return false;
+    if (t < 0 || t > 1) return Number.POSITIVE_INFINITY;
 
-    const proj = { x: start.x + t * dx, y: start.y + t * dy };
-    return VRep.distance(point, proj) < tolerance;
+    return VRep.distance(point, { x: start.x + t * dx, y: start.y + t * dy });
+  }
+
+  isPointNearEdge(point: PointXY, edgeIndex: number, tolerance = 0.5): boolean {
+    return this.distanceToEdge(point, edgeIndex) < tolerance;
   }
 
   findEdgeNearPoint(point: PointXY, tolerance = 0.5): number | null {
+    // a small polytope seen up close puts several edges inside the tolerance
+    // at once, so pick the closest rather than the first in index order
+    let nearestIndex: number | null = null;
+    let nearestDistance = Number.POSITIVE_INFINITY;
+
     for (let i = 0; i < this.points.length; i++) {
-      if (this.isPointNearEdge(point, i, tolerance)) {
-        return i;
+      const distance = this.distanceToEdge(point, i);
+      if (distance < tolerance && distance < nearestDistance) {
+        nearestDistance = distance;
+        nearestIndex = i;
       }
     }
-    return null;
+    return nearestIndex;
   }
 
   computeConvexHull(): PointXY[] {
