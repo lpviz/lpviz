@@ -247,3 +247,71 @@ describe("expandDegenerateBounds", () => {
     expect(expandDegenerateBounds(real)).toEqual(real);
   });
 });
+
+describe("VRep.findEdgeNearPoint", () => {
+  const SMALL_SQUARE = [
+    { x: 0, y: 0 },
+    { x: 0.3, y: 0 },
+    { x: 0.3, y: 0.3 },
+    { x: 0, y: 0.3 },
+  ];
+
+  test("picks the nearest edge, not the lowest index, when a small polytope puts every edge in tolerance", () => {
+    const edge = VRep.fromPoints(SMALL_SQUARE);
+    // the default 0.5 tolerance exceeds this square's side length, so all four
+    // edges qualify for any interior point
+    expect(edge.findEdgeNearPoint({ x: 0, y: 0.15 })).toBe(3);
+    expect(edge.findEdgeNearPoint({ x: 0.15, y: 0.3 })).toBe(2);
+    expect(edge.findEdgeNearPoint({ x: 0.3, y: 0.15 })).toBe(1);
+    expect(edge.findEdgeNearPoint({ x: 0.15, y: 0 })).toBe(0);
+  });
+
+  test("still returns the right edge for a large polytope", () => {
+    const big = [
+      { x: 0, y: 0 },
+      { x: 20, y: 0 },
+      { x: 20, y: 20 },
+      { x: 0, y: 20 },
+    ];
+    const rep = VRep.fromPoints(big);
+    expect(rep.findEdgeNearPoint({ x: 0, y: 10 })).toBe(3);
+    expect(rep.findEdgeNearPoint({ x: 20, y: 10 })).toBe(1);
+    expect(rep.findEdgeNearPoint({ x: 10, y: 20 })).toBe(2);
+  });
+
+  test("keeps the closing edge of a closed polygon reachable", () => {
+    const rep = VRep.fromPoints(SMALL_SQUARE);
+    expect(rep.findEdgeNearPoint({ x: 0.15, y: 0.02 })).toBe(0);
+    expect(rep.findEdgeNearPoint({ x: 0.02, y: 0.15 })).toBe(3);
+  });
+
+  test("returns null when no edge is within tolerance", () => {
+    const rep = VRep.fromPoints([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 },
+    ]);
+    // incenter: ~2.3 clear of every edge
+    expect(rep.findEdgeNearPoint({ x: 7.3, y: 2.7 })).toBeNull();
+  });
+
+  test("isPointNearEdge agrees with the nearest-edge choice", () => {
+    const rep = VRep.fromPoints(SMALL_SQUARE);
+    const point = { x: 0, y: 0.15 };
+    const nearest = rep.findEdgeNearPoint(point);
+    expect(nearest).not.toBeNull();
+    expect(rep.isPointNearEdge(point, nearest!)).toBe(true);
+  });
+
+  test("breaks exact ties by lowest index", () => {
+    const rep = VRep.fromPoints([
+      { x: -1, y: 0 },
+      { x: 0, y: -1 },
+      { x: 1, y: 0 },
+      { x: 0, y: 1 },
+    ]);
+    // the centre sits sqrt(2)/2 = 0.7071... from all four edges
+    expect(rep.findEdgeNearPoint({ x: 0, y: 0 }, 0.71)).toBe(0);
+    expect(rep.findEdgeNearPoint({ x: 0, y: 0 }, 0.5)).toBeNull();
+  });
+});
