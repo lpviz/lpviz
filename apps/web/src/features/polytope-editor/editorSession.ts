@@ -4,7 +4,6 @@ import {
   centroid,
   isConvexChain,
   isConvexPolygon,
-  signedArea,
   VRep,
 } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
@@ -275,8 +274,11 @@ export function getEditorTransition(
         (_, index) => index !== action.deleteIndex,
       );
 
-      if (isDerivedClosed || session.kind === "editing-closed") {
-        if (nextVertices.length < 2) {
+      // The polygon stays closed, minus the vertex: dropping a vertex of a
+      // convex polygon keeps it convex, so there is nothing to reject. A
+      // triangle has nothing left to close and goes back to drafting.
+      if (isDerivedClosed || state.completionMode === "closed") {
+        if (nextVertices.length < 3) {
           return {
             kind: "edit",
             result: {
@@ -288,25 +290,12 @@ export function getEditorTransition(
           };
         }
 
-        const reopenedVertices = Array.from(
-          { length: nextVertices.length },
-          (_, offset) => {
-            const sourceIndex =
-              (action.deleteIndex + 1 + offset) % displayVertices.length;
-            return displayVertices[sourceIndex];
-          },
-        );
-        const orientedVertices =
-          signedArea(displayVertices) > 0
-            ? reopenedVertices.reverse()
-            : reopenedVertices;
-
         return {
           kind: "edit",
           result: {
-            vertices: orientedVertices,
-            completionMode: "open",
-            interiorPoint: null,
+            vertices: nextVertices,
+            completionMode: "closed",
+            interiorPoint: VRep.fromPoints(nextVertices).centroidPoint(),
           },
           saveToHistory: true,
         };
