@@ -258,6 +258,89 @@ describe("cuttingPlane", () => {
     }
   });
 
+  test("reports an unbounded objective instead of claiming optimality", () => {
+    // x in [-1, 2], maximize y: the optimum is only bounded by the initial box,
+    // never by a constraint
+    const strip = [
+      [1, 0, 2],
+      [-1, 0, 1],
+    ] as [number, number, number][];
+    const hull = [
+      [-1, -5],
+      [2, -5],
+      [2, 5],
+      [-1, 5],
+    ] as [number, number][];
+    for (const queryPoint of QUERY_POINTS) {
+      for (const rayShoot of [true, false]) {
+        const r = cuttingPlane(
+          hull,
+          strip,
+          Float64Array.of(0, 1),
+          opts(queryPoint, { rayShoot }),
+        );
+        expect(r.footer.startsWith("Stopped on the initial box boundary")).toBe(
+          true,
+        );
+        expect(r.footer).toContain("unbounded");
+      }
+    }
+  });
+
+  // The open chain (0,0) → (2,1) → (1,2) of lpviz/lpviz#75: the region
+  // y >= x/2, x + y <= 3 is unbounded to the upper left, with (2,1) its only
+  // vertex. Minimizing x over it has no optimum; maximizing x + y does — the
+  // value 3 along the whole ray from (2,1) in the direction (-1, 1) — even
+  // though that optimal face runs off into the initial box exactly where an
+  // unbounded objective would stop. The ellipsoid method is the reference.
+  const WEDGE = [
+    [1, -2, 0],
+    [1, 1, 3],
+  ] as [number, number, number][];
+  const WEDGE_CHAIN = [
+    [0, 0],
+    [2, 1],
+    [1, 2],
+  ] as [number, number][];
+
+  test("an objective that is unbounded over an open region says so", () => {
+    for (const objective of [Float64Array.of(-1, 0), Float64Array.of(-1, 1)]) {
+      for (const queryPoint of QUERY_POINTS) {
+        for (const rayShoot of [true, false]) {
+          const r = cuttingPlane(
+            WEDGE_CHAIN,
+            WEDGE,
+            objective,
+            opts(queryPoint, { rayShoot }),
+          );
+          expect(r.footer).toContain("unbounded");
+        }
+      }
+      const reference = ellipsoid(WEDGE_CHAIN, WEDGE, objective, {
+        ...opts("chebyshev"),
+        deepCuts: true,
+      });
+      expect(reference.footer).toContain("unbounded");
+    }
+  });
+
+  test("a bounded objective whose optimal face is a ray is still optimal", () => {
+    const objective = Float64Array.of(1, 1);
+    for (const queryPoint of QUERY_POINTS) {
+      for (const rayShoot of [true, false]) {
+        const r = cuttingPlane(
+          WEDGE_CHAIN,
+          WEDGE,
+          objective,
+          opts(queryPoint, { rayShoot }),
+        );
+        expect(r.footer).not.toContain("unbounded");
+        const last = r.iterations[r.iterations.length - 1]!;
+        expect(last[0]! + last[1]!).toBeCloseTo(3, 4);
+      }
+    }
+  });
+
   test("results are reproducible across repeated solves", () => {
     for (const queryPoint of QUERY_POINTS) {
       const run = () =>

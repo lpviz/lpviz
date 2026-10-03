@@ -32,6 +32,10 @@ const MIN_CHEBYSHEV_RADIUS = 1e-12;
 const VAIDYA_DROP_LEVERAGE = 1e-3;
 // inert box for the LP solver: the localizing set carries its own bounds
 const LP_BOUND = 1e6;
+// A recession direction has to improve the objective by more than this per
+// unit length to count: below it the direction runs along an optimal face, not
+// away from it, and the optimum it leads to is a finite value.
+const RECESSION_TOLERANCE = 1e-9;
 
 export type QueryPoint = "analytic" | "chebyshev" | "volumetric";
 
@@ -44,7 +48,12 @@ export interface CuttingPlaneOptions {
   verbose: boolean;
 }
 
-type Termination = "converged" | "maxit" | "exhausted" | "degenerate";
+type Termination =
+  | "converged"
+  | "maxit"
+  | "exhausted"
+  | "degenerate"
+  | "unbounded";
 
 type QueryResult = {
   point: Float64Array;
@@ -239,6 +248,16 @@ export function cuttingPlane(
     }
   }
 
+  // Both of these are claims of optimality, and both are wrong when the
+  // objective is unbounded: nothing but the initial box stopped the method.
+  if (
+    (termination === "converged" || termination === "exhausted") &&
+    bestObjective > -Infinity &&
+    objectiveIsUnbounded(A, c)
+  ) {
+    termination = "unbounded";
+  }
+
   const footer = buildFooter(
     termination,
     iterations.length,
@@ -263,6 +282,36 @@ export function cuttingPlane(
     rows,
     footer,
   };
+}
+
+/**
+ * Whether `max c'x` over the (feasible) region `Ax <= b` is unbounded, which is
+ * exactly when some recession direction `d` of the region — `Ad <= 0` — has
+ * `c'd > 0`. That is one small LP over the recession cone clipped to the unit
+ * box.
+ *
+ * The ellipsoid method reads this off its geometry instead: a converged center
+ * on the initial ellipsoid's boundary was stopped by the ellipsoid, not by a
+ * constraint. The same test does not transfer to a polyhedron. The query
+ * points here are strictly interior, so the converged point only approaches
+ * the initial box; and a *bounded* objective whose optimal face is a ray also
+ * runs that face into the box, where a Chebyshev center is as happy to sit at
+ * the box end of the face as anywhere else along it. Position on the box
+ * cannot tell the two apart; the recession cone can.
+ */
+function objectiveIsUnbounded(
+  A: { rows: number; cols: number; data: Float64Array },
+  c: Float64Array,
+): boolean {
+  const cone: LpRow[] = [];
+  for (let i = 0; i < A.rows; i++) {
+    cone.push([A.data[i * A.cols]!, A.data[i * A.cols + 1]!, 0]);
+  }
+  const best = solveSmallLp([c[0]!, c[1]!], cone, 1);
+  return (
+    best.status === "optimal" &&
+    best.value > RECESSION_TOLERANCE * Math.hypot(c[0]!, c[1]!)
+  );
 }
 
 function computeQueryPoint(
@@ -532,6 +581,8 @@ function buildFooter(
         : `Localizing set exhausted after ${iterationCount} iterations in ${elapsed}\nNothing better than the incumbent remains, so it is optimal\n`;
     case "degenerate":
       return `Query point degenerated numerically after ${iterationCount} iterations in ${elapsed}\n`;
+    case "unbounded":
+      return `Stopped on the initial box boundary after ${iterationCount} iterations in ${elapsed}\nThe objective is unbounded over this region: the method only searches inside the initial box\n`;
     default:
       return `Did not converge after ${iterationCount} iterations in ${elapsed}\n`;
   }
