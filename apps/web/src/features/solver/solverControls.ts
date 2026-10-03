@@ -9,6 +9,7 @@ import {
 import type { ShareSettings } from "@/features/share/sharedState";
 import type { ResultRenderPayload } from "@/features/solver/solverService";
 import type { SolverWorkerPayload } from "@/features/solver/solverWorker";
+import type { Vertices } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
@@ -63,6 +64,19 @@ function objectiveBase(state: State) {
       state.objectiveVector.y,
     ),
   };
+}
+
+// The points the ellipsoid family builds its initial localization around. A
+// bounded region's vertices are its polytope's. An unbounded region's polytope
+// carries none, but every vertex it has is an interior point of the drawn chain
+// (the end edges continue as rays), so the chain bounds them all. Without it
+// the engine falls back to a fixed box around the origin, which has no relation
+// to the drawing.
+function regionBoundingVertices(state: State): Vertices {
+  const vertices = state.polytope?.vertices ?? [];
+  return vertices.length > 0
+    ? vertices
+    : state.vertices.map(({ x, y }) => [x, y] as [number, number]);
 }
 
 // The dragged start point as a solver payload, or absent when never set (the
@@ -229,8 +243,8 @@ export function createSolverControls({
         const ss = s.solverSettings;
         return {
           solver: "ellipsoid",
-          // the drawn region bounds the initial ellipsoid
-          vertices: s.polytope.vertices,
+          // the drawn region bounds the initial ellipsoid (or box)
+          vertices: regionBoundingVertices(s),
           ...base,
           maxit: Math.max(1, ss.maxitEllipsoid || 1),
           deepCuts: ss.ellipsoidDeepCuts,

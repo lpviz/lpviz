@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { SolverSettings } from "../core/store";
+import type { SolverSettings, State } from "../core/store";
 import type { ShareSettings } from "../share/sharedState";
 import { createSolverControls } from "./solverControls";
 
@@ -55,5 +55,63 @@ describe("shared solver settings", () => {
     const { applied, simplex } = controls();
     simplex.applySharedSettings({ alphaMax: 0.5, pdhgEta: 0.1 });
     expect(applied).toEqual({});
+  });
+});
+
+describe("ellipsoid request", () => {
+  const ellipsoid = () =>
+    createSolverControls({
+      updateSolverSetting: () => {},
+      hasUnboundedObjectiveDirection: () => false,
+    }).find((c) => c.mode === "ellipsoid")!;
+  const CHAIN = [
+    { x: 0, y: 0 },
+    { x: 2, y: 1 },
+    { x: 1, y: 2 },
+  ];
+  const stateWith = (polytope: Partial<State["polytope"]>) =>
+    ({
+      vertices: CHAIN,
+      objectiveVector: { x: -1, y: 0 },
+      polytope: {
+        kind: "unbounded",
+        lines: [
+          [1, -2, 0],
+          [1, 1, 3],
+        ],
+        vertices: [],
+        inequalities: ["", ""],
+        boundaryRays: [],
+        ...polytope,
+      },
+      solverSettings: {
+        maxitEllipsoid: 100,
+        ellipsoidDeepCuts: true,
+        ellipsoidRayShoot: true,
+        ellipsoidQueryPoint: "chebyshev",
+        ellipsoidInitialScale: 1.5,
+      },
+    }) as unknown as State;
+  const verticesOf = (state: State) => {
+    const request = ellipsoid().buildRequest(state);
+    if (!request || request.solver !== "ellipsoid") throw new Error();
+    return request.vertices;
+  };
+
+  test("an unbounded region is bounded by the drawn chain", () => {
+    expect(verticesOf(stateWith({}))).toEqual([
+      [0, 0],
+      [2, 1],
+      [1, 2],
+    ]);
+  });
+
+  test("a bounded region is bounded by its own vertices", () => {
+    const vertices = [
+      [0, 0],
+      [3, 0],
+      [0, 3],
+    ] as [number, number][];
+    expect(verticesOf(stateWith({ kind: "bounded", vertices }))).toBe(vertices);
   });
 });
