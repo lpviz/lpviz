@@ -83,7 +83,7 @@ export function createResultPresenter(deps: {
         if (windowed && index === headCount) {
           return createResultBlock(
             "iterate-item-nohover",
-            `    ⋯ ${hiddenCount} iterations not shown while rotating`,
+            `    ⋯ ${hiddenCount} iterations not shown while rotating ⋯ `,
           );
         }
         const sourceIndex =
