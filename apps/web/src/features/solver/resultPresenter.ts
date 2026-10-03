@@ -7,7 +7,12 @@ import {
 import type { ResultTextBlock } from "@/features/solver/types";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
+// While the objective rotates the log is re-rendered on every step, so it shows
+// a window of this many rows instead of the whole run: the first rows, a gap
+// marker, then the last rows — so the final iterate, the one the viewport marks
+// as the answer, stays in view instead of the run appearing to end at row 20.
 const ROTATE_ROW_LIMIT = 20;
+const ROTATE_TAIL_ROWS = 8;
 
 type RenderOptions = { limitVirtualRows?: boolean };
 
@@ -67,14 +72,34 @@ export function createResultPresenter(deps: {
     if (payload.type === "virtual") {
       lastVirtualResult = payload;
       const rows = payload.rows;
-      const rowCount = limitVirtualRows
-        ? Math.min(ROTATE_ROW_LIMIT, rows.length)
-        : rows.length;
+      const windowed = limitVirtualRows && rows.length > ROTATE_ROW_LIMIT;
+      const rowCount = windowed ? ROTATE_ROW_LIMIT : rows.length;
+      const headCount = ROTATE_ROW_LIMIT - ROTATE_TAIL_ROWS - 1;
+      const hiddenCount = rows.length - (ROTATE_ROW_LIMIT - 1);
+      // a windowed row keeps its own index, so hovering a tail row still
+      // highlights that iterate on the canvas
+      const blockAt = (index: number): ResultTextBlock | undefined => {
+        if (index < 0 || index >= rowCount) return undefined;
+        if (windowed && index === headCount) {
+          return createResultBlock(
+            "iterate-item-nohover",
+            `    ⋯ ${hiddenCount} iterations not shown while rotating`,
+          );
+        }
+        const sourceIndex =
+          windowed && index > headCount
+            ? rows.length - (rowCount - index)
+            : index;
+        const row = rows.at(sourceIndex);
+        return row === undefined
+          ? undefined
+          : createVirtualBlock(row, sourceIndex);
+      };
       // Rows are fixed-width; sampling three avoids formatting all of them
       // (100k at max settings) just to measure the widest line.
-      const sampleRows =
+      const sampleBlocks =
         rowCount > 0
-          ? [rows.at(0)!, rows.at(rowCount >> 1)!, rows.at(rowCount - 1)!]
+          ? [blockAt(0), blockAt(rowCount >> 1), blockAt(rowCount - 1)]
           : [];
       setState(
         {
@@ -83,20 +108,11 @@ export function createResultPresenter(deps: {
           resultVirtualHeader: payload.header || "",
           resultVirtualFooter: payload.footer ?? null,
           resultVirtualShowEmpty: rowCount === 0,
-          resultVirtualRows: {
-            length: rowCount,
-            at: (index: number) => {
-              if (index >= rowCount) return undefined;
-              const row = rows.at(index);
-              return row === undefined
-                ? undefined
-                : createVirtualBlock(row, index);
-            },
-          },
+          resultVirtualRows: { length: rowCount, at: blockAt },
           resultMaxLineChars: getMaxLineChars([
             payload.header || "",
             ...(payload.footer ? [payload.footer] : []),
-            ...sampleRows.map((r) => formatVirtualResultRow(r)),
+            ...sampleBlocks.flatMap((block) => (block ? [block.text] : [])),
           ]),
           highlightIteratePathIndex: null,
         },
