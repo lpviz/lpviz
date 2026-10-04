@@ -64,11 +64,25 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   const logExpansion = logPanel
     ? createSidebarLogExpansion({ sidebar, content, logPanel })
     : null;
+  // The width a classic scrollbar takes inside the scroll column, which the
+  // stylesheet trades the column's side padding against (see #sidebarContent).
+  // Overlay scrollbars measure 0. Re-measured whenever the column is resized,
+  // which includes the scrollbar appearing or changing width.
+  const syncScrollbarGutter = () => {
+    content.style.setProperty(
+      "--sidebar-gutter",
+      `${content.offsetWidth - content.clientWidth}px`,
+    );
+  };
+  syncScrollbarGutter();
+  const gutterObserver = new ResizeObserver(syncScrollbarGutter);
+  gutterObserver.observe(content);
   return {
     updateWidth: (w: number) => {
       sidebar.style.width = `${w}px`;
     },
     destroy: () => {
+      gutterObserver.disconnect();
       logExpansion?.destroy();
       for (const c of children) c.destroy();
       header.remove();

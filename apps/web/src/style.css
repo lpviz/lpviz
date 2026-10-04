@@ -243,7 +243,6 @@ body {
   left: 0;
   width: 450px;
   height: 100%;
-  padding: 10px;
   box-sizing: border-box;
   background-color: rgba(240, 240, 240, 1);
   border-right: 1px solid #ccc;
@@ -255,6 +254,19 @@ body {
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* The padding lives on the scroll column, not the sidebar, so a classic
+     scrollbar sits flush with the sidebar's edge. --sidebar-gutter is that
+     scrollbar's width, measured by mountSidebar (0 for overlay scrollbars,
+     which take no room). The right padding gives way to it, so the track is
+     the right margin, and the left padding grows to match, so the panels stay
+     centred in the sidebar: 10px each side with overlay scrollbars, the
+     track's width each side with classic ones. */
+  --sidebar-gutter: 0px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  padding-left: max(10px, var(--sidebar-gutter));
+  padding-right: max(0px, calc(10px - var(--sidebar-gutter)));
+  box-sizing: border-box;
   overflow-y: auto;
   overflow-x: hidden;
   min-height: 0;
@@ -950,11 +962,15 @@ body {
     left: 0;
     width: 100vw !important;
     height: var(--mobile-sidebar-height, 42dvh);
-    padding: 8px 10px calc(10px + env(safe-area-inset-bottom, 0));
     border-right: 0;
     border-top: 1px solid #bbb;
     box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.12);
     text-align: center;
+  }
+
+  #sidebarContent {
+    padding-top: 8px;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0));
   }
 
   #sidebarContent .header {
