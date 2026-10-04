@@ -80,7 +80,7 @@ const USAGE_TIP_SECTIONS: UsageTipSection[] = [
       { label: "Share a link", desc: "click the share button" },
       { label: "Snap to grid", desc: "press <kbd>S</kbd>" },
       { label: "Undo / Redo", desc: "<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>" },
-      { label: "Reset", desc: "refresh the page" },
+      { label: "Reset", desc: "click the reset button" },
     ],
   },
   {

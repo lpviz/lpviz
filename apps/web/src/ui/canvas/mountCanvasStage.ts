@@ -54,14 +54,21 @@ export function mountCanvasStage(
   );
   const gallery = mountProblemGallery(main, ctx);
   const zoom = el("div", { id: "zoomControls" });
-  const reset = el("button", { attrs: { title: "Reset Zoom (Home)" } });
-  reset.innerHTML =
+  const home = el("button", { attrs: { title: "Reset Zoom (Home)" } });
+  home.innerHTML =
     '<svg width="25" height="25" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>';
-  reset.addEventListener("click", () => ctx.actions.resetView());
+  home.addEventListener("click", () => ctx.actions.resetView());
   const fit = el("button", { attrs: { title: "Zoom" } });
   fit.innerHTML =
     '<svg width="25" height="25" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><defs><mask id="hole-mask"><rect width="100" height="100" fill="white" /><circle cx="40" cy="40" r="20" fill="black" /></mask></defs><circle cx="40" cy="40" r="32.5" mask="url(#hole-mask)" /><g transform="translate(55,55) rotate(45)"><rect x="0" y="-4" width="52.5" height="15" /></g></svg>';
   fit.addEventListener("click", () => ctx.actions.zoomToFit());
+  const reset = el("button", {
+    id: "resetButton",
+    attrs: { title: "Reset (clear everything)" },
+  });
+  reset.innerHTML =
+    '<svg width="25" height="25" viewBox="0 0 24 24"><path d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" /></svg>';
+  reset.addEventListener("click", () => ctx.actions.reset());
   const toggle3d = el("button", {
     id: "toggle3DButton",
     attrs: { title: "Toggle 3D Mode" },
@@ -95,7 +102,7 @@ export function mountCanvasStage(
     zs,
     zv,
   );
-  zoom.append(reset, fit, toggle3d, share, zc);
+  zoom.append(home, fit, reset, toggle3d, share, zc);
   main.append(zoom);
   const help = mountHelpButton(main);
   const handle = el("div", { id: "sidebarHandle" });

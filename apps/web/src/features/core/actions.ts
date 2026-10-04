@@ -15,6 +15,9 @@ export type AppActions = {
   startRotation: () => void;
   stopRotation: () => void;
   share: () => void;
+  // back to an empty canvas, with every setting at its default, after the
+  // person confirms
+  reset: () => void;
   zoomToFit: () => void;
   resetView: () => void;
   toggle3D: () => void;

@@ -1,6 +1,12 @@
 import type { AppContext } from "@/app/appContext";
 import type { AppActions } from "@/features/core/actions";
-import { ALL_VIEWPORT_DIRTY, setState } from "@/features/core/store";
+import {
+  ALL_VIEWPORT_DIRTY,
+  freshState,
+  getState,
+  on,
+  setState,
+} from "@/features/core/store";
 import { createHistoryService } from "@/features/history/historyService";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
@@ -66,6 +72,25 @@ export function boot(root: HTMLElement) {
     }
   };
 
+  // Run `fn` once the viewport is not mid-transition between 2D and 3D: now if
+  // it is not, otherwise when the running transition completes.
+  const afterViewTransition = (fn: () => void) => {
+    if (!getState().isTransitioning3D) {
+      fn();
+      return;
+    }
+    const controller = new AbortController();
+    on(
+      ["isTransitioning3D"],
+      ({ isTransitioning3D }) => {
+        if (isTransitioning3D) return;
+        controller.abort();
+        fn();
+      },
+      controller.signal,
+    );
+  };
+
   const actions: AppActions = {
     setConstraintHighlight: solver.setConstraintHighlight,
     setIterateHighlight: solver.setIterateHighlight,
@@ -79,6 +104,28 @@ export function boot(root: HTMLElement) {
     stopRotation: solver.stopRotation,
 
     share: share.share,
+    reset: () => {
+      if (
+        !window.confirm(
+          "Reset lpviz? This clears the drawing and every setting.",
+        )
+      )
+        return;
+      // In place rather than by reloading the page, so it works offline.
+      solver.invalidatePendingSolveResults();
+      solver.stopRotation();
+      solver.clearComputedState();
+      setState(freshState(), { viewportDirty: ALL_VIEWPORT_DIRTY });
+      // pan is enabled on an empty canvas; the first vertex placed turns it
+      // off until the region is finished
+      canvasManager?.set2DPanEnabled(true);
+      const { is3DMode, isTransitioning3D } = getState();
+      if (is3DMode && !isTransitioning3D) viewport.toggle3D();
+      afterViewTransition(() => {
+        viewport.resetView();
+        canvasManager?.draw();
+      });
+    },
 
     zoomToFit: viewport.zoomToFit,
     resetView: viewport.resetView,

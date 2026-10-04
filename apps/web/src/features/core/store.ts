@@ -334,60 +334,94 @@ export type State = {
   isNavigatingViewport: boolean;
 };
 
+// The fields a reset leaves alone: the 3D view and its transition, which the
+// transition controller owns (a reset in 3D mode asks it to return to 2D rather
+// than flipping these itself), plus the two that mirror something outside the
+// store — whether the viewport is mid-navigation, and the trace capacity the
+// rotation controller derives from the angle step.
+type ViewAndRuntimeState = Pick<
+  State,
+  | "is3DMode"
+  | "viewAngle"
+  | "isTransitioning3D"
+  | "transitionStartTime"
+  | "transition3DStartAngles"
+  | "transition3DEndAngles"
+  | "transitionDirection"
+  | "transitionProgress"
+  | "isNavigatingViewport"
+  | "maxTraceCount"
+>;
+
+export type FreshState = Omit<State, keyof ViewAndRuntimeState>;
+
+/**
+ * The starting values of everything else: the problem, its solve and the
+ * result panel, the editor, the solver mode and settings, undo history,
+ * snapping and the trace. Fresh objects every call, so a reset never shares
+ * an array or settings object with the state it replaces. The initial state
+ * is built from it, so the two cannot drift apart.
+ */
+export function freshState(): FreshState {
+  return {
+    vertices: [],
+    completionMode: "draft",
+    interiorPoint: null,
+    polytope: null,
+    inequalitiesMessage: null,
+    resultDisplayMode: "usage",
+    resultBlocks: null,
+    resultVirtualHeader: null,
+    resultVirtualFooter: null,
+    resultVirtualShowEmpty: false,
+    resultVirtualRows: [],
+    resultMaxLineChars: 0,
+
+    objectiveVector: null,
+    currentObjective: null,
+    objectiveHidden: false,
+
+    solverMode: "central",
+    solverSettings: { ...DEFAULT_SOLVER_SETTINGS },
+    solverStartPoint: null,
+    iteratePath: EMPTY_ITERATE_PATH,
+    iterateEllipsoids: null,
+    iterateLocalizingSets: null,
+    iteratePhases: [],
+    highlightIteratePathIndex: null,
+    rotateObjectiveMode: false,
+    replayActive: false,
+    originalIteratePath: EMPTY_ITERATE_PATH,
+    originalIteratePhases: [],
+    iterateRestartIndices: [],
+    iterateObjectiveVector: null,
+    originalIterateObjectiveVector: null,
+
+    snapToGrid: false,
+    highlightIndex: null,
+    editorInteraction: { kind: "idle" },
+    lastCompletedInteraction: "none",
+
+    historyStack: [],
+    redoStack: [],
+
+    zScale: DEFAULT_Z_SCALE,
+
+    traceEnabled: false,
+    traceBuffer: [],
+  };
+}
+
 const initialState: State = {
-  vertices: [],
-  completionMode: "draft",
-  interiorPoint: null,
-  polytope: null,
-  inequalitiesMessage: null,
-  resultDisplayMode: "usage",
-  resultBlocks: null,
-  resultVirtualHeader: null,
-  resultVirtualFooter: null,
-  resultVirtualShowEmpty: false,
-  resultVirtualRows: [],
-  resultMaxLineChars: 0,
-
-  objectiveVector: null,
-  currentObjective: null,
-  objectiveHidden: false,
-
-  solverMode: "central",
-  solverSettings: { ...DEFAULT_SOLVER_SETTINGS },
-  solverStartPoint: null,
-  iteratePath: EMPTY_ITERATE_PATH,
-  iterateEllipsoids: null,
-  iterateLocalizingSets: null,
-  iteratePhases: [],
-  highlightIteratePathIndex: null,
-  rotateObjectiveMode: false,
-  replayActive: false,
-  originalIteratePath: EMPTY_ITERATE_PATH,
-  originalIteratePhases: [],
-  iterateRestartIndices: [],
-  iterateObjectiveVector: null,
-  originalIterateObjectiveVector: null,
-
-  snapToGrid: false,
-  highlightIndex: null,
-  editorInteraction: { kind: "idle" },
-  lastCompletedInteraction: "none",
-
-  historyStack: [],
-  redoStack: [],
-
+  ...freshState(),
   is3DMode: false,
   viewAngle: { ...DEFAULT_VIEW_ANGLE },
-  zScale: DEFAULT_Z_SCALE,
   isTransitioning3D: false,
   transitionStartTime: 0,
   transition3DStartAngles: { x: 0, y: 0, z: 0 },
   transition3DEndAngles: { ...DEFAULT_VIEW_ANGLE },
   transitionDirection: null,
   transitionProgress: 0,
-
-  traceEnabled: false,
-  traceBuffer: [],
   maxTraceCount: 0,
   isNavigatingViewport: false,
 };
