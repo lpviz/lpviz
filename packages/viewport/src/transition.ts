@@ -1,9 +1,9 @@
-import { Euler, PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
+import { Euler, Vector3 } from "three";
 
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
-import { getPerspectiveDistanceFromSnapshot3D } from "./projection3d";
+import { getPerspectiveDistanceFromSnapshot3D, projectCanvasPointToWorldPlane } from "./projection3d";
 import { getViewportSize, orthographicFor, type ViewportDirtyFlags, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type ViewportTransitionPlan = {
@@ -50,14 +50,8 @@ const transitionEuler = new Euler();
 const transitionDirection = new Vector3();
 const transitionPosition = new Vector3();
 const transitionUp = new Vector3();
-const projectionCamera = new PerspectiveCamera();
-const projectionTarget = new Vector3();
-const projectionPlaneNormal = new Vector3(0, 0, 1);
-const projectionPlanePoint = new Vector3();
-const projectionPlane = new Plane(projectionPlaneNormal, 0);
-const projectionRaycaster = new Raycaster();
-const projectionPointerNdc = new Vector2();
-const projectionPointerWorld = new Vector3();
+
+export { projectCanvasPointToWorldPlane };
 
 export function getPerspectiveDistanceForUnitsPerPixel(snapshot: ViewportRenderSnapshot, unitsPerPixel: number, height = snapshot.height || 1) {
   const fov = snapshot.perspective.fov * (Math.PI / 180);
@@ -210,41 +204,6 @@ export function getViewportVisibleCenterCanvasPoint(rect: ViewportRect, sidebarW
     x: sidebarWidth + (width - sidebarWidth) / 2,
     y: height / 2,
   };
-}
-
-export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, z = 0): PointXY | null {
-  const { width, height } = getViewportSize(snapshot, rect);
-  if (width === 0 || height === 0) {
-    return null;
-  }
-
-  projectionCamera.fov = snapshot.perspective.fov;
-  projectionCamera.aspect = snapshot.perspective.aspect;
-  projectionCamera.near = snapshot.perspective.near;
-  projectionCamera.far = snapshot.perspective.far;
-  projectionCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
-  projectionCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
-  projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
-  projectionCamera.lookAt(projectionTarget);
-  projectionCamera.updateMatrixWorld();
-  projectionCamera.updateProjectionMatrix();
-
-  projectionPointerNdc.set((point.x / width) * 2 - 1, -((point.y / height) * 2 - 1));
-  projectionRaycaster.setFromCamera(projectionPointerNdc, projectionCamera);
-  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal, projectionPlanePoint.set(0, 0, z));
-
-  // Guard: near-parallel ray produces an intersection point billions of units
-  // away. Check the denominator (ray · plane.normal) before intersecting.
-  const dotXY = Math.abs(projectionRaycaster.ray.direction.z);
-  if (dotXY < 0.08) {
-    return null;
-  }
-
-  const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
-  if (!hit || !Number.isFinite(projectionPointerWorld.x) || !Number.isFinite(projectionPointerWorld.y)) {
-    return null;
-  }
-  return { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
 }
 
 function buildViewport2DStateFromVisibleCenter(visibleCenter: PointXY, scaleFactor: number, gridSpacing: number): Viewport2DState {

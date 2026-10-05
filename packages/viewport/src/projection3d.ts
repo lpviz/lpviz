@@ -1,6 +1,6 @@
 import { PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type Viewport3DInteractionOptions = {
@@ -20,15 +20,16 @@ const MAX_3D_PLANE_SLOPE = 2;
 // Ray-plane denominator threshold: if |ray · normal| < this, the ray is nearly
 // parallel to the plane and the intersection point is too far away to be useful.
 const PLANE_PARALLEL_THRESHOLD = 0.08;
+const Z_PLANE_NORMAL: PointXYZ = { x: 0, y: 0, z: 1 };
 
 const projectionCamera = new PerspectiveCamera();
 const projectionTarget = new Vector3();
 const projectionRaycaster = new Raycaster();
 const projectionPointerNdc = new Vector2();
 const projectionPointerWorld = new Vector3();
-const projectionPlaneNormal = new Vector3(0, 0, 1);
-const projectionPlanePoint = new Vector3(0, 0, 0);
-const projectionPlane = new Plane(projectionPlaneNormal, 0);
+const projectionPlaneNormal = new Vector3();
+const projectionPlanePoint = new Vector3();
+const projectionPlane = new Plane();
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
 
@@ -122,56 +123,33 @@ export function getObjectiveScreenPosition3D(snapshot: ViewportRenderSnapshot, r
   });
 }
 
-export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: Viewport3DInteractionOptions): PointXY {
+// Where the ray through canvas-space `point` meets the plane, or null when the
+// ray is near-parallel to it (the hit would be billions of units away: test
+// the denominator ray · normal first), misses it, or hits at a non-finite
+// point.
+function intersectCanvasRayWithPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, normal: PointXYZ, coplanarPoint: PointXYZ): PointXY | null {
   const { width, height } = getViewportSize(snapshot, rect);
-  if (width === 0 || height === 0) {
-    return snapPoint(
-      {
-        x: snapshot.target.x,
-        y: snapshot.target.y,
-      },
-      options.snapToGrid,
-    );
+  projectionRaycaster.setFromCamera(projectionPointerNdc.set((point.x / width) * 2 - 1, -((point.y / height) * 2 - 1)), configurePerspectiveCameraFromSnapshot(snapshot));
+  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.set(normal.x, normal.y, normal.z), projectionPlanePoint.set(coplanarPoint.x, coplanarPoint.y, coplanarPoint.z));
+  if (Math.abs(projectionRaycaster.ray.direction.dot(projectionPlane.normal)) < PLANE_PARALLEL_THRESHOLD) return null;
+  const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+  return hit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y) ? { x: projectionPointerWorld.x, y: projectionPointerWorld.y } : null;
+}
+
+export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, z = 0): PointXY | null {
+  return intersectCanvasRayWithPlane(snapshot, rect, point, Z_PLANE_NORMAL, { x: 0, y: 0, z });
+}
+
+export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: Viewport3DInteractionOptions): PointXY {
+  let point = projectCanvasPointToWorldPlane(snapshot, rect, { x, y });
+  if (!point && options.viewAnchor3D) {
+    // Fallback: the view-aligned plane through the drag anchor. It is always
+    // well-conditioned because its normal points toward the camera, so the
+    // ray can never be parallel to it for reasonable FOVs.
+    const viewDir = projectionViewDir
+      .set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z)
+      .normalize();
+    point = intersectCanvasRayWithPlane(snapshot, rect, { x, y }, viewDir, options.viewAnchor3D);
   }
-
-  configurePerspectiveCameraFromSnapshot(snapshot);
-
-  projectionPointerNdc.set((x / width) * 2 - 1, -((y / height) * 2 - 1));
-  projectionRaycaster.setFromCamera(projectionPointerNdc, projectionCamera);
-
-  projectionPlaneNormal.set(0, 0, 1);
-  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal, projectionPlanePoint.set(0, 0, 0));
-
-  const dotTilted = projectionRaycaster.ray.direction.dot(projectionPlane.normal);
-  let point: PointXY | null = null;
-
-  if (Math.abs(dotTilted) >= PLANE_PARALLEL_THRESHOLD) {
-    const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
-    if (hit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
-      point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
-    }
-  }
-
-  if (!point) {
-    // First fallback: view-aligned plane through the drag anchor.
-    // This plane is always well-conditioned because its normal points toward
-    // the camera — the ray can never be parallel to it for reasonable FOVs.
-    if (options.viewAnchor3D) {
-      projectionViewDir.set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z).normalize();
-      projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.copy(projectionViewDir), projectionPlanePoint.set(options.viewAnchor3D.x, options.viewAnchor3D.y, options.viewAnchor3D.z));
-      const dotView = projectionRaycaster.ray.direction.dot(projectionPlane.normal);
-      if (Math.abs(dotView) >= PLANE_PARALLEL_THRESHOLD) {
-        const viewHit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
-        if (viewHit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
-          point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
-        }
-      }
-    }
-
-    if (!point) {
-      point = { x: snapshot.target.x, y: snapshot.target.y };
-    }
-  }
-
-  return snapPoint(clamp3DInteractionPoint(point, snapshot, rect, options), options.snapToGrid);
+  return snapPoint(clamp3DInteractionPoint(point ?? { x: snapshot.target.x, y: snapshot.target.y }, snapshot, rect, options), options.snapToGrid);
 }

@@ -3,14 +3,8 @@ import { Euler, Vector3 } from "three";
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
-import { configurePerspectiveCameraFromSnapshot, getPerspectiveDistanceFromSnapshot3D } from "./projection3d";
-import {
-  buildPerspectivePoseFromViewAngle,
-  getPerspectiveDistanceForUnitsPerPixel,
-  getScaleFactorFromPerspectiveDistance,
-  getViewportVisibleCenterCanvasPoint,
-  projectCanvasPointToWorldPlane,
-} from "./transition";
+import { configurePerspectiveCameraFromSnapshot, getPerspectiveDistanceFromSnapshot3D, projectCanvasPointToWorldPlane } from "./projection3d";
+import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getScaleFactorFromPerspectiveDistance, getViewportVisibleCenterCanvasPoint } from "./transition";
 import { getViewportSize, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 type ViewportZBounds = {
