@@ -3,39 +3,24 @@ import { getState, type ViewportDirtyFlags } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Camera, Scene, WebGLRenderer } from "three";
 import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
-import type { ImpostorResult, ImpostorStrategy } from "./ImpostorStrategy";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
 import { LayerHost } from "./LayerHost";
 import type { SceneContext } from "./SceneContext";
-import { TracePassImpostor } from "./TracePassImpostor";
+import { Trace3DCompositor } from "./Trace3DCompositor";
+import { TraceCache } from "./TraceCache";
 
 type Size = { width: number; height: number; dpr: number };
 
-type RenderScenes = Record<RenderPassName, Scene>;
-
 export class SceneManager {
-  readonly scenes: RenderScenes = {
-    background: new Scene(),
-    transparent: new Scene(),
-    foreground: new Scene(),
-    vertices: new Scene(),
-    traceLines: new Scene(),
-    trace: new Scene(),
-    overlay: new Scene(),
-  };
+  readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   readonly layerHost = new LayerHost();
-  private traceImpostor = new TracePassImpostor(
-    () => this.invalidate({ layers: false }),
-    () => [this.scenes.transparent, this.scenes.foreground],
-  );
-  // per-pass render substitutions; only the trace pass has one today
-  private impostors: Partial<Record<RenderPassName, ImpostorStrategy>> = {
-    traceLines: this.traceImpostor,
-  };
-  // reused across frames so the render loop allocates no Map per frame; holds
-  // each impostor's prepared result between the prepare pass and the draw pass
-  private readonly substitutions = new Map<RenderPassName, ImpostorResult>();
+  // The trace-lines pass renders through an impostor when one applies: in 2D
+  // a world-anchored accumulation cache (so neither camera motion nor a trace
+  // append re-renders baked chunks); while the 3D view is in motion a
+  // single-sample offscreen composite instead of the MSAA canvas.
+  private traceCache = new TraceCache(() => this.invalidate({ layers: false }));
+  private trace3D = new Trace3DCompositor(() => this.invalidate({ layers: false }));
 
   private camera: Camera | null = null;
   private dirty = true;
@@ -163,7 +148,8 @@ export class SceneManager {
         // chunk sequence numbers, so trace/iterate dirt needs no cache flush
       } else {
         this.layersDirty = "all";
-        this.traceImpostor.markContentDirty();
+        // a flagless invalidate (e.g. layer-content change) must drop the bake
+        this.traceCache.markContentDirty();
       }
     }
     this.dirty = true;
@@ -223,7 +209,8 @@ export class SceneManager {
     this.unsubscribeCurrentMouse = null;
 
     this.layerHost.dispose();
-    this.traceImpostor.dispose();
+    this.traceCache.dispose();
+    this.trace3D.dispose();
     for (const scene of Object.values(this.scenes)) {
       for (const child of [...scene.children]) {
         scene.remove(child);
@@ -236,36 +223,31 @@ export class SceneManager {
   private renderScenes(camera: Camera): void {
     this.renderer.clear();
     this.renderer.autoClear = false;
-    // Prepare all impostors first: their offscreen baking (cache rebuild, 3D
-    // depth pre-pass) must run before any canvas pass renders, or a mid-loop
-    // render-target switch drops the composited result.
-    const substitutions = this.substitutions;
-    substitutions.clear();
+    // The trace impostors bake offscreen (cache rebuild, 3D depth pre-pass)
+    // before any canvas pass renders, or a mid-loop render-target switch would
+    // drop the composited result. The cache wins when it applies; the 3D
+    // compositor is consulted only for a pass that has something to draw.
+    const traceLines = this.scenes.traceLines;
+    const cached = this.traceCache.prepare(this.renderer, traceLines);
+    const composited = cached || nothingVisible(traceLines) ? null : this.trace3D.prepare(this.renderer, camera, traceLines, [this.scenes.transparent, this.scenes.foreground]);
     for (const pass of RENDER_PASSES) {
-      const impostor = this.impostors[pass];
-      if (impostor) {
-        substitutions.set(pass, impostor.prepare(this.renderer, camera, this.scenes[pass]));
+      let scene = this.scenes[pass];
+      let passCamera = camera;
+      if (pass === "traceLines" && cached) {
+        scene = cached;
+      } else if (pass === "traceLines" && composited) {
+        scene = composited;
+        passCamera = this.trace3D.camera;
       }
-    }
-    for (const pass of RENDER_PASSES) {
-      if (substitutions.has(pass)) {
-        const result = substitutions.get(pass);
-        if (result === "skip") continue;
-        if (result) {
-          this.renderer.render(result.scene, result.camera);
-          continue;
-        }
-      }
-      const scene = this.scenes[pass];
-      if (scene.children.length === 0 || scene.children.every(isHidden)) {
+      if (nothingVisible(scene)) {
         continue;
       }
-      this.renderer.render(scene, camera);
+      this.renderer.render(scene, passCamera);
     }
     this.renderer.autoClear = true;
   }
 }
 
-function isHidden(object: { visible: boolean }): boolean {
-  return !object.visible;
+function nothingVisible(scene: Scene): boolean {
+  return scene.children.every((child) => !child.visible);
 }
