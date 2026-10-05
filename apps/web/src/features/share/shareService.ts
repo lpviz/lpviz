@@ -1,4 +1,4 @@
-import { getSnapshot, getState, type SolverMode } from "@/features/core/store";
+import { getState, type SolverMode } from "@/features/core/store";
 import { encodeSharedState } from "@/features/share/compactUrl";
 import type { ShareSettings } from "@/features/share/sharedState";
 import type { SolverControl } from "@/features/solver/solverControls";
@@ -14,7 +14,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
     };
   };
   const share = () => {
-    const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getSnapshot();
+    const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getState();
     // base64url only, so the whole link survives being pasted into chat,
     // email or a paper without a linkifier clipping its tail
     const encoded = encodeSharedState({

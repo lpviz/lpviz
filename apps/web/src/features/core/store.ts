@@ -398,141 +398,109 @@ type Listener = () => void;
 type StateValues<K extends keyof State> = { [P in K]: State[P] };
 type MetaListener = (meta?: StateChangeMeta) => void;
 
-class LpvizStore {
-  private values: State;
-  private listeners = new Map<keyof State, Listener[]>();
-  private metaListeners: MetaListener[] = [];
-  private pending: Listener[] = [];
-
-  constructor(initialValues: State) {
-    this.values = initialValues;
-  }
-
-  getState(): Readonly<State> {
-    return this.values;
-  }
-
-  getSnapshot(): State {
-    return { ...this.values };
-  }
-
-  patch(partial: Partial<State>, meta?: StateChangeMeta): void {
-    const changedKeys: (keyof State)[] = [];
-    let nextValues: State | null = null;
-
-    for (const rawKey in partial) {
-      const key = rawKey as keyof State;
-      const value = partial[key];
-      if (Object.is(this.values[key], value)) continue;
-      nextValues ??= { ...this.values };
-      (nextValues as Record<keyof State, State[keyof State]>)[key] = value as State[keyof State];
-      changedKeys.push(key);
-    }
-
-    if (nextValues) {
-      this.values = nextValues;
-      for (const key of changedKeys) {
-        const ls = this.listeners.get(key);
-        if (!ls) continue;
-        for (let i = 0; i < ls.length; i++) ls[i]!();
-      }
-      this.flush();
-    }
-
-    // viewportDirty is the union of what the changed fields imply and anything
-    // the caller passed explicitly (see FIELD_DIRTY)
-    const derived = nextValues ? deriveViewportDirty(this.values, changedKeys) : null;
-    if (meta === undefined && derived === null) return;
-    let merged: StateChangeMeta = meta ?? {};
-    if (derived !== null) {
-      merged = {
-        ...merged,
-        viewportDirty: { ...merged.viewportDirty, ...derived },
-      };
-    }
-    const listeners = this.metaListeners.slice();
-    for (let i = 0; i < listeners.length; i++) listeners[i]!(merged);
-  }
-
-  on<K extends keyof State>(keys: readonly K[], fn: (values: StateValues<K>) => void, signal: AbortSignal): void {
-    if (signal.aborted) return;
-
-    let scheduled = false;
-    const flush = () => {
-      scheduled = false;
-      const snap = {} as StateValues<K>;
-      for (const key of keys) snap[key] = this.values[key];
-      fn(snap);
-    };
-    const handler = () => {
-      if (scheduled) return;
-      scheduled = true;
-      this.pending.push(flush);
-    };
-
-    for (const key of keys) {
-      const ls = this.listeners.get(key);
-      if (ls) ls.push(handler);
-      else this.listeners.set(key, [handler]);
-    }
-
-    signal.addEventListener(
-      "abort",
-      () => {
-        for (const key of keys) {
-          const ls = this.listeners.get(key);
-          if (!ls) continue;
-          const index = ls.indexOf(handler);
-          if (index >= 0) ls.splice(index, 1);
-          if (ls.length === 0) this.listeners.delete(key);
-        }
-      },
-      { once: true },
-    );
-  }
-
-  onMeta(fn: MetaListener, signal: AbortSignal): void {
-    if (signal.aborted) return;
-    this.metaListeners.push(fn);
-    signal.addEventListener(
-      "abort",
-      () => {
-        const index = this.metaListeners.indexOf(fn);
-        if (index >= 0) this.metaListeners.splice(index, 1);
-      },
-      { once: true },
-    );
-  }
-
-  private flush(): void {
-    while (this.pending.length > 0) {
-      const pending = this.pending;
-      this.pending = [];
-      for (let i = 0; i < pending.length; i++) pending[i]!();
-    }
-  }
-}
-
-const lpvizStore = new LpvizStore(initialState);
+let values: State = initialState;
+const listeners = new Map<keyof State, Listener[]>();
+const metaListeners: MetaListener[] = [];
+let pending: Listener[] = [];
 
 export function getState(): Readonly<State> {
-  return lpvizStore.getState();
+  return values;
 }
 
-export function getSnapshot(): State {
-  return lpvizStore.getSnapshot();
+function flush(): void {
+  while (pending.length > 0) {
+    const batch = pending;
+    pending = [];
+    for (let i = 0; i < batch.length; i++) batch[i]!();
+  }
 }
 
-export function setState(patch: Partial<State>, meta?: StateChangeMeta): void {
-  lpvizStore.patch(patch, meta);
+export function setState(partial: Partial<State>, meta?: StateChangeMeta): void {
+  const changedKeys: (keyof State)[] = [];
+  let nextValues: State | null = null;
+
+  for (const rawKey in partial) {
+    const key = rawKey as keyof State;
+    const value = partial[key];
+    if (Object.is(values[key], value)) continue;
+    nextValues ??= { ...values };
+    (nextValues as Record<keyof State, State[keyof State]>)[key] = value as State[keyof State];
+    changedKeys.push(key);
+  }
+
+  if (nextValues) {
+    values = nextValues;
+    for (const key of changedKeys) {
+      const ls = listeners.get(key);
+      if (!ls) continue;
+      for (let i = 0; i < ls.length; i++) ls[i]!();
+    }
+    flush();
+  }
+
+  // viewportDirty is the union of what the changed fields imply and anything
+  // the caller passed explicitly (see FIELD_DIRTY)
+  const derived = nextValues ? deriveViewportDirty(values, changedKeys) : null;
+  if (meta === undefined && derived === null) return;
+  let merged: StateChangeMeta = meta ?? {};
+  if (derived !== null) {
+    merged = {
+      ...merged,
+      viewportDirty: { ...merged.viewportDirty, ...derived },
+    };
+  }
+  const metaBatch = metaListeners.slice();
+  for (let i = 0; i < metaBatch.length; i++) metaBatch[i]!(merged);
 }
 
 export function on<K extends keyof State>(keys: readonly K[], fn: (values: StateValues<K>) => void, signal: AbortSignal): void {
-  lpvizStore.on(keys, fn, signal);
+  if (signal.aborted) return;
+
+  let scheduled = false;
+  const run = () => {
+    scheduled = false;
+    const snap = {} as StateValues<K>;
+    for (const key of keys) snap[key] = values[key];
+    fn(snap);
+  };
+  const handler = () => {
+    if (scheduled) return;
+    scheduled = true;
+    pending.push(run);
+  };
+
+  for (const key of keys) {
+    const ls = listeners.get(key);
+    if (ls) ls.push(handler);
+    else listeners.set(key, [handler]);
+  }
+
+  signal.addEventListener(
+    "abort",
+    () => {
+      for (const key of keys) {
+        const ls = listeners.get(key);
+        if (!ls) continue;
+        const index = ls.indexOf(handler);
+        if (index >= 0) ls.splice(index, 1);
+        if (ls.length === 0) listeners.delete(key);
+      }
+    },
+    { once: true },
+  );
 }
 
-export function onMeta(fn: (meta?: StateChangeMeta) => void, signal: AbortSignal): void {
-  lpvizStore.onMeta(fn, signal);
+export function onMeta(fn: MetaListener, signal: AbortSignal): void {
+  if (signal.aborted) return;
+  metaListeners.push(fn);
+  signal.addEventListener(
+    "abort",
+    () => {
+      const index = metaListeners.indexOf(fn);
+      if (index >= 0) metaListeners.splice(index, 1);
+    },
+    { once: true },
+  );
 }
 
 export function computeDrawingPhase(state: State): DrawingPhase {
@@ -673,14 +641,9 @@ export function flattenIteratesToPath(iteratesArray: Float64Array[]): IteratePat
 }
 
 function appendedTraceBuffer(state: State, path: IteratePath, objectiveSnapshot: PointXY | null): TraceEntry[] {
-  // The trace chunk shares the iterate path's flat buffer (one object, no copy).
-  const entry: TraceEntry = {
-    points: path.points,
-    count: path.count,
-    stride: path.stride,
-    objectiveVector: snapshotObjectiveVector(objectiveSnapshot),
-  };
-  const raw = [...state.traceBuffer, entry];
+  // The trace chunk shares the iterate path's flat buffer (one object, no copy)
+  // and the caller's objective snapshot, which nothing mutates in place.
+  const raw: TraceEntry[] = [...state.traceBuffer, { ...path, objectiveVector: objectiveSnapshot }];
   return raw.length > state.maxTraceCount ? raw.slice(raw.length - state.maxTraceCount) : raw;
 }
 
