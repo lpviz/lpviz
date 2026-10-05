@@ -298,3 +298,28 @@ describe("VRep.findEdgeNearPoint", () => {
     expect(rep.findEdgeNearPoint({ x: 0, y: 0 }, 0.5)).toBeNull();
   });
 });
+
+describe("boundaryDirections", () => {
+  // hasNontrivialRecessionDirection used Math.hypot(A, B) and
+  // isObjectiveDirectionUnbounded used Math.hypot(-B, A) before they shared
+  // one helper; the share is sound only if both forms, and the candidate
+  // tuples built from them, agree bit for bit.
+  test("Math.hypot(A, B) and Math.hypot(-B, A) agree bit for bit over 10,000 random inputs", () => {
+    let seed = 12345;
+    const next = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+    const magnitudes = [1, 1e-3, 1e3, 1e-150, 1e150, 1e-310, 1e308];
+    const sample = (i: number, zeroEvery: number) => (i % zeroEvery === 0 ? 0 : (next() * 2 - 1) * magnitudes[Math.floor(next() * magnitudes.length)]!);
+    for (let i = 0; i < 10000; i++) {
+      const A = sample(i, 7);
+      const B = sample(i, 11);
+      const n1 = Math.hypot(A, B);
+      const dx = -B;
+      const dy = A;
+      const n2 = Math.hypot(dx, dy);
+      expect(Object.is(n1, n2)).toBe(true);
+      const recession = [-B / n1, A / n1, B / n1, -A / n1];
+      const objective = [dx / n2, dy / n2, -dx / n2, -dy / n2];
+      for (let k = 0; k < 4; k++) expect(Object.is(recession[k], objective[k])).toBe(true);
+    }
+  });
+});

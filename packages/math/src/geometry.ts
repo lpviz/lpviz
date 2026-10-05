@@ -1,4 +1,4 @@
-import type { Lines, PointXY, Vertices } from "./types";
+import type { Line, Lines, PointXY, Vertices } from "./types";
 
 export interface BoundingBox {
   minX: number;
@@ -70,8 +70,8 @@ export function isConvexPolygon(points: ReadonlyArray<PointXY>, tol = 1e-9): boo
   return isConvexSequence(points, true, tol);
 }
 
-export function centroid(vertices: Vertices) {
-  if (vertices.length === 0) throw new Error("No intersections found");
+export function centroid(vertices: Vertices, emptyMessage = "No intersections found") {
+  if (vertices.length === 0) throw new Error(emptyMessage);
   let sumX = 0;
   let sumY = 0;
   for (const p of vertices) {
@@ -115,20 +115,8 @@ export class VRep {
   }
 
   centroidPoint(): PointXY {
-    if (this.points.length === 0) {
-      throw new Error("Cannot compute centroid of empty polytope");
-    }
-
-    let sumX = 0;
-    let sumY = 0;
-    for (const pt of this.points) {
-      sumX += pt.x;
-      sumY += pt.y;
-    }
-    return {
-      x: sumX / this.points.length,
-      y: sumY / this.points.length,
-    };
+    const [x, y] = centroid(this.toVertices(), "Cannot compute centroid of empty polytope");
+    return { x, y };
   }
 
   isConvex(tol = 1e-9): boolean {
@@ -250,6 +238,14 @@ function satisfiesLines(point: [number, number], lines: Lines, tol = 1e-6): bool
   return lines.every(([A, B, C]) => A * point[0] + B * point[1] <= C + tol);
 }
 
+// Where two constraint lines cross, or null when they are parallel within
+// tol. The expression order is part of the solvers' input; keep it.
+function intersectLines([A1, B1, C1]: Line, [A2, B2, C2]: Line, tol: number): [number, number] | null {
+  const det = A1 * B2 - A2 * B1;
+  if (Math.abs(det) < tol) return null;
+  return [(C1 * B2 - C2 * B1) / det, (A1 * C2 - A2 * C1) / det];
+}
+
 export function findFeasiblePoint(lines: Lines, tol = 1e-6): [number, number] | null {
   if (lines.length === 0) {
     return null;
@@ -260,19 +256,11 @@ export function findFeasiblePoint(lines: Lines, tol = 1e-6): [number, number] | 
   for (let i = 0; i < lines.length; i++) {
     const [A, B, C] = lines[i];
     const basePoint: [number, number] = [A * C, B * C];
-    const inwardSteps = [1, 10, 100];
     candidates.push(basePoint);
-    inwardSteps.forEach((step) => {
-      candidates.push([basePoint[0] - A * step, basePoint[1] - B * step]);
-    });
-
+    for (const step of [1, 10, 100]) candidates.push([basePoint[0] - A * step, basePoint[1] - B * step]);
     for (let j = i + 1; j < lines.length; j++) {
-      const [A2, B2, C2] = lines[j];
-      const det = A * B2 - A2 * B;
-      if (Math.abs(det) < tol) continue;
-      const x = (C * B2 - C2 * B) / det;
-      const y = (A * C2 - A2 * C) / det;
-      candidates.push([x, y]);
+      const point = intersectLines(lines[i], lines[j], tol);
+      if (point) candidates.push(point);
     }
   }
 
@@ -290,7 +278,8 @@ export function findStrictFeasiblePoint(lines: Lines, tol = 1e-6): [number, numb
   if (!feasiblePoint) {
     return null;
   }
-  if (lines.every(([A, B, C]) => A * feasiblePoint[0] + B * feasiblePoint[1] < C - tol)) {
+  const strictlyInside = (p: [number, number]) => lines.every(([A, B, C]) => A * p[0] + B * p[1] < C - tol);
+  if (strictlyInside(feasiblePoint)) {
     return feasiblePoint;
   }
 
@@ -300,7 +289,7 @@ export function findStrictFeasiblePoint(lines: Lines, tol = 1e-6): [number, numb
     for (let i = 0; i < directions; i++) {
       const angle = (2 * Math.PI * i) / directions;
       const candidate: [number, number] = [feasiblePoint[0] + radius * Math.cos(angle), feasiblePoint[1] + radius * Math.sin(angle)];
-      if (lines.every(([A, B, C]) => A * candidate[0] + B * candidate[1] < C - tol)) {
+      if (strictlyInside(candidate)) {
         return candidate;
       }
     }
@@ -309,24 +298,22 @@ export function findStrictFeasiblePoint(lines: Lines, tol = 1e-6): [number, numb
   return null;
 }
 
-function hasNontrivialRecessionDirection(lines: Lines, tol = 1e-6): boolean {
-  // The recession cone {d : A·d <= 0} of a 2D region is nontrivial iff some
-  // direction perpendicular to a constraint normal satisfies every constraint
-  // (any extreme ray of the cone lies on the boundary of some half-plane).
+// The unit directions along each constraint boundary, both ways; every
+// extreme ray of the recession cone {d : A·d <= 0} lies along one of them.
+function boundaryDirections(lines: Lines, tol: number): Array<[number, number]> {
+  const directions: Array<[number, number]> = [];
   for (const [A, B] of lines) {
     const norm = Math.hypot(A, B);
     if (norm <= tol) continue;
-    const candidates: Array<[number, number]> = [
-      [-B / norm, A / norm],
-      [B / norm, -A / norm],
-    ];
-    for (const [dx, dy] of candidates) {
-      if (lines.every(([A2, B2]) => A2 * dx + B2 * dy <= tol)) {
-        return true;
-      }
-    }
+    directions.push([-B / norm, A / norm], [B / norm, -A / norm]);
   }
-  return false;
+  return directions;
+}
+
+function hasNontrivialRecessionDirection(lines: Lines, tol = 1e-6): boolean {
+  // The recession cone of a 2D region is nontrivial iff one of its boundary
+  // directions satisfies every constraint.
+  return boundaryDirections(lines, tol).some(([dx, dy]) => lines.every(([A2, B2]) => A2 * dx + B2 * dy <= tol));
 }
 
 export function classifyRegion(lines: Lines, vertices: Vertices): RegionKind {
@@ -354,18 +341,8 @@ export function verticesFromLines(lines: Lines, tol = 1e-6): Vertices {
 
   for (let i = 0; i < n - 1; i++) {
     for (let j = i + 1; j < n; j++) {
-      const [A1, B1, C1] = lines[i];
-      const [A2, B2, C2] = lines[j];
-      const det = A1 * B2 - A2 * B1;
-      if (Math.abs(det) < tol) continue;
-
-      const x = (C1 * B2 - C2 * B1) / det;
-      const y = (A1 * C2 - A2 * C1) / det;
-
-      const satisfiesAll = lines.every(([A, B, C]) => A * x + B * y <= C + tol);
-      if (satisfiesAll) {
-        intersections.push([x, y]);
-      }
+      const point = intersectLines(lines[i], lines[j], tol);
+      if (point && satisfiesLines(point, lines, tol)) intersections.push(point);
     }
   }
 
@@ -407,55 +384,34 @@ export function buildOpenBoundaryRays(points: Vertices): BoundaryRay[] {
   const last = points[points.length - 1];
 
   return [
-    {
-      start: [first[0], first[1]],
-      direction: [first[0] - second[0], first[1] - second[1]],
-    },
-    {
-      start: [last[0], last[1]],
-      direction: [last[0] - penultimate[0], last[1] - penultimate[1]],
-    },
+    { start: [first[0], first[1]], direction: [first[0] - second[0], first[1] - second[1]] },
+    { start: [last[0], last[1]], direction: [last[0] - penultimate[0], last[1] - penultimate[1]] },
   ];
+}
+
+// Parameters along each ray of the point where their lines cross, or null
+// when they are parallel within tol.
+function rayParams([x1, y1]: [number, number], [dx1, dy1]: [number, number], [x2, y2]: [number, number], [dx2, dy2]: [number, number], tol: number): [number, number] | null {
+  const det = dx1 * dy2 - dy1 * dx2;
+  if (Math.abs(det) < tol) return null;
+  const tx = x2 - x1;
+  const ty = y2 - y1;
+  return [(tx * dy2 - ty * dx2) / det, (tx * dy1 - ty * dx1) / det];
 }
 
 function intersectOpenBoundaryRays(rays: BoundaryRay[], lines: Lines, tol = 1e-6): [number, number] | null {
   if (rays.length !== 2) return null;
   const [r1, r2] = rays;
-  const [x1, y1] = r1.start;
-  const [dx1, dy1] = r1.direction;
-  const [x2, y2] = r2.start;
-  const [dx2, dy2] = r2.direction;
-
-  const det = dx1 * dy2 - dy1 * dx2;
-  if (Math.abs(det) < tol) return null;
-
-  const tx = x2 - x1;
-  const ty = y2 - y1;
-  const t1 = (tx * dy2 - ty * dx2) / det;
-  const t2 = (tx * dy1 - ty * dx1) / det;
-  if (t1 < -tol || t2 < -tol) return null;
-
-  const point: [number, number] = [x1 + t1 * dx1, y1 + t1 * dy1];
+  const params = rayParams(r1.start, r1.direction, r2.start, r2.direction, tol);
+  if (!params || params[0] < -tol || params[1] < -tol) return null;
+  const point: [number, number] = [r1.start[0] + params[0] * r1.direction[0], r1.start[1] + params[0] * r1.direction[1]];
   return satisfiesLines(point, lines, tol) ? point : null;
 }
 
 function intersectRayWithSegment(ray: BoundaryRay, segStart: Vertices[number], segEnd: Vertices[number], tol = 1e-6): [number, number] | null {
-  const [rx, ry] = ray.start;
-  const [rdx, rdy] = ray.direction;
-  const [sx, sy] = segStart;
-  const sdx = segEnd[0] - segStart[0];
-  const sdy = segEnd[1] - segStart[1];
-
-  const det = rdx * sdy - rdy * sdx;
-  if (Math.abs(det) < tol) return null;
-
-  const dx = sx - rx;
-  const dy = sy - ry;
-  const tRay = (dx * sdy - dy * sdx) / det;
-  const tSeg = (dx * rdy - dy * rdx) / det;
-  if (tRay < -tol || tSeg < -tol || tSeg > 1 + tol) return null;
-
-  return [rx + tRay * rdx, ry + tRay * rdy];
+  const params = rayParams(ray.start, ray.direction, segStart, [segEnd[0] - segStart[0], segEnd[1] - segStart[1]], tol);
+  if (!params || params[0] < -tol || params[1] < -tol || params[1] > 1 + tol) return null;
+  return [ray.start[0] + params[0] * ray.direction[0], ray.start[1] + params[0] * ray.direction[1]];
 }
 
 function intersectSegmentWithLine(segStart: Vertices[number], segEnd: Vertices[number], line: Lines[number], tol = 1e-6): [number, number] | null {
@@ -512,10 +468,7 @@ export function hasOpenBoundaryClosure(points: Vertices, lines: Lines, tol = 1e-
     if (intersectRayWithSegment(endRay, points[i], points[i + 1], tol)) return true;
   }
 
-  if (terminalSegmentClosesAgainstNonAdjacentConstraint(points, 0, lines, tol)) return true;
-  if (terminalSegmentClosesAgainstNonAdjacentConstraint(points, points.length - 2, lines, tol)) return true;
-
-  return false;
+  return [0, points.length - 2].some((index) => terminalSegmentClosesAgainstNonAdjacentConstraint(points, index, lines, tol));
 }
 
 export function isObjectiveDirectionUnbounded(lines: Lines, objective: [number, number], tol = 1e-6): boolean {
@@ -529,22 +482,9 @@ export function isObjectiveDirectionUnbounded(lines: Lines, objective: [number, 
     return false;
   }
 
-  const candidateDirections: [number, number][] = [];
-  for (const [A, B] of lines) {
-    const dx = -B;
-    const dy = A;
-    const norm = Math.hypot(dx, dy);
-    if (norm <= tol) {
-      continue;
-    }
-    candidateDirections.push([dx / norm, dy / norm], [-dx / norm, -dy / norm]);
-  }
+  const candidateDirections = boundaryDirections(lines, tol);
   candidateDirections.push([cx / objectiveNorm, cy / objectiveNorm]);
-
-  return candidateDirections.some(([dx, dy]) => {
-    if (cx * dx + cy * dy <= tol) {
-      return false;
-    }
-    return lines.every(([A, B]) => A * dx + B * dy <= tol);
-  });
+  // `!(… <= tol)` rather than `> tol` so a NaN dot still falls through to the
+  // constraint test, as it always has
+  return candidateDirections.some(([dx, dy]) => !(cx * dx + cy * dy <= tol) && lines.every(([A, B]) => A * dx + B * dy <= tol));
 }
