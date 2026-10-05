@@ -1,14 +1,15 @@
 // Visual + DOM regression harness. Builds the app, serves dist with vite
 // preview, drives headless Chromium through a fixed set of scenarios (share
 // links, panel toggles, a draw→solve→3D→orbit→2D→pan→zoom interaction) and
-// records, per scenario: a screenshot, the body's outerHTML,
+// records, per scenario: a screenshot, the body's outerHTML, every element's
+// layout rect and scroll offsets,
 // the computed style of every element, and any console error. The baseline is
 // local (.visual/baseline, gitignored): write it on the reference commit, then
 // run the compare on the branch.
 //
 // Determinism, pinned from the harness side so the app is untouched: Math.random
 // is seeded in the page, the solver worker's clocks are pinned (footers print
-// elapsed ms), CSS animations/transitions are disabled before capture,
+// elapsed ms), CSS animations/transitions are disabled from document start,
 // prefers-reduced-motion stops the gallery's timer-driven reshuffle, and the
 // page's own clock (timers, requestAnimationFrame, performance.now) is driven
 // by Playwright's fake clock, so idle timers and the 2D/3D transition advance
@@ -60,9 +61,15 @@ type Scenario = { name: string; s?: string; path?: string; viewport?: Viewport; 
 
 // Advance the page's fake clock (timers and animation frames fire in order).
 const tick = (page: Page, ms: number) => page.clock.runFor(ms);
-// Real time for the solver worker to post its result, then one frame to apply it.
+// Real time until every request posted to the solver worker has been answered
+// (counted by WORKER_COUNTER below; the fake clock does not govern the worker),
+// then one frame to apply the result.
 const settled = async (page: Page) => {
-  await page.waitForTimeout(300);
+  const deadline = Date.now() + 20_000;
+  while ((await page.evaluate(() => (window as unknown as { __lpvizWorker?: { pending: number } }).__lpvizWorker?.pending ?? 0)) > 0) {
+    if (Date.now() > deadline) throw new Error("solver worker did not answer within 20s");
+    await page.waitForTimeout(25);
+  }
   await tick(page, 32);
 };
 const DESKTOP: Viewport = { width: 1280, height: 800 };
@@ -195,12 +202,18 @@ scenarios.push({
 
 const SEEDED_RANDOM = `(() => { let seed = 0x2f6e2b1; Math.random = () => { seed = (seed + 0x6d2b79f5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();`;
 const PINNED_CLOCKS = "performance.now = () => 0; Date.now = () => 0;\n";
-const FROZEN_MOTION = "*, *::before, *::after { animation: none !important; transition: none !important; }";
+// Counts solver requests and replies so `settled` can wait for the worker itself.
+const WORKER_COUNTER = `(() => { const Real = window.Worker; let posted = 0, received = 0; window.__lpvizWorker = { get pending() { return posted - received; } }; window.Worker = class extends Real { constructor(...a) { super(...a); this.addEventListener("message", () => { received++; }); } postMessage(...a) { posted++; return super.postMessage(...a); } }; })();`;
+// Injected at document start so no transition ever starts: a transition that
+// begins before capture promotes its element to a compositor layer, and that
+// layer rasterizes anti-aliased edges one unit differently from in-page raster.
+const FROZEN_MOTION = `document.addEventListener("DOMContentLoaded", () => { const s = document.createElement("style"); s.textContent = "*, *::before, *::after { animation: none !important; transition: none !important; }"; document.head.append(s); });`;
 
 const STYLE_SCRIPT = `(() => {
   const path = (el) => { const parts = []; for (let e = el; e && e.nodeType === 1; e = e.parentElement) { let s = e.tagName.toLowerCase(); if (e.id) s += '#' + e.id; if (e.classList.length) s += '.' + [...e.classList].join('.'); const sib = e.parentElement ? [...e.parentElement.children].filter(c => c.tagName === e.tagName) : []; if (sib.length > 1) s += ':nth(' + sib.indexOf(e) + ')'; parts.unshift(s); } return parts.join('>'); };
   const out = [];
-  for (const el of document.querySelectorAll('*')) { const cs = getComputedStyle(el); const props = []; for (let i = 0; i < cs.length; i++) { const p = cs[i]; props.push(p + ':' + cs.getPropertyValue(p)); } props.sort(); out.push(path(el) + '\\n  ' + props.join(';')); }
+  const r2 = (n) => Math.round(n * 100) / 100;
+  for (const el of document.querySelectorAll('*')) { const cs = getComputedStyle(el); const props = []; for (let i = 0; i < cs.length; i++) { const p = cs[i]; props.push(p + ':' + cs.getPropertyValue(p)); } props.sort(); const b = el.getBoundingClientRect(); props.unshift('@rect:' + [r2(b.x), r2(b.y), r2(b.width), r2(b.height)].join(','), '@scroll:' + r2(el.scrollLeft) + ',' + r2(el.scrollTop)); out.push(path(el) + '\\n  ' + props.join(';')); }
   return out.join('\\n');
 })()`;
 
@@ -216,7 +229,6 @@ async function capture(page: Page, sc: Scenario) {
   page.on("pageerror", onPageError);
   await page.setViewportSize(sc.viewport ?? DESKTOP);
   await page.goto(`http://localhost:${PORT}/${sc.path ?? ""}${sc.s ? `?s=${sc.s}` : ""}`, { waitUntil: "networkidle" });
-  await page.addStyleTag({ content: FROZEN_MOTION });
   await page.evaluate(() => document.fonts.ready);
   await settled(page);
   await tick(page, 400);
@@ -324,6 +336,8 @@ try {
   // Math.random call count would otherwise depend on timing (no CSS reads the query).
   const context = await browser.newContext({ deviceScaleFactor: 1, reducedMotion: "reduce" });
   await context.addInitScript(SEEDED_RANDOM);
+  await context.addInitScript(WORKER_COUNTER);
+  await context.addInitScript(FROZEN_MOTION);
   // The solver worker prints elapsed time into its footers; pin its clocks by
   // prepending to the worker chunk as it is served.
   await context.route("**/assets/solverWorker-*.js", async (route) => {
@@ -331,7 +345,9 @@ try {
     route.fulfill({ response, body: PINNED_CLOCKS + (await response.text()), headers: { ...response.headers(), "content-type": "text/javascript" } });
   });
   const page = await context.newPage();
+  // install() alone lets time keep flowing; pauseAt() makes it advance only through tick().
   await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
+  await page.clock.pauseAt(new Date("2026-01-01T00:00:00Z"));
   page.on("dialog", (d) => d.dismiss());
   for (const sc of scenarios) {
     if (only && !sc.name.includes(only)) continue;
