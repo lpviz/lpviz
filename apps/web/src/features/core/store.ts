@@ -12,6 +12,7 @@ import type { Line, PointXY, PointXYZ } from "@lpviz/math/types";
 import { hasPolytopeLines, type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
+import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
 export const MAX_TRACE_POINT_SPRITES = 1200;
 export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE };
@@ -101,14 +102,7 @@ interface TraceEntry extends IteratePath {
   objectiveVector: PointXY | null;
 }
 
-export type ViewportDirtyFlags = Partial<{
-  grid: boolean;
-  polytope: boolean;
-  constraints: boolean;
-  objective: boolean;
-  trace: boolean;
-  iterate: boolean;
-}>;
+export type { ViewportDirtyFlags };
 
 // Repaint everything — for whole-problem swaps (gallery load, shared-state
 // import) and mode switches where deriving per-field flags would be noise.

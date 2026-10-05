@@ -3,7 +3,7 @@ import { Euler, PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "th
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
-import type { ViewportPerspectivePose, ViewportRenderSnapshot } from "./types";
+import type { ViewportDirtyFlags, ViewportPerspectivePose, ViewportRenderSnapshot } from "./types";
 
 type ViewportRect = Pick<DOMRect, "width" | "height">;
 
@@ -25,14 +25,6 @@ export type ViewportTransitionFrame = {
   snapshot: ViewportRenderSnapshot;
 };
 
-export type ViewportDirtyFlags = Partial<{
-  grid: boolean;
-  polytope: boolean;
-  constraints: boolean;
-  objective: boolean;
-  trace: boolean;
-  iterate: boolean;
-}>;
 export type ViewportTransitionStatePatch = {
   isTransitioning3D: boolean;
   transitionStartTime: number;
@@ -122,7 +114,7 @@ export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }:
   };
 }
 
-export function interpolateTransitionViewAngle(plan: ViewportTransitionPlan, progress: number): PointXYZ {
+function interpolateTransitionViewAngle(plan: ViewportTransitionPlan, progress: number): PointXYZ {
   const clampedProgress = Math.max(0, Math.min(1, progress));
   return {
     x: lerp(plan.startAngles.x, plan.endAngles.x, clampedProgress),
@@ -141,13 +133,6 @@ export function buildTransitionStartState(targetMode: boolean, startTime: number
     transitionProgress: 0,
     is3DMode: targetMode,
     viewAngle: { ...plan.startAngles },
-  };
-}
-
-export function buildTransitionProgressState(plan: ViewportTransitionPlan, progress: number): Pick<ViewportTransitionStatePatch, "viewAngle" | "transitionProgress"> {
-  return {
-    viewAngle: interpolateTransitionViewAngle(plan, progress),
-    transitionProgress: Math.max(0, Math.min(1, progress)),
   };
 }
 
@@ -279,7 +264,7 @@ export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot,
   return { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
 }
 
-export function buildViewport2DStateFromVisibleCenter(visibleCenter: PointXY, scaleFactor: number, gridSpacing: number): Viewport2DState {
+function buildViewport2DStateFromVisibleCenter(visibleCenter: PointXY, scaleFactor: number, gridSpacing: number): Viewport2DState {
   return {
     gridSpacing,
     scaleFactor: clampScaleFactor2D(scaleFactor),

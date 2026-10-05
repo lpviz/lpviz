@@ -38,6 +38,7 @@
     "wrangler": "^4.47.0"
   },
   "knip": {
+    "includeEntryExports": true,
     "workspaces": {
       ".": {
         "project": [

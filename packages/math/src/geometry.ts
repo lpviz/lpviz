@@ -247,7 +247,7 @@ export class VRep {
 
 export type RegionKind = "bounded" | "unbounded" | "empty" | "degenerate";
 
-export function satisfiesLines(point: [number, number], lines: Lines, tol = 1e-6): boolean {
+function satisfiesLines(point: [number, number], lines: Lines, tol = 1e-6): boolean {
   return lines.every(([A, B, C]) => A * point[0] + B * point[1] <= C + tol);
 }
 

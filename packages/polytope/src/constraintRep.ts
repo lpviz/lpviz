@@ -6,11 +6,11 @@ export interface ConstraintRep {
   lines: Lines;
 }
 
-export function formatConstraintNumber(value: number): number {
+function formatConstraintNumber(value: number): number {
   return value === Math.floor(value) ? value : parseFloat(value.toFixed(3));
 }
 
-export function formatConstraint(A: number, B: number, C: number): string {
+function formatConstraint(A: number, B: number, C: number): string {
   const normalizedA = formatConstraintNumber(A);
   const normalizedB = formatConstraintNumber(B);
   const normalizedC = formatConstraintNumber(C);

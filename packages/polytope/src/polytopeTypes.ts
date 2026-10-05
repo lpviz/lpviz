@@ -3,7 +3,6 @@ import type { Lines, Vertices } from "@lpviz/math/types";
 
 type NonEmptyArray<T> = [T, ...T[]];
 type NonEmptyLines = NonEmptyArray<Lines[number]>;
-type NonEmptyVertices = NonEmptyArray<Vertices[number]>;
 
 export interface PolytopeRepresentation {
   kind: RegionKind;
@@ -15,8 +14,4 @@ export interface PolytopeRepresentation {
 
 export function hasPolytopeLines(polytope: PolytopeRepresentation | null | undefined): polytope is PolytopeRepresentation & { lines: NonEmptyLines } {
   return Boolean(polytope && polytope.lines.length > 0);
-}
-
-export function hasPolytopeVertices(polytope: PolytopeRepresentation | null | undefined): polytope is PolytopeRepresentation & { vertices: NonEmptyVertices } {
-  return Boolean(polytope && polytope.vertices.length > 0);
 }

@@ -58,7 +58,7 @@ export interface EllipsoidResultData {
 // A factory, never a shared constant: these buffers are transferred to the main
 // thread, which detaches them. Handing out the same instance twice means the
 // second solve reads a detached ArrayBuffer and the whole result fails.
-export const emptyPolygons = () => ({
+const emptyPolygons = () => ({
   polygonPoints: new Float64Array(0),
   polygonOffsets: new Uint32Array(1),
 });

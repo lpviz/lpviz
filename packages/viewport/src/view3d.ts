@@ -205,7 +205,7 @@ export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): Po
   };
 }
 
-export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
+function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
   return snapshotCamera.position
     .set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z)
     .distanceTo(snapshotTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
