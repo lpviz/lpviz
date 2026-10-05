@@ -1,8 +1,7 @@
 import { linesToDenseAb } from "@lpviz/math/blas";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
-import { formatMilliseconds } from "./time";
+import { assertMaxit, formatMilliseconds } from "./time";
 
-const MAX_ITERATIONS_LIMIT = 100_000;
 // Half-extent used for the initial ellipsoid when the caller has no vertices to
 // bound the region with (the app always has some; this is the safety net).
 const FALLBACK_HALF_EXTENT = 100;
@@ -149,9 +148,7 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
 export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): EllipsoidResultData {
   const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
 
-  if (maxit > MAX_ITERATIONS_LIMIT) {
-    throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
-  }
+  assertMaxit(maxit);
 
   const { A, b } = linesToDenseAb(lines);
   const n = A.cols;

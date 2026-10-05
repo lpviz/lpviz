@@ -1,9 +1,8 @@
 import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, VecM, VecN } from "@lpviz/math/types";
-import { formatMilliseconds } from "./time";
+import { assertMaxit, solveFooter } from "./time";
 
-const MAX_ITERATIONS_LIMIT = 100_000;
 const SIGMA_MIN = 1e-8;
 const SIGMA_MAX = 1 - 1e-8;
 const SIGMA_POWER = 3;
@@ -40,9 +39,7 @@ interface IPMSolutionData {
 export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
   const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
-  if (maxit > MAX_ITERATIONS_LIMIT) {
-    throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
-  }
+  assertMaxit(maxit);
 
   // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
   const { A: aOriginal, b: bOriginal } = linesToDenseAb(lines);
@@ -181,13 +178,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
     }
   }
 
-  const elapsed = formatMilliseconds(performance.now() - startTime);
+  const solveTime = performance.now() - startTime;
   const count = solution.x.length;
-  solution.footer = failureMessage
-    ? `${failureMessage}\nStopped after ${count} iterations in ${elapsed}\n`
-    : converged
-      ? `Converged to optimal solution in ${elapsed} / ${count} iterations\n`
-      : `Did not converge after ${count} iterations in ${elapsed}\n`;
+  solution.footer = failureMessage ? `${failureMessage}\n${solveFooter(false, count, solveTime, "Stopped")}\n` : `${solveFooter(converged, count, solveTime)}\n`;
   return { iterates: { solution } };
 }
 

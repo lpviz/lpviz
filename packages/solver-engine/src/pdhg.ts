@@ -1,8 +1,7 @@
 import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import type { Lines, Vec2Ns, VecN } from "@lpviz/math/types";
-import { formatMilliseconds } from "./time";
+import { assertMaxit, solveFooter } from "./time";
 
-const MAX_ITERATIONS_LIMIT = 100_000;
 const BASIS_THRESHOLD = 1e-10;
 const HALPERN_SUFFICIENT_REDUCTION = 0.2;
 const HALPERN_NECESSARY_REDUCTION = 0.5;
@@ -245,10 +244,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     }
   }
 
-  const solveTime = performance.now() - startTime;
-  const formattedSolveTime = formatMilliseconds(solveTime);
-  const footer =
-    epsilonK <= tol ? `Converged to optimal solution in ${formattedSolveTime} / ${iterates.length} iterations` : `Did not converge after ${iterates.length} iterations in ${formattedSolveTime}`;
+  const footer = solveFooter(epsilonK <= tol, iterates.length, performance.now() - startTime);
 
   return {
     header,
@@ -263,9 +259,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
 
 export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
   const { ineq, maxit, startPoint } = options;
-  if (maxit > MAX_ITERATIONS_LIMIT) {
-    throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
-  }
+  assertMaxit(maxit);
 
   const { A, b } = linesToDenseAb(lines);
   const nOrig = A.cols;

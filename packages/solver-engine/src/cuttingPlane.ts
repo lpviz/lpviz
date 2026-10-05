@@ -2,9 +2,8 @@ import { linesToDenseAb } from "@lpviz/math/blas";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import { ELLIPSOID_STRIDE, appendIncumbent, clipPolygon, mostViolatedConstraint, objectiveRayStep, packPolygons, regionBoundingBox, type EllipsoidResultData, type EllipsoidRow } from "./ellipsoid";
-import { formatMilliseconds } from "./time";
+import { assertMaxit, formatMilliseconds } from "./time";
 
-const MAX_ITERATIONS_LIMIT = 100_000;
 const FEASIBILITY_TOLERANCE = 1e-9;
 const MAX_NEWTON_STEPS = 80;
 const NEWTON_DECREMENT_TOLERANCE = 1e-12;
@@ -84,9 +83,7 @@ type QueryResult = {
 export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): EllipsoidResultData {
   const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
 
-  if (maxit > MAX_ITERATIONS_LIMIT) {
-    throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
-  }
+  assertMaxit(maxit);
 
   const { A, b } = linesToDenseAb(lines);
   const n = A.cols;
