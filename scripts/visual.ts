@@ -8,14 +8,19 @@
 //
 // Determinism, pinned from the harness side so the app is untouched: Math.random
 // is seeded in the page, the solver worker's clocks are pinned (footers print
-// elapsed ms), CSS animations/transitions are disabled before capture, and
-// prefers-reduced-motion stops the gallery's timer-driven reshuffle.
+// elapsed ms), CSS animations/transitions are disabled before capture,
+// prefers-reduced-motion stops the gallery's timer-driven reshuffle, and the
+// page's own clock (timers, requestAnimationFrame, performance.now) is driven
+// by Playwright's fake clock, so idle timers and the 2D/3D transition advance
+// by exactly the milliseconds the scenario asks for regardless of machine load.
+// Only the worker's reply needs real time; `settled` waits for it.
 //
 //   bun scripts/visual.ts --write             capture the baseline
 //   bun scripts/visual.ts                     capture .visual/current and compare
 //   bun scripts/visual.ts --only NAME         restrict to scenarios containing NAME
 //   bun scripts/visual.ts --tolerance N       allow N differing pixels per screenshot
 //   bun scripts/visual.ts --no-build          reuse dist/
+//   VISUAL_BASELINE=DIR                       compare against a baseline captured elsewhere (CI)
 
 import { chromium, type Page } from "playwright";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
@@ -36,7 +41,8 @@ const tolerance = Number(opt("--tolerance") ?? 4);
 const PORT = Number(process.env.VISUAL_PORT ?? 3011);
 const ROOT = join(import.meta.dir, "..");
 const OUT = join(ROOT, ".visual", write ? "baseline" : "current");
-const BASE = join(ROOT, ".visual", "baseline");
+// CI captures the baseline from the PR base commit in another checkout and points here.
+const BASE = process.env.VISUAL_BASELINE ?? join(ROOT, ".visual", "baseline");
 mkdirSync(OUT, { recursive: true });
 
 // ---------- scenarios ----------
@@ -51,6 +57,14 @@ const share = (p: ReturnType<typeof problem>, mode: SharedAppState["solverMode"]
 
 type Viewport = { width: number; height: number };
 type Scenario = { name: string; s?: string; path?: string; viewport?: Viewport; settle?: number; run?: (page: Page) => Promise<void> };
+
+// Advance the page's fake clock (timers and animation frames fire in order).
+const tick = (page: Page, ms: number) => page.clock.runFor(ms);
+// Real time for the solver worker to post its result, then one frame to apply it.
+const settled = async (page: Page) => {
+  await page.waitForTimeout(300);
+  await tick(page, 32);
+};
 const DESKTOP: Viewport = { width: 1280, height: 800 };
 const MOBILE: Viewport = { width: 390, height: 844 };
 const MODES = ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const;
@@ -152,26 +166,28 @@ scenarios.push({
       [700, 520],
     ] as const) {
       await page.mouse.click(x, y);
-      await page.waitForTimeout(120);
+      await tick(page, 120);
     }
     await page.keyboard.press("Enter");
-    await page.waitForTimeout(200);
+    await tick(page, 200);
     await page.mouse.click(820, 380);
-    await page.waitForTimeout(200);
+    await tick(page, 200);
     await page.click("#ipmButton");
-    await page.waitForTimeout(800);
+    await settled(page);
+    await tick(page, 800);
     await page.click("#toggle3DButton");
-    await page.waitForTimeout(2000);
+    await tick(page, 2000);
     await drag(820, 380, 890, 340);
-    await page.waitForTimeout(500);
+    await tick(page, 500);
     await page.click("#toggle3DButton");
-    await page.waitForTimeout(2000);
+    await tick(page, 2000);
     await drag(820, 380, 850, 420);
     await page.mouse.move(820, 380);
     await page.mouse.wheel(0, -240);
-    await page.waitForTimeout(800);
+    await tick(page, 800);
     await page.click("button:has-text('Simplex')");
-    await page.waitForTimeout(800);
+    await settled(page);
+    await tick(page, 800);
   },
 });
 
@@ -202,10 +218,11 @@ async function capture(page: Page, sc: Scenario) {
   await page.goto(`http://localhost:${PORT}/${sc.path ?? ""}${sc.s ? `?s=${sc.s}` : ""}`, { waitUntil: "networkidle" });
   await page.addStyleTag({ content: FROZEN_MOTION });
   await page.evaluate(() => document.fonts.ready);
-  await page.waitForTimeout(400);
+  await settled(page);
+  await tick(page, 400);
   if (sc.run) await sc.run(page);
-  await page.waitForTimeout(sc.settle ?? 1200);
-  await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
+  await settled(page);
+  await tick(page, sc.settle ?? 1200);
   const png = await page.screenshot({ fullPage: false });
   const html = await page.evaluate(() => document.body.outerHTML);
   const styles = (await page.evaluate(STYLE_SCRIPT)) as string;
@@ -314,6 +331,7 @@ try {
     route.fulfill({ response, body: PINNED_CLOCKS + (await response.text()), headers: { ...response.headers(), "content-type": "text/javascript" } });
   });
   const page = await context.newPage();
+  await page.clock.install({ time: new Date("2026-01-01T00:00:00Z") });
   page.on("dialog", (d) => d.dismiss());
   for (const sc of scenarios) {
     if (only && !sc.name.includes(only)) continue;

@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
-import { applyHugeBounds } from "./sharedLineMaterials";
+import { applyHugeBounds } from "./hugeBounds";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
 // one uncapped quad per segment, extruded in the vertex shader along that segment's own

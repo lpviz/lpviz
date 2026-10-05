@@ -5,6 +5,7 @@
 // the baseline lives in scripts/golden.json. A refactor is behavior-preserving
 // on this path only if every hash is unchanged.
 //
+//   bun test                           runs it as a test (apps/web/src/features/solver/golden.test.ts)
 //   bun scripts/golden.ts              compare against the baseline
 //   bun scripts/golden.ts --write      rewrite the baseline
 //   bun scripts/golden.ts --dump DIR   also write every case's JSON into DIR
@@ -14,15 +15,9 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-// Solver footers print elapsed time; pin both clocks so output is a pure
-// function of the input. The worker logs expected failures (infeasible,
-// unbounded) through console.error; the message itself is captured below.
-performance.now = () => 0;
-Date.now = () => 0;
-console.error = () => {};
-
 // The worker module registers itself on `self`; capture its handler and its
-// postMessage instead of letting bun's globals see them.
+// postMessage instead of letting bun's globals see them. Imports are dynamic
+// so the capture is installed before the worker module evaluates.
 type Listener = (event: { data: unknown }) => Promise<void> | void;
 let workerListener: Listener | null = null;
 let lastPosted: unknown = null;
@@ -44,6 +39,22 @@ type SolverWorkerPayload = import("@/features/solver/solverWorker").SolverWorker
 type PointXY = { x: number; y: number };
 
 if (!workerListener) throw new Error("worker did not register a message listener");
+
+// Solver footers print elapsed time; pin both clocks so output is a pure
+// function of the input. The worker logs expected failures (infeasible,
+// unbounded) through console.error; the message itself is captured anyway.
+// Restored afterwards so a test run's other files keep real clocks.
+function withPinnedClocks<T>(run: () => Promise<T>): Promise<T> {
+  const saved = { now: performance.now, dateNow: Date.now, error: console.error };
+  performance.now = () => 0;
+  Date.now = () => 0;
+  console.error = () => {};
+  return run().finally(() => {
+    performance.now = saved.now;
+    Date.now = saved.dateNow;
+    console.error = saved.error;
+  });
+}
 
 // ---------- fixtures ----------
 
@@ -258,47 +269,67 @@ async function runCase(id: number, payload: SolverWorkerPayload, objective: Poin
   return plain({ error: response.success ? null : response.error, rendered, after });
 }
 
-// ---------- main ----------
+// ---------- run + compare ----------
 
-const args = process.argv.slice(2);
-const write = args.includes("--write");
-const dumpDir = args.includes("--dump") ? args[args.indexOf("--dump") + 1] : null;
-const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-if (dumpDir) mkdirSync(dumpDir, { recursive: true });
+const GOLDEN_PATH = join(import.meta.dir, "golden.json");
+type Golden = { total: string; cases: Record<string, string> };
 
-const baselinePath = join(import.meta.dir, "golden.json");
-const hashes: Record<string, string> = {};
-let id = 0;
-for (const fixture of fixtures)
-  for (const [oi, objective] of fixture.objectives.entries())
-    for (const [key, payload] of payloadsFor(fixture, objective)) {
-      const caseId = `${fixture.name}|o${oi}|${key}`;
-      if (only && !caseId.includes(only)) continue;
-      const json = JSON.stringify(await runCase(++id, payload, objective));
-      hashes[caseId] = createHash("sha256").update(json).digest("hex").slice(0, 16);
-      if (dumpDir) writeFileSync(join(dumpDir, caseId.replace(/[^A-Za-z0-9_.:|-]/g, "_") + ".json"), json);
+export function runGolden(options: { only?: string | null; dumpDir?: string | null } = {}): Promise<Golden> {
+  const { only = null, dumpDir = null } = options;
+  if (dumpDir) mkdirSync(dumpDir, { recursive: true });
+  return withPinnedClocks(async () => {
+    const hashes: Record<string, string> = {};
+    let id = 0;
+    for (const fixture of fixtures)
+      for (const [oi, objective] of fixture.objectives.entries())
+        for (const [key, payload] of payloadsFor(fixture, objective)) {
+          const caseId = `${fixture.name}|o${oi}|${key}`;
+          if (only && !caseId.includes(only)) continue;
+          const json = JSON.stringify(await runCase(++id, payload, objective));
+          hashes[caseId] = createHash("sha256").update(json).digest("hex").slice(0, 16);
+          if (dumpDir) writeFileSync(join(dumpDir, caseId.replace(/[^A-Za-z0-9_.:|-]/g, "_") + ".json"), json);
+        }
+    const cases = Object.fromEntries(
+      Object.keys(hashes)
+        .sort()
+        .map((k) => [k, hashes[k]!]),
+    );
+    return { total: createHash("sha256").update(JSON.stringify(cases)).digest("hex").slice(0, 16), cases };
+  });
+}
+
+export function readGolden(): Golden {
+  return JSON.parse(readFileSync(GOLDEN_PATH, "utf8")) as Golden;
+}
+
+// Case ids whose hash differs from the baseline, and baseline ids that did not run.
+export function compareGolden(actual: Golden, baseline: Golden, partial = false): { changed: string[]; missing: string[] } {
+  return {
+    changed: Object.keys(actual.cases).filter((k) => baseline.cases[k] !== actual.cases[k]),
+    missing: partial ? [] : Object.keys(baseline.cases).filter((k) => !(k in actual.cases)),
+  };
+}
+
+// ---------- CLI ----------
+
+if (import.meta.main) {
+  const args = process.argv.slice(2);
+  const write = args.includes("--write");
+  const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
+  const actual = await runGolden({ only, dumpDir: args.includes("--dump") ? args[args.indexOf("--dump") + 1] : null });
+  console.log(`${Object.keys(actual.cases).length} cases, total ${actual.total}`);
+  if (write) {
+    writeFileSync(GOLDEN_PATH, JSON.stringify(actual, null, 2) + "\n");
+    console.log(`wrote ${GOLDEN_PATH}`);
+  } else {
+    const baseline = readGolden();
+    const { changed, missing } = compareGolden(actual, baseline, Boolean(only));
+    for (const k of changed) console.log(`CHANGED ${k}: ${baseline.cases[k] ?? "(new)"} -> ${actual.cases[k]}`);
+    for (const k of missing) console.log(`MISSING ${k}`);
+    if (changed.length || missing.length) {
+      console.log(`golden: ${changed.length} changed, ${missing.length} missing`);
+      process.exit(1);
     }
-
-const sorted = Object.fromEntries(
-  Object.keys(hashes)
-    .sort()
-    .map((k) => [k, hashes[k]]),
-);
-const total = createHash("sha256").update(JSON.stringify(sorted)).digest("hex").slice(0, 16);
-console.log(`${Object.keys(sorted).length} cases, total ${total}`);
-
-if (write) {
-  writeFileSync(baselinePath, JSON.stringify({ total, cases: sorted }, null, 2) + "\n");
-  console.log(`wrote ${baselinePath}`);
-} else {
-  const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as { total: string; cases: Record<string, string> };
-  const changed = Object.keys(sorted).filter((k) => baseline.cases[k] !== sorted[k]);
-  const missing = Object.keys(baseline.cases).filter((k) => !(k in sorted) && !only);
-  for (const k of changed) console.log(`CHANGED ${k}: ${baseline.cases[k] ?? "(new)"} -> ${sorted[k]}`);
-  for (const k of missing) console.log(`MISSING ${k}`);
-  if (changed.length || missing.length) {
-    console.log(`golden: ${changed.length} changed, ${missing.length} missing`);
-    process.exit(1);
+    console.log("golden: all cases match");
   }
-  console.log("golden: all cases match");
 }
