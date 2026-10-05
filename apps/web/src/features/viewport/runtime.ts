@@ -4,6 +4,7 @@ import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
 import { getObjectiveScreenPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/transition";
+import type { ViewportPerspectivePose } from "@lpviz/viewport/types";
 import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D } from "@lpviz/viewport/view3d";
 import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
 import {
@@ -94,7 +95,8 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     return state.is3DMode && !state.isTransitioning3D;
   };
 
-  const isExternalViewportNavigationOwned = () => shouldUseExternal2DViewport() || shouldUseExternal3DControls();
+  // external 2D xor external 3D owns navigation whenever no transition runs
+  const isExternalViewportNavigationOwned = () => !getState().isTransitioning3D;
 
   const setViewportNavigationActive = (active: boolean) => {
     if (getState().isNavigatingViewport === active) {
@@ -179,22 +181,16 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     return buildViewport3DSnapshot(initial2DSnapshot, pose, getViewportRect());
   };
 
-  const syncManagerPlanarState = () => {
-    managerSnapshot = getExternal2DSnapshot();
-    setViewport2DControlsConfig({
-      sidebarWidth: currentSidebarWidth,
-      fallbackSnapshot: managerSnapshot,
-    });
+  // the 2D controls fall back to the manager snapshot, so every reassignment
+  // of it is also published to them
+  const setManagerSnapshot = (snapshot: ViewportRenderSnapshot) => {
+    managerSnapshot = snapshot;
+    setViewport2DControlsConfig({ sidebarWidth: currentSidebarWidth, fallbackSnapshot: managerSnapshot });
   };
 
-  const applyExternalPerspectivePose = (
-    pose: {
-      position: { x: number; y: number; z: number };
-      up: { x: number; y: number; z: number };
-      target: { x: number; y: number; z: number };
-    },
-    options: { syncControls?: boolean } = {},
-  ) => {
+  const syncManagerPlanarState = () => setManagerSnapshot(getExternal2DSnapshot());
+
+  const applyExternalPerspectivePose = (pose: ViewportPerspectivePose, options: { syncControls?: boolean } = {}) => {
     const previousScaleFactor = managerSnapshot.scaleFactor;
     rebuildExternal3DSnapshot(pose);
     if (Math.abs(managerSnapshot.scaleFactor - previousScaleFactor) > 1e-6) {
@@ -289,11 +285,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     sidebarWidth: currentSidebarWidth,
     fallbackSnapshot: managerSnapshot,
     onStateChange: (state) => {
-      managerSnapshot = buildViewport2DSnapshot(state, currentSidebarWidth, getViewportRect(), managerSnapshot);
-      setViewport2DControlsConfig({
-        sidebarWidth: currentSidebarWidth,
-        fallbackSnapshot: managerSnapshot,
-      });
+      setManagerSnapshot(buildViewport2DSnapshot(state, currentSidebarWidth, getViewportRect(), managerSnapshot));
       publishSnapshot(managerSnapshot);
     },
     onNavigationFrame: () => {
@@ -301,11 +293,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     },
   });
   syncViewport2DControlsStateFromSnapshot(managerSnapshot, currentSidebarWidth);
-  managerSnapshot = buildInitialSnapshot();
-  setViewport2DControlsConfig({
-    sidebarWidth: currentSidebarWidth,
-    fallbackSnapshot: managerSnapshot,
-  });
+  setManagerSnapshot(buildInitialSnapshot());
 
   external2DViewportActive = shouldUseExternal2DViewport();
   syncExternal2DControls(external2DViewportActive, {
@@ -316,7 +304,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
   });
   publishSnapshot(external2DViewportActive ? getExternal2DSnapshot() : managerSnapshot);
 
-  const externalOwnershipController = new AbortController();
+  const subscriptions = new AbortController();
   on(
     ["is3DMode", "isTransitioning3D"],
     () => {
@@ -346,11 +334,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       }
 
       if (external2DViewportActive) {
-        managerSnapshot = getExternal2DSnapshot();
-        setViewport2DControlsConfig({
-          sidebarWidth: currentSidebarWidth,
-          fallbackSnapshot: managerSnapshot,
-        });
+        syncManagerPlanarState();
         syncExternal2DControls(true);
         publishSnapshot(managerSnapshot);
         return;
@@ -358,17 +342,16 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
       publishSnapshot(managerSnapshot);
     },
-    externalOwnershipController.signal,
+    subscriptions.signal,
   );
 
-  const viewportDirtyController = new AbortController();
   onMeta((meta) => {
     const viewportDirty = meta?.viewportDirty;
     if (!viewportDirty || Object.keys(viewportDirty).length === 0) {
       return;
     }
     viewportBridge.invalidate({ viewportDirty });
-  }, viewportDirtyController.signal);
+  }, subscriptions.signal);
 
   // Shared tail of the layout-change handlers (updateDimensions /
   // setSidebarWidth): once the external-2D case is handled by the caller, a
@@ -396,11 +379,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     updateDimensions: () => {
       refreshViewportRect();
       if (shouldUseExternal2DViewport()) {
-        managerSnapshot = getExternal2DSnapshot();
-        setViewport2DControlsConfig({
-          sidebarWidth: currentSidebarWidth,
-          fallbackSnapshot: managerSnapshot,
-        });
+        syncManagerPlanarState();
         publishSnapshot(managerSnapshot);
         return;
       }
@@ -522,8 +501,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       transition.reset();
       resetViewport2DControlsConfig();
       resetViewport3DControlsConfig();
-      externalOwnershipController.abort();
-      viewportDirtyController.abort();
+      subscriptions.abort();
       resetViewportRenderSnapshot();
     },
   };
