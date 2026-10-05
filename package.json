@@ -47,7 +47,8 @@
       },
       "apps/web": {
         "project": [
-          "src/**/*.ts"
+          "src/**/*.ts",
+          "docs/*.ts"
         ]
       },
       "packages/math": {

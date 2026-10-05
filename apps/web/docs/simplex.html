@@ -1,60 +1,3 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Simplex Method, Visualized — lpviz Docs</title>
-    <meta
-      name="description"
-      content="How the Simplex method solves linear programs by walking from vertex to vertex: two-phase setup, Bland's and Dantzig's pivot rules, degenerate pivots, and dual simplex — visualized interactively in lpviz."
-    />
-    <link rel="canonical" href="https://lpviz.net/docs/simplex" />
-    <link rel="stylesheet" href="/docs/docs.css" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="lpviz" />
-    <meta property="og:title" content="The Simplex Method, Visualized" />
-    <meta property="og:description" content="Watch the Simplex algorithm pivot from vertex to vertex of a polytope you draw: two phases, Bland's and Dantzig's pivot rules, unboundedness, and dual simplex, explained." />
-    <meta property="og:url" content="https://lpviz.net/docs/simplex" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="The Simplex Method, Visualized — lpviz" />
-    <meta name="twitter:description" content="Two-phase simplex, Bland's and Dantzig's rules, and dual simplex on polytopes you draw." />
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "TechArticle",
-            "headline": "The Simplex Method, Visualized",
-            "description": "How the Simplex method solves linear programs by pivoting between vertices, and how lpviz implements and visualizes it.",
-            "url": "https://lpviz.net/docs/simplex",
-            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
-              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
-              { "@type": "ListItem", "position": 3, "name": "Simplex", "item": "https://lpviz.net/docs/simplex" }
-            ]
-          }
-        ]
-      }
-    </script>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav aria-label="Documentation">
-        <a class="brand" href="/">lpviz</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/simplex" class="is-active" aria-current="page">Simplex</a>
-        <a href="/docs/interior-point">Interior Point</a>
-        <a href="/docs/pdhg">PDHG</a>
-        <a href="/docs/ellipsoid">Ellipsoid</a>
-        <a href="/docs/central-path">Central Path</a>
-      </nav>
-    </header>
-    <main>
-      <article>
         <p class="breadcrumbs"><a href="/docs/">Docs</a> / Simplex</p>
         <h1>The Simplex method</h1>
         <p class="lede">The Simplex method solves a linear program by walking along the edges of the feasible region, hopping from vertex to vertex so that the objective improves at every step. In <a href="https://lpviz.net/">lpviz</a>, that walk is drawn right on the polytope you sketched.</p>
@@ -149,17 +92,3 @@
           <li><strong>Compare with <a href="/docs/interior-point">IPM</a>.</strong> Simplex cost per iteration is a basis update; IPM pays for a full Newton system but takes few iterations regardless of how many vertices the region has. On <em>Many Facets</em>, count iterations for both.</li>
           <li><strong>Dual vs. primal.</strong> Enable <em>Trace</em>, run primal simplex, switch on dual mode, and run again: one path crawls the inside of the boundary, the other leaps around the exterior scaffolding of constraint intersections — both finish at the same vertex.</li>
         </ul>
-
-        <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/"><span class="dir">← Back to</span>Docs overview</a>
-          <a class="next" href="/docs/interior-point"><span class="dir">Next →</span>Interior Point Methods</a>
-        </nav>
-      </article>
-    </main>
-    <footer class="site-footer">
-      <div>
-        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
-      </div>
-    </footer>
-  </body>
-</html>

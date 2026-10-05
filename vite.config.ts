@@ -1,43 +1,34 @@
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { defineConfig, type Connect, type Plugin, type ResolvedConfig } from "vite";
+import { defineConfig, type Connect, type Plugin } from "vite";
+import { DOCS_PAGES } from "./apps/web/docs/pages";
+import { renderDocsPage } from "./apps/web/docs/render";
 
-// In production, Cloudflare's asset server maps clean URLs onto the static
-// docs pages (html_handling: auto-trailing-slash): /docs and /docs/ serve
+// The documentation pages are rendered from apps/web/docs into docs/<slug>.html
+// at build time. In production, Cloudflare's asset server maps clean URLs onto
+// them (html_handling: auto-trailing-slash): /docs and /docs/ serve
 // docs/index.html, /docs/simplex serves docs/simplex.html. Vite's dev and
-// preview servers only serve the literal file paths, so mirror that mapping.
-function docsCleanUrls(): Plugin {
-  let config: ResolvedConfig;
-
-  const middleware =
-    (pagesDir: string): Connect.NextHandleFunction =>
-    (req, _res, next) => {
-      const url = req.url ?? "";
-      const queryIndex = url.search(/[?#]/);
-      const pathname = queryIndex === -1 ? url : url.slice(0, queryIndex);
-      const query = queryIndex === -1 ? "" : url.slice(queryIndex);
-
-      if (pathname === "/docs" || pathname === "/docs/") {
-        req.url = `/docs/index.html${query}`;
-      } else {
-        const page = pathname.match(/^\/docs\/([\w-]+)\/?$/)?.[1];
-        if (page && existsSync(resolve(pagesDir, "docs", `${page}.html`))) {
-          req.url = `/docs/${page}.html${query}`;
-        }
-      }
-      next();
-    };
+// preview servers render the same pages on request under the same URLs.
+function docsPages(): Plugin {
+  const middleware: Connect.NextHandleFunction = (req, res, next) => {
+    const url = req.url ?? "";
+    const queryIndex = url.search(/[?#]/);
+    const pathname = queryIndex === -1 ? url : url.slice(0, queryIndex);
+    const slug = pathname === "/docs" || pathname === "/docs/" ? "index" : pathname.match(/^\/docs\/([\w-]+)\/?$/)?.[1];
+    const page = DOCS_PAGES.find((p) => p.slug === slug);
+    if (!page) return next();
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.end(renderDocsPage(page));
+  };
 
   return {
-    name: "docs-clean-urls",
-    configResolved(resolved) {
-      config = resolved;
+    name: "docs-pages",
+    generateBundle() {
+      for (const page of DOCS_PAGES) this.emitFile({ type: "asset", fileName: `docs/${page.slug}.html`, source: renderDocsPage(page) });
     },
     configureServer(server) {
-      server.middlewares.use(middleware(config.publicDir));
+      server.middlewares.use(middleware);
     },
     configurePreviewServer(server) {
-      server.middlewares.use(middleware(resolve(config.root, config.build.outDir)));
+      server.middlewares.use(middleware);
     },
   };
 }
@@ -46,7 +37,7 @@ export default defineConfig({
   resolve: {
     tsconfigPaths: true,
   },
-  plugins: [docsCleanUrls()],
+  plugins: [docsPages()],
   build: {
     outDir: "dist",
     sourcemap: true,

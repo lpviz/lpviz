@@ -1,60 +1,3 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Central Path and Log Barrier, Visualized — lpviz Docs</title>
-    <meta
-      name="description"
-      content="The central path of a linear program: how the logarithmic barrier turns constraints into a smooth landscape, how Newton's method traces the path from analytic center to optimum, and what it reveals about interior point methods."
-    />
-    <link rel="canonical" href="https://lpviz.net/docs/central-path" />
-    <link rel="stylesheet" href="/docs/docs.css" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="lpviz" />
-    <meta property="og:title" content="The Central Path and Log Barrier, Visualized" />
-    <meta property="og:description" content="Trace the smooth curve connecting the analytic center of a polytope to its optimal vertex, computed with Newton's method on the log-barrier problem." />
-    <meta property="og:url" content="https://lpviz.net/docs/central-path" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="The Central Path, Visualized — lpviz" />
-    <meta name="twitter:description" content="Log barriers, analytic centers, and the smooth road to the optimum of a linear program." />
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "TechArticle",
-            "headline": "The Central Path and Log Barrier, Visualized",
-            "description": "What the central path of a linear program is, how lpviz traces it with Newton's method on log-barrier subproblems, and how it relates to interior point methods.",
-            "url": "https://lpviz.net/docs/central-path",
-            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
-              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
-              { "@type": "ListItem", "position": 3, "name": "Central Path", "item": "https://lpviz.net/docs/central-path" }
-            ]
-          }
-        ]
-      }
-    </script>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav aria-label="Documentation">
-        <a class="brand" href="/">lpviz</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/simplex">Simplex</a>
-        <a href="/docs/interior-point">Interior Point</a>
-        <a href="/docs/pdhg">PDHG</a>
-        <a href="/docs/ellipsoid">Ellipsoid</a>
-        <a href="/docs/central-path" class="is-active" aria-current="page">Central Path</a>
-      </nav>
-    </header>
-    <main>
-      <article>
         <p class="breadcrumbs"><a href="/docs/">Docs</a> / Central Path</p>
         <h1>The central path</h1>
         <p class="lede">The central path is the smooth curve that <a href="/docs/interior-point">interior point methods</a> chase: it starts at the most "central" point of your feasible region and ends at the optimum. Unlike the other buttons in <a href="https://lpviz.net/">lpviz</a>, this one doesn't visualize a practical solver — it computes the ideal object itself.</p>
@@ -129,17 +72,3 @@
           <li><strong>Centrality vs. shape.</strong> The analytic center is not the centroid: drag one edge to have many nearly-parallel copies (or load <em>Flat Facets</em>) and watch the whole path get pushed away from the crowded side — every constraint contributes its own log term, so redundant constraints still bend the path.</li>
           <li><strong>Small N tells the story too.</strong> Set N = 2: you get just the two ends of the path — the analytic center and (nearly) the optimum.</li>
         </ul>
-
-        <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/ellipsoid"><span class="dir">← Previous</span>The Ellipsoid Method</a>
-          <a class="next" href="/docs/"><span class="dir">Back to</span>Docs overview</a>
-        </nav>
-      </article>
-    </main>
-    <footer class="site-footer">
-      <div>
-        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
-      </div>
-    </footer>
-  </body>
-</html>

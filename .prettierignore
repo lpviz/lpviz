@@ -1,0 +1,2 @@
+# Byte-exact body fragments of the docs pages (apps/web/docs/render.ts); not prettier-formatted.
+apps/web/docs/*.html

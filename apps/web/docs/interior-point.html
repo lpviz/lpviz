@@ -1,60 +1,3 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Interior Point Methods, Visualized — lpviz Docs</title>
-    <meta
-      name="description"
-      content="How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, and infeasible starts — visualized interactively in lpviz."
-    />
-    <link rel="canonical" href="https://lpviz.net/docs/interior-point" />
-    <link rel="stylesheet" href="/docs/docs.css" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="lpviz" />
-    <meta property="og:title" content="Interior Point Methods, Visualized" />
-    <meta property="og:description" content="Watch a Mehrotra predictor-corrector interior point method arc through the interior of a polytope you draw, and learn what every knob does." />
-    <meta property="og:url" content="https://lpviz.net/docs/interior-point" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="Interior Point Methods, Visualized — lpviz" />
-    <meta name="twitter:description" content="The central path, predictor-corrector steps, and infeasible starts, animated on polytopes you draw." />
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "TechArticle",
-            "headline": "Interior Point Methods, Visualized",
-            "description": "How primal-dual interior point methods for linear programming work, and how lpviz implements a Mehrotra-style predictor-corrector method.",
-            "url": "https://lpviz.net/docs/interior-point",
-            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
-              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
-              { "@type": "ListItem", "position": 3, "name": "Interior Point", "item": "https://lpviz.net/docs/interior-point" }
-            ]
-          }
-        ]
-      }
-    </script>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav aria-label="Documentation">
-        <a class="brand" href="/">lpviz</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/simplex">Simplex</a>
-        <a href="/docs/interior-point" class="is-active" aria-current="page">Interior Point</a>
-        <a href="/docs/pdhg">PDHG</a>
-        <a href="/docs/ellipsoid">Ellipsoid</a>
-        <a href="/docs/central-path">Central Path</a>
-      </nav>
-    </header>
-    <main>
-      <article>
         <p class="breadcrumbs"><a href="/docs/">Docs</a> / Interior Point</p>
         <h1>Interior point methods</h1>
         <p class="lede">Where <a href="/docs/simplex">Simplex</a> crawls the boundary, an interior point method (IPM) cuts straight through the middle: it keeps every iterate strictly inside the constraints and follows a smooth arc to the optimum. <a href="https://lpviz.net/">lpviz</a> implements a Mehrotra-style primal-dual predictor–corrector method — the algorithm at the core of most modern LP solvers.</p>
@@ -181,17 +124,3 @@
           <li><strong>The endgame is superlinear.</strong> Look at the µ column: once the iterate is near the optimum, µ collapses by orders of magnitude per iteration.</li>
           <li><strong>It converges to the analytic center of the optimal face.</strong> Make the objective exactly perpendicular to an edge (so a whole edge is optimal): IPM lands in the middle of that edge, while Simplex picks one of its endpoint vertices.</li>
         </ul>
-
-        <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/simplex"><span class="dir">← Previous</span>The Simplex Method</a>
-          <a class="next" href="/docs/pdhg"><span class="dir">Next →</span>PDHG</a>
-        </nav>
-      </article>
-    </main>
-    <footer class="site-footer">
-      <div>
-        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
-      </div>
-    </footer>
-  </body>
-</html>

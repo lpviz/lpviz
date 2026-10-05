@@ -1,60 +1,3 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>PDHG for Linear Programming, Visualized — lpviz Docs</title>
-    <meta
-      name="description"
-      content="How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, and basis identification — visualized in lpviz."
-    />
-    <link rel="canonical" href="https://lpviz.net/docs/pdhg" />
-    <link rel="stylesheet" href="/docs/docs.css" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="lpviz" />
-    <meta property="og:title" content="PDHG for Linear Programming, Visualized" />
-    <meta property="og:description" content="The first-order method behind GPU LP solvers like PDLP: watch PDHG spiral into the optimum, diverge when step sizes are too big, and accelerate with Halpern restarts." />
-    <meta property="og:url" content="https://lpviz.net/docs/pdhg" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="PDHG, Visualized — lpviz" />
-    <meta name="twitter:description" content="Primal-dual hybrid gradient dynamics, Halpern restarts, and basis identification on LPs you draw." />
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "TechArticle",
-            "headline": "PDHG for Linear Programming, Visualized",
-            "description": "How the primal-dual hybrid gradient method solves linear programs, and how lpviz implements and visualizes it, including Halpern acceleration with restarts.",
-            "url": "https://lpviz.net/docs/pdhg",
-            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
-              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
-              { "@type": "ListItem", "position": 3, "name": "PDHG", "item": "https://lpviz.net/docs/pdhg" }
-            ]
-          }
-        ]
-      }
-    </script>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav aria-label="Documentation">
-        <a class="brand" href="/">lpviz</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/simplex">Simplex</a>
-        <a href="/docs/interior-point">Interior Point</a>
-        <a href="/docs/pdhg" class="is-active" aria-current="page">PDHG</a>
-        <a href="/docs/ellipsoid">Ellipsoid</a>
-        <a href="/docs/central-path">Central Path</a>
-      </nav>
-    </header>
-    <main>
-      <article>
         <p class="breadcrumbs"><a href="/docs/">Docs</a> / PDHG</p>
         <h1>PDHG: primal-dual hybrid gradient</h1>
         <p class="lede">PDHG solves a linear program using nothing but matrix–vector products and projections — no factorizations, no linear systems. That simplicity is why it powers modern GPU-scale solvers like Google's PDLP. In <a href="https://lpviz.net/">lpviz</a> you can watch its signature behavior up close: iterates that <em>spiral</em> into the optimum.</p>
@@ -213,17 +156,3 @@
           <li><strong>Cheap iterations, many of them.</strong> PDHG might take 50× more iterations than IPM on the same drawing, yet each iteration is only two matrix–vector products. That trade is the entire story of first-order LP solvers.</li>
           <li><strong>Restarts change the shape.</strong> With Halpern on, the path advances in near-straight "sprints" between restart markers instead of circling.</li>
         </ul>
-
-        <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/interior-point"><span class="dir">← Previous</span>Interior Point Methods</a>
-          <a class="next" href="/docs/ellipsoid"><span class="dir">Next →</span>The Ellipsoid Method</a>
-        </nav>
-      </article>
-    </main>
-    <footer class="site-footer">
-      <div>
-        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
-      </div>
-    </footer>
-  </body>
-</html>
