@@ -8,19 +8,14 @@ const MIN_STEP_SIZE = 1e-10;
 const LINE_SEARCH_SHRINK_FACTOR = 0.5;
 const LINE_SEARCH_SUFFICIENT_DECREASE = 0.01;
 const MAX_LINE_SEARCH_ITERATIONS = 100;
-const DEFAULT_CONVERGENCE_TOLERANCE = 1e-4;
+const NEWTON_GRADIENT_TOLERANCE = 1e-4;
 const NEWTON_DECREMENT_RELATIVE_TOLERANCE = 1e-12;
-const DEFAULT_MAX_NEWTON_ITERATIONS = 2000;
+const MAX_NEWTON_ITERATIONS = 2000;
 const BARRIER_PARAM_START = 3.0;
 const BARRIER_PARAM_END = -5.0;
 
 interface CentralPathOptions {
   niter: number;
-}
-
-interface CentralPathXkOptions {
-  maxit: number;
-  epsilon: number;
 }
 
 function computeObjective(
@@ -122,9 +117,7 @@ function performLineSearch(
   return 0;
 }
 
-function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, mu: number, x0: Float64Array, opts: CentralPathXkOptions) {
-  const { maxit, epsilon } = opts;
-
+function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, mu: number, x0: Float64Array) {
   const currentPoint = Float64Array.from(x0);
   const gradient = new Float64Array(c.length);
   const hessian = new Float64Array(c.length * c.length);
@@ -134,7 +127,7 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
   const slackScratch = new Float64Array(b.length);
   const luScratch = new Float64Array(c.length * c.length);
 
-  for (let iteration = 1; iteration <= maxit; iteration++) {
+  for (let iteration = 1; iteration <= MAX_NEWTON_ITERATIONS; iteration++) {
     const newtonStep = computeNewtonStep(A, b, c, mu, currentPoint, gradient, hessian, axScratch, slackScratch, step, luScratch);
     if (newtonStep === null) {
       return null;
@@ -143,7 +136,7 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
     const gradientInfinityNorm = infinityNorm(gradient);
     const decrement = dot(gradient, newtonStep);
     const currentObjective = computeObjective(A, b, c, mu, currentPoint, axScratch, slackScratch);
-    if (gradientInfinityNorm < epsilon || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(currentObjective))) {
+    if (gradientInfinityNorm < NEWTON_GRADIENT_TOLERANCE || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(currentObjective))) {
       return Float64Array.from(currentPoint);
     }
 
@@ -186,10 +179,7 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   const slackScratch = new Float64Array(b.length);
 
   for (const mu of barrierParameters) {
-    const optimalPoint = centralPathXk(A, b, c, mu, currentPoint, {
-      epsilon: DEFAULT_CONVERGENCE_TOLERANCE,
-      maxit: DEFAULT_MAX_NEWTON_ITERATIONS,
-    });
+    const optimalPoint = centralPathXk(A, b, c, mu, currentPoint);
 
     if (!optimalPoint) {
       continue;
