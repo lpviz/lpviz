@@ -80,7 +80,7 @@ const getDeltas = (count: number, rng: Rng): number[] => {
   return deltas;
 };
 
-const valtrPolygon = (count: number, rng: Rng): PointXY[] => {
+export const valtrPolygon = (count: number, rng: Rng): PointXY[] => {
   const xDeltas = getDeltas(count, rng);
   const yDeltas = getDeltas(count, rng);
   shuffle(yDeltas, rng);
@@ -103,7 +103,7 @@ const valtrPolygon = (count: number, rng: Rng): PointXY[] => {
   }));
 };
 
-const isWellProportioned = (points: PointXY[]): boolean => {
+export const isWellProportioned = (points: PointXY[]): boolean => {
   const xs = points.map((p) => p.x);
   const ys = points.map((p) => p.y);
   const minX = Math.min(...xs);
@@ -194,100 +194,16 @@ export function requestRandomConvexPolygonProblem(): GalleryProblem | null {
   return createRandomConvexPolygonProblem(count);
 }
 
+const pts = (...coords: [number, number][]): PointXY[] => coords.map(([x, y]) => ({ x, y }));
+
 export const GALLERY_PROBLEMS: GalleryProblem[] = [
-  {
-    id: "pentagon",
-    name: "Pentagon",
-    vertices: [
-      { x: -8, y: -5 },
-      { x: -9, y: 4 },
-      { x: -2, y: 9 },
-      { x: 7, y: 5 },
-      { x: 8, y: -4 },
-    ],
-    interiorPoint: { x: -1, y: 1 },
-    objectiveVector: { x: 7, y: 3 },
-  },
-  {
-    id: "corridor",
-    name: "Hexagon",
-    vertices: [
-      { x: -12, y: -3 },
-      { x: -8, y: 5 },
-      { x: 4, y: 6 },
-      { x: 12, y: 1 },
-      { x: 9, y: -5 },
-      { x: -4, y: -6 },
-    ],
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 9, y: 2 },
-  },
-  {
-    id: "wide-box",
-    name: "Rectangle",
-    vertices: [
-      { x: -14, y: -4 },
-      { x: -14, y: 4 },
-      { x: 14, y: 4 },
-      { x: 14, y: -4 },
-    ],
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 3, y: 7 },
-  },
-  {
-    id: "needle",
-    name: "Needle",
-    vertices: [
-      { x: -30, y: -0.35 },
-      { x: -30, y: 0.35 },
-      { x: 30, y: 0.35 },
-      { x: 30, y: -0.35 },
-    ],
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 10, y: 0.1 },
-  },
-  {
-    ...createRandomConvexPolygonProblem(DEFAULT_RANDOM_POLYGON_VERTICES, mulberry32(RANDOM_POLYGON_PREVIEW_SEED)),
-    isRandom: true,
-  },
-  {
-    id: "slanted-strip",
-    name: "Slanted Strip",
-    vertices: [
-      { x: -24, y: -8 },
-      { x: -23, y: -6 },
-      { x: 24, y: 8 },
-      { x: 23, y: 6 },
-    ],
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 8, y: 6 },
-  },
-  {
-    id: "many-facets",
-    name: "Many Facets",
-    vertices: regularPolygon(28, 12, 10),
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 5, y: 7 },
-  },
-  {
-    id: "flat-many",
-    name: "Flat Facets",
-    vertices: regularPolygon(32, 24, 2.2),
-    interiorPoint: { x: 0, y: 0 },
-    objectiveVector: { x: 9, y: 1 },
-  },
-  {
-    id: "tight-corner",
-    name: "Tight Corner",
-    vertices: [
-      { x: -10, y: -6 },
-      { x: -10, y: 6 },
-      { x: 2, y: 6 },
-      { x: 9, y: 0.25 },
-      { x: 9.25, y: -0.25 },
-      { x: 2, y: -6 },
-    ],
-    interiorPoint: { x: -1, y: 0 },
-    objectiveVector: { x: 10, y: 0.2 },
-  },
+  { id: "pentagon", name: "Pentagon", vertices: pts([-8, -5], [-9, 4], [-2, 9], [7, 5], [8, -4]), interiorPoint: { x: -1, y: 1 }, objectiveVector: { x: 7, y: 3 } },
+  { id: "corridor", name: "Hexagon", vertices: pts([-12, -3], [-8, 5], [4, 6], [12, 1], [9, -5], [-4, -6]), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 9, y: 2 } },
+  { id: "wide-box", name: "Rectangle", vertices: pts([-14, -4], [-14, 4], [14, 4], [14, -4]), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 3, y: 7 } },
+  { id: "needle", name: "Needle", vertices: pts([-30, -0.35], [-30, 0.35], [30, 0.35], [30, -0.35]), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 10, y: 0.1 } },
+  { ...createRandomConvexPolygonProblem(DEFAULT_RANDOM_POLYGON_VERTICES, mulberry32(RANDOM_POLYGON_PREVIEW_SEED)), isRandom: true },
+  { id: "slanted-strip", name: "Slanted Strip", vertices: pts([-24, -8], [-23, -6], [24, 8], [23, 6]), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 8, y: 6 } },
+  { id: "many-facets", name: "Many Facets", vertices: regularPolygon(28, 12, 10), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 5, y: 7 } },
+  { id: "flat-many", name: "Flat Facets", vertices: regularPolygon(32, 24, 2.2), interiorPoint: { x: 0, y: 0 }, objectiveVector: { x: 9, y: 1 } },
+  { id: "tight-corner", name: "Tight Corner", vertices: pts([-10, -6], [-10, 6], [2, 6], [9, 0.25], [9.25, -0.25], [2, -6]), interiorPoint: { x: -1, y: 0 }, objectiveVector: { x: 10, y: 0.2 } },
 ];
