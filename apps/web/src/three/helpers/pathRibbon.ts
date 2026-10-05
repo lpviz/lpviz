@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, Vector2 } from "three";
+import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
 import { applyHugeBounds } from "./sharedLineMaterials";
 
 // Constant screen-width polyline rendering with true fat-line styling at a
@@ -145,6 +145,20 @@ export type PathRibbonStyle = {
 
 const WHITE = new Color(1, 1, 1);
 
+// A TEX_WIDTH x rows RGBA texture, reused in place when large enough
+// (grow-only): solver steps replace paths dozens of times per second, and
+// allocating a texture per step churns both the GC and the GL driver.
+function ensureTexture(texture: DataTexture | null, rows: number, type: typeof FloatType | typeof UnsignedByteType): DataTexture {
+  if (texture && (texture.image.height as number) >= rows) return texture;
+  texture?.dispose();
+  const length = TEX_WIDTH * rows * 4;
+  const next = new DataTexture(type === FloatType ? new Float32Array(length) : new Uint8Array(length), TEX_WIDTH, rows, RGBAFormat, type);
+  next.minFilter = NearestFilter;
+  next.magFilter = NearestFilter;
+  next.generateMipmaps = false;
+  return next;
+}
+
 // bound when a ribbon has no per-point colors, keeping a single program
 const dummyColorTexture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
 dummyColorTexture.needsUpdate = true;
@@ -195,18 +209,9 @@ export class PathRibbon {
   }
 
   // points: per-point [x, y, z]; colors: optional per-point linear RGBA bytes.
-  // Path/color textures are reused in place when large enough (grow-only):
-  // solver steps replace paths dozens of times per second, and allocating a
-  // texture per step churns both the GC and the GL driver.
   setPath(points: Float32Array, pointCount: number, colors?: Uint8Array | null): void {
     const rows = Math.max(1, Math.ceil(pointCount / TEX_WIDTH));
-    if (!this.texture || (this.texture.image.height as number) < rows) {
-      this.texture?.dispose();
-      this.texture = new DataTexture(new Float32Array(TEX_WIDTH * rows * 4), TEX_WIDTH, rows, RGBAFormat, FloatType);
-      this.texture.minFilter = NearestFilter;
-      this.texture.magFilter = NearestFilter;
-      this.texture.generateMipmaps = false;
-    }
+    this.texture = ensureTexture(this.texture, rows, FloatType);
     const data = this.texture.image.data as Float32Array;
     for (let i = 0; i < pointCount; i++) {
       data[i * 4] = points[i * 3]!;
@@ -223,13 +228,7 @@ export class PathRibbon {
     // with per-point colors the uniform must not tint them
     (this.material.uniforms.color!.value as Color).copy(colors ? WHITE : this.baseColor);
     if (colors) {
-      if (!this.colorTexture || (this.colorTexture.image.height as number) < rows) {
-        this.colorTexture?.dispose();
-        this.colorTexture = new DataTexture(new Uint8Array(TEX_WIDTH * rows * 4), TEX_WIDTH, rows, RGBAFormat);
-        this.colorTexture.minFilter = NearestFilter;
-        this.colorTexture.magFilter = NearestFilter;
-        this.colorTexture.generateMipmaps = false;
-      }
+      this.colorTexture = ensureTexture(this.colorTexture, rows, UnsignedByteType);
       (this.colorTexture.image.data as Uint8Array).set(colors.subarray(0, pointCount * 4));
       this.colorTexture.needsUpdate = true;
       this.material.uniforms.colorTex!.value = this.colorTexture;

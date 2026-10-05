@@ -373,6 +373,38 @@ export interface BoundaryRay {
   direction: [number, number];
 }
 
+// Clip the ray start + t*direction (t > 0) to the box: the farthest boundary hit, or null when the ray never enters it.
+const RAY_CLIP_EPS = 1e-10;
+export function clipRayToBoundingBox(start: PointXY, direction: PointXY, bounds: BoundingBox): [PointXY, PointXY] | null {
+  const candidates: Array<{ t: number; point: PointXY }> = [];
+
+  if (Math.abs(direction.x) > RAY_CLIP_EPS) {
+    for (const x of [bounds.minX, bounds.maxX]) {
+      const t = (x - start.x) / direction.x;
+      if (t <= RAY_CLIP_EPS) continue;
+      const y = start.y + t * direction.y;
+      if (y >= bounds.minY - RAY_CLIP_EPS && y <= bounds.maxY + RAY_CLIP_EPS) {
+        candidates.push({ t, point: { x, y } });
+      }
+    }
+  }
+
+  if (Math.abs(direction.y) > RAY_CLIP_EPS) {
+    for (const y of [bounds.minY, bounds.maxY]) {
+      const t = (y - start.y) / direction.y;
+      if (t <= RAY_CLIP_EPS) continue;
+      const x = start.x + t * direction.x;
+      if (x >= bounds.minX - RAY_CLIP_EPS && x <= bounds.maxX + RAY_CLIP_EPS) {
+        candidates.push({ t, point: { x, y } });
+      }
+    }
+  }
+
+  if (candidates.length === 0) return null;
+  candidates.sort((a, b) => b.t - a.t);
+  return [start, candidates[0].point];
+}
+
 export function buildOpenBoundaryRays(points: Vertices): BoundaryRay[] {
   if (points.length < 2) {
     return [];

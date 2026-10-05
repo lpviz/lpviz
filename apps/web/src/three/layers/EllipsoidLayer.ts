@@ -1,13 +1,13 @@
-import type { EllipsoidPath, LocalizingSetPath } from "@/features/core/store";
-import { Group, Matrix4 } from "three";
+import { getState, type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
-import type { SceneContext } from "../SceneContext";
-import { LayerBase } from "./base/LayerBase";
+import { applyHugeBounds, lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
+import { ZScaledGroupLayer } from "./base/LayerBase";
 
 const ELLIPSOID_COLOR = "#377eb8";
 const ACTIVE_THICKNESS = 2.5;
@@ -100,14 +100,14 @@ function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: n
 // Each ellipse contains every feasible point at least as good as the incumbent
 // at that iteration, so watching them nest is watching the method localize the
 // optimum. Follows the active iterate: the last one solved, or the one being
-// hovered in the log / replayed.
-export class EllipsoidLayer extends LayerBase {
-  readonly object3D: Group;
+// hovered in the log / replayed. Raw z is baked into each ellipse's transform;
+// zScale and the 2D/3D transition flatten ride on scale.z, exactly as for the
+// iterate path.
+export class EllipsoidLayer extends ZScaledGroupLayer {
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
-  private readonly polygonGeometry: LineSegmentsGeometry;
   private readonly polygon: LineSegments2;
   private readonly matrix = new Matrix4();
   private readonly indices: number[] = [];
@@ -120,41 +120,34 @@ export class EllipsoidLayer extends LayerBase {
     applyHugeBounds(geometry);
     this.geometry = geometry;
 
-    const group = new Group();
-    this.polygonGeometry = new LineSegmentsGeometry();
-    applyHugeBounds(this.polygonGeometry);
-    this.polygon = new LineSegments2(this.polygonGeometry, polygonMaterial(false));
-    this.polygon.renderOrder = RENDER_ORDER.ellipsoid;
-    this.polygon.frustumCulled = false;
-    this.polygon.visible = false;
-    group.add(this.polygon);
+    this.polygon = setupLine(new LineSegments2(lineGeometry(), polygonMaterial(false)), RENDER_ORDER.ellipsoid);
+    this.object3D.add(this.polygon);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
-      const segments = new LineSegments2(geometry, slotMaterial(slot, false));
-      segments.renderOrder = RENDER_ORDER.ellipsoid;
-      segments.frustumCulled = false;
+      const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), RENDER_ORDER.ellipsoid);
       segments.matrixAutoUpdate = false;
-      segments.visible = false;
       this.slots.push(segments);
-      group.add(segments);
+      this.object3D.add(segments);
     }
-    this.object3D = group;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    // raw z is baked into each ellipse's transform; zScale and the 2D/3D
-    // transition flatten ride on scale.z, exactly as for the iterate path
-    this.applyZScale(ctx);
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [
+      raw.iterateEllipsoids,
+      raw.iterateLocalizingSets,
+      raw.iteratePath,
+      raw.iterateObjectiveVector,
+      raw.highlightIteratePathIndex,
+      raw.is3DMode,
+      raw.isTransitioning3D,
+      getViewportRenderSnapshot().mode,
+    ];
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.iterateEllipsoids, raw.iterateLocalizingSets, raw.iteratePath, raw.iterateObjectiveVector, raw.highlightIteratePathIndex, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
-  }
-
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     const ellipsoids = raw.iterateEllipsoids;
 
     if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, raw)) {
@@ -198,7 +191,7 @@ export class EllipsoidLayer extends LayerBase {
     this.showLocalizingSet(raw, snap.mode === "3d");
   }
 
-  private showLocalizingSet(raw: ReturnType<SceneContext["getState"]>, is3D: boolean): void {
+  private showLocalizingSet(raw: State, is3D: boolean): void {
     const index = raw.highlightIteratePathIndex;
     if (index === null) {
       this.polygon.visible = false;
@@ -210,7 +203,7 @@ export class EllipsoidLayer extends LayerBase {
       this.polygon.visible = false;
       return;
     }
-    replaceLinePositions(this.polygonGeometry, this.polygonScratch.subarray(0, written));
+    replaceLinePositions(this.polygon.geometry, this.polygonScratch.subarray(0, written));
     this.polygon.material = polygonMaterial(is3D);
     this.polygon.visible = true;
   }
@@ -249,7 +242,7 @@ export class EllipsoidLayer extends LayerBase {
 
   dispose(): void {
     this.geometry.dispose();
-    this.polygonGeometry.dispose();
+    this.polygon.geometry.dispose();
   }
 }
 

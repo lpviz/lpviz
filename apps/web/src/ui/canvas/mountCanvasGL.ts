@@ -1,9 +1,7 @@
 import type { ViewportBridge } from "@/features/viewport/types";
-import type { Layer } from "@/three/Layer";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
 import { ControlsController } from "@/three/controllers/ControlsController";
-import { SharedMaterialsController } from "@/three/controllers/SharedMaterialsController";
 import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
@@ -30,9 +28,8 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   const transitionCtl = new TransitionController(mgr);
   mgr.addTick(() => transitionCtl.tick());
   const cameraCtl = new CameraController(mgr);
-  const controlsCtl = new ControlsController(mgr);
-  const materialsCtl = new SharedMaterialsController(mgr);
-  const layers: Layer[] = [
+  const controlsCtl = new ControlsController(mgr, cameraCtl.perspective);
+  const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),
     new PolytopeRubberBandLayer(),
@@ -59,14 +56,9 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   return {
     canvas,
     destroy: () => {
-      for (const l of layers) {
-        mgr.removeLayer(l);
-        l.dispose();
-      }
       controlsCtl.dispose();
       cameraCtl.dispose();
       transitionCtl.dispose();
-      materialsCtl.dispose();
       mgr.dispose();
       onBridgeDispose?.();
       canvas.remove();

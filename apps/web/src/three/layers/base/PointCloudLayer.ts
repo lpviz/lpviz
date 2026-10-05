@@ -1,12 +1,12 @@
 import type { ViewportDirtyFlags } from "@/features/core/store";
 import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
-import { makePointsGeo } from "../../helpers/makePointsGeo";
+import { makePoints, pointsMaterial } from "../../helpers/points";
 import type { RenderPassName } from "../../Layer";
-import type { SceneContext } from "../../SceneContext";
-import { LayerBase } from "./LayerBase";
+import { ZScaledLayer } from "./LayerBase";
 
 export type PointCloudConfig = {
   color: string;
+  opacity?: number;
   pixelSize: number;
   texture: Texture;
   renderOrder: number;
@@ -16,14 +16,13 @@ export type PointCloudConfig = {
   vertexColors: boolean;
 };
 
-// Shared base for the iterate point clouds. Owns one correct grow-only
-// DynamicDrawUsage position attribute (and optional color attribute), the
-// plain/colored material pair, and the scale.z transform — all of which used to
-// be hand-rolled, and inconsistently (some layers allocated fresh buffers every
-// frame). Subclasses implement rebuild() by calling draw(count, writePositions,
+// Shared base for the iterate point clouds and single-point markers. Owns one
+// grow-only DynamicDrawUsage position attribute (and optional color
+// attribute), the plain/colored material pair, and the scale.z transform.
+// Subclasses implement rebuild() by calling draw(count, writePositions,
 // writeColors?), writing directly into the grow-only arrays (no intermediate
 // copy on the rotation hot path).
-export abstract class PointCloudLayer extends LayerBase {
+export abstract class PointCloudLayer extends ZScaledLayer {
   readonly object3D: Points;
   override readonly renderPass: RenderPassName;
   override readonly invalidationKeys: readonly (keyof ViewportDirtyFlags)[];
@@ -32,28 +31,11 @@ export abstract class PointCloudLayer extends LayerBase {
 
   constructor(config: PointCloudConfig) {
     super();
-    const shared = {
-      size: config.pixelSize,
-      sizeAttenuation: false,
-      transparent: false,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: config.texture,
-      alphaTest: 0.2,
-    };
-    this.matPlain = new PointsMaterial({ ...shared, color: config.color });
-    this.matColored = config.vertexColors ? new PointsMaterial({ ...shared, color: "#ffffff", vertexColors: true }) : null;
-    const points = new Points(makePointsGeo(), this.matPlain);
-    points.renderOrder = config.renderOrder;
-    points.frustumCulled = false;
-    points.visible = false;
-    this.object3D = points;
+    this.matPlain = pointsMaterial(config.texture, config.pixelSize, config.color, config.opacity);
+    this.matColored = config.vertexColors ? pointsMaterial(config.texture, config.pixelSize, "#ffffff", config.opacity, true) : null;
+    this.object3D = makePoints(this.matPlain, config.renderOrder, false);
     this.renderPass = config.renderPass;
     this.invalidationKeys = config.invalidationKeys;
-  }
-
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
   }
 
   protected hide(): void {

@@ -2,7 +2,7 @@ import type { CompletionMode, DragTarget, DragViewAnchor3D, State } from "@/feat
 import { displayedSolverStartPoint, getState } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { type BoundingBox, VRep } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox, VRep } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
 
 const VERTEX_HIT_RADIUS = 12;
@@ -15,7 +15,6 @@ const SOLVER_START_HIT_RADIUS = 10;
 // region and under a pixel zoomed out (see #71).
 export const EDGE_HIT_RADIUS_PX = 10;
 const DRAG_THRESHOLD_PX = 5;
-const EPS = 1e-10;
 
 type Bounds = BoundingBox;
 
@@ -79,36 +78,6 @@ function distanceToSegment(point: PointXY, start: PointXY, end: PointXY): number
   return Math.hypot(point.x - projection.x, point.y - projection.y);
 }
 
-function clipRayToBounds(start: PointXY, direction: PointXY, bounds: Bounds): [PointXY, PointXY] | null {
-  const candidates: Array<{ t: number; point: PointXY }> = [];
-
-  if (Math.abs(direction.x) > EPS) {
-    for (const x of [bounds.minX, bounds.maxX]) {
-      const t = (x - start.x) / direction.x;
-      if (t <= EPS) continue;
-      const y = start.y + t * direction.y;
-      if (y >= bounds.minY - EPS && y <= bounds.maxY + EPS) {
-        candidates.push({ t, point: { x, y } });
-      }
-    }
-  }
-
-  if (Math.abs(direction.y) > EPS) {
-    for (const y of [bounds.minY, bounds.maxY]) {
-      const t = (y - start.y) / direction.y;
-      if (t <= EPS) continue;
-      const x = start.x + t * direction.x;
-      if (x >= bounds.minX - EPS && x <= bounds.maxX + EPS) {
-        candidates.push({ t, point: { x, y } });
-      }
-    }
-  }
-
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.t - a.t);
-  return [start, candidates[0].point];
-}
-
 export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: PointXY): number | null {
   const { completionMode, polytope } = getState();
   if (completionMode !== "open" || !polytope?.boundaryRays?.length) {
@@ -118,7 +87,7 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Poin
   const bounds = getVisibleBounds(canvasManager);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
     const ray = polytope.boundaryRays[index];
-    const clipped = clipRayToBounds({ x: ray.start[0], y: ray.start[1] }, { x: ray.direction[0], y: ray.direction[1] }, bounds);
+    const clipped = clipRayToBoundingBox({ x: ray.start[0], y: ray.start[1] }, { x: ray.direction[0], y: ray.direction[1] }, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
     if (distanceToSegment(point, start, end) < 0.5) {

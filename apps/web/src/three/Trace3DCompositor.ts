@@ -1,7 +1,8 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { Camera, CustomBlending, GLSL3, Material, Mesh, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
+import { Camera, Material, Mesh, OrthographicCamera, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
+import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
 // Motion-time compositor for the trace-lines pass in 3D mode.
 //
@@ -31,18 +32,6 @@ void main() {
 }
 `;
 
-// offscreen strokes are sRGB-encoded premultiplied alpha (see cacheEncode in
-// pathRibbon.ts), so the composite is a passthrough with (ONE, 1-alpha)
-const QUAD_FRAGMENT_SHADER = /* glsl */ `
-uniform sampler2D map;
-in vec2 vUv;
-out vec4 outColor;
-
-void main() {
-  outColor = texture(map, vUv);
-}
-`;
-
 export class Trace3DCompositor {
   private renderTarget: WebGLRenderTarget | null = null;
   private quadScene = new Scene();
@@ -51,24 +40,13 @@ export class Trace3DCompositor {
   private materialScratch: Material[] = [];
   private lastViewKey = "";
   private lastViewChangeAt = -Infinity;
-  private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  private settle: SettleTimer;
 
-  constructor(private requestFrame?: () => void) {
-    this.material = new ShaderMaterial({
-      glslVersion: GLSL3,
-      vertexShader: QUAD_VERTEX_SHADER,
-      fragmentShader: QUAD_FRAGMENT_SHADER,
-      uniforms: { map: { value: null } },
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      blending: CustomBlending,
-      blendSrc: OneFactor,
-      blendDst: OneMinusSrcAlphaFactor,
-    });
-    const quad = new Mesh(new PlaneGeometry(2, 2), this.material);
-    quad.frustumCulled = false;
-    this.quadScene.add(quad);
+  constructor(requestFrame: () => void) {
+    this.settle = new SettleTimer(requestFrame, VIEW_SETTLE_MS);
+    const { mesh, material } = makeCompositeQuad(QUAD_VERTEX_SHADER, 2);
+    this.material = material;
+    this.quadScene.add(mesh);
   }
 
   // Returns the composite quad scene when the pass should go through the
@@ -95,14 +73,8 @@ export class Trace3DCompositor {
     if (!moving) {
       return null;
     }
-    if (this.settleTimer === null && this.requestFrame) {
-      // demand-driven rendering: schedule the settle frame that re-renders
-      // the pass directly at full quality
-      this.settleTimer = setTimeout(() => {
-        this.settleTimer = null;
-        this.requestFrame!();
-      }, VIEW_SETTLE_MS);
-    }
+    // the settle frame re-renders the pass directly at full quality
+    this.settle.arm();
 
     const pixelWidth = Math.max(1, Math.round((snapshot.width || 1) * renderer.getPixelRatio()));
     const pixelHeight = Math.max(1, Math.round((snapshot.height || 1) * renderer.getPixelRatio()));
@@ -159,10 +131,7 @@ export class Trace3DCompositor {
   }
 
   dispose(): void {
-    if (this.settleTimer !== null) {
-      clearTimeout(this.settleTimer);
-      this.settleTimer = null;
-    }
+    this.settle.dispose();
     this.releaseTarget();
     this.quadScene.children.forEach((child) => {
       (child as Mesh).geometry?.dispose();
