@@ -31,12 +31,10 @@ type EditorTransition =
   | {
       kind: "edit";
       result: EditorEditResult;
-      saveToHistory: boolean;
     }
   | {
       kind: "select-objective";
       objectiveVector: PointXY;
-      saveToHistory: boolean;
     };
 
 export function getEditorContext(state: State) {
@@ -147,7 +145,6 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
 const edit = (vertices: PointXY[], completionMode: CompletionMode, interiorPoint: PointXY | null): EditorTransition => ({
   kind: "edit",
   result: { vertices, completionMode, interiorPoint },
-  saveToHistory: true,
 });
 
 export function getEditorTransition(
@@ -167,7 +164,6 @@ export function getEditorTransition(
         return {
           kind: "select-objective",
           objectiveVector: state.currentObjective || action.point,
-          saveToHistory: true,
         };
       }
 

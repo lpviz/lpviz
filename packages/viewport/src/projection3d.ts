@@ -4,14 +4,12 @@ import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type Viewport3DInteractionOptions = {
-  objectiveVector: PointXY | null;
   zScale: number;
   snapToGrid: boolean;
   editorInteractionKind: string;
   is3DMode: boolean;
   isTransitioning3D: boolean;
   viewAnchor3D?: { x: number; y: number; z: number };
-  zValueForPoint?: (entry: Float64Array) => number;
 };
 
 const MAX_3D_DRAG_BOUND = 5000;
@@ -112,14 +110,6 @@ export function toCanvasCoords3D(
     x: point.x,
     y: point.y,
     z: ((zValue * zScale) / 100) * snapshot.transitionZMultiplier,
-  });
-}
-
-export function getObjectiveScreenPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY): PointXY {
-  return projectWorldPosition3D(snapshot, rect, {
-    x: point.x,
-    y: point.y,
-    z: 0,
   });
 }
 

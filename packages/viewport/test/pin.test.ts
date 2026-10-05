@@ -12,7 +12,7 @@ import {
   toLogicalCoords2D,
   zoomViewport2DStateAtCanvasPoint,
 } from "../src/projection2d";
-import { getObjectiveScreenPosition3D, projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D, type Viewport3DInteractionOptions } from "../src/projection3d";
+import { projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D, type Viewport3DInteractionOptions } from "../src/projection3d";
 import {
   buildPerspectivePoseFromViewAngle,
   buildTransitionCompleteState,
@@ -61,11 +61,11 @@ const ANCHORS = [
   { x: -40, y: 25, z: 0 },
 ];
 const OPTION_VARIANTS: Viewport3DInteractionOptions[] = [
-  { objectiveVector: null, zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
-  { objectiveVector: null, zScale: 0.1, snapToGrid: true, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
-  { objectiveVector: { x: 1, y: 2 }, zScale: 0.1, snapToGrid: false, editorInteractionKind: "drag", is3DMode: true, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
-  { objectiveVector: null, zScale: 2.5, snapToGrid: true, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: true, viewAnchor3D: ANCHORS[1] },
-  { objectiveVector: null, zScale: 0.0001, snapToGrid: false, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
+  { zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
+  { zScale: 0.1, snapToGrid: true, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
+  { zScale: 0.1, snapToGrid: false, editorInteractionKind: "drag", is3DMode: true, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
+  { zScale: 2.5, snapToGrid: true, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: true, viewAnchor3D: ANCHORS[1] },
+  { zScale: 0.0001, snapToGrid: false, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
 ];
 const BOUNDS = [
   { minX: -30, maxX: 30, minY: -10, maxY: 10 },
@@ -136,7 +136,7 @@ function buildTranscript() {
                 toCanvasCoords3D(snap, rect, { x, y }, undefined, 0.1),
                 toCanvasCoords3D(snap, rect, { x, y }, 7, 0.1),
                 toCanvasCoords3D(snap, rect, { x, y }, 7, 2.5, (entry) => entry[0] * 2 + entry[1]),
-                getObjectiveScreenPosition3D(snap, rect, { x, y }),
+                projectWorldPosition3D(snap, rect, { x, y, z: 0 }),
               ]);
             }
           }
@@ -241,7 +241,7 @@ describe("viewport pin", () => {
     // camera 1.5 rad from top-down: nearly in the z = 0 plane, so the top of
     // the canvas looks above the horizon and never meets the plane
     const snap = buildViewport3DSnapshot(createDefaultViewportRenderSnapshot(rect), buildPerspectivePoseFromViewAngle({ x: -1.5, y: 0, z: 0 }, 100, { x: 5, y: -3, z: 2 }), rect);
-    const base: Viewport3DInteractionOptions = { objectiveVector: null, zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false };
+    const base: Viewport3DInteractionOptions = { zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false };
     expect(projectCanvasPointToWorldPlane(snap, rect, { x: 600, y: 0 }, 0)).toBeNull();
     expect(toLogicalCoords3D(snap, rect, 600, 0, base)).toEqual({ x: 5, y: -3 });
     const anchored = toLogicalCoords3D(snap, rect, 600, 0, { ...base, viewAnchor3D: { x: 3, y: -2, z: 1.5 } });

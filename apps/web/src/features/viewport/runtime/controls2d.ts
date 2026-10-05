@@ -1,9 +1,8 @@
 import { getState } from "@/features/core/store";
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, deriveViewport2DState, type Viewport2DState, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
+import type { ViewportRect } from "@lpviz/viewport/types";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
-
-type ViewportRect = Pick<DOMRect, "width" | "height">;
 
 type ActivePanState = {
   startClientX: number;
