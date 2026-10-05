@@ -288,7 +288,7 @@ const total = createHash("sha256").update(JSON.stringify(sorted)).digest("hex").
 console.log(`${Object.keys(sorted).length} cases, total ${total}`);
 
 if (write) {
-  writeFileSync(baselinePath, JSON.stringify({ total, cases: sorted }, null, 1) + "\n");
+  writeFileSync(baselinePath, JSON.stringify({ total, cases: sorted }, null, 2) + "\n");
   console.log(`wrote ${baselinePath}`);
 } else {
   const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as { total: string; cases: Record<string, string> };
