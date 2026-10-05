@@ -60,7 +60,7 @@ export function attachCanvasInteractions({
   const DOUBLE_TAP_RADIUS_PX = 28;
   // How close (in screen pixels) a click must land to the first vertex to close
   // the region. Touch needs a more forgiving target than a mouse cursor.
-  const coarsePointer = typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(pointer: coarse)").matches;
+  const coarsePointer = window.matchMedia("(pointer: coarse)").matches;
   const CLOSE_HIT_RADIUS_PX = coarsePointer ? 24 : 12;
 
   // pen and touch share the same "has this gesture drifted far enough to be a
@@ -98,13 +98,10 @@ export function attachCanvasInteractions({
 
   const cleanupDragState = () => {
     pendingDragHistory = null;
-    setState(
-      {
-        editorInteraction: { kind: "idle" },
-        lastCompletedInteraction: "none",
-      },
-      { viewportDirty: {} },
-    );
+    setState({
+      editorInteraction: { kind: "idle" },
+      lastCompletedInteraction: "none",
+    });
     restoreViewportControls();
     requestAnimationFrame(restoreViewportControls);
   };
@@ -117,7 +114,6 @@ export function attachCanvasInteractions({
     },
     options: {
       saveToHistory?: boolean;
-      extraPatch?: Partial<State>;
     } = {},
   ) => {
     if (options.saveToHistory ?? true) {
@@ -130,7 +126,6 @@ export function attachCanvasInteractions({
       polytope: null as null,
       inequalitiesMessage: null,
       highlightIndex: null,
-      ...(options.extraPatch ?? {}),
     });
     canvasManager.draw();
     sendPolytope();
@@ -177,24 +172,21 @@ export function attachCanvasInteractions({
 
       setState({ vertices: updatedVertices.map(([x, y]) => ({ x, y })) });
 
-      setState(
-        {
-          editorInteraction: {
-            kind: "dragging",
-            target: {
-              kind: "constraint",
-              operation: {
-                kind: "closed-line",
-                lineIndex: target.operation.lineIndex,
-                lines: updatedLines,
-              },
-              start: logicalCoords,
-              normal: target.normal,
+      setState({
+        editorInteraction: {
+          kind: "dragging",
+          target: {
+            kind: "constraint",
+            operation: {
+              kind: "closed-line",
+              lineIndex: target.operation.lineIndex,
+              lines: updatedLines,
             },
+            start: logicalCoords,
+            normal: target.normal,
           },
         },
-        { viewportDirty: {} },
-      );
+      });
     } else {
       const operation = target.operation;
       const shiftX = target.normal.x * delta;
@@ -203,20 +195,17 @@ export function attachCanvasInteractions({
       setState({
         vertices: getState().vertices.map((v, i) => (indices.has(i) ? { x: v.x + shiftX, y: v.y + shiftY } : v)),
       });
-      setState(
-        {
-          editorInteraction: {
-            kind: "dragging",
-            target: {
-              kind: "constraint",
-              operation,
-              start: logicalCoords,
-              normal: target.normal,
-            },
+      setState({
+        editorInteraction: {
+          kind: "dragging",
+          target: {
+            kind: "constraint",
+            operation,
+            start: logicalCoords,
+            normal: target.normal,
           },
         },
-        { viewportDirty: {} },
-      );
+      });
     }
 
     sendPolytope();
@@ -282,27 +271,21 @@ export function attachCanvasInteractions({
       if (target.kind === "objective") {
         pendingDragHistory = captureHistoryEntry(state);
       }
-      setState(
-        {
-          editorInteraction: { kind: "dragging", target },
-        },
-        { viewportDirty: {} },
-      );
+      setState({
+        editorInteraction: { kind: "dragging", target },
+      });
       canvasManager.setControlsBlocked(true);
       return true;
     }
 
-    setState(
-      {
-        editorInteraction: {
-          kind: "pending-drag",
-          target,
-          dragStartPos: { x: clientX, y: clientY },
-        },
-        lastCompletedInteraction: "none",
+    setState({
+      editorInteraction: {
+        kind: "pending-drag",
+        target,
+        dragStartPos: { x: clientX, y: clientY },
       },
-      { viewportDirty: {} },
-    );
+      lastCompletedInteraction: "none",
+    });
     pendingDragHistory = captureHistoryEntry(state);
     if (target.kind === "point") {
       canvasManager.setControlsBlocked(true);
@@ -320,15 +303,12 @@ export function attachCanvasInteractions({
 
     const logicalCoords = getLogicalFromClient(canvasManager, clientX, clientY);
     if (initialInteraction.kind === "pending-drag" && exceedsDragThreshold(initialState, clientX, clientY)) {
-      setState(
-        {
-          editorInteraction: {
-            kind: "dragging",
-            target: initialInteraction.target,
-          },
+      setState({
+        editorInteraction: {
+          kind: "dragging",
+          target: initialInteraction.target,
         },
-        { viewportDirty: {} },
-      );
+      });
       canvasManager.setControlsBlocked(true);
     }
 
@@ -346,20 +326,17 @@ export function attachCanvasInteractions({
   const handleDragEnd = () => {
     const interaction = getState().editorInteraction;
     if (interaction.kind === "dragging") {
-      setState(
-        {
-          editorInteraction: { kind: "idle" },
-          lastCompletedInteraction:
-            interaction.target.kind === "point"
-              ? "dragged-point"
-              : interaction.target.kind === "constraint"
-                ? "dragged-constraint"
-                : interaction.target.kind === "solver-start"
-                  ? "dragged-start"
-                  : "dragged-objective",
-        },
-        { viewportDirty: {} },
-      );
+      setState({
+        editorInteraction: { kind: "idle" },
+        lastCompletedInteraction:
+          interaction.target.kind === "point"
+            ? "dragged-point"
+            : interaction.target.kind === "constraint"
+              ? "dragged-constraint"
+              : interaction.target.kind === "solver-start"
+                ? "dragged-start"
+                : "dragged-objective",
+      });
       // a moved start marker changes no geometry, and re-sending the polytope
       // would reset any accumulated trace (comparing paths from different
       // starts is the point of dragging it)
