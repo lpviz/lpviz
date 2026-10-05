@@ -1,7 +1,7 @@
 // Visual + DOM regression harness. Builds the app, serves dist with vite
 // preview, drives headless Chromium through a fixed set of scenarios (share
 // links, panel toggles, a draw→solve→3D→orbit→2D→pan→zoom interaction) and
-// records, per scenario: a screenshot, the sidebar's and stage's outerHTML,
+// records, per scenario: a screenshot, the body's outerHTML,
 // the computed style of every element, and any console error. The baseline is
 // local (.visual/baseline, gitignored): write it on the reference commit, then
 // run the compare on the branch.
@@ -50,7 +50,7 @@ const share = (p: ReturnType<typeof problem>, mode: SharedAppState["solverMode"]
   encodeSharedState({ vertices: p.vertices, completionMode: "closed", objective: p.objectiveVector, solverMode: mode, settings: {}, ...extra });
 
 type Viewport = { width: number; height: number };
-type Scenario = { name: string; s?: string; viewport?: Viewport; settle?: number; run?: (page: Page) => Promise<void> };
+type Scenario = { name: string; s?: string; path?: string; viewport?: Viewport; settle?: number; run?: (page: Page) => Promise<void> };
 const DESKTOP: Viewport = { width: 1280, height: 800 };
 const MOBILE: Viewport = { width: 390, height: 844 };
 const MODES = ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const;
@@ -129,6 +129,11 @@ scenarios.push({
     await page.mouse.up();
   },
 });
+// the static documentation pages, served verbatim from public/docs
+// A tall viewport instead of fullPage: the software renderer cannot capture the 9,400px ellipsoid page in one shot.
+const DOCS: Viewport = { width: 1280, height: 7000 };
+for (const doc of ["", "simplex", "interior-point", "pdhg", "ellipsoid", "central-path"]) scenarios.push({ name: `docs-${doc || "index"}`, path: `docs/${doc}`, viewport: DOCS, settle: 300 });
+scenarios.push({ name: "docs-ellipsoid-tail", path: "docs/ellipsoid", viewport: DOCS, settle: 300, run: (page) => page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)) });
 scenarios.push({
   name: "interaction",
   settle: 1500,
@@ -179,7 +184,7 @@ const FROZEN_MOTION = "*, *::before, *::after { animation: none !important; tran
 const STYLE_SCRIPT = `(() => {
   const path = (el) => { const parts = []; for (let e = el; e && e.nodeType === 1; e = e.parentElement) { let s = e.tagName.toLowerCase(); if (e.id) s += '#' + e.id; if (e.classList.length) s += '.' + [...e.classList].join('.'); const sib = e.parentElement ? [...e.parentElement.children].filter(c => c.tagName === e.tagName) : []; if (sib.length > 1) s += ':nth(' + sib.indexOf(e) + ')'; parts.unshift(s); } return parts.join('>'); };
   const out = [];
-  for (const el of document.querySelectorAll('*')) { const cs = getComputedStyle(el); const props = []; for (let i = 0; i < cs.length; i++) { const p = cs[i]; props.push(p + ':' + cs.getPropertyValue(p)); } out.push(path(el) + '\\n  ' + props.join(';')); }
+  for (const el of document.querySelectorAll('*')) { const cs = getComputedStyle(el); const props = []; for (let i = 0; i < cs.length; i++) { const p = cs[i]; props.push(p + ':' + cs.getPropertyValue(p)); } props.sort(); out.push(path(el) + '\\n  ' + props.join(';')); }
   return out.join('\\n');
 })()`;
 
@@ -194,7 +199,7 @@ async function capture(page: Page, sc: Scenario) {
   page.on("console", onConsole);
   page.on("pageerror", onPageError);
   await page.setViewportSize(sc.viewport ?? DESKTOP);
-  await page.goto(`http://localhost:${PORT}/${sc.s ? `?s=${sc.s}` : ""}`, { waitUntil: "networkidle" });
+  await page.goto(`http://localhost:${PORT}/${sc.path ?? ""}${sc.s ? `?s=${sc.s}` : ""}`, { waitUntil: "networkidle" });
   await page.addStyleTag({ content: FROZEN_MOTION });
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(400);
@@ -202,7 +207,7 @@ async function capture(page: Page, sc: Scenario) {
   await page.waitForTimeout(sc.settle ?? 1200);
   await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r))));
   const png = await page.screenshot({ fullPage: false });
-  const html = await page.evaluate(() => (document.getElementById("sidebar")?.outerHTML ?? "") + "\n" + (document.querySelector("main")?.outerHTML ?? ""));
+  const html = await page.evaluate(() => document.body.outerHTML);
   const styles = (await page.evaluate(STYLE_SCRIPT)) as string;
   page.off("console", onConsole);
   page.off("pageerror", onPageError);
