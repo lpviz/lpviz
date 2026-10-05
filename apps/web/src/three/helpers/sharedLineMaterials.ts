@@ -3,45 +3,17 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { setPathRibbonResolution } from "./pathRibbon";
 
-type LineMaterialKey = {
-  color: string | number;
-  linewidth: number;
-  depthTest: boolean;
-  depthWrite: boolean;
-  opacity: number;
-};
-
 const materialCache = new Map<string, LineMaterial>();
-
-function makeKey(k: LineMaterialKey): string {
-  return `${k.color}|${k.linewidth}|${k.depthTest}|${k.depthWrite}|${k.opacity}`;
-}
 
 // The depth-on-in-3D line material every polytope/objective/constraint layer
 // wants: 2D paints in draw order (no depth), 3D depth-tests so the floor
-// occludes correctly. Wraps the shared cache.
+// occludes correctly. One instance per distinct parameter set, shared by
+// every object that asks for it.
 export function lineDepthMaterial(color: string | number, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
-  return getSharedLineMaterial({
-    color,
-    linewidth,
-    depthTest: is3D,
-    depthWrite: is3D,
-    opacity,
-  });
-}
-
-export function getSharedLineMaterial(opts: LineMaterialKey): LineMaterial {
-  const key = makeKey(opts);
+  const key = `${color}|${linewidth}|${is3D}|${is3D}|${opacity}`;
   let mat = materialCache.get(key);
   if (!mat) {
-    mat = new LineMaterial({
-      color: opts.color,
-      linewidth: opts.linewidth,
-      depthTest: opts.depthTest,
-      depthWrite: opts.depthWrite,
-      transparent: opts.opacity < 1,
-      opacity: opts.opacity,
-    });
+    mat = new LineMaterial({ color, linewidth, depthTest: is3D, depthWrite: is3D, transparent: opacity < 1, opacity });
     materialCache.set(key, mat);
   }
   return mat;

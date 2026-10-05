@@ -1,41 +1,18 @@
 import { getCurrentMouse } from "@/features/core/currentMouse";
-import { getState, type State } from "@/features/core/store";
+import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, getSharedLineMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { Layer } from "../Layer";
 
 const POLYTOPE_OUTLINE_COLOR = "#000000";
 
 const POLY_LINE_THICKNESS = 2;
 
-const rbMat = getSharedLineMaterial({
-  color: POLYTOPE_OUTLINE_COLOR,
-  linewidth: POLY_LINE_THICKNESS,
-  depthTest: false,
-  depthWrite: false,
-  opacity: 1,
-});
-
-type RubberBandState = {
-  lastVertex: import("@lpviz/math/types").PointXY | null;
-  is3DMode: boolean;
-  isTransitioning3D: boolean;
-};
-
-function selectRubberBandState(state: State): RubberBandState {
-  const isDraft = state.completionMode === "draft";
-  const verts = state.vertices;
-  const active = isDraft && verts.length >= 1;
-  return {
-    lastVertex: active ? verts[verts.length - 1]! : null,
-    is3DMode: state.is3DMode,
-    isTransitioning3D: state.isTransitioning3D,
-  };
-}
+const rbMat = lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false);
 
 const RUBBER_BAND_BUF = new Float32Array(6);
 
@@ -58,20 +35,14 @@ export class PolytopeRubberBandLayer implements Layer {
 
   update(): void {
     const state = getState();
-    const snap = getViewportRenderSnapshot();
-    const rbState = selectRubberBandState(state);
-
-    if (!rbState.lastVertex || !shouldRenderSnapshotMode(snap.mode, rbState)) {
-      this.object3D.visible = false;
-      return;
-    }
+    const verts = state.vertices;
+    const last = state.completionMode === "draft" && verts.length >= 1 ? verts[verts.length - 1]! : null;
     const mouse = getCurrentMouse();
-    if (!mouse) {
+    if (!last || !shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, state) || !mouse) {
       this.object3D.visible = false;
       return;
     }
 
-    const last = rbState.lastVertex;
     RUBBER_BAND_BUF[0] = last.x;
     RUBBER_BAND_BUF[1] = last.y;
     RUBBER_BAND_BUF[2] = 0;
