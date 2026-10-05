@@ -69,8 +69,8 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
       title: "Problem gallery",
       "aria-expanded": "false",
     },
+    html: '<svg class="problem-gallery__chevron" viewBox="0 0 12 8" aria-hidden="true"><polyline points="1 1 6 6 11 1" /></svg>',
   });
-  toggle.innerHTML = '<svg class="problem-gallery__chevron" viewBox="0 0 12 8" aria-hidden="true"><polyline points="1 1 6 6 11 1" /></svg>';
   const items = el("div", {
     className: "problem-gallery__items",
     attrs: { "aria-hidden": "true" },
@@ -81,10 +81,10 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     const b = el("button", {
       className: "problem-gallery__item",
       attrs: { type: "button", title: p.name },
+      html: p.isRandom
+        ? `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true"><g class="problem-gallery__shape">${shapeMarkup(p)}</g><g class="problem-gallery__shape is-faded"></g></svg><span>${p.name}</span>`
+        : `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true">${shapeMarkup(p)}</svg><span>${p.name}</span>`,
     });
-    b.innerHTML = p.isRandom
-      ? `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true"><g class="problem-gallery__shape">${shapeMarkup(p)}</g><g class="problem-gallery__shape is-faded"></g></svg><span>${p.name}</span>`
-      : `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true">${shapeMarkup(p)}</svg><span>${p.name}</span>`;
     if (p.isRandom) reshuffles.push(createReshuffle(b));
     b.addEventListener("click", () => {
       if (p.isRandom) {

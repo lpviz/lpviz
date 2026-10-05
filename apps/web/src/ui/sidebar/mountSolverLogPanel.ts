@@ -1,7 +1,10 @@
 import type { AppContext } from "@/app/appContext";
 import { computeDrawingPhase, getState, on, type State } from "@/features/core/store";
+import type { ResultTextBlock } from "@/features/solver/types";
 import { el } from "@/ui/dom";
 import { usageHint } from "@/ui/usageTips";
+
+const rowEl = (block: ResultTextBlock) => el("div", { className: block.className, text: block.text, attrs: block.index !== undefined ? { "data-index": String(block.index) } : {} });
 
 export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   const frame = el("div", { id: "terminal-container" });
@@ -107,14 +110,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     }
     if (s.resultDisplayMode === "blocks" && s.resultBlocks) {
       const c = el("div");
-      for (const block of s.resultBlocks)
-        c.append(
-          el("div", {
-            className: block.className,
-            text: block.text,
-            attrs: block.index !== undefined ? { "data-index": String(block.index) } : {},
-          }),
-        );
+      for (const block of s.resultBlocks) c.append(rowEl(block));
       result.append(c);
       return;
     }
@@ -179,16 +175,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       topSpacer.style.height = `${start * rowHeight}px`;
       bottomSpacer.style.height = `${(blocks.length - end) * rowHeight}px`;
       const fragment = document.createDocumentFragment();
-      for (let i = start; i < end; i++) {
-        const row = blocks.at(i)!;
-        fragment.append(
-          el("div", {
-            className: row.className,
-            text: row.text,
-            attrs: row.index !== undefined ? { "data-index": String(row.index) } : {},
-          }),
-        );
-      }
+      for (let i = start; i < end; i++) fragment.append(rowEl(blocks.at(i)!));
       rowsEl.replaceChildren(fragment);
     };
 
