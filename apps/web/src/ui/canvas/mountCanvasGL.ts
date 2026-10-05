@@ -1,5 +1,4 @@
 import type { ViewportBridge } from "@/features/viewport/types";
-import type { Layer } from "@/three/Layer";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
 import { ControlsController } from "@/three/controllers/ControlsController";
@@ -30,7 +29,7 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   mgr.addTick(() => transitionCtl.tick());
   const cameraCtl = new CameraController(mgr);
   const controlsCtl = new ControlsController(mgr);
-  const layers: Layer[] = [
+  const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),
     new PolytopeRubberBandLayer(),
@@ -57,10 +56,6 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   return {
     canvas,
     destroy: () => {
-      for (const l of layers) {
-        mgr.removeLayer(l);
-        l.dispose();
-      }
       controlsCtl.dispose();
       cameraCtl.dispose();
       transitionCtl.dispose();

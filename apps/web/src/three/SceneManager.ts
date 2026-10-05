@@ -4,7 +4,6 @@ import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot"
 import { Camera, Scene, WebGLRenderer } from "three";
 import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
-import { LayerHost } from "./LayerHost";
 import type { SceneContext } from "./SceneContext";
 import { Trace3DCompositor } from "./Trace3DCompositor";
 import { TraceCache } from "./TraceCache";
@@ -14,7 +13,7 @@ type Size = { width: number; height: number; dpr: number };
 export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
-  readonly layerHost = new LayerHost();
+  private layers: Layer[] = [];
   // The trace-lines pass renders through an impostor when one applies: in 2D
   // a world-anchored accumulation cache (so neither camera motion nor a trace
   // append re-renders baked chunks); while the 3D view is in motion a
@@ -121,9 +120,14 @@ export class SceneManager {
     }
 
     if (this.layersDirty) {
-      const layersDirty = this.layersDirty;
+      const dirty = this.layersDirty === "all" ? null : this.layersDirty;
       this.layersDirty = null;
-      this.layerHost.update(this.ctx, layersDirty === "all" ? undefined : layersDirty);
+      for (const layer of this.layers) {
+        if (dirty && layer.invalidationKeys.every((key) => !dirty[key])) {
+          continue;
+        }
+        layer.update(this.ctx);
+      }
     }
 
     if (this.camera) {
@@ -161,25 +165,13 @@ export class SceneManager {
   }
 
   addLayer(layer: Layer): void {
-    this.layerHost.add(layer);
+    this.layers.push(layer);
     if (layer.renderObjects) {
       for (const { object3D, pass } of layer.renderObjects) {
         this.scenes[pass].add(object3D);
       }
     } else {
       this.scenes[layer.renderPass ?? "foreground"].add(layer.object3D);
-    }
-    this.invalidate();
-  }
-
-  removeLayer(layer: Layer): void {
-    this.layerHost.remove(layer);
-    if (layer.renderObjects) {
-      for (const { object3D, pass } of layer.renderObjects) {
-        this.scenes[pass].remove(object3D);
-      }
-    } else {
-      this.scenes[layer.renderPass ?? "foreground"].remove(layer.object3D);
     }
     this.invalidate();
   }
@@ -208,7 +200,10 @@ export class SceneManager {
     this.unsubscribeCurrentMouse?.();
     this.unsubscribeCurrentMouse = null;
 
-    this.layerHost.dispose();
+    for (const layer of this.layers) {
+      layer.dispose();
+    }
+    this.layers = [];
     this.traceCache.dispose();
     this.trace3D.dispose();
     for (const scene of Object.values(this.scenes)) {
