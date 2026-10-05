@@ -1,33 +1,21 @@
-import type { State } from "@/features/core/store";
-import { computeFlatZ, getState, MAX_TRACE_POINT_SPRITES } from "@/features/core/store";
+import { getState, MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { BufferAttribute, DynamicDrawUsage, Group, Points, PointsMaterial } from "three";
+import { BufferAttribute, DynamicDrawUsage, PointsMaterial } from "three";
+import { flatXYZ } from "../helpers/flatPositions";
 import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
-import { LayerBase } from "./base/LayerBase";
+import { ZScaledGroupLayer } from "./base/LayerBase";
 
 const TRACE_COLOR = "#ffa500";
 const TRACE_POINT_PIXEL_SIZE = 6;
 const TRACE_POINTS_RENDER_ORDER = RENDER_ORDER.tracePoints;
 
-function buildTracePathPositions(entry: State["traceBuffer"][number]) {
-  const { points, count, stride, objectiveVector } = entry;
-  if (count === 0) return new Float32Array();
-  const positions = new Float32Array(count * 3);
-  for (let i = 0; i < count; i++) {
-    const base = i * stride;
-    positions[i * 3] = points[base]!;
-    positions[i * 3 + 1] = points[base + 1]!;
-    positions[i * 3 + 2] = computeFlatZ(points, base, stride, objectiveVector);
-  }
-  return positions;
-}
+type TraceEntry = State["traceBuffer"][number];
 
-function buildTraceSamplePositions(pathPositions: Float32Array) {
-  const pointCount = Math.floor(pathPositions.length / 3);
-  if (pointCount === 0) return [] as number[];
+// Every step-th point of a path plus its last point, as flat [x, y, z].
+function buildTraceSamplePositions(pathPositions: Float32Array, pointCount: number) {
   const step = Math.max(1, Math.ceil(pointCount / MAX_TRACE_POINT_SPRITES));
   const samples: number[] = [];
   for (let i = 0; i < pointCount; i += step) {
@@ -47,11 +35,11 @@ function buildTraceSamplePositions(pathPositions: Float32Array) {
 
 const tracePointPositionCache = new WeakMap<object, Float32Array>();
 
-function getCachedTracePointPositions(entry: State["traceBuffer"][number]) {
+function getCachedTracePointPositions(entry: TraceEntry) {
   let cached = tracePointPositionCache.get(entry);
   if (cached) return cached;
-  const pathPos = buildTracePathPositions(entry);
-  const sampled = pathPos.length === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(pathPos));
+  const { points, count, stride, objectiveVector } = entry;
+  const sampled = count === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(flatXYZ(points, count, stride, objectiveVector), count));
   tracePointPositionCache.set(entry, sampled);
   return sampled;
 }
@@ -80,23 +68,14 @@ function buildAllTracePointPositions(raw: State, mode: "2d" | "3d"): { array: Fl
   return { array: concatScratch, length: total };
 }
 
-export class TracePointsLayer extends LayerBase {
-  readonly object3D: Group;
+export class TracePointsLayer extends ZScaledGroupLayer {
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["trace"] as const;
-  private pts: Points;
+  private pts = makePoints(pointsMaterial(SHARED_CIRCLE_TEXTURE, TRACE_POINT_PIXEL_SIZE, TRACE_COLOR), TRACE_POINTS_RENDER_ORDER, true);
 
   constructor() {
     super();
-    const pts = makePoints(pointsMaterial(SHARED_CIRCLE_TEXTURE, TRACE_POINT_PIXEL_SIZE, TRACE_COLOR), TRACE_POINTS_RENDER_ORDER, true);
-    const group = new Group();
-    group.add(pts);
-    this.object3D = group;
-    this.pts = pts;
-  }
-
-  protected override everyFrame(): void {
-    this.applyZScale();
+    this.object3D.add(this.pts);
   }
 
   protected dependencies(): readonly unknown[] {

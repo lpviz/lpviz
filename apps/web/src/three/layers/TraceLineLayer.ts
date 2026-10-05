@@ -1,27 +1,16 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { Group } from "three";
-import { writeFlatXYZ } from "../helpers/flatPositions";
+import { flatXYZ } from "../helpers/flatPositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { LayerBase } from "./base/LayerBase";
+import { ZScaledGroupLayer } from "./base/LayerBase";
 
 const TRACE_COLOR = "#ffa500";
 const TRACE_OPACITY = 0.4;
 const TRACE_LINE_THICKNESS = 2;
 
 type TraceEntry = State["traceBuffer"][number];
-
-let pointScratch = new Float32Array(0);
-
-function buildEntryPoints(entry: TraceEntry): Float32Array {
-  if (pointScratch.length < entry.count * 3) {
-    pointScratch = new Float32Array(entry.count * 3);
-  }
-  writeFlatXYZ(pointScratch, entry.points, entry.count, entry.stride, entry.objectiveVector);
-  return pointScratch;
-}
 
 // Trace paths render as screen-space ribbons (see pathRibbon.ts): the same
 // 2px fat-line styling as the rest of the app without Line2's quad-per-
@@ -30,8 +19,7 @@ function buildEntryPoints(entry: TraceEntry): Float32Array {
 // ribbon whose path texture is built and uploaded exactly once — a rotation
 // step costs one chunk upload, every iterate is drawn (no sampling), and
 // previously drawn curves can never shift between frames.
-export class TraceLineLayer extends LayerBase {
-  readonly object3D: Group;
+export class TraceLineLayer extends ZScaledGroupLayer {
   override readonly renderPass = "traceLines" as const;
   override readonly invalidationKeys = ["trace"] as const;
   private pool: PathRibbon[] = [];
@@ -40,11 +28,6 @@ export class TraceLineLayer extends LayerBase {
   // monotonic append sequence stamped on each ribbon mesh; TraceCache keys
   // its incremental accumulation on it (see TraceCache.ts)
   private nextSeq = 0;
-
-  constructor() {
-    super();
-    this.object3D = new Group();
-  }
 
   private makeRibbon(): PathRibbon {
     const ribbon = new PathRibbon({
@@ -56,10 +39,6 @@ export class TraceLineLayer extends LayerBase {
     this.object3D.add(ribbon.mesh);
     this.pool.push(ribbon);
     return ribbon;
-  }
-
-  protected override everyFrame(): void {
-    this.applyZScale();
   }
 
   protected dependencies(): readonly unknown[] {
@@ -96,7 +75,7 @@ export class TraceLineLayer extends LayerBase {
       if (this.assigned.has(entry)) continue;
       if (entry.count < 2) continue;
       const ribbon = freed.pop() ?? this.makeRibbon();
-      ribbon.setPath(buildEntryPoints(entry), entry.count);
+      ribbon.setPath(flatXYZ(entry.points, entry.count, entry.stride, entry.objectiveVector), entry.count);
       ribbon.setDepth(is3D);
       ribbon.mesh.userData.traceSeq = this.nextSeq++;
       ribbon.mesh.visible = true;

@@ -15,6 +15,18 @@ export function writeFlatXYZ(dst: Float32Array, points: Float64Array, count: num
   }
 }
 
+// The same flat path in a shared grow-only scratch (valid until the next call):
+// every caller copies it into its own texture or attribute synchronously.
+let scratch = new Float32Array(0);
+
+export function flatXYZ(points: Float64Array, count: number, stride: number, objectiveVector: PointXY | null): Float32Array {
+  if (scratch.length < count * 3) {
+    scratch = new Float32Array(count * 3);
+  }
+  writeFlatXYZ(scratch, points, count, stride, objectiveVector);
+  return scratch;
+}
+
 // One [x, y, z] for the iterate at `index`, used by the single-point sprite
 // layers (star / highlight). Returns null when the index is out of range.
 export function flatPointXYZ(path: IteratePath, index: number, objectiveVector: PointXY | null): [number, number, number] | null {

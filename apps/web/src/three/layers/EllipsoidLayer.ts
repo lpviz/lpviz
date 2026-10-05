@@ -1,13 +1,13 @@
 import { getState, type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { Group, Matrix4 } from "three";
+import { Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
-import { LayerBase } from "./base/LayerBase";
+import { ZScaledGroupLayer } from "./base/LayerBase";
 
 const ELLIPSOID_COLOR = "#377eb8";
 const ACTIVE_THICKNESS = 2.5;
@@ -100,9 +100,10 @@ function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: n
 // Each ellipse contains every feasible point at least as good as the incumbent
 // at that iteration, so watching them nest is watching the method localize the
 // optimum. Follows the active iterate: the last one solved, or the one being
-// hovered in the log / replayed.
-export class EllipsoidLayer extends LayerBase {
-  readonly object3D: Group;
+// hovered in the log / replayed. Raw z is baked into each ellipse's transform;
+// zScale and the 2D/3D transition flatten ride on scale.z, exactly as for the
+// iterate path.
+export class EllipsoidLayer extends ZScaledGroupLayer {
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
@@ -119,23 +120,15 @@ export class EllipsoidLayer extends LayerBase {
     applyHugeBounds(geometry);
     this.geometry = geometry;
 
-    const group = new Group();
     this.polygon = setupLine(new LineSegments2(lineGeometry(), polygonMaterial(false)), RENDER_ORDER.ellipsoid);
-    group.add(this.polygon);
+    this.object3D.add(this.polygon);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
       const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), RENDER_ORDER.ellipsoid);
       segments.matrixAutoUpdate = false;
       this.slots.push(segments);
-      group.add(segments);
+      this.object3D.add(segments);
     }
-    this.object3D = group;
-  }
-
-  protected override everyFrame(): void {
-    // raw z is baked into each ellipse's transform; zScale and the 2D/3D
-    // transition flatten ride on scale.z, exactly as for the iterate path
-    this.applyZScale();
   }
 
   protected dependencies(): readonly unknown[] {

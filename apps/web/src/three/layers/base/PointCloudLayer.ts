@@ -2,7 +2,7 @@ import type { ViewportDirtyFlags } from "@/features/core/store";
 import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
 import { makePoints, pointsMaterial } from "../../helpers/points";
 import type { RenderPassName } from "../../Layer";
-import { LayerBase } from "./LayerBase";
+import { ZScaledLayer } from "./LayerBase";
 
 export type PointCloudConfig = {
   color: string;
@@ -22,7 +22,7 @@ export type PointCloudConfig = {
 // Subclasses implement rebuild() by calling draw(count, writePositions,
 // writeColors?), writing directly into the grow-only arrays (no intermediate
 // copy on the rotation hot path).
-export abstract class PointCloudLayer extends LayerBase {
+export abstract class PointCloudLayer extends ZScaledLayer {
   readonly object3D: Points;
   override readonly renderPass: RenderPassName;
   override readonly invalidationKeys: readonly (keyof ViewportDirtyFlags)[];
@@ -36,10 +36,6 @@ export abstract class PointCloudLayer extends LayerBase {
     this.object3D = makePoints(this.matPlain, config.renderOrder, false);
     this.renderPass = config.renderPass;
     this.invalidationKeys = config.invalidationKeys;
-  }
-
-  protected override everyFrame(): void {
-    this.applyZScale();
   }
 
   protected hide(): void {
