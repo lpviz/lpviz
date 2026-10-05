@@ -142,6 +142,14 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
   };
 }
 
+// Every edit is its own undoable step (closing included; otherwise undo jumps
+// back past the close AND the last-placed vertex).
+const edit = (vertices: PointXY[], completionMode: CompletionMode, interiorPoint: PointXY | null): EditorTransition => ({
+  kind: "edit",
+  result: { vertices, completionMode, interiorPoint },
+  saveToHistory: true,
+});
+
 export function getEditorTransition(
   state: State,
   action:
@@ -175,29 +183,11 @@ export function getEditorTransition(
         // when zoomed out, e.g. on mobile). Defaults to a world distance.
         const closeThreshold = action.closeThreshold ?? 0.5;
         if (VRep.distance(action.point, state.vertices[0]) < closeThreshold) {
-          return {
-            kind: "edit",
-            result: {
-              vertices: state.vertices,
-              completionMode: "closed",
-              interiorPoint: polytope.centroidPoint(),
-            },
-            // closing is its own undoable step, like finish-open; otherwise
-            // undo jumps back past the close AND the last-placed vertex
-            saveToHistory: true,
-          };
+          return edit(state.vertices, "closed", polytope.centroidPoint());
         }
 
         if (polytope.contains(action.point)) {
-          return {
-            kind: "edit",
-            result: {
-              vertices: state.vertices,
-              completionMode: "closed",
-              interiorPoint: { x: action.point.x, y: action.point.y },
-            },
-            saveToHistory: true,
-          };
+          return edit(state.vertices, "closed", { x: action.point.x, y: action.point.y });
         }
       }
 
@@ -209,15 +199,7 @@ export function getEditorTransition(
         };
       }
 
-      return {
-        kind: "edit",
-        result: {
-          vertices: tentative,
-          completionMode: "draft",
-          interiorPoint: null,
-        },
-        saveToHistory: true,
-      };
+      return edit(tentative, "draft", null);
     }
     case "finish-open":
       if (context.session.kind !== "drafting" || state.vertices.length < 2) {
@@ -231,70 +213,23 @@ export function getEditorTransition(
         };
       }
 
-      return {
-        kind: "edit",
-        result: {
-          vertices: state.vertices,
-          completionMode: "open",
-          interiorPoint: null,
-        },
-        saveToHistory: true,
-      };
+      return edit(state.vertices, "open", null);
     case "delete-vertex": {
       const {
         session,
         geometry: { vertices: displayVertices, isDerivedClosed },
       } = context;
       const nextVertices = displayVertices.filter((_, index) => index !== action.deleteIndex);
+      const closed = isDerivedClosed || state.completionMode === "closed";
 
       // The polygon stays closed, minus the vertex: dropping a vertex of a
       // convex polygon keeps it convex, so there is nothing to reject. A
       // triangle has nothing left to close and goes back to drafting.
-      if (isDerivedClosed || state.completionMode === "closed") {
-        if (nextVertices.length < 3) {
-          return {
-            kind: "edit",
-            result: {
-              vertices: nextVertices,
-              completionMode: "draft",
-              interiorPoint: null,
-            },
-            saveToHistory: true,
-          };
-        }
-
-        return {
-          kind: "edit",
-          result: {
-            vertices: nextVertices,
-            completionMode: "closed",
-            interiorPoint: VRep.fromPoints(nextVertices).centroidPoint(),
-          },
-          saveToHistory: true,
-        };
+      if (closed && nextVertices.length >= 3) {
+        return edit(nextVertices, "closed", VRep.fromPoints(nextVertices).centroidPoint());
       }
 
-      if (session.kind === "drafting") {
-        return {
-          kind: "edit",
-          result: {
-            vertices: nextVertices,
-            completionMode: "draft",
-            interiorPoint: null,
-          },
-          saveToHistory: true,
-        };
-      }
-
-      return {
-        kind: "edit",
-        result: {
-          vertices: nextVertices,
-          completionMode: nextVertices.length >= 2 ? "open" : "draft",
-          interiorPoint: null,
-        },
-        saveToHistory: true,
-      };
+      return edit(nextVertices, closed || session.kind === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
     }
     case "insert-edge-point": {
       const {
@@ -320,27 +255,7 @@ export function getEditorTransition(
         y: start.y + t * dy,
       });
 
-      if (isDerivedClosed) {
-        return {
-          kind: "edit",
-          result: {
-            vertices: nextVertices,
-            completionMode: "closed",
-            interiorPoint: VRep.fromPoints(nextVertices).centroidPoint(),
-          },
-          saveToHistory: true,
-        };
-      }
-
-      return {
-        kind: "edit",
-        result: {
-          vertices: nextVertices,
-          completionMode: state.completionMode,
-          interiorPoint: state.interiorPoint,
-        },
-        saveToHistory: true,
-      };
+      return isDerivedClosed ? edit(nextVertices, "closed", VRep.fromPoints(nextVertices).centroidPoint()) : edit(nextVertices, state.completionMode, state.interiorPoint);
     }
     case "insert-boundary-ray-point": {
       if (context.session.kind !== "editing-open") {
@@ -354,15 +269,7 @@ export function getEditorTransition(
         nextVertices.push(action.point);
       }
 
-      return {
-        kind: "edit",
-        result: {
-          vertices: nextVertices,
-          completionMode: "open",
-          interiorPoint: null,
-        },
-        saveToHistory: true,
-      };
+      return edit(nextVertices, "open", null);
     }
     case "repair-displayed-hull": {
       const {
@@ -382,15 +289,7 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      return {
-        kind: "edit",
-        result: {
-          vertices: hull,
-          completionMode: "closed",
-          interiorPoint: VRep.fromPoints(hull).centroidPoint(),
-        },
-        saveToHistory: true,
-      };
+      return edit(hull, "closed", VRep.fromPoints(hull).centroidPoint());
     }
   }
 }
