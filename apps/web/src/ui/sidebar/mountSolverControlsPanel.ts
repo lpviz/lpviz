@@ -12,18 +12,12 @@ const maxitToSliderValue = (value: number) => Math.min(MAXIT_LOG_MAX, Math.max(M
 const sliderValueToMaxit = (value: string) => Math.max(1, Math.round(10 ** parseFloat(value)));
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const fmt = (value: number) => NUMBER_FORMAT.format(value);
+const fixed = (digits: number) => (value: number) => value.toFixed(digits);
 
 // The rule vocabulary comes from the engine; a Record turns a rule without a
 // label into a compile error.
-const ENTERING_RULE_LABELS: Record<EnteringRule, string> = {
-  coeff: "Dantzig",
-  first: "Bland (low)",
-  last: "Bland (high)",
-};
-const LEAVING_RULE_LABELS: Record<LeavingRule, string> = {
-  first: "Lowest index",
-  last: "Highest index",
-};
+const ENTERING_RULE_LABELS: Record<EnteringRule, string> = { coeff: "Dantzig", first: "Bland (low)", last: "Bland (high)" };
+const LEAVING_RULE_LABELS: Record<LeavingRule, string> = { first: "Lowest index", last: "Highest index" };
 const ENTERING_RULE_OPTIONS = ENTERING_RULES.map((value) => [value, ENTERING_RULE_LABELS[value]] as const);
 const LEAVING_RULE_OPTIONS = LEAVING_RULES.map((value) => [value, LEAVING_RULE_LABELS[value]] as const);
 const QUERY_POINT_OPTIONS = [
@@ -33,42 +27,26 @@ const QUERY_POINT_OPTIONS = [
   ["volumetric", "Volumetric"],
 ] as const satisfies readonly (readonly [EllipsoidQueryPoint, string])[];
 
+type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
 type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG" | "maxitEllipsoid">;
 type SettingsSync = (state: State) => void;
 type SettingField = HTMLInputElement | HTMLSelectElement;
-
-type SolverButtonUiState = {
-  active: boolean;
-  disabled: boolean;
-};
+type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: string; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
 
 function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
-  const i = el("input", {
-    attrs: { type: "range", id, min, max, step, autocomplete: "off" },
-  });
-  i.addEventListener("input", () => onInput((i as HTMLInputElement).value));
-  return i as HTMLInputElement;
+  const i = el("input", { attrs: { type: "range", id, min, max, step, autocomplete: "off" } });
+  i.addEventListener("input", () => onInput(i.value));
+  return i;
 }
 function checkbox(id: string, onChange: (v: boolean) => void) {
-  const i = el("input", {
-    attrs: { type: "checkbox", id },
-  }) as HTMLInputElement;
+  const i = el("input", { attrs: { type: "checkbox", id } });
   i.addEventListener("change", () => onChange(i.checked));
   return i;
 }
 function select<T extends string>(id: string, options: readonly (readonly [T, string])[], onChange: (v: T) => void) {
-  const s = el("select", { attrs: { id, autocomplete: "off" } }, [...options.map(([value, label]) => el("option", { attrs: { value }, text: label }))]) as HTMLSelectElement;
+  const s = el("select", { attrs: { id, autocomplete: "off" } }, [...options.map(([value, label]) => el("option", { attrs: { value }, text: label }))]);
   s.addEventListener("change", () => onChange(s.value as T));
   return s;
-}
-function labeled(text: string, id: string, control: HTMLElement, value?: HTMLElement, includeBreak = false) {
-  const fragment = document.createDocumentFragment();
-  const label = el("label", { attrs: { for: id } });
-  label.append(text);
-  if (value) label.append(" ", value);
-  fragment.append(label, control);
-  if (includeBreak) fragment.append(el("br"));
-  return fragment;
 }
 
 export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
@@ -95,43 +73,77 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   let renderedMode: SolverMode | null = null;
   let syncSettings: SettingsSync = () => {};
 
+  // every control writes its setting, then re-solves if its solver is the active one
+  const set =
+    (mode: SolverMode) =>
+    <K extends keyof SolverSettings>(key: K) =>
+    (v: SolverSettings[K]) => {
+      ctx.actions.updateSolverSetting(key, v);
+      ctx.actions.recomputeIfModeActive(mode);
+    };
+
   function setInputValue(input: SettingField, value: string) {
     if (document.activeElement !== input) input.value = value;
   }
 
-  function renderMaxit(id: string, value: number, key: MaxitSettingKey, mode: SolverMode): { element: HTMLElement; sync: (settings: SolverSettings) => void } {
-    const span = el("span", { text: fmt(value) });
+  // A slider (id `<key>Slider`) with a live readout: <label>text " " <span></label>,
+  // the input, and a <br> unless `br` is false.
+  function numberSlider(st: SolverSettings, mode: SolverMode, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec) {
+    const id = key + "Slider";
+    const span = el("span", { text: format(st[key]) });
+    const update = set(mode)(key);
+    const input = range(id, min, max, step, (v) => {
+      const next = parse(v);
+      span.textContent = format(next);
+      update(next);
+    });
+    input.value = String(st[key]);
+    const text = el("label", { attrs: { for: id } });
+    text.append(label, " ", span);
+    const nodes: Node[] = [text, input];
+    if (br) nodes.push(el("br"));
+    return {
+      nodes,
+      sync: (next: SolverSettings) => {
+        span.textContent = format(next[key]);
+        setInputValue(input, String(next[key]));
+      },
+    };
+  }
+
+  // one <label>text " "<input type=checkbox></label> per entry, in order
+  function checkboxRow(st: SolverSettings, mode: SolverMode, labels: Partial<Record<SettingKeys<boolean>, string>>) {
+    const row = el("div", { className: "settings-checkbox-row" });
+    const boxes = (Object.entries(labels) as [SettingKeys<boolean>, string][]).map(([key, label]) => {
+      const cb = checkbox(key, set(mode)(key));
+      cb.checked = st[key];
+      const wrap = el("label", { attrs: { for: key }, text: label + " " }, [cb]);
+      row.append(wrap);
+      return [key, cb, wrap] as const;
+    });
+    return { row, boxes };
+  }
+
+  function renderMaxit(st: SolverSettings, id: string, key: MaxitSettingKey, mode: SolverMode) {
+    const span = el("span", { text: fmt(st[key]) });
+    const update = set(mode)(key);
     const input = range(id, String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP), (v) => {
       const maxit = sliderValueToMaxit(v);
       span.textContent = fmt(maxit);
-      ctx.actions.updateSolverSetting(key, maxit);
-      ctx.actions.recomputeIfModeActive(mode);
+      update(maxit);
     });
     input.classList.add("log-slider");
-    input.value = String(maxitToSliderValue(value));
+    input.value = String(maxitToSliderValue(st[key]));
     const wrap = el("div", { className: "log-slider-control" });
-    const label = el("label", {
-      attrs: { for: id },
-      text: "Maximum iterations:",
-    });
+    const label = el("label", { attrs: { for: id }, text: "Maximum iterations:" });
     label.append(" ", span);
-    wrap.append(
-      label,
-      input,
-      el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, [
-        el("span", { text: "1" }),
-        el("span", { text: "10" }),
-        el("span", { text: "100" }),
-        el("span", { text: "1k" }),
-        el("span", { text: "10k" }),
-        el("span", { text: "100k" }),
-      ]),
-    );
+    const scale = ["1", "10", "100", "1k", "10k", "100k"].map((text) => el("span", { text }));
+    wrap.append(label, input, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale));
     return {
       element: wrap,
-      sync: (st) => {
-        span.textContent = fmt(st[key]);
-        setInputValue(input, String(maxitToSliderValue(st[key])));
+      sync: (next: SolverSettings) => {
+        span.textContent = fmt(next[key]);
+        setInputValue(input, String(maxitToSliderValue(next[key])));
       },
     };
   }
@@ -142,142 +154,49 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     settings.append(sec);
 
     if (mode === "ipm") {
-      const v1 = el("span", { text: st.alphaMax.toFixed(3) });
-      const a = range("alphaMaxSlider", "0.001", "1", "0.001", (v) => {
-        const next = parseFloat(v);
-        v1.textContent = next.toFixed(3);
-        ctx.actions.updateSolverSetting("alphaMax", next);
-        ctx.actions.recomputeIfModeActive("ipm");
-      });
-      a.value = String(st.alphaMax);
-      sec.append(labeled("αmax (maximum step size ratio):", "alphaMaxSlider", a, v1, true));
-
-      const v2 = el("span", { text: st.correctorThreshold.toFixed(3) });
-      const c = range("correctorThresholdSlider", "0.001", "0.999", "0.001", (v) => {
-        const next = parseFloat(v);
-        v2.textContent = next.toFixed(3);
-        ctx.actions.updateSolverSetting("correctorThreshold", next);
-        ctx.actions.recomputeIfModeActive("ipm");
-      });
-      c.value = String(st.correctorThreshold);
-      const maxit = renderMaxit("maxitSliderIPM", st.maxitIPM, "maxitIPM", "ipm");
-      sec.append(labeled("Corrector threshold:", "correctorThresholdSlider", c, v2, true), maxit.element);
+      const alpha = numberSlider(st, mode, { key: "alphaMax", min: "0.001", max: "1", step: "0.001", label: "αmax (maximum step size ratio):" });
+      const corrector = numberSlider(st, mode, { key: "correctorThreshold", min: "0.001", max: "0.999", step: "0.001", label: "Corrector threshold:" });
+      const maxit = renderMaxit(st, "maxitSliderIPM", "maxitIPM", mode);
+      sec.append(...alpha.nodes, ...corrector.nodes, maxit.element);
       return (s) => {
-        const next = s.solverSettings;
-        v1.textContent = next.alphaMax.toFixed(3);
-        setInputValue(a, String(next.alphaMax));
-        v2.textContent = next.correctorThreshold.toFixed(3);
-        setInputValue(c, String(next.correctorThreshold));
-        maxit.sync(next);
+        alpha.sync(s.solverSettings);
+        corrector.sync(s.solverSettings);
+        maxit.sync(s.solverSettings);
       };
     }
 
     if (mode === "pdhg") {
-      const etaValue = el("span", { text: st.pdhgEta.toFixed(3) });
-      const eta = range("pdhgEtaSlider", "0.001", "0.750", "0.001", (v) => {
-        const next = parseFloat(v);
-        etaValue.textContent = next.toFixed(3);
-        ctx.actions.updateSolverSetting("pdhgEta", next);
-        ctx.actions.recomputeIfModeActive("pdhg");
-      });
-      eta.value = String(st.pdhgEta);
-
-      const tauValue = el("span", { text: st.pdhgTau.toFixed(3) });
-      const tau = range("pdhgTauSlider", "0.001", "0.750", "0.001", (v) => {
-        const next = parseFloat(v);
-        tauValue.textContent = next.toFixed(3);
-        ctx.actions.updateSolverSetting("pdhgTau", next);
-        ctx.actions.recomputeIfModeActive("pdhg");
-      });
-      tau.value = String(st.pdhgTau);
-      const maxit = renderMaxit("maxitSliderPDHG", st.maxitPDHG, "maxitPDHG", "pdhg");
-
-      sec.append(labeled("η (primal step size factor):", "pdhgEtaSlider", eta, etaValue, true), labeled("τ (dual step size factor):", "pdhgTauSlider", tau, tauValue, true), maxit.element);
-      const row = el("div", { className: "settings-checkbox-row" });
-      const checkboxes = (
-        [
-          ["pdhgIneqMode", "Inequality mode"],
-          ["pdhgHalpernMode", "Halpern"],
-          ["pdhgColorByBasis", "Color by basis"],
-        ] as const
-      ).map(([key, label]) => {
-        const cb = checkbox(key, (v) => {
-          ctx.actions.updateSolverSetting(key, v);
-          ctx.actions.recomputeIfModeActive("pdhg");
-        });
-        cb.checked = st[key];
-        row.append(el("label", { attrs: { for: key }, text: label + " " }, [cb]));
-        return [key, cb] as const;
-      });
-      sec.append(row);
+      const eta = numberSlider(st, mode, { key: "pdhgEta", min: "0.001", max: "0.750", step: "0.001", label: "η (primal step size factor):" });
+      const tau = numberSlider(st, mode, { key: "pdhgTau", min: "0.001", max: "0.750", step: "0.001", label: "τ (dual step size factor):" });
+      const maxit = renderMaxit(st, "maxitSliderPDHG", "maxitPDHG", mode);
+      const { row, boxes } = checkboxRow(st, mode, { pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" });
+      sec.append(...eta.nodes, ...tau.nodes, maxit.element, row);
       return (s) => {
         const next = s.solverSettings;
-        etaValue.textContent = next.pdhgEta.toFixed(3);
-        setInputValue(eta, String(next.pdhgEta));
-        tauValue.textContent = next.pdhgTau.toFixed(3);
-        setInputValue(tau, String(next.pdhgTau));
+        eta.sync(next);
+        tau.sync(next);
         maxit.sync(next);
-        for (const [key, cb] of checkboxes) cb.checked = next[key];
+        for (const [key, cb] of boxes) cb.checked = next[key];
       };
     }
 
     if (mode === "ellipsoid") {
-      const scaleValue = el("span", {
-        text: st.ellipsoidInitialScale.toFixed(2),
-      });
-      const scale = range("ellipsoidInitialScaleSlider", "1.05", "4", "0.05", (v) => {
-        const next = parseFloat(v);
-        scaleValue.textContent = next.toFixed(2);
-        ctx.actions.updateSolverSetting("ellipsoidInitialScale", next);
-        ctx.actions.recomputeIfModeActive("ellipsoid");
-      });
-      scale.value = String(st.ellipsoidInitialScale);
-      const maxit = renderMaxit("maxitSliderEllipsoid", st.maxitEllipsoid, "maxitEllipsoid", "ellipsoid");
-      sec.append(labeled("Initial ellipsoid size:", "ellipsoidInitialScaleSlider", scale, scaleValue, true), maxit.element);
-      const query = select("ellipsoidQueryPoint", QUERY_POINT_OPTIONS, (v) => {
-        ctx.actions.updateSolverSetting("ellipsoidQueryPoint", v);
-        ctx.actions.recomputeIfModeActive("ellipsoid");
-      });
+      const scale = numberSlider(st, mode, { key: "ellipsoidInitialScale", min: "1.05", max: "4", step: "0.05", label: "Initial ellipsoid size:", format: fixed(2) });
+      const maxit = renderMaxit(st, "maxitSliderEllipsoid", "maxitEllipsoid", mode);
+      const query = select("ellipsoidQueryPoint", QUERY_POINT_OPTIONS, set(mode)("ellipsoidQueryPoint"));
       query.value = st.ellipsoidQueryPoint;
-      sec.append(
-        el("div", { className: "settings-inline-row" }, [
-          el("label", {
-            attrs: { for: "ellipsoidQueryPoint" },
-            text: "Query point:",
-          }),
-          query,
-        ]),
-      );
-
-      const row = el("div", { className: "settings-checkbox-row" });
-      const checkboxes = (
-        [
-          ["ellipsoidDeepCuts", "Deep cuts"],
-          ["ellipsoidRayShoot", "Ray shoot"],
-        ] as const
-      ).map(([key, label]) => {
-        const cb = checkbox(key, (v) => {
-          ctx.actions.updateSolverSetting(key, v);
-          ctx.actions.recomputeIfModeActive("ellipsoid");
-        });
-        cb.checked = st[key];
-        const wrap = el("label", { attrs: { for: key }, text: label + " " }, [cb]);
-        row.append(wrap);
-        return [key, cb, wrap] as const;
-      });
-      sec.append(row);
+      const { row, boxes } = checkboxRow(st, mode, { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" });
+      const queryRow = el("div", { className: "settings-inline-row" }, [el("label", { attrs: { for: "ellipsoidQueryPoint" }, text: "Query point:" }), query]);
+      sec.append(...scale.nodes, maxit.element, queryRow, row);
       return (s) => {
         const next = s.solverSettings;
-        scaleValue.textContent = next.ellipsoidInitialScale.toFixed(2);
-        setInputValue(scale, String(next.ellipsoidInitialScale));
+        scale.sync(next);
         maxit.sync(next);
-        if (document.activeElement !== query) {
-          query.value = next.ellipsoidQueryPoint;
-        }
+        setInputValue(query, next.ellipsoidQueryPoint);
         // the cut shape options belong to the ellipsoid update itself; the
         // other query points localize with a polyhedron and never form one
         const cutsApply = next.ellipsoidQueryPoint === "ellipsoid";
-        for (const [key, cb, wrap] of checkboxes) {
+        for (const [key, cb, wrap] of boxes) {
           cb.checked = next[key];
           const applies = cutsApply || key === "ellipsoidRayShoot";
           cb.disabled = !applies;
@@ -287,20 +206,11 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     }
 
     if (mode === "simplex") {
-      const dual = checkbox("simplexDualMode", (v) => {
-        ctx.actions.updateSolverSetting("simplexDualMode", v);
-        ctx.actions.recomputeIfModeActive("simplex");
-      });
+      const dual = checkbox("simplexDualMode", set(mode)("simplexDualMode"));
       dual.checked = st.simplexDualMode;
-      const entering = select("simplexEnteringRule", ENTERING_RULE_OPTIONS, (v) => {
-        ctx.actions.updateSolverSetting("simplexEnteringRule", v);
-        ctx.actions.recomputeIfModeActive("simplex");
-      });
+      const entering = select("simplexEnteringRule", ENTERING_RULE_OPTIONS, set(mode)("simplexEnteringRule"));
       entering.value = st.simplexEnteringRule;
-      const leaving = select("simplexLeavingRule", LEAVING_RULE_OPTIONS, (v) => {
-        ctx.actions.updateSolverSetting("simplexLeavingRule", v);
-        ctx.actions.recomputeIfModeActive("simplex");
-      });
+      const leaving = select("simplexLeavingRule", LEAVING_RULE_OPTIONS, set(mode)("simplexLeavingRule"));
       leaving.value = st.simplexLeavingRule;
       sec.append(
         el("div", { className: "settings-checkbox-row" }, [el("label", { attrs: { for: "simplexDualMode" }, text: "Dual simplex mode " }, [dual])]),
@@ -319,29 +229,9 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       };
     }
 
-    const nValue = el("span", { text: String(st.centralPathIter) });
-    const n = range("centralPathIterSlider", "2", "100", "1", (v) => {
-      const next = parseInt(v, 10);
-      nValue.textContent = String(next);
-      ctx.actions.updateSolverSetting("centralPathIter", next);
-      ctx.actions.recomputeIfModeActive("central");
-    });
-    n.value = String(st.centralPathIter);
-    sec.append(labeled("N (number of steps):", "centralPathIterSlider", n, nValue));
-    return (s) => {
-      nValue.textContent = String(s.solverSettings.centralPathIter);
-      setInputValue(n, String(s.solverSettings.centralPathIter));
-    };
-  }
-
-  function getSolverButtonUiState(state: State, mode: SolverMode): SolverButtonUiState {
-    const hasComputedLines = hasPolytopeLines(state.polytope);
-    const readyForSolvers = computeDrawingPhase(state) === "ready_for_solvers" && hasComputedLines && state.objectiveVector !== null;
-
-    return {
-      active: state.solverMode === mode,
-      disabled: !readyForSolvers || !isSolverSelectable(state, mode),
-    };
+    const n = numberSlider(st, mode, { key: "centralPathIter", min: "2", max: "100", step: "1", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false });
+    sec.append(...n.nodes);
+    return (s) => n.sync(s.solverSettings);
   }
 
   function isSolverSelectable(state: State, mode: SolverMode): boolean {
@@ -356,11 +246,10 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   }
 
   function render(s: State) {
-    for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as SolverMode[]) {
-      const ui = getSolverButtonUiState(s, mode);
-      const b = buttons.get(mode)!;
-      b.className = ui.active ? "button-active" : "";
-      b.disabled = ui.disabled;
+    const readyForSolvers = computeDrawingPhase(s) === "ready_for_solvers" && hasPolytopeLines(s.polytope) && s.objectiveVector !== null;
+    for (const [mode, b] of buttons) {
+      b.className = s.solverMode === mode ? "button-active" : "";
+      b.disabled = !readyForSolvers || !isSolverSelectable(s, mode);
     }
     if (renderedMode !== s.solverMode) {
       renderedMode = s.solverMode;
