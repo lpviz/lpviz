@@ -33,7 +33,7 @@ export interface VirtualResultPayload {
   type: "virtual";
   header: string;
   rows: ResultRowsView;
-  footer?: string;
+  footer?: string | undefined;
 }
 
 interface BlocksResultPayload {
@@ -64,8 +64,8 @@ export type IterateResult = {
   header: string;
   rows: ResultRowsView;
   footer?: string;
-  phases?: number[];
-  restartIndices?: number[];
+  phases?: number[] | undefined;
+  restartIndices?: number[] | undefined;
   ellipsoids?: EllipsoidPath;
   localizingSets?: LocalizingSetPath | null;
 };

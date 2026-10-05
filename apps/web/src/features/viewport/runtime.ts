@@ -205,7 +205,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
   const publish3DControlsConfig = ({
     syncFromSnapshot = false,
   }: {
-    syncFromSnapshot?: boolean;
+    syncFromSnapshot?: boolean | undefined;
   } = {}) => {
     if (syncFromSnapshot) {
       external3DControlsSyncToken += 1;

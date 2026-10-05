@@ -2,7 +2,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   // `html` is parsed into the element after its attributes are set and before
   // `children` are appended, the order every former `.innerHTML =` site used
-  options: { className?: string; text?: string; html?: string; attrs?: Record<string, string>; id?: string } = {},
+  options: { className?: string; text?: string; html?: string; attrs?: Record<string, string>; id?: string | undefined } = {},
   children: Node[] = [],
 ): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);

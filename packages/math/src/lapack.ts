@@ -39,7 +39,7 @@ export function solveDenseSystem(matrix: Float64Array, size: number, rhs: Float6
       const factor = lu[factorIndex]!;
       for (let col = pivot + 1; col < size; col++) {
         const index = row * size + col;
-        lu[index] -= factor * lu[pivot * size + col]!;
+        lu[index]! -= factor * lu[pivot * size + col]!;
       }
     }
   }
@@ -88,8 +88,8 @@ export function invertDenseMatrix(matrix: Float64Array, size: number, out: Float
     const rowOffset = pivot * size;
     const scale = 1 / work[rowOffset + pivot]!;
     for (let col = 0; col < size; col++) {
-      work[rowOffset + col] *= scale;
-      out[rowOffset + col] *= scale;
+      work[rowOffset + col]! *= scale;
+      out[rowOffset + col]! *= scale;
     }
     for (let row = 0; row < size; row++) {
       if (row === pivot) continue;
@@ -97,8 +97,8 @@ export function invertDenseMatrix(matrix: Float64Array, size: number, out: Float
       if (factor === 0) continue;
       const target = row * size;
       for (let col = 0; col < size; col++) {
-        work[target + col] -= factor * work[rowOffset + col]!;
-        out[target + col] -= factor * out[rowOffset + col]!;
+        work[target + col]! -= factor * work[rowOffset + col]!;
+        out[target + col]! -= factor * out[rowOffset + col]!;
       }
     }
   }

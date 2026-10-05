@@ -69,7 +69,7 @@ export function transposedMatVec(matrix: DenseMatrix, vector: Float64Array, out:
     const scale = vector[i]!;
     const rowOffset = i * cols;
     for (let j = 0; j < cols; j++) {
-      out[j] += data[rowOffset + j]! * scale;
+      out[j]! += data[rowOffset + j]! * scale;
     }
   }
 }

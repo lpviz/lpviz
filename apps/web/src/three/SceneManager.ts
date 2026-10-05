@@ -129,7 +129,7 @@ export class SceneManager {
     }
   };
 
-  invalidate(options: { layers?: boolean; viewportDirty?: ViewportDirtyFlags } = {}): void {
+  invalidate(options: { layers?: boolean; viewportDirty?: ViewportDirtyFlags | undefined } = {}): void {
     if (options.layers ?? true) {
       if (options.viewportDirty && Object.keys(options.viewportDirty).length) {
         if (this.layersDirty !== "all") {

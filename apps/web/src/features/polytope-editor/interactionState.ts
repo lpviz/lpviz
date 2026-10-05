@@ -86,7 +86,7 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Poin
 
   const bounds = getVisibleBounds(canvasManager);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
-    const ray = polytope.boundaryRays[index];
+    const ray = polytope.boundaryRays[index]!;
     const clipped = clipRayToBoundingBox({ x: ray.start[0], y: ray.start[1] }, { x: ray.direction[0], y: ray.direction[1] }, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
@@ -146,8 +146,8 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
       const line = lineContext[edgeIndex];
       if (!line) return null;
       const nextIndex = (edgeIndex + 1) % state.vertices.length;
-      const start = state.vertices[edgeIndex];
-      const end = state.vertices[nextIndex];
+      const start = state.vertices[edgeIndex]!;
+      const end = state.vertices[nextIndex]!;
       if (Math.hypot(end.x - start.x, end.y - start.y) > 1e-6) {
         return {
           kind: "constraint",

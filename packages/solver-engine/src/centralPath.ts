@@ -67,9 +67,9 @@ function computeNewtonStep(
     const rowOffset = i * A.cols;
     for (let j = 0; j < A.cols; j++) {
       const aij = A.data[rowOffset + j]!;
-      gradient[j] -= gradientScale * aij;
+      gradient[j]! -= gradientScale * aij;
       for (let k = 0; k < A.cols; k++) {
-        hessian[j * A.cols + k] += hessianScale * aij * A.data[rowOffset + k]!;
+        hessian[j * A.cols + k]! += hessianScale * aij * A.data[rowOffset + k]!;
       }
     }
   }
@@ -145,7 +145,7 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
       return null;
     }
     for (let j = 0; j < currentPoint.length; j++) {
-      currentPoint[j] += newtonStep[j]! * stepSize;
+      currentPoint[j]! += newtonStep[j]! * stepSize;
     }
   }
 

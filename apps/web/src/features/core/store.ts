@@ -36,20 +36,20 @@ export type HistoryEntry = {
 export type DragViewAnchor3D = { x: number; y: number; z: number };
 
 export type DragTarget =
-  | { kind: "point"; index: number; viewAnchor3D?: DragViewAnchor3D }
+  | { kind: "point"; index: number; viewAnchor3D?: DragViewAnchor3D | undefined }
   | {
       kind: "constraint";
       operation: ConstraintDragOperation;
       start: PointXY;
       normal: PointXY;
     }
-  | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D }
+  | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D | undefined }
   | {
       kind: "solver-start";
       // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
       // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
       grabOffset?: PointXY;
-      viewAnchor3D?: DragViewAnchor3D;
+      viewAnchor3D?: DragViewAnchor3D | undefined;
     };
 export type EditorInteractionState =
   | { kind: "idle" }

@@ -19,7 +19,7 @@ const midOf = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
 
 describe("findEdgeNearPoint", () => {
   test("snaps a click on each edge to that edge, not to edge 0", () => {
-    const on = (i: number) => findEdgeNearPoint(midOf(SMALL_SQUARE[i], SMALL_SQUARE[(i + 1) % 4]), SMALL_SQUARE, "closed");
+    const on = (i: number) => findEdgeNearPoint(midOf(SMALL_SQUARE[i]!, SMALL_SQUARE[(i + 1) % 4]!), SMALL_SQUARE, "closed");
     expect(on(0)).toBe(0);
     expect(on(1)).toBe(1);
     expect(on(2)).toBe(2);

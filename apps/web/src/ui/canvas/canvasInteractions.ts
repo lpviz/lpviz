@@ -158,7 +158,7 @@ export function attachCanvasInteractions({
     let operation: ConstraintDragTarget["operation"];
 
     if (target.operation.kind === "closed-line") {
-      const line = target.operation.lines[target.operation.lineIndex];
+      const line = target.operation.lines[target.operation.lineIndex]!;
       const length = Math.hypot(line[0], line[1]);
       if (length <= 0) return;
 
@@ -647,7 +647,7 @@ export function attachCanvasInteractions({
     "touchstart",
     (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
-      const touch = event.touches[0];
+      const touch = event.touches[0]!;
       activeTouchStart = {
         clientX: touch.clientX,
         clientY: touch.clientY,
@@ -662,7 +662,7 @@ export function attachCanvasInteractions({
     "touchmove",
     (event: TouchEvent) => {
       if (event.touches.length !== 1) return;
-      const touch = event.touches[0];
+      const touch = event.touches[0]!;
       if (activeTouchStart) {
         markIfMovedBeyondTap(activeTouchStart, touch.clientX, touch.clientY);
       }

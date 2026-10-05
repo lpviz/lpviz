@@ -58,7 +58,7 @@ type IterateTrace = {
   rows: EllipsoidRow[];
   rho: number[];
   ellipsoids: Float64Array;
-  polygons?: number[][];
+  polygons?: number[][] | undefined;
 };
 
 export function newTrace(maxit: number, polygons?: number[][]): IterateTrace {
@@ -254,7 +254,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
     const invGPg = 1 / gPg;
     const step = tau / Math.sqrt(gPg);
 
-    for (let j = 0; j < n; j++) center[j] -= step * Pg[j]!;
+    for (let j = 0; j < n; j++) center[j]! -= step * Pg[j]!;
     for (let j = 0; j < n; j++) {
       for (let k = j; k < n; k++) {
         const value = delta * (P[j * n + k]! - sigma * Pg[j]! * Pg[k]! * invGPg);

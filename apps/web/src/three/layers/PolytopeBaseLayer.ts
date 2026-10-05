@@ -43,8 +43,8 @@ const fillMaterial = (color: string) =>
 function buildShapeFromVertices(vertices: ReadonlyArray<PointXY>) {
   const shape = new Shape();
   if (vertices.length === 0) return shape;
-  shape.moveTo(vertices[0].x, vertices[0].y);
-  for (let i = 1; i < vertices.length; i++) shape.lineTo(vertices[i].x, vertices[i].y);
+  shape.moveTo(vertices[0]!.x, vertices[0]!.y);
+  for (let i = 1; i < vertices.length; i++) shape.lineTo(vertices[i]!.x, vertices[i]!.y);
   shape.closePath();
   return shape;
 }
@@ -62,7 +62,7 @@ function clipPolygonToHalfPlane(polygon: PointXY[], line: Line): PointXY[] {
     return { x: s.x + t * dx, y: s.y + t * dy };
   };
   const result: PointXY[] = [];
-  let prev = polygon[polygon.length - 1],
+  let prev = polygon[polygon.length - 1]!,
     prevIn = inside(prev);
   for (const cur of polygon) {
     const curIn = inside(cur);

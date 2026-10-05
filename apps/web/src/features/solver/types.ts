@@ -3,5 +3,5 @@ type ResultTextBlockClassName = "iterate-header" | "iterate-item" | "iterate-ite
 export type ResultTextBlock = {
   className: ResultTextBlockClassName;
   text: string;
-  index?: number;
+  index?: number | undefined;
 };

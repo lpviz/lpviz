@@ -197,7 +197,7 @@ describe("getEditorTransition: delete-vertex", () => {
       });
       expect(t.kind).toBe("edit");
       if (t.kind !== "edit") throw new Error();
-      expect(t.result.vertices).toEqual([PENT[0], PENT[2], PENT[3], PENT[4]]);
+      expect(t.result.vertices).toEqual([PENT[0]!, PENT[2]!, PENT[3]!, PENT[4]!]);
       expect(t.result.completionMode).toBe("closed");
       expect(t.result.interiorPoint).not.toBeNull();
     }
@@ -215,8 +215,8 @@ describe("getEditorTransition: delete-vertex", () => {
       kind: "insert-edge-point",
       edgeIndex: 0,
       point: {
-        x: (PENT[0].x + PENT[1].x) / 2,
-        y: (PENT[0].y + PENT[1].y) / 2,
+        x: (PENT[0]!.x + PENT[1]!.x) / 2,
+        y: (PENT[0]!.y + PENT[1]!.y) / 2,
       },
     });
     if (inserted.kind !== "edit") throw new Error(inserted.kind);
@@ -246,7 +246,7 @@ describe("getEditorTransition: delete-vertex", () => {
       { kind: "delete-vertex", deleteIndex: 2 },
     );
     if (t.kind !== "edit") throw new Error(t.kind);
-    expect(t.result.vertices).toEqual([TRI[0], TRI[1]]);
+    expect(t.result.vertices).toEqual([TRI[0]!, TRI[1]!]);
     expect(t.result.completionMode).toBe("draft");
     expect(t.result.interiorPoint).toBeNull();
   });
@@ -267,7 +267,7 @@ describe("getEditorTransition: delete-vertex", () => {
       { kind: "delete-vertex", deleteIndex: 1 },
     );
     if (t.kind !== "edit") throw new Error(t.kind);
-    expect(t.result.vertices).toEqual([chain[0], chain[2], chain[3]]);
+    expect(t.result.vertices).toEqual([chain[0]!, chain[2]!, chain[3]!]);
     expect(t.result.completionMode).toBe("open");
   });
 });

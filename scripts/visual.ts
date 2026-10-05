@@ -251,7 +251,7 @@ async function capture(page: Page, sc: Scenario) {
 // Returns the count and a PNG (data URL) with differing pixels in red.
 async function pixelDiff(page: Page, a: Buffer, b: Buffer): Promise<{ differing: number; total: number; image: string } | "size"> {
   return page.evaluate(
-    async ([ba, bb]) => {
+    async ([ba, bb]: [string, string]) => {
       const load = (src: string) =>
         new Promise<HTMLImageElement>((resolve, reject) => {
           const img = new Image();
@@ -291,7 +291,7 @@ async function pixelDiff(page: Page, a: Buffer, b: Buffer): Promise<{ differing:
       A.ctx.putImageData(out, 0, 0);
       return { differing, total: da.length / 4, image: A.c.toDataURL("image/png") };
     },
-    [a.toString("base64"), b.toString("base64")],
+    [a.toString("base64"), b.toString("base64")] as [string, string],
   );
 }
 
