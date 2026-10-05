@@ -44,33 +44,11 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
   }
 
-  const { A, b } = linesToDenseAb(lines);
+  // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
+  const { A: aOriginal, b: bOriginal } = linesToDenseAb(lines);
+  const A = { rows: aOriginal.rows, cols: aOriginal.cols, data: Float64Array.from(aOriginal.data, (value) => -value) };
+  const b = Float64Array.from(bOriginal, (value) => -value);
   const c = Float64Array.from(objective, (value) => -value);
-  const bneg = Float64Array.from(b, (value) => -value);
-  const Aneg = Float64Array.from(A.data, (value) => -value);
-
-  return ipmCore(
-    {
-      rows: A.rows,
-      cols: A.cols,
-      data: Aneg,
-    },
-    bneg,
-    c,
-    {
-      eps_p,
-      eps_d,
-      eps_opt,
-      maxit,
-      alphaMax,
-      correctorThreshold,
-      startPoint,
-    },
-  );
-}
-
-function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, opts: IPMOptions) {
-  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
   const m = A.rows;
   const n = A.cols;
 
@@ -82,7 +60,6 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
     header: " Iter        x        y        Obj     Infeas          µ",
     rows: [],
   };
-  const res = { iterates: { solution } };
 
   let x = new Float64Array(n);
   let s = new Float64Array(m).fill(1);
@@ -141,8 +118,11 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
     const gap = Math.abs(pObj - dot(b, y)) / (1 + Math.abs(pObj));
     const pRes = infinityNorm(rP);
 
-    logIter(solution, x, mu, pObj, pRes);
-    pushIter(solution, x, s, y, mu);
+    solution.rows.push({ kind: "ipm", iteration: solution.x.length + 1, x: x[0] ?? 0, y: x[1] ?? 0, objective: -pObj, infeasibility: pRes, mu });
+    solution.x.push(x.slice());
+    solution.s.push(s.slice());
+    solution.y.push(y.slice());
+    solution.mu.push(mu);
 
     if (pRes <= eps_p && infinityNorm(rD) <= eps_d && gap <= eps_opt) {
       converged = true;
@@ -201,9 +181,14 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
     }
   }
 
-  const solveTime = performance.now() - startTime;
-  logFinal(solution, converged, solveTime, failureMessage);
-  return res;
+  const elapsed = formatMilliseconds(performance.now() - startTime);
+  const count = solution.x.length;
+  solution.footer = failureMessage
+    ? `${failureMessage}\nStopped after ${count} iterations in ${elapsed}\n`
+    : converged
+      ? `Converged to optimal solution in ${elapsed} / ${count} iterations\n`
+      : `Did not converge after ${count} iterations in ${elapsed}\n`;
+  return { iterates: { solution } };
 }
 
 //   [ A  -I   0 ] [dx]   [rP]        (primal residual)
@@ -257,32 +242,4 @@ function alphaStep(values: Float64Array, delta: Float64Array) {
     }
   }
   return alpha;
-}
-
-function pushIter(d: IPMSolutionData, x: Float64Array, s: Float64Array, y: Float64Array, mu: number) {
-  d.x.push(x.slice());
-  d.s.push(s.slice());
-  d.y.push(y.slice());
-  d.mu.push(mu);
-}
-
-function logIter(d: IPMSolutionData, x: Float64Array, mu: number, pObj: number, pRes: number) {
-  const row = {
-    kind: "ipm" as const,
-    iteration: d.x.length + 1,
-    x: x[0] ?? 0,
-    y: x[1] ?? 0,
-    objective: -pObj,
-    infeasibility: pRes,
-    mu,
-  };
-  d.rows.push(row);
-}
-
-function logFinal(d: IPMSolutionData, converged: boolean, solveTime: number, failureMessage: string | null) {
-  d.footer = failureMessage
-    ? `${failureMessage}\nStopped after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`
-    : converged
-      ? `Converged to optimal solution in ${formatMilliseconds(solveTime)} / ${d.x.length} iterations\n`
-      : `Did not converge after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`;
 }
