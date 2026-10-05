@@ -338,14 +338,6 @@ body {
   overflow: hidden;
 }
 
-.scanlines--delay-8 {
-  --delay: -8s;
-}
-
-.scanlines--delay-12 {
-  --delay: -12s;
-}
-
 #result,
 #topResult {
   max-height: 100%;

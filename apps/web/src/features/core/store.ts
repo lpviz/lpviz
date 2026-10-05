@@ -548,24 +548,10 @@ export function displayedSolverStartPoint(state: State): PointXY | null {
   return point;
 }
 
-export function updateIteratePaths(path: IteratePath, phasesArray?: number[], restartIndicesArray?: number[], ellipsoids?: EllipsoidPath | null, localizingSets?: LocalizingSetPath | null): void {
-  const { objectiveVector } = getState();
-  // viewportDirty derived from the changed iterate fields (see FIELD_DIRTY)
-  setState(buildIterateStatePatch(path, phasesArray, restartIndicesArray, snapshotObjectiveVector(objectiveVector), ellipsoids ?? null, localizingSets ?? null));
-}
-
 export function clearIterateState(): void {
   setState({
     ...buildIterateStatePatch(EMPTY_ITERATE_PATH, undefined, undefined, null),
     highlightIteratePathIndex: null,
-  });
-}
-
-export function addTraceToBuffer(path: IteratePath): void {
-  const state = getState();
-  if (!state.traceEnabled || path.count === 0) return;
-  setState({
-    traceBuffer: appendedTraceBuffer(state, path, snapshotObjectiveVector(state.objectiveVector)),
   });
 }
 

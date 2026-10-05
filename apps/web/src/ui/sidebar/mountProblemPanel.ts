@@ -35,7 +35,7 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
     }
   });
   inequalities.addEventListener("mouseleave", () => ctx.actions.setConstraintHighlight(null));
-  frame.append(topResult, el("div", { id: "terminal-window" }), el("div", { className: "scanlines" }), el("div", { className: "scanlines scanlines--delay-8" }));
+  frame.append(topResult, el("div", { id: "terminal-window" }));
   parent.append(frame);
   function render(state: State) {
     const objectiveActive = state.objectiveVector !== null;

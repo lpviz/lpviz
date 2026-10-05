@@ -44,7 +44,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       hoverRafId = null;
     }
   };
-  frame.append(result, el("div", { id: "terminal-window" }), el("div", { className: "scanlines" }), el("div", { className: "scanlines scanlines--delay-12" }));
+  frame.append(result, el("div", { id: "terminal-window" }));
   parent.append(frame);
   result.addEventListener("pointerenter", (e) => {
     pointerInsideResult = true;
