@@ -1,8 +1,9 @@
-import { Euler, PerspectiveCamera, Vector3 } from "three";
+import { Euler, Vector3 } from "three";
 
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
+import { configurePerspectiveCameraFromSnapshot, getPerspectiveDistanceFromSnapshot3D } from "./projection3d";
 import {
   buildPerspectivePoseFromViewAngle,
   getPerspectiveDistanceForUnitsPerPixel,
@@ -29,26 +30,11 @@ const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const MIN_PERSPECTIVE_DISTANCE = 10;
 const EPS = 1e-6;
 
-const snapshotCamera = new PerspectiveCamera();
-const snapshotTarget = new Vector3();
 const fitEuler = new Euler();
 const fitForward = new Vector3();
 const fitUp = new Vector3();
 const fitRight = new Vector3();
 const fitRelative = new Vector3();
-
-const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot) => {
-  snapshotCamera.fov = snapshot.perspective.fov;
-  snapshotCamera.aspect = snapshot.perspective.aspect;
-  snapshotCamera.near = snapshot.perspective.near;
-  snapshotCamera.far = snapshot.perspective.far;
-  snapshotCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
-  snapshotCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
-  snapshotTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
-  snapshotCamera.lookAt(snapshotTarget);
-  snapshotCamera.updateProjectionMatrix();
-  snapshotCamera.updateMatrixWorld();
-};
 
 const configureFitBasisFromViewAngle = (viewAngle: PointXYZ) => {
   fitEuler.set(-viewAngle.x, -viewAngle.y, -viewAngle.z, "XYZ");
@@ -190,18 +176,8 @@ const offsetTargetForVisibleViewport3D = (
 };
 
 export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): PointXYZ {
-  configurePerspectiveCameraFromSnapshot(snapshot);
-  return {
-    x: -snapshotCamera.rotation.x,
-    y: -snapshotCamera.rotation.y,
-    z: -snapshotCamera.rotation.z,
-  };
-}
-
-function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
-  return snapshotCamera.position
-    .set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z)
-    .distanceTo(snapshotTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
+  const { rotation } = configurePerspectiveCameraFromSnapshot(snapshot);
+  return { x: -rotation.x, y: -rotation.y, z: -rotation.z };
 }
 
 export function getDefaultPerspectiveDistance3D(snapshot: ViewportRenderSnapshot, rect?: ViewportRect) {

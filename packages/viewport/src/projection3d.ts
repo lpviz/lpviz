@@ -32,18 +32,26 @@ const projectionPlane = new Plane(projectionPlaneNormal, 0);
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
 
-const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot) => {
+// The package's one scratch camera, posed from the snapshot; every reader
+// configures it first and nothing relies on its state across calls.
+export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderSnapshot): PerspectiveCamera {
   projectionCamera.fov = snapshot.perspective.fov;
   projectionCamera.aspect = snapshot.perspective.aspect;
   projectionCamera.near = snapshot.perspective.near;
   projectionCamera.far = snapshot.perspective.far;
   projectionCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
   projectionCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
-  projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
-  projectionCamera.lookAt(projectionTarget);
+  projectionCamera.lookAt(projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
   projectionCamera.updateMatrixWorld();
   projectionCamera.updateProjectionMatrix();
-};
+  return projectionCamera;
+}
+
+export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
+  return projectedPosition
+    .set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z)
+    .distanceTo(projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
+}
 
 const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DInteractionOptions): PointXY => {
   if (!(options.editorInteractionKind !== "idle" && (options.is3DMode || options.isTransitioning3D))) {

@@ -3,6 +3,7 @@ import { Euler, PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "th
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
+import { getPerspectiveDistanceFromSnapshot3D } from "./projection3d";
 import { getViewportSize, orthographicFor, type ViewportDirtyFlags, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type ViewportTransitionPlan = {
@@ -87,9 +88,7 @@ export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }:
         z: 0,
       };
 
-  projectionPositionFromSnapshot(snapshot);
-  projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
-  const snapshotDistance = transitionPosition.distanceTo(projectionTarget);
+  const snapshotDistance = getPerspectiveDistanceFromSnapshot3D(snapshot);
   const perspectiveDistance = targetMode
     ? getPerspectiveDistanceForUnitsPerPixel(snapshot, snapshot.unitsPerPixel, snapshot.height)
     : Number.isFinite(snapshotDistance) && snapshotDistance > 0
@@ -264,8 +263,4 @@ export function buildViewport2DStateFromTransitionFrame(plan: ViewportTransition
   };
 
   return buildViewport2DStateFromVisibleCenter(visibleCenter, frame.snapshot.scaleFactor, frame.snapshot.gridSpacing);
-}
-
-function projectionPositionFromSnapshot(snapshot: ViewportRenderSnapshot) {
-  transitionPosition.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
 }
