@@ -1,19 +1,10 @@
 import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 
-// A share link is a URL people paste into chat, email and papers, so the
-// payload is restricted to the base64url alphabet — A-Z a-z 0-9 - _ — which
-// every auto-linker treats as part of the URL. The previous JSONCrush payload
-// was dense but full of quotes, parentheses, tildes and percent-escapes, and
-// tended to end in punctuation like `*_`; linkifiers routinely swallowed the
-// tail or stopped early, producing links that silently loaded a different
-// problem.
-//
-// The encoding is a small binary format rather than JSON: field order is fixed
-// so keys cost nothing, coordinates are delta-coded varints (polygon vertices
-// sit close together, so each one costs a byte or two), and settings left at
-// their default are omitted entirely. That runs shorter than the compressed
-// JSON it replaces while staying paste-safe.
+// A share link gets pasted into chat, email and papers, so the payload is restricted to the
+// base64url alphabet (A-Z a-z 0-9 - _), which every auto-linker treats as part of the URL. The
+// encoding is a small binary format: fixed field order (keys cost nothing), delta-coded varint
+// coordinates, and settings left at their default omitted entirely.
 
 // v2 added the extended-flags byte (and with it the solver start point). v1 is
 // still read: its header is one byte shorter and it can carry no start point.
@@ -23,10 +14,9 @@ import type { ShareSettings, SharedAppState } from "@/features/share/sharedState
 // was written to eliminate.
 const VERSION = 2;
 const MIN_VERSION = 1;
-// 1e-4 of a world unit is far below one screen pixel at any usable zoom, and
-// vertices are where the bytes go. The objective is only two numbers and is
-// printed to three decimals in the problem panel, so it gets enough precision
-// that a round-tripped link renders identically rather than one ulp off.
+// 1e-4 of a world unit is far below one screen pixel at any usable zoom, and vertices are where the
+// bytes go; the objective is printed to three decimals, so it gets enough precision that a
+// round-tripped link renders identically rather than one ulp off.
 const COORDINATE_SCALE = 1e4;
 const OBJECTIVE_SCALE = 1e6;
 const Z_SCALE_SCALE = 1e3;

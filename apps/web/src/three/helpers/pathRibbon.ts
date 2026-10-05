@@ -1,27 +1,14 @@
 import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
 import { applyHugeBounds } from "./sharedLineMaterials";
 
-// Constant screen-width polyline rendering with true fat-line styling at a
-// fraction of the cost of instanced fat lines (Line2): one uncapped quad per
-// segment, extruded in the vertex shader along that segment's own screen-space
-// normal. Line2 expands every segment into a *capped* quad — at millions of
-// sub-pixel segments that is orders of magnitude of redundant overdraw —
-// whereas uncapped quads tile the path edge to edge and rasterize
-// width x on-screen-length once, the same as a continuous ribbon.
-//
-// Extruding per segment (rather than sharing two mitered vertices per point,
-// as this did originally) is what makes the width *actually* constant: a
-// shared-vertex joint has to reach the intersection of the two offset edges to
-// keep both segments full width, which grows without bound as a turn
-// approaches a hairpin. Clamping that miter is what made zig-zagging paths —
-// the ellipsoid method's especially, where a third of the joints turn by more
-// than 120° — visibly taper toward every corner. The cost is a small wedge of
-// missing ink on the outside of sharp corners, which at these widths reads as
-// a mitre-less join rather than as a defect.
-//
-// The path lives in a float texture indexed by gl_VertexID (four vertices per
-// segment, no vertex attributes at all), so a path costs one RGBA32F texel per
-// point of GPU memory and geometries share a single static index buffer.
+// Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
+// one uncapped quad per segment, extruded in the vertex shader along that segment's own
+// screen-space normal, so the quads tile the path edge to edge and rasterize width x
+// on-screen-length once. Extruding per segment (not sharing mitered vertices per point) is what
+// keeps the width constant: a clamped miter visibly tapers zig-zagging paths toward every corner,
+// whereas the missing wedge on the outside of a sharp corner reads as a mitre-less join. The path
+// lives in a float texture indexed by gl_VertexID (four vertices per segment, no vertex
+// attributes), so a path costs one RGBA32F texel per point and geometries share one static index buffer.
 
 const TEX_WIDTH = 4096;
 const TEX_WIDTH_MASK = TEX_WIDTH - 1;
@@ -34,12 +21,9 @@ export function setPathRibbonResolution(width: number, height: number): void {
   sharedResolution.set(width, height);
 }
 
-// Shared by reference across every ribbon material. The trace cache flips it
-// on while baking ribbons into its render target so they write sRGB-encoded
-// values there (three forces linearToOutputTexel to identity for render
-// targets): blending and MSAA resolve then happen in the same encoded space
-// as direct canvas rendering, making cached and directly drawn strokes
-// pixel-identical.
+// Shared by reference across every ribbon material. The trace cache flips it on while baking
+// ribbons into its render target so they write sRGB-encoded values there (three forces
+// linearToOutputTexel to identity for render targets), making cached and direct strokes pixel-identical.
 const sharedCacheEncode = { value: 0 };
 export function setPathRibbonCacheEncode(enabled: boolean): void {
   sharedCacheEncode.value = enabled ? 1 : 0;
@@ -93,12 +77,9 @@ void main() {
 }
 `;
 
-// linearToOutputTexel comes from three's standard fragment prefix and is
-// compiled per render target (sRGB encode onto the canvas, identity into
-// render targets). cacheEncode forces the sRGB encode when baking into the
-// trace cache — sRGBTransferOETF is the exact function linearToOutputTexel
-// aliases for the canvas, so cached strokes blend and resolve in the same
-// encoded space as directly drawn ones.
+// linearToOutputTexel comes from three's standard fragment prefix and is compiled per render
+// target (sRGB encode onto the canvas, identity into render targets); cacheEncode forces the sRGB
+// encode when baking into the trace cache, sRGBTransferOETF being exactly what it aliases for the canvas.
 const FRAGMENT_SHADER = /* glsl */ `
 uniform vec3 color;
 uniform float opacity;

@@ -39,22 +39,11 @@ function formatConstraint(A: number, B: number, C: number): string {
   return `${xTerm}${yTerm} ≤ ${normalizedC}`.trim();
 }
 
-// Which way an open chain turns, as -1 (right), +1 (left) or 0 (no consistent
-// turn: collinear, or turning both ways). The natural normal (A = dy, B = -dx)
-// already puts the interior on the <= side of a left-turning chain, so this is
-// all that is needed to orient every edge the same way round. A turn counts
-// when the sine of its angle exceeds `tol` — a test on the raw cross product
-// would have units of length squared and call every turn of a small chain
-// collinear, silently handing those chains back to the centroid rule.
-//
-// Reading the side off a reference point instead is unsound for an open chain:
-// the reference is a mean over all the points, so one distant vertex can drag
-// it across an edge and leave that edge's half-plane facing outward, which cuts
-// the nodes either side of it out of the user's own region. The turn is a
-// purely local property, so no single vertex can swing it. Reported against
-// this share link, where a four-node chain's first node sat far outside the
-// triangle the rest described:
-//   https://lpviz.net/?s=AsIABJCr0QH0nI4B78iOApm_qQH0rSmGziCbrAn1xArq284D6q7OBWQA
+// Which way an open chain turns, as -1 (right), +1 (left) or 0 (collinear, or turning both
+// ways). The natural normal (A = dy, B = -dx) puts the interior on the <= side of a left-turning
+// chain. A turn counts when the sine of its angle exceeds `tol`: the raw cross product has units
+// of length squared and would call every turn of a small chain collinear. The turn is a local
+// property, so unlike the centroid rule no single distant vertex can swing an edge outward.
 function chainTurnSign(points: Vertices, tol: number): -1 | 0 | 1 {
   let sign: number = 0;
   for (let i = 0; i + 2 < points.length; i++) {

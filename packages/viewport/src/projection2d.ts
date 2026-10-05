@@ -2,7 +2,7 @@ import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
 import { getAvailableViewportSize, getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
-const ORTHO_MIN_SCALE_FACTOR = 0.05;
+export const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const ORTHO_MAX_SCALE_FACTOR = 400;
 
 export type Viewport2DState = { gridSpacing: number; scaleFactor: number; offsetX: number; offsetY: number };

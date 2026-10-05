@@ -28,10 +28,8 @@ const MAX_BACKTRACKS = 60;
 // Below this the localizing set has no room left to query and the incumbent is
 // the answer; it is the polyhedral counterpart of the ellipsoid collapsing.
 const MIN_CHEBYSHEV_RADIUS = 1e-12;
-// Vaidya drops a cut once its leverage score falls below a threshold — those
-// cuts are nearly redundant, and dropping them is what keeps the constraint
-// count (and so the per-iteration cost) bounded. Dropping only ever enlarges
-// the localizing set, so it can never lose the optimum.
+// Vaidya drops a cut once its leverage score falls below this, which bounds the constraint
+// count; dropping only ever enlarges the localizing set, so it can never lose the optimum.
 const VAIDYA_DROP_LEVERAGE = 1e-3;
 // inert box for the LP solver: the localizing set carries its own bounds
 const LP_BOUND = 1e6;
@@ -52,13 +50,9 @@ export interface CuttingPlaneOptions {
 
 type QueryResult = {
   point: Float64Array;
-  // The ellipse drawn for this iterate. Note it is *inscribed* at the query
-  // point, where the ellipsoid method's is a covering ellipsoid — the two look
-  // alike and mean opposite things. In particular the next query point is
-  // routinely outside this ellipse, which is expected: it is a local measure of
-  // how much room surrounds the query point, not the region still under
-  // consideration. That region is the polyhedron of accumulated cuts, which
-  // only ever shrinks (see the test of the same name).
+  // The ellipse drawn for this iterate, *inscribed* at the query point (the ellipsoid method's
+  // is a covering ellipsoid): a local measure of room, not the region still under
+  // consideration, so the next query point is routinely outside it.
   p11: number;
   p12: number;
   p22: number;
@@ -66,31 +60,13 @@ type QueryResult = {
 };
 
 /**
- * Cutting-plane methods that localize with a polyhedron instead of an
- * ellipsoid, differing only in which point of it they query next:
- *
- *   - `chebyshev`  the center of its largest inscribed ball (one LP);
- *   - `analytic`   the minimizer of the log barrier -sum log(b_i - a_i'x),
- *                  i.e. the point furthest from all faces in the barrier's
- *                  sense (ACCPM);
- *   - `volumetric` Vaidya's minimizer of ½ log det H(x), which weights each
- *                  face by its leverage score so that near-redundant cuts stop
- *                  dragging the query point around, plus cut dropping.
- *
- * They exist here because the ellipsoid method's spiral comes from querying the
- * *center of a covering ellipsoid*, which is a crude proxy for "deep inside the
- * region still under consideration". These query points are the principled
- * answer, and they do not precess.
- *
- * The oracle, the incumbent handling and the ray shoot are shared with the
- * ellipsoid method, so iteration counts are directly comparable: all of them
- * start from the same inflated bounding box of the drawn region, and all of
- * them learn constraints only when a query point violates one.
- *
- * Unlike the ellipsoid method, the localizing set here is a polyhedron whose
- * support function is not available in closed form, so the upper bound
- * `max c'x over L` that drives `rho` and the stopping gap is an actual LP,
- * solved exactly each iteration.
+ * Cutting-plane methods that localize with a polyhedron instead of an ellipsoid, differing in the
+ * point they query next: `chebyshev` the center of the largest inscribed ball (one LP), `analytic`
+ * the log-barrier minimizer (ACCPM), `volumetric` Vaidya's minimizer of ½ log det H(x) with
+ * leverage-weighted faces plus cut dropping. The oracle, incumbent and ray shoot are shared with
+ * the ellipsoid method, so iteration counts are directly comparable. The polyhedron's support
+ * function has no closed form, so the upper bound `max c'x over L` behind `rho` and the stopping
+ * gap is an actual LP, solved exactly each iteration.
  */
 export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): EllipsoidResultData {
   const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
@@ -207,19 +183,10 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
 }
 
 /**
- * Whether `max c'x` over the (feasible) region `Ax <= b` is unbounded, which is
- * exactly when some recession direction `d` of the region — `Ad <= 0` — has
- * `c'd > 0`. That is one small LP over the recession cone clipped to the unit
- * box.
- *
- * The ellipsoid method reads this off its geometry instead: a converged center
- * on the initial ellipsoid's boundary was stopped by the ellipsoid, not by a
- * constraint. The same test does not transfer to a polyhedron. The query
- * points here are strictly interior, so the converged point only approaches
- * the initial box; and a *bounded* objective whose optimal face is a ray also
- * runs that face into the box, where a Chebyshev center is as happy to sit at
- * the box end of the face as anywhere else along it. Position on the box
- * cannot tell the two apart; the recession cone can.
+ * Whether `max c'x` over `Ax <= b` is unbounded: some recession direction `d` (`Ad <= 0`) has
+ * `c'd > 0`, one small LP over the recession cone clipped to the unit box. The ellipsoid method's
+ * boundary test does not transfer: the query points here are strictly interior, and a *bounded*
+ * objective whose optimal face is a ray also runs into the box, so position cannot tell the two apart.
  */
 function objectiveIsUnbounded(A: { rows: number; cols: number; data: Float64Array }, c: Float64Array): boolean {
   const cone: LpRow[] = [];

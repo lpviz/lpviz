@@ -62,17 +62,10 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
   let s = new Float64Array(m).fill(1);
   let y = new Float64Array(m).fill(1);
   if (startPoint && startPoint.length === n) {
-    // Warm start from a user-chosen x0: relocate only the primal point and
-    // keep the cold start's s = y = 1, so a start at the default position
-    // reproduces the cold trajectory exactly. Feasibility of x0 is not
-    // required — this is an infeasible-start method — but strict positivity
-    // of (s, y) is: both sit on the diagonal of the Newton system and the
-    // fraction-to-boundary rule only preserves positivity it starts with.
-    // The centered choice satisfies it, gives every complementarity product
-    // s_i*y_i = 1 (a tiny product makes the first affine directions explode),
-    // and keeps the initial mu = 1 on scale for sigma = (mu_aff/mu)^3. The
-    // cold start never zeroes the primal residual either (s = 1, not b - Ax),
-    // so residuals are the solver's job in both cases.
+    // Relocate only the primal point and keep s = y = 1, so a start at the default position
+    // reproduces the cold trajectory. x0 need not be feasible (infeasible-start method), but
+    // (s, y) must stay strictly positive: the fraction-to-boundary rule only preserves the
+    // positivity it starts with, and s_i*y_i = 1 keeps the initial mu on scale for sigma.
     x.set(startPoint);
   }
 

@@ -460,9 +460,8 @@ export function attachCanvasInteractions({
     return false;
   };
 
-  // The shared tail of a pen pointerup and a touchend: release the drag, drop
-  // the gesture record, then (only for a gesture that neither drifted nor
-  // dragged) test for a double tap and swallow the event when it was one.
+  // The shared tail of a pen pointerup and a touchend: only a gesture that neither drifted nor
+  // dragged is tested for a double tap, and the event is swallowed when it was one.
   const endTapGesture = (event: PointerEvent | TouchEvent, started: { moved: boolean } | null, forget: () => void, at: { clientX: number; clientY: number } | undefined) => {
     const interactionBeforeEnd = getState().editorInteraction;
     handlePointerRelease(event);
@@ -504,9 +503,8 @@ export function attachCanvasInteractions({
   const isTextEntryTarget = (target: EventTarget | null) =>
     target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 
-  // "+" lengthens the replay, "-" shortens it — the flashed readout names the
-  // value so the direction is unambiguous. It shows on every press, including
-  // one that hits an end of the range, so the keys never feel dead.
+  // "+" lengthens the replay, "-" shortens it; the readout shows on every press, including one
+  // that hits an end of the range, so the keys never feel dead
   const adjustReplayDuration = (direction: 1 | -1) => {
     const { solverSettings } = getState();
     const replaySpeed = stepReplayDurationMs(solverSettings.replaySpeed, direction);

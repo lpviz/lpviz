@@ -1,13 +1,4 @@
-import {
-  addTraceToBuffer,
-  flattenIteratesToPath,
-  getState,
-  updateIteratePaths,
-  updateIteratePathsWithTrace,
-  type EllipsoidPath,
-  type IteratePath,
-  type LocalizingSetPath,
-} from "@/features/core/store";
+import { flattenIteratesToPath, updateIteratePathsWithTrace, type EllipsoidPath, type IteratePath, type LocalizingSetPath } from "@/features/core/store";
 import type { ResultTextBlock } from "@/features/solver/types";
 import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
 import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
@@ -91,23 +82,16 @@ function applySimplexResult(result: SimplexResult, updateResult: (payload: Resul
 }
 
 function applyCentralPathResult(result: CentralPathResult, updateResult: (payload: ResultRenderPayload) => void) {
-  const path = flattenIteratesToPath(result.iterations);
   applyIterateResult(
     {
-      iterations: path,
+      iterations: flattenIteratesToPath(result.iterations),
       header: result.logs[0] ?? "",
       // central-path logs carry no footer line (the footer below is synthesized)
       rows: result.logs.slice(1),
       footer: `Traced central path in ${Math.round(result.tsolve * 1000)}ms`,
-      updateTrace: false,
     },
     updateResult,
   );
-
-  const { traceEnabled } = getState();
-  if (traceEnabled && path.count > 0) {
-    addTraceToBuffer(path);
-  }
 }
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {
@@ -116,15 +100,8 @@ export function formatVirtualResultRow(row: VirtualResultRow): string {
   return `${iteration} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.extra, 10, 1, false)}`;
 }
 
-function applyIterateResult(
-  { iterations, header, rows, footer, updateTrace = true, phases, restartIndices, ellipsoids, localizingSets }: IterateResult & { updateTrace?: boolean },
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
-  if (updateTrace) {
-    updateIteratePathsWithTrace(iterations, phases, restartIndices, ellipsoids, localizingSets);
-  } else {
-    updateIteratePaths(iterations, phases, restartIndices, ellipsoids, localizingSets);
-  }
+function applyIterateResult({ iterations, header, rows, footer, phases, restartIndices, ellipsoids, localizingSets }: IterateResult, updateResult: (payload: ResultRenderPayload) => void) {
+  updateIteratePathsWithTrace(iterations, phases, restartIndices, ellipsoids, localizingSets);
 
   updateResult({ type: "virtual", header, rows, footer });
 }

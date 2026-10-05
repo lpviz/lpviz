@@ -334,17 +334,10 @@ function selectLeavingIndex(xB: Float64Array, direction: Float64Array, basisIndi
   return leave;
 }
 
-// A pivot is degenerate when the entering variable cannot increase at all
-// (minimum ratio ~ 0): the basis changes but the vertex does not. Cycling is a
-// run of degenerate pivots that revisits a basis, and only Bland's rule
-// (lowest index entering and leaving) is guaranteed to avoid it. Rather than
-// letting the other rules spin until MAX_ITERATIONS, both simplex loops count
-// consecutive degenerate pivots and fall back to Bland's rule for the rest of
-// the phase once the count exceeds this limit. Iterations pivoted under the
-// fallback carry a "d" after their number in the log, the way PDHG marks
-// Halpern restarts with "r". A legitimately degenerate vertex in the app's
-// 2-D/3-D problems needs only a handful of degenerate pivots, and a false
-// trigger merely changes the pivot rule.
+// Only Bland's rule (lowest index entering and leaving) is guaranteed not to cycle, so after this
+// many consecutive degenerate pivots (minimum ratio ~ 0) a simplex loop falls back to it for the
+// rest of the phase; those iterations carry a "d" after their number in the log. A legitimately
+// degenerate vertex in the app's problems needs only a handful, and a false trigger is harmless.
 const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
 
 // Iteration column of a log row: "12" normally, "12d" while the cycling guard
@@ -459,13 +452,9 @@ function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, bas
   return { iterations, logs, finalBasis, objective, status };
 }
 
-// Drives any artificial variable still basic at the end of Phase 1 out of the
-// basis by swapping in the lowest-index original column with a nonzero pivot.
-// This is deliberately independent of the selected pivot rules: it is a basis
-// repair step, not an objective-improving pivot, so the rules only govern the
-// two simplex loops. (Primal mode reaches this loop only for zero-area regions,
-// which the app rejects; dual mode reaches it when the objective is exactly
-// parallel to a constraint normal.)
+// Drives any artificial variable still basic after Phase 1 out of the basis by swapping in the
+// lowest-index original column with a nonzero pivot. A basis repair step, deliberately
+// independent of the selected pivot rules.
 function pivotOutArtificialVariables(phase1Matrix: DenseMatrix, bVec: Float64Array, basisInit: boolean[], originalColumnCount: number, tol: number) {
   const basis = basisInit.slice();
   const column = new Float64Array(phase1Matrix.rows);
@@ -558,11 +547,8 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   const phase1 = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
 
   if (Math.abs(phase1.objective) > tol) {
-    // Phase 1 could not drive the artificial objective to zero, so the dual LP
-    // is infeasible. The feasible region we are visualizing is non-empty
-    // (emptiness is rejected before the solver runs), so by LP duality the
-    // primal LP is unbounded. Report it like the primal solver does and still
-    // plot the Phase 1 trajectory.
+    // The dual LP is infeasible; the region is non-empty (emptiness is rejected before the
+    // solver runs), so by LP duality the primal is unbounded. Still plot the Phase 1 trajectory.
     return {
       iterations: [] as Float64Array[],
       phase1Iterations: phase1.iterations,
@@ -595,14 +581,10 @@ function primalPointFromSplitTableau(tableauX: Vec2N, n: number) {
   return point;
 }
 
-// Turn a user-supplied vertex of {Ax <= b} directly into a feasible Phase-2
-// basis for the split standard form [A, -A, I]. The dual side needs no
-// initialization: primal simplex derives its dual estimate y = B^-T c_B from
-// the basis, and dual feasibility is exactly what Phase 2 works toward.
-// Returns null unless the point verifiably is a nondegenerate basic feasible
-// solution — exactly n tight rows, every other slack positive, nonsingular
-// basis matrix whose basic solution is feasible and reproduces the vertex —
-// so a bad start degrades to the ordinary two-phase run, never a wrong path.
+// Turn a user-supplied vertex of {Ax <= b} into a feasible Phase-2 basis for [A, -A, I]. Returns
+// null unless the point verifiably is a nondegenerate basic feasible solution (exactly n tight
+// rows, nonsingular basis whose basic solution is feasible and reproduces the vertex), so a bad
+// start degrades to the ordinary two-phase run, never a wrong path.
 function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Float64Array, aPhase2: DenseMatrix, vertex: number[], tol: number): boolean[] | null {
   const m = A.rows;
   const n = A.cols;
@@ -616,9 +598,8 @@ function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Floa
     if (slack < -tol * scale) return null; // infeasible point
     if (slack <= tol * scale) active.push(i);
   }
-  // basic variables = one split coordinate per dimension + one slack per
-  // inactive row; that totals m exactly when |active| = n (a nondegenerate
-  // vertex). Interior points and degenerate corners fall back to Phase 1.
+  // one split coordinate per dimension + one slack per inactive row totals m exactly when
+  // |active| = n; interior points and degenerate corners fall back to Phase 1
   if (active.length !== n) return null;
 
   const basis: boolean[] = new Array(2 * n + m).fill(false);

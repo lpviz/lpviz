@@ -2,8 +2,7 @@ import { type DenseMatrix, dot, linesToDenseAb } from "@lpviz/math/blas";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import { assertMaxit, solveFooter } from "./time";
 
-// Half-extent used for the initial ellipsoid when the caller has no vertices to
-// bound the region with (the app always has some; this is the safety net).
+// initial half-extent when there are no vertices to bound the region (the app always has some)
 const FALLBACK_HALF_EXTENT = 100;
 // A flat bounding box (vertical/horizontal sliver) would otherwise seed an
 // ellipsoid with a near-zero axis, which the shape matrix cannot recover from.
@@ -40,11 +39,9 @@ interface EllipsoidOptions {
 export interface EllipsoidResultData {
   iterations: Float64Array[];
   ellipsoids: Float64Array;
-  // The localizing set per iteration, as a closed polygon: [x, y] pairs for
-  // iterate `i` live at `polygonPoints[polygonOffsets[i] * 2 ...
-  // polygonOffsets[i + 1] * 2)`. Empty for the ellipsoid method, whose
-  // localizing set *is* the drawn ellipsoid; the cutting-plane methods emit the
-  // polyhedron of accumulated cuts, which the ellipse alone cannot show.
+  // The localizing set per iteration as a closed polygon: iterate `i`'s [x, y] pairs live at
+  // `polygonPoints[polygonOffsets[i] * 2 ... polygonOffsets[i + 1] * 2)`. Empty for the
+  // ellipsoid method, whose localizing set *is* the drawn ellipsoid.
   polygonPoints: Float64Array;
   polygonOffsets: Uint32Array;
   rho: number[];
@@ -55,9 +52,7 @@ export interface EllipsoidResultData {
 
 export const ELLIPSOID_HEADER = " Iter        x        y        Obj     Infeas          ρ";
 
-// Everything a run records per iterate, in lockstep: the (x, y) path, the log
-// rows, rho, the drawn ellipses and, for the cutting planes, the localizing
-// polygons.
+// Everything a run records per iterate, in lockstep; polygons only for the cutting planes.
 type IterateTrace = {
   iterations: Float64Array[];
   rows: EllipsoidRow[];
@@ -71,7 +66,6 @@ export function newTrace(maxit: number, polygons?: number[][]): IterateTrace {
   return { iterations: [], rows: [], rho: [], ellipsoids: new Float64Array((maxit + 1) * ELLIPSOID_STRIDE), polygons };
 }
 
-// Record one queried point: its ellipse [p11, p12, p22], its log row and rho.
 export function recordIterate(trace: IterateTrace, x: Float64Array, p11: number, p12: number, p22: number, objective: number, infeasibility: number, objectiveRadius: number): void {
   const { iterations, ellipsoids } = trace;
   const base = iterations.length * ELLIPSOID_STRIDE;
@@ -86,10 +80,8 @@ export function recordIterate(trace: IterateTrace, x: Float64Array, p11: number,
 }
 
 /**
- * The best feasible point found so far. With the ray shoot, a feasible query
- * point first slides along the objective until a constraint blocks it, and that
- * boundary point is the one adopted: the cut through the original point stays
- * valid, but it now bites deep instead of passing through the center.
+ * The best feasible point found so far. With the ray shoot, a feasible query point first slides
+ * along the objective until a constraint blocks it, and that boundary point is the one adopted.
  */
 export class Incumbent {
   readonly point: Float64Array;
@@ -146,11 +138,7 @@ export function packPolygons(polygons: readonly (readonly number[])[]) {
   return { polygonPoints, polygonOffsets };
 }
 
-/**
- * Sutherland-Hodgman clip of a convex polygon against `a'x <= b`. The
- * localizing set is an intersection of half-planes, so clipping the initial box
- * by each cut in turn is the whole construction.
- */
+/** Sutherland-Hodgman clip of a convex polygon against `a'x <= b`. */
 export function clipPolygon(polygon: readonly number[], a0: number, a1: number, b: number): number[] {
   const out: number[] = [];
   const count = polygon.length / 2;
@@ -175,46 +163,21 @@ export function clipPolygon(polygon: readonly number[], a0: number, a1: number, 
 // "infeasible" is the ellipsoid method's empty localizing set, "exhausted" the cutting planes'.
 export type Termination = "converged" | "maxit" | "infeasible" | "exhausted" | "degenerate" | "unbounded";
 
-// The initial ellipsoid must strictly contain the drawn region: that is what
-// makes the method's guarantee hold, and it is what makes the test below
-// unambiguous. Every extreme point of the region — bounded or not — is a drawn
-// vertex, hence strictly inside; so a converged point *on* the boundary was
-// stopped by the ellipsoid rather than by the constraints, which means the
-// objective is unbounded over the region.
+// The initial ellipsoid must strictly contain the drawn region: every extreme point of the
+// region is a drawn vertex, hence strictly inside, so a converged point *on* the boundary was
+// stopped by the ellipsoid rather than by a constraint, i.e. the objective is unbounded.
 const MIN_INITIAL_SCALE = 1.05;
 const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
 
 /**
- * The ellipsoid method on `max objective'x s.t. Ax <= b`.
+ * The ellipsoid method on `max objective'x s.t. Ax <= b`, sliding-objective variant: an infeasible
+ * center is cut with the most violated row, a feasible one with the objective. Deep cuts push the
+ * plane to the constraint / incumbent level; the ray shoot slides a feasible center along the
+ * objective to the blocking constraint before adopting it as the incumbent.
  *
- * Each iteration keeps an ellipsoid E_k that is guaranteed to contain every
- * feasible point at least as good as the best one found so far, and shrinks it
- * with one cutting plane through (or past) its center:
- *
- *   - center infeasible -> cut with the most violated constraint row;
- *   - center feasible   -> cut with the objective, which discards every point
- *                          no better than the incumbent (the "sliding
- *                          objective" variant).
- *
- * With deep cuts the plane is pushed to the constraint / incumbent level
- * instead of passing through the center, which is strictly more aggressive and
- * never loses a feasible point.
- *
- * With the ray shoot, a feasible center first slides along the objective until
- * a constraint blocks it, and that boundary point becomes the incumbent. The
- * cut stays valid — the shot point is feasible, so nothing at least as good as
- * it can be optimal-and-discarded — but it now bites deep instead of passing
- * through the center. It is worth 1.7-2.4x on the regions in the gallery, since
- * cut depth compounds where the initial ellipsoid's size only enters
- * logarithmically.
- *
- * `rho = sqrt(objective' P objective)` is the ellipsoid's half-width along the
- * objective, i.e. how much objective value could still be hiding inside it, so
- * it doubles as the reported convergence measure and as the vertical lift of
- * the 3D iterate path. Termination uses the sharper certificate rho makes
- * available: `objective'c + rho` upper-bounds the optimum (the ellipsoid
- * contains it) while the incumbent lower-bounds it, so the two bracket the true
- * optimality gap. That gap is never larger than rho and closes sooner.
+ * `rho = sqrt(objective' P objective)` is the ellipsoid's half-width along the objective, so
+ * `objective'c + rho` upper-bounds the optimum while the incumbent lower-bounds it; that gap is
+ * the stopping measure and the vertical lift of the 3D iterate path.
  */
 export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): EllipsoidResultData {
   const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
@@ -249,8 +212,6 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
     const feasible = violation <= FEASIBILITY_TOLERANCE;
     if (feasible) incumbent.offer(center, objectiveValue);
 
-    // `objectiveValue + objectiveRadius` bounds the optimum from above: the
-    // ellipsoid still contains it. The gap test is never worse than rho alone.
     const objectiveRadius = Math.sqrt(Math.max(0, quadraticForm(P, c, n)));
     upperBound = objectiveValue + objectiveRadius;
     recordIterate(trace, center, P[0]!, P[1]!, P[n + 1]!, objectiveValue, Math.max(0, violation), objectiveRadius);
@@ -282,8 +243,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
 
     const alpha = deepCuts ? beta / Math.sqrt(gPg) : 0;
     if (alpha >= 1) {
-      // the half-space misses the ellipsoid: nothing feasible (and no better
-      // than the incumbent) is left inside it
+      // the half-space misses the ellipsoid: nothing feasible and better than the incumbent is left
       termination = "infeasible";
       break;
     }
@@ -340,8 +300,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
   };
 }
 
-// The initial ellipsoid is axis-aligned, so its defining quadratic form is just
-// a sum of squares over the semi-axes.
+// the initial ellipsoid is axis-aligned, so its quadratic form is a sum of squares over the semi-axes
 function onInitialBoundary(x: Float64Array, center: Float64Array, semiAxes: Float64Array, n: number) {
   let quadratic = 0;
   for (let j = 0; j < n; j++) {
@@ -352,9 +311,7 @@ function onInitialBoundary(x: Float64Array, center: Float64Array, semiAxes: Floa
 }
 
 /**
- * The drawn region's bounding box, inflated by `scale`. Shared by every method
- * in this family so they all start from the same localization of the region:
- * the ellipsoid method circumscribes an ellipsoid around this box, the
+ * The drawn region's bounding box, inflated by `scale`: the ellipsoid method circumscribes it, the
  * cutting-plane methods take the box itself as their initial localizing set.
  */
 export function regionBoundingBox(vertices: Vertices, n: number, scale: number) {
@@ -405,17 +362,10 @@ function initialEllipsoid(vertices: Vertices, n: number, scale: number) {
 }
 
 /**
- * Close a run by recording the incumbent as its final iterate.
- *
- * Every method here returns the best feasible point it found, which is not in
- * general the last point it queried: a cutting-plane method can exhaust its
- * localizing set while the last query point sits in the middle of it (and may
- * even be infeasible), and a ray shoot puts the incumbent on the boundary
- * rather than at any center. Without this the viewport's star and the log's
- * last row would mark a point that is not the answer.
- *
- * The appended entry reuses the previous iterate's ellipse, so the drawn
- * localization stays put while the path steps to the point being returned.
+ * Close a run by recording the incumbent as its final iterate: the best feasible point is not in
+ * general the last one queried (an exhausted localizing set, a ray-shot incumbent), and the
+ * viewport's star and the log's last row must mark the answer. The appended entry reuses the
+ * previous iterate's ellipse, so the drawn localization stays put while the path steps to it.
  */
 export function appendIncumbent(result: IterateTrace, incumbent: Incumbent, upperBound: number): void {
   const { point: best, objective: bestObjective } = incumbent;
@@ -430,7 +380,6 @@ export function appendIncumbent(result: IterateTrace, incumbent: Incumbent, uppe
   if (base + ELLIPSOID_STRIDE > result.ellipsoids.length) return;
   if (count > 0) {
     result.ellipsoids.copyWithin(base, base - ELLIPSOID_STRIDE, base);
-    // the localization stays where it was while the path steps to the answer
     if (result.polygons && result.polygons.length === count) {
       result.polygons.push([...result.polygons[count - 1]!]);
     }
@@ -466,10 +415,8 @@ export function mostViolatedConstraint(A: { rows: number; cols: number; data: Fl
   return { row, violation: A.rows === 0 ? 0 : violation };
 }
 
-// How far a feasible point can slide along the objective before a constraint
-// blocks it: max t with A(x + t*c) <= b. Zero when the point is already on a
-// blocking face, and zero (rather than infinity) when nothing blocks at all —
-// an unbounded direction has no boundary point to adopt as an incumbent.
+// max t with A(x + t*c) <= b: how far a feasible point can slide along the objective. Zero when
+// nothing blocks at all (not infinity): an unbounded direction has no boundary point to adopt.
 function objectiveRayStep(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, x: Float64Array, c: Float64Array, n: number) {
   let step = Infinity;
   for (let i = 0; i < A.rows; i++) {

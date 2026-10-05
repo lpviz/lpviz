@@ -1,3 +1,4 @@
+import { ORTHO_MIN_SCALE_FACTOR } from "./projection2d";
 import { Euler, Vector3 } from "three";
 
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
@@ -12,7 +13,6 @@ type ViewportZBounds = { minZ: number; maxZ: number };
 export type Viewport3DViewState = { viewAngle: PointXYZ; target: PointXYZ; distance: number; pose: ViewportPerspectivePose };
 
 const DEFAULT_TARGET: PointXYZ = { x: 0, y: 0, z: 0 };
-const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const MIN_PERSPECTIVE_DISTANCE = 10;
 const EPS = 1e-6;
 
