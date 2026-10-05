@@ -1,116 +1,88 @@
 import type { DrawingPhase } from "@/features/core/store";
 import { el } from "@/ui/dom";
 
-interface UsageTip {
-  label: string;
-  /** HTML-safe description; may contain inline <kbd>/<strong>. */
-  desc: string;
-}
+// [label, description]; the description is HTML (inline <kbd>/<strong>) and
+// is assigned via innerHTML.
+type UsageTip = [label: string, desc: string];
 
-interface UsageTipSection {
-  title: string;
-  tips: UsageTip[];
-}
-
-const USAGE_TIP_SECTIONS: UsageTipSection[] = [
-  {
-    title: "Drawing the region",
-    tips: [
-      { label: "Add a vertex", desc: "click empty space" },
-      { label: "Insert a vertex", desc: "double-click an edge" },
-      { label: "Move a vertex", desc: "drag it" },
-      { label: "Move a constraint", desc: "drag its edge line" },
-      { label: "Delete a vertex", desc: "right-click it" },
-      { label: "Finish the region", desc: "press <kbd>Enter</kbd>" },
+const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
+  [
+    "Drawing the region",
+    [
+      ["Add a vertex", "click empty space"],
+      ["Insert a vertex", "double-click an edge"],
+      ["Move a vertex", "drag it"],
+      ["Move a constraint", "drag its edge line"],
+      ["Delete a vertex", "right-click it"],
+      ["Finish the region", "press <kbd>Enter</kbd>"],
     ],
-  },
-  {
-    title: "Objective",
-    tips: [
-      { label: "Place it", desc: "click inside the region" },
-      { label: "Aim it", desc: "drag the arrow" },
-      { label: "Spin it", desc: "click <strong>Rotate Objective</strong>" },
-      { label: "Hide / show it", desc: "press <kbd>H</kbd>" },
+  ],
+  [
+    "Objective",
+    [
+      ["Place it", "click inside the region"],
+      ["Aim it", "drag the arrow"],
+      ["Spin it", "click <strong>Rotate Objective</strong>"],
+      ["Hide / show it", "press <kbd>H</kbd>"],
     ],
-  },
-  {
-    title: "Solving",
-    tips: [
-      {
-        label: "Run a solver",
-        desc: "pick IPM, PDHG, Simplex, Ellipsoid, or Central Path",
-      },
-      {
-        label: "Replay iterations",
-        desc: "click <strong>Animate</strong> (again to stop)",
-      },
-      {
-        label: "Animation length",
-        desc: "press <kbd>+</kbd> / <kbd>-</kbd>",
-      },
-      { label: "Keep a trace", desc: "toggle the <strong>Trace</strong> box" },
-      { label: "Tune a solver", desc: "adjust its sliders" },
-      {
-        label: "Move the start",
-        desc: "drag the gray ring; right-click it to reset",
-      },
+  ],
+  [
+    "Solving",
+    [
+      ["Run a solver", "pick IPM, PDHG, Simplex, Ellipsoid, or Central Path"],
+      ["Replay iterations", "click <strong>Animate</strong> (again to stop)"],
+      ["Animation length", "press <kbd>+</kbd> / <kbd>-</kbd>"],
+      ["Keep a trace", "toggle the <strong>Trace</strong> box"],
+      ["Tune a solver", "adjust its sliders"],
+      ["Move the start", "drag the gray ring; right-click it to reset"],
     ],
-  },
-  {
-    title: "Inspecting",
-    tips: [
-      {
-        label: "Highlight a constraint",
-        desc: "hover its row in the top panel",
-      },
-      {
-        label: "Highlight an iterate",
-        desc: "hover its row in the bottom panel",
-      },
-      { label: "See more log rows", desc: "scroll the sidebar" },
+  ],
+  [
+    "Inspecting",
+    [
+      ["Highlight a constraint", "hover its row in the top panel"],
+      ["Highlight an iterate", "hover its row in the bottom panel"],
+      ["See more log rows", "scroll the sidebar"],
     ],
-  },
-  {
-    title: "View",
-    tips: [
-      { label: "Pan", desc: "drag the canvas" },
-      { label: "Zoom", desc: "scroll" },
-      { label: "Fit to contents", desc: "click the zoom button" },
-      { label: "Recenter", desc: "click the home button" },
-      { label: "Share a link", desc: "click the share button" },
-      { label: "Snap to grid", desc: "press <kbd>S</kbd>" },
-      { label: "Undo / Redo", desc: "<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>" },
-      { label: "Reset", desc: "click the reset button" },
+  ],
+  [
+    "View",
+    [
+      ["Pan", "drag the canvas"],
+      ["Zoom", "scroll"],
+      ["Fit to contents", "click the zoom button"],
+      ["Recenter", "click the home button"],
+      ["Share a link", "click the share button"],
+      ["Snap to grid", "press <kbd>S</kbd>"],
+      ["Undo / Redo", "<kbd>⌘Z</kbd> / <kbd>⇧⌘Z</kbd>"],
+      ["Reset", "click the reset button"],
     ],
-  },
-  {
-    title: "3D view",
-    tips: [
-      { label: "Toggle 3D", desc: "click the <strong>3D</strong> button" },
-      { label: "Pan", desc: "left-drag" },
-      { label: "Orbit", desc: "right-drag" },
-      { label: "Zoom", desc: "scroll" },
-      { label: "Z-scale", desc: "<kbd>Shift</kbd>+scroll or the slider" },
+  ],
+  [
+    "3D view",
+    [
+      ["Toggle 3D", "click the <strong>3D</strong> button"],
+      ["Pan", "left-drag"],
+      ["Orbit", "right-drag"],
+      ["Zoom", "scroll"],
+      ["Z-scale", "<kbd>Shift</kbd>+scroll or the slider"],
     ],
-  },
-  {
-    title: "Examples",
-    tips: [{ label: "Load a preset", desc: "open the gallery up top, pick a problem" }],
-  },
+  ],
+  ["Examples", [["Load a preset", "open the gallery up top, pick a problem"]]],
 ];
 
 /** Clean, sectioned layout used by the help popover. */
 export function usageTipsList(): HTMLDivElement {
   const list = el("div", { className: "usage-tips-list" });
-  for (const section of USAGE_TIP_SECTIONS) {
+  for (const [title, tips] of USAGE_TIP_SECTIONS) {
     const group = el("div", { className: "usage-tips-section" });
-    group.append(el("div", { className: "usage-tips-section__title", text: section.title }));
-    for (const tip of section.tips) {
+    group.append(el("div", { className: "usage-tips-section__title", text: title }));
+    for (const [label, desc] of tips) {
       const row = el("div", { className: "usage-tip" });
-      row.append(el("span", { className: "usage-tip__label", text: tip.label }));
-      const desc = el("span", { className: "usage-tip__desc" });
-      desc.innerHTML = tip.desc;
-      row.append(desc);
+      row.append(el("span", { className: "usage-tip__label", text: label }));
+      const description = el("span", { className: "usage-tip__desc" });
+      description.innerHTML = desc;
+      row.append(description);
       group.append(row);
     }
     list.append(group);
