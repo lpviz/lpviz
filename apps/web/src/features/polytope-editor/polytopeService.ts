@@ -3,7 +3,7 @@ import { computeEditorRegionForState } from "@/features/polytope-editor/editorSe
 
 export type PolytopeService = { send: () => void };
 
-export function createPolytopeService(getHandleProblemChange: () => () => void): PolytopeService {
+export function createPolytopeService(handleProblemChange: () => void): PolytopeService {
   const send = () => {
     try {
       const regionResult = computeEditorRegionForState(getState());
@@ -13,7 +13,7 @@ export function createPolytopeService(getHandleProblemChange: () => () => void):
           inequalitiesMessage: "Nonconvex",
           highlightIndex: null,
         });
-        getHandleProblemChange()();
+        handleProblemChange();
         return;
       }
       const promotion = regionResult.promotion;
@@ -30,7 +30,7 @@ export function createPolytopeService(getHandleProblemChange: () => () => void):
           inequalitiesMessage: "No inequalities returned.",
           highlightIndex: null,
         });
-        getHandleProblemChange()();
+        handleProblemChange();
         return;
       }
       const { highlightIndex } = getState();
@@ -39,7 +39,7 @@ export function createPolytopeService(getHandleProblemChange: () => () => void):
         inequalitiesMessage: null,
         ...(highlightIndex !== null && highlightIndex >= result.inequalities.length ? { highlightIndex: null } : {}),
       });
-      getHandleProblemChange()();
+      handleProblemChange();
     } catch (error) {
       console.error("Error:", error);
       setState({
@@ -47,7 +47,7 @@ export function createPolytopeService(getHandleProblemChange: () => () => void):
         inequalitiesMessage: "Error computing inequalities.",
         highlightIndex: null,
       });
-      getHandleProblemChange()();
+      handleProblemChange();
     }
   };
   return { send };
