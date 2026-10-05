@@ -3,17 +3,10 @@ import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot"
 import { Group, type Object3D } from "three";
 import type { Layer, RenderPassName } from "../../Layer";
 
-// Template-method base for data-driven layers. Replaces the ~230 lines of
-// hand-written `PrevState` structs that every layer used to open `update()`
-// with (`if (p && p.a === raw.a && …) return; this.prev = {…}`).
-//
-// A subclass declares the inputs whose reference change requires a rebuild via
-// `dependencies()`; the base `Object.is`-compares the tuple against the
-// previous one (the same reference-equality diff the hand-written code did) and
-// calls `rebuild()` only on change. `everyFrame()` runs unconditionally —
-// it formalizes the previously-implicit split where `object3D.scale.z` (and
-// similar cheap transforms) must update every frame while geometry rebuilds
-// only when its inputs change.
+// Template-method base for data-driven layers: a subclass declares the inputs whose reference
+// change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
+// against the previous one and calls `rebuild()` only on change. `everyFrame()` runs
+// unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass?: RenderPassName;

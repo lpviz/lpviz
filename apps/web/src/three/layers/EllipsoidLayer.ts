@@ -12,29 +12,23 @@ import { ZScaledGroupLayer } from "./base/LayerBase";
 const ELLIPSOID_COLOR = "#377eb8";
 const ACTIVE_THICKNESS = 2.5;
 const TRAIL_THICKNESS = 1.5;
-// The localizing polyhedron is the region actually still under consideration.
-// Thinner and fainter than the ellipse it accompanies — enough to read as a
-// boundary, not enough to compete with the path.
+// The localizing polyhedron is the region actually still under consideration: thinner and fainter
+// than the ellipse it accompanies, so it reads as a boundary without competing with the path.
 const POLYGON_THICKNESS = 1.25;
 const POLYGON_OPACITY = 0.7;
 const ACTIVE_OPACITY = 0.95;
-// Only a mild fade with age: each ellipsoid is ~77% the area of the one before,
-// so the older ones are also the *larger* ones — the ones that frame the whole
-// picture. Fading them out the way a motion trail would erases exactly what is
-// worth seeing.
+// Only a mild fade with age: each ellipsoid is ~77% the area of the one before, so the older ones
+// are also the *larger* ones, the ones that frame the whole picture.
 const OLDEST_OPACITY = 0.45;
-// How many of the run's ellipsoids are drawn at once. They are sampled evenly
-// across everything computed so far rather than taken from the tail: each one
-// is ~77% the area of its predecessor, so an even spread shows the whole
-// shrinking sequence (including the initial ellipsoid framing the region)
-// instead of a cluster of near-identical ellipses around the optimum.
+// How many of the run's ellipsoids are drawn at once, sampled evenly across everything computed so
+// far rather than taken from the tail, so the whole shrinking sequence shows (including the initial
+// ellipsoid framing the region) instead of a cluster of near-identical ellipses at the optimum.
 const TRAIL_COUNT = 10;
 const CIRCLE_SEGMENTS = 96;
 
-// Unit circle as segment pairs, shared by every slot: each ellipse is this
-// circle under the linear map L with L Lᵀ = P (a Cholesky factor — any square
-// root works, since the circle is rotation invariant), so a rebuild only writes
-// 10 matrices instead of 10 geometries.
+// Unit circle as segment pairs, shared by every slot: each ellipse is this circle under the linear
+// map L with L Lᵀ = P (a Cholesky factor; any square root works, the circle being rotation
+// invariant), so a rebuild only writes 10 matrices instead of 10 geometries.
 function buildUnitCirclePositions(): Float32Array {
   const positions = new Float32Array(CIRCLE_SEGMENTS * 6);
   for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
@@ -65,11 +59,10 @@ function sampleIndices(active: number, out: number[]): void {
   }
 }
 
-// The lower-triangular Cholesky factor of the 2x2 shape matrix, written into
-// `matrix` together with the center and the height `z` of the matching iterate
-// (so in 3D each ellipse sits at its own iterate rather than flat on the
-// floor). Returns false when P is not (numerically) positive definite, in which
-// case the ellipse is skipped rather than drawn with a NaN transform.
+// The lower-triangular Cholesky factor of the 2x2 shape matrix, written into `matrix` with the
+// center and the matching iterate's height `z` (so in 3D each ellipse sits at its own iterate).
+// Returns false when P is not numerically positive definite: the ellipse is then skipped rather
+// than drawn with a NaN transform.
 function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: number, z: number): boolean {
   const base = index * ellipsoids.stride;
   const cx = ellipsoids.data[base]!;
@@ -96,13 +89,10 @@ function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: n
   return true;
 }
 
-// The ellipsoid method's shrinking ellipsoids, drawn under the iterate path.
-// Each ellipse contains every feasible point at least as good as the incumbent
-// at that iteration, so watching them nest is watching the method localize the
-// optimum. Follows the active iterate: the last one solved, or the one being
-// hovered in the log / replayed. Raw z is baked into each ellipse's transform;
-// zScale and the 2D/3D transition flatten ride on scale.z, exactly as for the
-// iterate path.
+// The ellipsoid method's shrinking ellipsoids, drawn under the iterate path and following the
+// active iterate (the last one solved, or the one hovered in the log / replayed). Raw z is baked
+// into each ellipse's transform; zScale and the 2D/3D transition flatten ride on scale.z, exactly
+// as for the iterate path.
 export class EllipsoidLayer extends ZScaledGroupLayer {
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
@@ -183,11 +173,8 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     }
     this.hideFrom(used);
 
-    // The localizing polyhedron is shown only for a hovered (or replayed)
-    // iterate. Drawing one per trail slot buries the picture — they nest, they
-    // are many-sided, and unlike the ellipses they do not shrink smoothly — so
-    // it reads as an inspection tool: point at a row, see the region that
-    // iteration was still working in.
+    // The localizing polyhedron is shown only for a hovered (or replayed) iterate: one per trail
+    // slot buries the picture, so it reads as an inspection tool instead.
     this.showLocalizingSet(raw, snap.mode === "3d");
   }
 

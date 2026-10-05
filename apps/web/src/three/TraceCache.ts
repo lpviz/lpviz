@@ -4,48 +4,21 @@ import { Mesh, Object3D, OrthographicCamera, Scene, ShaderMaterial, WebGLRendere
 import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
 import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
-// World-anchored impostor for the trace-lines render pass in 2D mode.
+// World-anchored impostor for the trace-lines render pass in 2D mode. Trace chunks are immutable
+// once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
+// sequence number (stamped on its mesh by TraceLineLayer): appends draw only the new chunks into
+// the existing target with no clear (alpha-over of one shared color and opacity is associative,
+// so neither chunk order nor the order of the two composite quads changes the blend). Evictions
+// cannot be un-blended, so a rebuild leaves the oldest TRAILING_HEADROOM chunks out of the main
+// bake and renders them through a trailing target that re-renders only when an eviction shrinks
+// it; once evictions stop they are folded into the main target. Both targets render through the
+// same camera, viewport and shader path, so a chunk is pixel-identical wherever it lives.
 //
-// Trace chunks are immutable once appended, so the cache treats its offscreen
-// target as an accumulation buffer keyed by each chunk's append sequence
-// number (stamped on its mesh by TraceLineLayer):
-//
-//  - Appends are incremental: only the new chunks are drawn into the existing
-//    target, with no clear — alpha-over compositing into the target is
-//    associative, so the result is identical to re-rendering everything.
-//  - Evictions cannot be un-blended, so they are amortized instead of paid
-//    per step: a rebuild bakes all live chunks except the oldest few
-//    (TRAILING_HEADROOM), which render through a second, trailing target
-//    that re-renders only when an eviction shrinks it. The next rebuild is
-//    only needed once that headroom of evictions is used up. During
-//    continuous objective rotation — one eviction per step at trace
-//    capacity — this turns "redraw every chunk every step" into "draw one
-//    new chunk plus the trailing few, and a full rebuild every ~headroom
-//    steps".
-//  - Once evictions stop, the trailing chunks are folded into the main
-//    target (also incrementally — adding is always safe) and the trailing
-//    target is released.
-//
-// Both targets render through the same camera, viewport, and shader path, so
-// a chunk produces bit-identical pixels wherever it currently lives — moving
-// chunks between the targets can never make strokes shimmer. Camera frames
-// composite the two targets as world-anchored quads; trace strokes all share
-// one color and opacity, so the quad order does not affect the blended
-// result (alpha-over of equal colors commutes).
-//
-// The cache covers the visible rect plus a pan margin at the canvas's device
-// pixels-per-world-unit; it fully rebuilds when the zoom level changes, the
-// view pans beyond the margin, the canvas resizes, or after a round trip
-// through 3D (a perspective view cannot composite from an orthographic
-// billboard).
-//
-// Zoom rebuilds are deferred while the zoom level is actively changing: the
-// quads are world-anchored, so the camera scales them correctly by itself
-// and only the constant screen-space stroke width drifts (rebuilding every
-// gesture frame redraws every chunk and is the single biggest frame-drop
-// source). The cache re-crisps when the drift passes ZOOM_REBUILD_RATIO,
-// when the view escapes the cached rect, or once the zoom is quiet for
-// ZOOM_SETTLE_MS.
+// The cache covers the visible rect plus a pan margin at the canvas's device pixels-per-world-unit
+// and fully rebuilds on a zoom change, a pan beyond the margin, a resize, or a round trip through
+// 3D. Zoom rebuilds are deferred while the zoom is changing: the quads are world-anchored, so only
+// the screen-space stroke width drifts, until the drift passes ZOOM_REBUILD_RATIO, the view
+// escapes the cached rect, or the view is quiet for VIEW_SETTLE_MS.
 const CACHE_MARGIN = 1.25;
 // match the antialiasing of the default framebuffer so cached strokes look
 // identical to directly rendered ones
@@ -58,10 +31,9 @@ const EVICTION_QUIET_MS = 500;
 // mid-gesture stroke-width drift allowed before a rebuild re-crisps anyway
 const ZOOM_REBUILD_RATIO = 1.25;
 const VIEW_SETTLE_MS = 160;
-// fast pans can escape the margin every couple of frames; mid-gesture the
-// rebuilds are rate limited (the world-anchored quads keep compositing, so
-// only the freshly exposed strip lacks trace history until the next rebuild)
-// and each rebuilt rect leads the pan direction to make escapes rarer
+// fast pans can escape the margin every couple of frames; mid-gesture the rebuilds are rate
+// limited (the world-anchored quads keep compositing, so only the freshly exposed strip lacks
+// trace history) and each rebuilt rect leads the pan direction to make escapes rarer
 const PAN_REBUILD_INTERVAL_MS = 120;
 const PAN_LEAD_FRAMES = 12;
 
@@ -335,10 +307,9 @@ export class TraceCache {
   private renderTrailing(renderer: WebGLRenderer, traceLinesScene: Scene, startSeq: number, endSeq: number): void {
     if (!this.trailingTarget || this.trailingTarget.width !== this.cachedPixelWidth || this.trailingTarget.height !== this.cachedPixelHeight) {
       this.trailingTarget?.dispose();
-      // single-sample: this target re-renders on every eviction (the most
-      // frequent cache operation during rotation), the MSAA clear/resolve
-      // there dominated steady-state cost on slower GL stacks, and the
-      // aliasing on the oldest translucent chunks is not discernible
+      // single-sample: this target re-renders on every eviction, where the MSAA clear/resolve
+      // dominated steady-state cost on slower GL stacks; aliasing on the oldest translucent
+      // chunks is not discernible
       this.trailingTarget = new WebGLRenderTarget(this.cachedPixelWidth, this.cachedPixelHeight, { samples: 0, depthBuffer: false, stencilBuffer: false });
       this.trailingMaterial.uniforms.map!.value = this.trailingTarget.texture;
     }
@@ -357,11 +328,9 @@ export class TraceCache {
   }
 
   private recache(renderer: WebGLRenderer, traceLinesScene: Scene, view: ViewParams, degrade: boolean): void {
-    // rebuilds while the view is moving or evictions are streaming (sustained
-    // rotation at trace capacity) skip multisampling: the MSAA fill and
-    // resolve are what makes a full rebuild blow the frame budget, and
-    // aliasing is not discernible while the content or camera is churning.
-    // One crisp rebuild follows once everything settles.
+    // rebuilds while the view is moving or evictions are streaming skip multisampling: the MSAA
+    // fill and resolve are what make a full rebuild blow the frame budget, and aliasing is not
+    // discernible while the content or camera is churning; one crisp rebuild follows on settle
     const samples = degrade ? 0 : CACHE_SAMPLES;
     if (!this.renderTarget || this.renderTarget.width !== view.pixelWidth || this.renderTarget.height !== view.pixelHeight || this.renderTarget.samples !== samples) {
       this.renderTarget?.dispose();

@@ -1,10 +1,9 @@
 import { computeFlatZ, type IteratePath } from "@/features/core/store";
 import type { PointXY } from "@lpviz/math/types";
 
-// Write a flat iterate/trace path into `dst` as [x, y, z]*count. z is the
-// render-space height from computeFlatZ; the zScale and 2D/3D-transition flatten
-// are applied per-layer via object3D.scale.z, never baked here. This is the loop
-// that used to be copy-pasted in every point/line layer that renders a path.
+// Write a flat iterate/trace path into `dst` as [x, y, z]*count. z is the render-space height from
+// computeFlatZ; the zScale and 2D/3D-transition flatten are applied per-layer via
+// object3D.scale.z, never baked here.
 export function writeFlatXYZ(dst: Float32Array, points: Float64Array, count: number, stride: number, objectiveVector: PointXY | null): void {
   for (let i = 0; i < count; i++) {
     const s = i * stride;

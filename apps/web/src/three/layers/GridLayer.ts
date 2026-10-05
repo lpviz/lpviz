@@ -6,16 +6,12 @@ import type { Layer } from "../Layer";
 const GRID_COLOR = "#e0e0e0";
 const AXIS_COLOR = "#707070";
 
-// Fragment-shader grid on a single static quad: unit lines and axes are
-// computed per pixel from world coordinates, so pan/zoom/orbit and 2D/3D
-// transitions never rebuild any geometry (the old line-segment grid
-// re-tessellated on every zoom frame, up to ~16k segments in 3D). Lines are
-// one device pixel with derivative-based coverage, which also fades the grid
-// out naturally instead of aliasing when it gets denser than the pixel grid.
-//
-// The quad is kept modest (fp32 varyings wobble at deep zoom when vertex
-// coordinates are huge) and recentered onto the integer-snapped camera
-// target when the view wanders; integer shifts leave fract() untouched.
+// Fragment-shader grid on a single static quad: unit lines and axes are computed per pixel from
+// world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Lines are
+// one device pixel with derivative-based coverage, which fades the grid out instead of aliasing
+// when it gets denser than the pixel grid. The quad is kept modest (fp32 varyings wobble at deep
+// zoom when vertex coordinates are huge) and recentered onto the integer-snapped camera target
+// when the view wanders; integer shifts leave fract() untouched.
 const GRID_HALF_EXTENT = 8192;
 const RECENTER_THRESHOLD = 2048;
 

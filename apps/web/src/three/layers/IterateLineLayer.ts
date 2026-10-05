@@ -27,11 +27,8 @@ function buildPhaseColors(phases: number[]): Uint8Array {
   return colorScratch;
 }
 
-// The iterate path renders as a screen-space ribbon (see pathRibbon.ts):
-// true fat-line styling without Line2's quad-per-segment cost, which made
-// every camera frame pay for up to maxit capped quads. Phase coloring rides
-// along as a per-point color texture, replacing the old one-Line2-per-phase-
-// segment pool (and its draw call per segment).
+// The iterate path renders as a screen-space ribbon (see pathRibbon.ts); phase coloring rides
+// along as a per-point color texture, one draw call for the whole path.
 export class IterateLineLayer extends ZScaledGroupLayer {
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
