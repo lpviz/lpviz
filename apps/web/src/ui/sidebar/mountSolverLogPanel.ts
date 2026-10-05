@@ -197,18 +197,10 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   }
   render(getState());
 
-  // The panel used to re-render only when its *contents* changed, which left
-  // two gaps once it could be resized independently (dragging the sidebar
-  // handle, or expanding the log by scrolling the sidebar):
-  //
-  //   - width: fit() sizes the font to the width, so rows stayed fitted to a
-  //     width they no longer had and wrapped;
-  //   - height: the virtual window is sized from the viewport, so a taller
-  //     panel kept showing exactly as many rows as the short one did.
-  //
-  // Width is the expensive case and needs the full re-render; height only
-  // needs the window refilled, which matters because expanding the log emits a
-  // stream of height changes.
+  // The panel is resized independently of its contents (sidebar handle, log
+  // expansion). A width change needs the full re-render, since fit() sizes the
+  // font to the width; a height change only needs the virtual window refilled,
+  // which matters because expanding the log emits a stream of height changes.
   let fittedWidth = result.clientWidth;
   let fittedHeight = result.clientHeight;
   const sizeObserver = new ResizeObserver(() => {
