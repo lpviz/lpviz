@@ -1,9 +1,7 @@
 import { PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 
 import type { PointXY } from "@lpviz/math/types";
-import type { ViewportRenderSnapshot } from "./types";
-
-type ViewportRect = Pick<DOMRect, "width" | "height">;
+import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type Viewport3DInteractionOptions = {
   objectiveVector: PointXY | null;
@@ -34,11 +32,6 @@ const projectionPlane = new Plane(projectionPlaneNormal, 0);
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
 
-const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
-  width: rect.width || snapshot.width || 1,
-  height: rect.height || snapshot.height || 1,
-});
-
 const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot) => {
   projectionCamera.fov = snapshot.perspective.fov;
   projectionCamera.aspect = snapshot.perspective.aspect;
@@ -50,17 +43,6 @@ const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot
   projectionCamera.lookAt(projectionTarget);
   projectionCamera.updateMatrixWorld();
   projectionCamera.updateProjectionMatrix();
-};
-
-const snapPoint = (point: PointXY, snapToGrid: boolean): PointXY => {
-  if (!snapToGrid) {
-    return point;
-  }
-
-  return {
-    x: Math.round(point.x),
-    y: Math.round(point.y),
-  };
 };
 
 const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DInteractionOptions): PointXY => {

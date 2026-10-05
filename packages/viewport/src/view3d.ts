@@ -10,9 +10,7 @@ import {
   getViewportVisibleCenterCanvasPoint,
   projectCanvasPointToWorldPlane,
 } from "./transition";
-import type { ViewportPerspectivePose, ViewportRenderSnapshot } from "./types";
-
-type ViewportRect = Pick<DOMRect, "width" | "height">;
+import { getViewportSize, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 type ViewportZBounds = {
   minZ: number;
@@ -38,11 +36,6 @@ const fitForward = new Vector3();
 const fitUp = new Vector3();
 const fitRight = new Vector3();
 const fitRelative = new Vector3();
-
-const getViewportSize = (snapshot: ViewportRenderSnapshot, rect?: ViewportRect) => ({
-  width: rect?.width || snapshot.width || 1,
-  height: rect?.height || snapshot.height || 1,
-});
 
 const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot) => {
   snapshotCamera.fov = snapshot.perspective.fov;
@@ -305,17 +298,7 @@ export function buildViewport3DSnapshot(snapshot: ViewportRenderSnapshot, pose: 
     unitsPerPixel,
     transitionZMultiplier: 1,
     target: { ...pose.target },
-    orthographic: {
-      left: -(width * unitsPerPixel) / 2,
-      right: (width * unitsPerPixel) / 2,
-      top: (height * unitsPerPixel) / 2,
-      bottom: -(height * unitsPerPixel) / 2,
-      position: {
-        x: pose.target.x,
-        y: pose.target.y,
-        z: 10,
-      },
-    },
+    orthographic: orthographicFor(width, height, unitsPerPixel, pose.target),
     perspective: {
       ...snapshot.perspective,
       position: { ...pose.position },

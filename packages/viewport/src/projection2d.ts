@@ -1,11 +1,9 @@
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
-import type { ViewportRenderSnapshot } from "./types";
+import { getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const ORTHO_MAX_SCALE_FACTOR = 400;
-
-type ViewportRect = Pick<DOMRect, "width" | "height">;
 
 export type Viewport2DState = {
   gridSpacing: number;
@@ -14,17 +12,7 @@ export type Viewport2DState = {
   offsetY: number;
 };
 
-const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
-  width: rect.width || snapshot.width || 1,
-  height: rect.height || snapshot.height || 1,
-});
-
 const getUnitsPerPixel = (state: Pick<Viewport2DState, "gridSpacing" | "scaleFactor">) => 1 / (state.gridSpacing * state.scaleFactor);
-
-const snapPoint = (point: PointXY, snapToGrid = false) => {
-  if (!snapToGrid) return point;
-  return { x: Math.round(point.x), y: Math.round(point.y) };
-};
 
 export function clampScaleFactor2D(value: number) {
   return Math.max(ORTHO_MIN_SCALE_FACTOR, Math.min(ORTHO_MAX_SCALE_FACTOR, value));
@@ -79,17 +67,7 @@ export function buildViewport2DSnapshot(state: Viewport2DState, sidebarWidth: nu
     unitsPerPixel,
     transitionZMultiplier: 1,
     target,
-    orthographic: {
-      left: -(width * unitsPerPixel) / 2,
-      right: (width * unitsPerPixel) / 2,
-      top: (height * unitsPerPixel) / 2,
-      bottom: -(height * unitsPerPixel) / 2,
-      position: {
-        x: target.x,
-        y: target.y,
-        z: 10,
-      },
-    },
+    orthographic: orthographicFor(width, height, unitsPerPixel, target),
   };
 }
 

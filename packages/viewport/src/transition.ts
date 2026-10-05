@@ -3,9 +3,7 @@ import { Euler, PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "th
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
-import type { ViewportDirtyFlags, ViewportPerspectivePose, ViewportRenderSnapshot } from "./types";
-
-type ViewportRect = Pick<DOMRect, "width" | "height">;
+import { getViewportSize, orthographicFor, type ViewportDirtyFlags, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 export type ViewportTransitionPlan = {
   baseSnapshot: ViewportRenderSnapshot;
@@ -45,10 +43,6 @@ export const TRANSITION_VIEWPORT_DIRTY_FLAGS: ViewportDirtyFlags = {
 
 const ZERO_VIEW_ANGLE: PointXYZ = { x: 0, y: 0, z: 0 };
 const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
-const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
-  width: rect.width || snapshot.width || 1,
-  height: rect.height || snapshot.height || 1,
-});
 const getUnitsPerPixel = (gridSpacing: number, scaleFactor: number) => 1 / (gridSpacing * clampScaleFactor2D(scaleFactor));
 
 const transitionEuler = new Euler();
@@ -199,17 +193,7 @@ export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progr
       unitsPerPixel,
       transitionZMultiplier: plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress,
       target,
-      orthographic: {
-        left: -(width * unitsPerPixel) / 2,
-        right: (width * unitsPerPixel) / 2,
-        top: (height * unitsPerPixel) / 2,
-        bottom: -(height * unitsPerPixel) / 2,
-        position: {
-          x: target.x,
-          y: target.y,
-          z: 10,
-        },
-      },
+      orthographic: orthographicFor(width, height, unitsPerPixel, target),
       perspective: {
         ...plan.baseSnapshot.perspective,
         aspect: width / Math.max(1, height),

@@ -1,3 +1,5 @@
+import type { PointXY } from "@lpviz/math/types";
+
 export type ViewportBridge = {
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
@@ -45,6 +47,20 @@ export type ViewportPerspectivePose = {
   up: { x: number; y: number; z: number };
   target: { x: number; y: number; z: number };
 };
+
+export type ViewportRect = Pick<DOMRect, "width" | "height">;
+
+export const getViewportSize = (snapshot: ViewportRenderSnapshot, rect?: ViewportRect) => ({ width: rect?.width || snapshot.width || 1, height: rect?.height || snapshot.height || 1 });
+
+export const orthographicFor = (width: number, height: number, unitsPerPixel: number, target: PointXY): ViewportRenderSnapshot["orthographic"] => ({
+  left: -(width * unitsPerPixel) / 2,
+  right: (width * unitsPerPixel) / 2,
+  top: (height * unitsPerPixel) / 2,
+  bottom: -(height * unitsPerPixel) / 2,
+  position: { x: target.x, y: target.y, z: 10 },
+});
+
+export const snapPoint = (point: PointXY, snapToGrid: boolean): PointXY => (snapToGrid ? { x: Math.round(point.x), y: Math.round(point.y) } : point);
 
 export function createDefaultViewportRenderSnapshot({ width, height }: { width: number; height: number }): ViewportRenderSnapshot {
   const safeWidth = width || 1;
