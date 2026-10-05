@@ -15,17 +15,12 @@ export type Viewport2DState = {
   offsetY: number;
 };
 
-const getViewportSize = (
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-) => ({
+const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
   width: rect.width || snapshot.width || 1,
   height: rect.height || snapshot.height || 1,
 });
 
-const getUnitsPerPixel = (
-  state: Pick<Viewport2DState, "gridSpacing" | "scaleFactor">,
-) => 1 / (state.gridSpacing * state.scaleFactor);
+const getUnitsPerPixel = (state: Pick<Viewport2DState, "gridSpacing" | "scaleFactor">) => 1 / (state.gridSpacing * state.scaleFactor);
 
 const snapPoint = (point: PointXY, snapToGrid = false) => {
   if (!snapToGrid) return point;
@@ -33,20 +28,13 @@ const snapPoint = (point: PointXY, snapToGrid = false) => {
 };
 
 export function clampScaleFactor2D(value: number) {
-  return Math.max(
-    ORTHO_MIN_SCALE_FACTOR,
-    Math.min(ORTHO_MAX_SCALE_FACTOR, value),
-  );
+  return Math.max(ORTHO_MIN_SCALE_FACTOR, Math.min(ORTHO_MAX_SCALE_FACTOR, value));
 }
 
-export function deriveViewport2DState(
-  snapshot: ViewportRenderSnapshot,
-  sidebarWidth: number,
-): Viewport2DState {
+export function deriveViewport2DState(snapshot: ViewportRenderSnapshot, sidebarWidth: number): Viewport2DState {
   const scaleFactor = clampScaleFactor2D(snapshot.scaleFactor || 1);
   const gridSpacing = snapshot.gridSpacing || 20;
-  const unitsPerPixel =
-    snapshot.unitsPerPixel || 1 / (gridSpacing * scaleFactor);
+  const unitsPerPixel = snapshot.unitsPerPixel || 1 / (gridSpacing * scaleFactor);
 
   return {
     gridSpacing,
@@ -56,12 +44,7 @@ export function deriveViewport2DState(
   };
 }
 
-export function buildViewport2DStateFromTarget(
-  target: PointXY,
-  scaleFactor: number,
-  gridSpacing: number,
-  sidebarWidth: number,
-): Viewport2DState {
+export function buildViewport2DStateFromTarget(target: PointXY, scaleFactor: number, gridSpacing: number, sidebarWidth: number): Viewport2DState {
   const clampedScaleFactor = clampScaleFactor2D(scaleFactor);
   const unitsPerPixel = 1 / (gridSpacing * clampedScaleFactor);
   return {
@@ -72,12 +55,7 @@ export function buildViewport2DStateFromTarget(
   };
 }
 
-export function buildViewport2DSnapshot(
-  state: Viewport2DState,
-  sidebarWidth: number,
-  rect: ViewportRect,
-  fallbackSnapshot: ViewportRenderSnapshot,
-): ViewportRenderSnapshot {
+export function buildViewport2DSnapshot(state: Viewport2DState, sidebarWidth: number, rect: ViewportRect, fallbackSnapshot: ViewportRenderSnapshot): ViewportRenderSnapshot {
   const scaleFactor = clampScaleFactor2D(state.scaleFactor);
   const normalizedState = {
     ...state,
@@ -116,13 +94,7 @@ export function buildViewport2DSnapshot(
   };
 }
 
-export function toLogicalCoords2D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  x: number,
-  y: number,
-  options: { snapToGrid?: boolean } = {},
-): PointXY {
+export function toLogicalCoords2D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: { snapToGrid?: boolean } = {}): PointXY {
   const { width, height } = getViewportSize(snapshot, rect);
   return snapPoint(
     {
@@ -133,11 +105,7 @@ export function toLogicalCoords2D(
   );
 }
 
-export function toCanvasCoords2D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  point: PointXY,
-): PointXY {
+export function toCanvasCoords2D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY): PointXY {
   const { width, height } = getViewportSize(snapshot, rect);
   return {
     x: width / 2 + (point.x - snapshot.target.x) / snapshot.unitsPerPixel,
@@ -153,12 +121,7 @@ export function zoomViewport2DStateAtCanvasPoint(
   point: PointXY,
   scaleFactor: number,
 ): Viewport2DState {
-  const snapshot = buildViewport2DSnapshot(
-    state,
-    sidebarWidth,
-    rect,
-    fallbackSnapshot,
-  );
+  const snapshot = buildViewport2DSnapshot(state, sidebarWidth, rect, fallbackSnapshot);
   const logicalPoint = toLogicalCoords2D(snapshot, rect, point.x, point.y);
   const { width, height } = getViewportSize(snapshot, rect);
   const nextScaleFactor = clampScaleFactor2D(scaleFactor);
@@ -168,12 +131,7 @@ export function zoomViewport2DStateAtCanvasPoint(
     y: logicalPoint.y - (height / 2 - point.y) * nextUnitsPerPixel,
   };
 
-  return buildViewport2DStateFromTarget(
-    target,
-    nextScaleFactor,
-    state.gridSpacing,
-    sidebarWidth,
-  );
+  return buildViewport2DStateFromTarget(target, nextScaleFactor, state.gridSpacing, sidebarWidth);
 }
 
 /**
@@ -197,14 +155,8 @@ export function fitViewport2DToBounds(
   const height = bounds.maxY - bounds.minY;
 
   const viewportSize = getViewportSize(fallbackSnapshot, rect);
-  const availWidth = Math.max(
-    100,
-    viewportSize.width - sidebarWidth - 2 * padding,
-  );
-  const availHeight = Math.max(
-    100,
-    viewportSize.height - topInset - 2 * padding,
-  );
+  const availWidth = Math.max(100, viewportSize.width - sidebarWidth - 2 * padding);
+  const availHeight = Math.max(100, viewportSize.height - topInset - 2 * padding);
   const scaleX = availWidth / (width * state.gridSpacing);
   const scaleY = availHeight / (height * state.gridSpacing);
   const scaleFactor = clampScaleFactor2D(Math.min(scaleX, scaleY));
@@ -220,15 +172,7 @@ export function fitViewport2DToBounds(
   };
 }
 
-export function isDefault2DView(
-  snapshot: ViewportRenderSnapshot,
-  sidebarWidth: number,
-) {
+export function isDefault2DView(snapshot: ViewportRenderSnapshot, sidebarWidth: number) {
   const defaultTargetX = -((sidebarWidth / 2) * snapshot.unitsPerPixel);
-  return (
-    snapshot.mode === "2d" &&
-    Math.abs(snapshot.scaleFactor - 1) <= EPS &&
-    Math.abs(snapshot.target.x - defaultTargetX) <= EPS &&
-    Math.abs(snapshot.target.y) <= EPS
-  );
+  return snapshot.mode === "2d" && Math.abs(snapshot.scaleFactor - 1) <= EPS && Math.abs(snapshot.target.x - defaultTargetX) <= EPS && Math.abs(snapshot.target.y) <= EPS;
 }

@@ -1,11 +1,7 @@
-import {
-  getViewportTransitionConfig,
-  subscribeViewportTransitionConfig,
-} from "@/features/viewport/runtime/transitionConfig";
+import { getViewportTransitionConfig, subscribeViewportTransitionConfig } from "@/features/viewport/runtime/transitionConfig";
 import type { SceneManager } from "../SceneManager";
 
-const easeInOutCubic = (t: number) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 export class TransitionController {
   private unsubscribe: () => void;

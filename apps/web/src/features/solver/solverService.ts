@@ -16,10 +16,7 @@ import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
 // per-solver applyResult that each SolverControl used to carry (each of which
 // re-narrowed the response by solver — redundant, since the response already
 // discriminates on `solver`).
-export function applySolverResult(
-  response: SolverWorkerSuccessResponse,
-  updateResult: (payload: ResultRenderPayload) => void,
-): void {
+export function applySolverResult(response: SolverWorkerSuccessResponse, updateResult: (payload: ResultRenderPayload) => void): void {
   switch (response.solver) {
     case "ipm":
       return applyIPMResult(response.result, updateResult);
@@ -141,10 +138,7 @@ export interface EllipsoidResult<I = Float64Array[], E = Float64Array> {
   rho?: number[];
 }
 
-function applyIPMResult(
-  result: IPMResult<IteratePath>,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applyIPMResult(result: IPMResult<IteratePath>, updateResult: (payload: ResultRenderPayload) => void) {
   const sol = result.iterates.solution;
   // worker-packed results arrive flat with the display z already baked in
   applyCanonicalIterateResult(
@@ -158,39 +152,18 @@ function applyIPMResult(
   );
 }
 
-function applySimplexResult(
-  result: SimplexResult,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applySimplexResult(result: SimplexResult, updateResult: (payload: ResultRenderPayload) => void) {
   const phase1Iterations = result.phase1Iterations ?? [];
-  const iterations =
-    phase1Iterations.length > 0
-      ? [...phase1Iterations, ...result.iterations]
-      : result.iterations;
-  const phases =
-    phase1Iterations.length > 0
-      ? [
-          ...Array.from({ length: phase1Iterations.length }, () => 0),
-          ...Array.from({ length: result.iterations.length }, () => 1),
-        ]
-      : undefined;
+  const iterations = phase1Iterations.length > 0 ? [...phase1Iterations, ...result.iterations] : result.iterations;
+  const phases = phase1Iterations.length > 0 ? [...Array.from({ length: phase1Iterations.length }, () => 0), ...Array.from({ length: result.iterations.length }, () => 1)] : undefined;
   updateIteratePathsWithTrace(flattenIteratesToPath(iterations), phases);
   updateResult({
     type: "blocks",
-    blocks: generateSimplexBlocks(
-      result.logs[0],
-      result.logs[1],
-      result.status,
-      phase1Iterations.length,
-      result.iterations.length,
-    ),
+    blocks: generateSimplexBlocks(result.logs[0], result.logs[1], result.status, phase1Iterations.length, result.iterations.length),
   });
 }
 
-function applyPDHGResult(
-  result: PDHGResult<IteratePath>,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applyPDHGResult(result: PDHGResult<IteratePath>, updateResult: (payload: ResultRenderPayload) => void) {
   // worker-packed results arrive flat with the display z already baked in
   applyCanonicalIterateResult(
     {
@@ -205,10 +178,7 @@ function applyPDHGResult(
   );
 }
 
-function applyEllipsoidResult(
-  result: EllipsoidResult<IteratePath, EllipsoidPath>,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applyEllipsoidResult(result: EllipsoidResult<IteratePath, EllipsoidPath>, updateResult: (payload: ResultRenderPayload) => void) {
   // worker-packed results arrive flat with the display z already baked in
   applyCanonicalIterateResult(
     {
@@ -223,10 +193,7 @@ function applyEllipsoidResult(
   );
 }
 
-function applyCentralPathResult(
-  result: CentralPathResult,
-  updateResult: (payload: ResultRenderPayload) => void,
-) {
+function applyCentralPathResult(result: CentralPathResult, updateResult: (payload: ResultRenderPayload) => void) {
   const path = flattenIteratesToPath(result.iterations);
   applyCanonicalIterateResult(
     {
@@ -269,35 +236,13 @@ export function formatVirtualResultRow(row: VirtualResultRow): string {
 }
 
 function applyCanonicalIterateResult(
-  {
-    iterations,
-    header,
-    rows,
-    footer,
-    updateTrace = true,
-    phases,
-    restartIndices,
-    ellipsoids,
-    localizingSets,
-  }: CanonicalIterateResult,
+  { iterations, header, rows, footer, updateTrace = true, phases, restartIndices, ellipsoids, localizingSets }: CanonicalIterateResult,
   updateResult: (payload: ResultRenderPayload) => void,
 ) {
   if (updateTrace) {
-    updateIteratePathsWithTrace(
-      iterations,
-      phases,
-      restartIndices,
-      ellipsoids,
-      localizingSets,
-    );
+    updateIteratePathsWithTrace(iterations, phases, restartIndices, ellipsoids, localizingSets);
   } else {
-    updateIteratePaths(
-      iterations,
-      phases,
-      restartIndices,
-      ellipsoids,
-      localizingSets,
-    );
+    updateIteratePaths(iterations, phases, restartIndices, ellipsoids, localizingSets);
   }
 
   updateResult(buildIteratePayload({ header, rows, footer }));
@@ -311,11 +256,7 @@ function generateSimplexBlocks(
   phase2IterationCount = 0,
 ): ResultTextBlock[] {
   const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
-  const createBlock = (
-    className: ResultTextBlock["className"],
-    text: string,
-    index?: number,
-  ): ResultTextBlock => ({
+  const createBlock = (className: ResultTextBlock["className"], text: string, index?: number): ResultTextBlock => ({
     className,
     text: normalizeLog(text),
     index,
@@ -323,24 +264,11 @@ function generateSimplexBlocks(
 
   const phase1Header = phase1logs[0] ?? "No phase 1 logs.";
   const phase1Rows = phase1logs.length > 2 ? phase1logs.slice(1, -1) : [];
-  const phase1Footer =
-    phase1logs.length > 1 ? phase1logs[phase1logs.length - 1] : "";
+  const phase1Footer = phase1logs.length > 1 ? phase1logs[phase1logs.length - 1] : "";
 
   const phase2Header = phase2logs[0] ?? "No phase 2 logs.";
-  const phase2Rows =
-    phase2logs.length <= 1
-      ? []
-      : status === "unbounded" || status === "infeasible"
-        ? phase2logs.slice(1)
-        : phase2logs.slice(1, -1);
-  const phase2Footer =
-    status === "unbounded"
-      ? "Unbounded LP"
-      : status === "infeasible"
-        ? "Infeasible LP"
-        : phase2logs.length > 1
-          ? phase2logs[phase2logs.length - 1]
-          : "";
+  const phase2Rows = phase2logs.length <= 1 ? [] : status === "unbounded" || status === "infeasible" ? phase2logs.slice(1) : phase2logs.slice(1, -1);
+  const phase2Footer = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : phase2logs.length > 1 ? phase2logs[phase2logs.length - 1] : "";
 
   const phase1Title = "Phase 1";
   const phase2Title = "Phase 2";
@@ -349,37 +277,19 @@ function generateSimplexBlocks(
       ? []
       : [
           createBlock("iterate-header", `${phase1Title}\n${phase1Header}`),
-          ...phase1Rows.map((log, i) =>
-            i < phase1IterationCount
-              ? createBlock("iterate-item", log, i)
-              : createBlock("iterate-item-nohover", log),
-          ),
-          ...(phase1Footer
-            ? [createBlock("iterate-footer", phase1Footer)]
-            : []),
+          ...phase1Rows.map((log, i) => (i < phase1IterationCount ? createBlock("iterate-item", log, i) : createBlock("iterate-item-nohover", log))),
+          ...(phase1Footer ? [createBlock("iterate-footer", phase1Footer)] : []),
         ];
 
   return [
     ...setupBlocks,
     createBlock("iterate-header", `${phase2Title}\n${phase2Header}`),
-    ...phase2Rows.map((log, i) =>
-      i < phase2IterationCount
-        ? createBlock("iterate-item", log, phase1IterationCount + i)
-        : createBlock("iterate-item-nohover", log),
-    ),
+    ...phase2Rows.map((log, i) => (i < phase2IterationCount ? createBlock("iterate-item", log, phase1IterationCount + i) : createBlock("iterate-item-nohover", log))),
     ...(phase2Footer ? [createBlock("iterate-footer", phase2Footer)] : []),
   ];
 }
 
-function buildIteratePayload({
-  header,
-  rows,
-  footer,
-}: {
-  header: string;
-  rows: ResultRowsView;
-  footer?: string;
-}): VirtualResultPayload {
+function buildIteratePayload({ header, rows, footer }: { header: string; rows: ResultRowsView; footer?: string }): VirtualResultPayload {
   return {
     type: "virtual",
     header,

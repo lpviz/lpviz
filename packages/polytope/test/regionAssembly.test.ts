@@ -115,10 +115,7 @@ describe("open chain half-plane orientation", () => {
     };
     for (let i = 0; i < 20000; i++) {
       const n = 3 + Math.floor(rnd() * 6);
-      const pts: Vertices = Array.from({ length: n }, () => [
-        (rnd() * 2 - 1) * 100,
-        (rnd() * 2 - 1) * 100,
-      ]);
+      const pts: Vertices = Array.from({ length: n }, () => [(rnd() * 2 - 1) * 100, (rnd() * 2 - 1) * 100]);
       if (new Set(pts.map(([x, y]) => `${x},${y}`)).size !== n) continue;
       const asPoints = pts.map(([x, y]) => ({ x, y }));
       if (!isConvexChain(asPoints)) continue;
@@ -141,9 +138,7 @@ describe("open chain half-plane orientation", () => {
       [2, 0],
       [2, 2],
     ];
-    const down: Vertices = up.map<[number, number]>(
-      ([x, y]) => [x, -y] as [number, number],
-    );
+    const down: Vertices = up.map<[number, number]>(([x, y]) => [x, -y] as [number, number]);
     expect(violating(up).length).toBe(0);
     expect(violating(down).length).toBe(0);
 

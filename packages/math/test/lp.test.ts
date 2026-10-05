@@ -101,9 +101,7 @@ describe("solveSmallLp", () => {
       expect(got.status).toBe("optimal");
       if (got.status !== "optimal") continue;
       for (const row of rows) {
-        expect(row[0]! * got.x[0]! + row[1]! * got.x[1]!).toBeLessThanOrEqual(
-          row[2]! + 1e-6,
-        );
+        expect(row[0]! * got.x[0]! + row[1]! * got.x[1]!).toBeLessThanOrEqual(row[2]! + 1e-6);
       }
     }
   });

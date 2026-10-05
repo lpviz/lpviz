@@ -13,9 +13,5 @@ export type ImpostorResult =
   | null;
 
 export interface ImpostorStrategy {
-  prepare(
-    renderer: WebGLRenderer,
-    camera: Camera,
-    passScene: Scene,
-  ): ImpostorResult;
+  prepare(renderer: WebGLRenderer, camera: Camera, passScene: Scene): ImpostorResult;
 }

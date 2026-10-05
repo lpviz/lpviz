@@ -6,15 +6,7 @@ type LayerInvalidationKey = keyof ViewportDirtyFlags;
 
 // The render passes in painter's-algorithm order — the single source of truth
 // for both the pass names and the order SceneManager renders them in.
-export const RENDER_PASSES = [
-  "background",
-  "transparent",
-  "foreground",
-  "vertices",
-  "traceLines",
-  "trace",
-  "overlay",
-] as const;
+export const RENDER_PASSES = ["background", "transparent", "foreground", "vertices", "traceLines", "trace", "overlay"] as const;
 export type RenderPassName = (typeof RENDER_PASSES)[number];
 
 export type LayerRenderObject = {

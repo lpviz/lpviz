@@ -1,11 +1,4 @@
-import {
-  DEFAULT_SOLVER_SETTINGS,
-  getState,
-  nearestPolytopeVertex,
-  type SolverMode,
-  type SolverSettings,
-  type State,
-} from "@/features/core/store";
+import { DEFAULT_SOLVER_SETTINGS, getState, nearestPolytopeVertex, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import type { ShareSettings } from "@/features/share/sharedState";
 import type { ResultRenderPayload } from "@/features/solver/solverService";
 import type { SolverWorkerPayload } from "@/features/solver/solverWorker";
@@ -13,10 +6,7 @@ import type { Vertices } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
-export type SolverSettingUpdater = <K extends keyof SolverSettings>(
-  key: K,
-  value: SolverSettings[K],
-) => void;
+export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
 
 export type SolverControl = {
   mode: SolverMode;
@@ -35,34 +25,23 @@ type SharedKey = keyof ShareSettings & keyof SolverSettings;
 // one of the engine's rule names. Anything else is dropped so a hand-edited
 // link can neither blank a <select> nor throw inside the settings panel's
 // store subscriber.
-function isValidSharedSetting<K extends SharedKey>(
-  key: K,
-  value: unknown,
-): value is SolverSettings[K] {
+function isValidSharedSetting<K extends SharedKey>(key: K, value: unknown): value is SolverSettings[K] {
   if (key === "simplexEnteringRule") return isEnteringRule(value);
   if (key === "simplexLeavingRule") return isLeavingRule(value);
   const fallback: unknown = DEFAULT_SOLVER_SETTINGS[key];
-  return typeof fallback === "number"
-    ? Number.isFinite(value)
-    : typeof value === typeof fallback;
+  return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
 
-const hasFeasibleRegion = (state: State): boolean =>
-  hasPolytopeLines(state.polytope) &&
-  (state.polytope.kind === "bounded" || state.polytope.kind === "unbounded");
+const hasFeasibleRegion = (state: State): boolean => hasPolytopeLines(state.polytope) && (state.polytope.kind === "bounded" || state.polytope.kind === "unbounded");
 
-const isEmptyRegion = (state: State): boolean =>
-  hasPolytopeLines(state.polytope) && state.polytope.kind === "empty";
+const isEmptyRegion = (state: State): boolean => hasPolytopeLines(state.polytope) && state.polytope.kind === "empty";
 
 // the objective vector + constraint lines guard common to every buildRequest
 function objectiveBase(state: State) {
   if (!state.objectiveVector || !hasPolytopeLines(state.polytope)) return null;
   return {
     lines: state.polytope.lines,
-    objective: Float64Array.of(
-      state.objectiveVector.x,
-      state.objectiveVector.y,
-    ),
+    objective: Float64Array.of(state.objectiveVector.x, state.objectiveVector.y),
   };
 }
 
@@ -74,9 +53,7 @@ function objectiveBase(state: State) {
 // to the drawing.
 function regionBoundingVertices(state: State): Vertices {
   const vertices = state.polytope?.vertices ?? [];
-  return vertices.length > 0
-    ? vertices
-    : state.vertices.map(({ x, y }) => [x, y] as [number, number]);
+  return vertices.length > 0 ? vertices : state.vertices.map(({ x, y }) => [x, y] as [number, number]);
 }
 
 // The dragged start point as a solver payload, or absent when never set (the
@@ -86,10 +63,7 @@ function startPointPayload(state: State): { startPoint?: number[] } {
   return point ? { startPoint: [point.x, point.y] } : {};
 }
 
-const messageBlocks = (
-  header: string,
-  message: string,
-): ResultRenderPayload => ({
+const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
   type: "blocks",
   blocks: [
     { className: "iterate-header", text: header },
@@ -110,10 +84,7 @@ export function createSolverControls({
     for (const k of keys) (out[k] as SolverSettings[SharedKey]) = s[k];
     return out;
   };
-  const applyShared = (
-    settings: ShareSettings,
-    keys: readonly SharedKey[],
-  ): void => {
+  const applyShared = (settings: ShareSettings, keys: readonly SharedKey[]): void => {
     for (const k of keys) {
       const v: unknown = settings[k];
       if (isValidSharedSetting(k, v)) updateSolverSetting(k, v);
@@ -123,15 +94,10 @@ export function createSolverControls({
   return [
     {
       mode: "central",
-      isSelectable: (s) =>
-        hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
+      isSelectable: (s) => hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
       getRunBlock: (s) => {
         if (!hasPolytopeLines(s.polytope)) return null;
-        if (s.polytope.kind === "empty")
-          return messageBlocks(
-            "No valid region",
-            "Central Path requires a feasible region.",
-          );
+        if (s.polytope.kind === "empty") return messageBlocks("No valid region", "Central Path requires a feasible region.");
         if (hasUnboundedObjectiveDirection(s))
           return messageBlocks(
             "Solver unavailable",
@@ -140,8 +106,7 @@ export function createSolverControls({
         return null;
       },
       collectShareSettings: () => collectShared(["centralPathIter"]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, ["centralPathIter"]),
+      applySharedSettings: (settings) => applyShared(settings, ["centralPathIter"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base || !hasPolytopeLines(s.polytope)) return null;
@@ -156,14 +121,9 @@ export function createSolverControls({
     {
       mode: "ipm",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) =>
-        isEmptyRegion(s)
-          ? messageBlocks("No valid region", "IPM requires a feasible region.")
-          : null,
-      collectShareSettings: () =>
-        collectShared(["alphaMax", "correctorThreshold", "maxitIPM"]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, ["alphaMax", "correctorThreshold", "maxitIPM"]),
+      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "IPM requires a feasible region.") : null),
+      collectShareSettings: () => collectShared(["alphaMax", "correctorThreshold", "maxitIPM"]),
+      applySharedSettings: (settings) => applyShared(settings, ["alphaMax", "correctorThreshold", "maxitIPM"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -181,26 +141,15 @@ export function createSolverControls({
     {
       mode: "simplex",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) =>
-        isEmptyRegion(s)
-          ? messageBlocks(
-              "No valid region",
-              "Simplex requires a valid feasible region.",
-            )
-          : null,
-      collectShareSettings: () =>
-        collectShared(["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
+      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "Simplex requires a valid feasible region.") : null),
+      collectShareSettings: () => collectShared(["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
+      applySharedSettings: (settings) => applyShared(settings, ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
         // Simplex consumes the start as a vertex (the marker snaps to one);
         // dual mode has no safe start-point interpretation and ignores it.
-        const snapped =
-          !s.solverSettings.simplexDualMode && s.solverStartPoint
-            ? nearestPolytopeVertex(s, s.solverStartPoint)
-            : null;
+        const snapped = !s.solverSettings.simplexDualMode && s.solverStartPoint ? nearestPolytopeVertex(s, s.solverStartPoint) : null;
         return {
           solver: "simplex",
           ...base,
@@ -214,29 +163,9 @@ export function createSolverControls({
     {
       mode: "ellipsoid",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) =>
-        isEmptyRegion(s)
-          ? messageBlocks(
-              "No valid region",
-              "The ellipsoid method requires a feasible region.",
-            )
-          : null,
-      collectShareSettings: () =>
-        collectShared([
-          "maxitEllipsoid",
-          "ellipsoidDeepCuts",
-          "ellipsoidRayShoot",
-          "ellipsoidQueryPoint",
-          "ellipsoidInitialScale",
-        ]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, [
-          "maxitEllipsoid",
-          "ellipsoidDeepCuts",
-          "ellipsoidRayShoot",
-          "ellipsoidQueryPoint",
-          "ellipsoidInitialScale",
-        ]),
+      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "The ellipsoid method requires a feasible region.") : null),
+      collectShareSettings: () => collectShared(["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"]),
+      applySharedSettings: (settings) => applyShared(settings, ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base || !hasPolytopeLines(s.polytope)) return null;
@@ -258,24 +187,8 @@ export function createSolverControls({
       mode: "pdhg",
       isSelectable: hasFeasibleRegion,
       getRunBlock: () => null,
-      collectShareSettings: () =>
-        collectShared([
-          "pdhgEta",
-          "pdhgTau",
-          "maxitPDHG",
-          "pdhgIneqMode",
-          "pdhgHalpernMode",
-          "pdhgColorByBasis",
-        ]),
-      applySharedSettings: (settings) =>
-        applyShared(settings, [
-          "pdhgEta",
-          "pdhgTau",
-          "maxitPDHG",
-          "pdhgIneqMode",
-          "pdhgHalpernMode",
-          "pdhgColorByBasis",
-        ]),
+      collectShareSettings: () => collectShared(["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
+      applySharedSettings: (settings) => applyShared(settings, ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;

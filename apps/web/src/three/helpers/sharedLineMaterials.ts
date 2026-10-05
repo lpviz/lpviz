@@ -20,12 +20,7 @@ function makeKey(k: LineMaterialKey): string {
 // The depth-on-in-3D line material every polytope/objective/constraint layer
 // wants: 2D paints in draw order (no depth), 3D depth-tests so the floor
 // occludes correctly. Wraps the shared cache.
-export function lineDepthMaterial(
-  color: string | number,
-  linewidth: number,
-  is3D: boolean,
-  opacity = 1,
-): LineMaterial {
+export function lineDepthMaterial(color: string | number, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
   return getSharedLineMaterial({
     color,
     linewidth,
@@ -68,10 +63,7 @@ export function tickSharedLineMaterialResolutions(w: number, h: number): void {
 // setPositions() (which calls them internally) does no unnecessary work.
 
 const HUGE = 1e10;
-const HUGE_BOX = new Box3(
-  new Vector3(-HUGE, -HUGE, -HUGE),
-  new Vector3(HUGE, HUGE, HUGE),
-);
+const HUGE_BOX = new Box3(new Vector3(-HUGE, -HUGE, -HUGE), new Vector3(HUGE, HUGE, HUGE));
 const HUGE_SPHERE = new Sphere(new Vector3(0, 0, 0), HUGE);
 
 export function applyHugeBounds(geo: BufferGeometry): void {
@@ -85,10 +77,7 @@ export function applyHugeBounds(geo: BufferGeometry): void {
 // call, and the renderer only deletes GL buffers on geometry dispose — a
 // replaced attribute's buffer is otherwise orphaned until the JS wrapper is
 // garbage collected. Dispose first; the new buffers upload on the next render.
-export function replaceLinePositions(
-  geo: LineSegmentsGeometry,
-  positions: Float32Array | number[],
-): void {
+export function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array | number[]): void {
   geo.dispose();
   geo.setPositions(positions);
   delete (geo as unknown as { _maxInstanceCount?: number })._maxInstanceCount;

@@ -4,10 +4,7 @@ import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type ViewportActions = ReturnType<typeof createViewportActions>;
 
-export function createViewportActions(
-  getCanvasManager: () => ViewportApi | null,
-  initialSidebarWidth: number,
-) {
+export function createViewportActions(getCanvasManager: () => ViewportApi | null, initialSidebarWidth: number) {
   let currentSidebarWidth = initialSidebarWidth;
   // Pixels along the top of the canvas covered by the problem gallery while
   // it is open. Zoom-to-fit keeps the region below it, so a preset picked from
@@ -28,16 +25,10 @@ export function createViewportActions(
     const cm = getCanvasManager();
     if (!cm) return;
     const state = getState();
-    const isOpenUnbounded =
-      state.completionMode === "open" && state.polytope?.kind === "unbounded";
+    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
-    cm.zoomToFit(
-      isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds,
-      50,
-      zoomFit?.zBounds,
-      topInset,
-    );
+    cm.zoomToFit(isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds, 50, zoomFit?.zBounds, topInset);
     cm.setSidebarWidth(currentSidebarWidth);
   };
   const toggle3D = () => {

@@ -31,31 +31,17 @@ const COORDINATE_SCALE = 1e4;
 const OBJECTIVE_SCALE = 1e6;
 const Z_SCALE_SCALE = 1e3;
 
-const SOLVER_MODES = [
-  "central",
-  "ipm",
-  "simplex",
-  "pdhg",
-  "ellipsoid",
-] as const;
+const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
 const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
-const QUERY_POINTS = [
-  "ellipsoid",
-  "chebyshev",
-  "analytic",
-  "volumetric",
-] as const;
+const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
 
 type SettingKey = keyof ShareSettings;
 
 type SettingCodec =
-  | { key: SettingKey; kind: "bool" }
-  | { key: SettingKey; kind: "int" }
-  | { key: SettingKey; kind: "scaled"; scale: number }
-  | { key: SettingKey; kind: "enum"; values: readonly string[] };
+  { key: SettingKey; kind: "bool" } | { key: SettingKey; kind: "int" } | { key: SettingKey; kind: "scaled"; scale: number } | { key: SettingKey; kind: "enum"; values: readonly string[] };
 
 // Index is the wire identity of a setting: only ever append to this list, and
 // never reorder it, or old links decode into the wrong fields.
@@ -125,10 +111,7 @@ const dequantize = (value: number, scale: number) => value / scale;
 function toBase64Url(bytes: number[]): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary)
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 function fromBase64Url(text: string): Uint8Array {
@@ -144,32 +127,16 @@ function fromBase64Url(text: string): Uint8Array {
 export function encodeSharedState(state: SharedAppState): string {
   const bytes: number[] = [VERSION];
 
-  const completion = Math.max(
-    0,
-    COMPLETION_MODES.indexOf(
-      (state.completionMode ?? "draft") as (typeof COMPLETION_MODES)[number],
-    ),
-  );
-  const solver = Math.max(
-    0,
-    SOLVER_MODES.indexOf(state.solverMode as (typeof SOLVER_MODES)[number]),
-  );
+  const completion = Math.max(0, COMPLETION_MODES.indexOf((state.completionMode ?? "draft") as (typeof COMPLETION_MODES)[number]));
+  const solver = Math.max(0, SOLVER_MODES.indexOf(state.solverMode as (typeof SOLVER_MODES)[number]));
   const hasObjective = state.objective !== null && state.objective !== undefined;
-  const hasZScale =
-    state.zScale !== undefined && Number.isFinite(state.zScale);
+  const hasZScale = state.zScale !== undefined && Number.isFinite(state.zScale);
   const start = state.solverStartPoint;
   // null is the meaningful value here: it says "wherever this solver starts by
   // default", so an untouched marker costs no bytes and stays correct even if
   // that default later moves. Only a point the user actually dragged is pinned.
-  const hasSolverStart =
-    start != null && Number.isFinite(start.x) && Number.isFinite(start.y);
-  bytes.push(
-    completion |
-      (solver << 2) |
-      (state.is3DMode ? 0x20 : 0) |
-      (hasObjective ? 0x40 : 0) |
-      (hasZScale ? 0x80 : 0),
-  );
+  const hasSolverStart = start != null && Number.isFinite(start.x) && Number.isFinite(start.y);
+  bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (hasObjective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
   bytes.push(hasSolverStart ? HAS_SOLVER_START : 0);
 
   const vertices = state.vertices ?? [];
@@ -270,10 +237,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
             y: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
           }
         : null;
-    const zScale =
-      (flags & 0x80) !== 0
-        ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE)
-        : undefined;
+    const zScale = (flags & 0x80) !== 0 ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE) : undefined;
     const solverStartPoint =
       (extended & HAS_SOLVER_START) !== 0
         ? {
@@ -304,10 +268,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
           (settings[codec.key] as number) = readVarint(bytes, cursor);
           break;
         case "scaled":
-          (settings[codec.key] as number) = dequantize(
-            readZigZag(bytes, cursor),
-            codec.scale,
-          );
+          (settings[codec.key] as number) = dequantize(readZigZag(bytes, cursor), codec.scale);
           break;
         case "enum": {
           if (cursor.at >= bytes.length) return null;

@@ -5,11 +5,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import {
-  applyHugeBounds,
-  lineDepthMaterial,
-  replaceLinePositions,
-} from "../helpers/sharedLineMaterials";
+import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
@@ -74,12 +70,7 @@ function sampleIndices(active: number, out: number[]): void {
 // (so in 3D each ellipse sits at its own iterate rather than flat on the
 // floor). Returns false when P is not (numerically) positive definite, in which
 // case the ellipse is skipped rather than drawn with a NaN transform.
-function writeEllipseMatrix(
-  matrix: Matrix4,
-  ellipsoids: EllipsoidPath,
-  index: number,
-  z: number,
-): boolean {
+function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: number, z: number): boolean {
   const base = index * ellipsoids.stride;
   const cx = ellipsoids.data[base]!;
   const cy = ellipsoids.data[base + 1]!;
@@ -158,16 +149,7 @@ export class EllipsoidLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.iterateEllipsoids,
-      raw.iterateLocalizingSets,
-      raw.iteratePath,
-      raw.iterateObjectiveVector,
-      raw.highlightIteratePathIndex,
-      raw.is3DMode,
-      raw.isTransitioning3D,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.iterateEllipsoids, raw.iterateLocalizingSets, raw.iteratePath, raw.iterateObjectiveVector, raw.highlightIteratePathIndex, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -175,24 +157,14 @@ export class EllipsoidLayer extends LayerBase {
     const snap = ctx.getSnapshot();
     const ellipsoids = raw.iterateEllipsoids;
 
-    if (
-      !ellipsoids ||
-      ellipsoids.count === 0 ||
-      !shouldRenderSnapshotMode(snap.mode, raw)
-    ) {
+    if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, raw)) {
       this.hideFrom(0);
       return;
     }
 
     // the replayed prefix, or the hovered row, bounds how much has "happened"
-    const revealed =
-      raw.iteratePath.count > 0
-        ? Math.min(raw.iteratePath.count, ellipsoids.count)
-        : ellipsoids.count;
-    const active = Math.min(
-      raw.highlightIteratePathIndex ?? revealed - 1,
-      ellipsoids.count - 1,
-    );
+    const revealed = raw.iteratePath.count > 0 ? Math.min(raw.iteratePath.count, ellipsoids.count) : ellipsoids.count;
+    const active = Math.min(raw.highlightIteratePathIndex ?? revealed - 1, ellipsoids.count - 1);
     if (active < 0) {
       this.hideFrom(0);
       return;
@@ -204,24 +176,15 @@ export class EllipsoidLayer extends LayerBase {
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
       const segments = this.slots[used]!;
-      const iterate = flatPointXYZ(
-        raw.iteratePath,
-        index,
-        raw.iterateObjectiveVector,
-      );
-      if (
-        !writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)
-      ) {
+      const iterate = flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+      if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)) {
         continue;
       }
       segments.matrix.copy(this.matrix);
       segments.matrixWorldNeedsUpdate = true;
       // slot styling ramps with recency, not with the slot's own index, so a
       // short run still ends on the bold "current" ellipse
-      segments.material = slotMaterial(
-        TRAIL_COUNT - this.indices.length + j,
-        is3D,
-      );
+      segments.material = slotMaterial(TRAIL_COUNT - this.indices.length + j, is3D);
       segments.visible = true;
       used++;
     }
@@ -235,43 +198,25 @@ export class EllipsoidLayer extends LayerBase {
     this.showLocalizingSet(raw, snap.mode === "3d");
   }
 
-  private showLocalizingSet(
-    raw: ReturnType<SceneContext["getState"]>,
-    is3D: boolean,
-  ): void {
+  private showLocalizingSet(raw: ReturnType<SceneContext["getState"]>, is3D: boolean): void {
     const index = raw.highlightIteratePathIndex;
     if (index === null) {
       this.polygon.visible = false;
       return;
     }
-    const iterate = flatPointXYZ(
-      raw.iteratePath,
-      index,
-      raw.iterateObjectiveVector,
-    );
-    const written = this.writePolygon(
-      raw.iterateLocalizingSets,
-      index,
-      iterate?.[2] ?? 0,
-    );
+    const iterate = flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+    const written = this.writePolygon(raw.iterateLocalizingSets, index, iterate?.[2] ?? 0);
     if (written === 0) {
       this.polygon.visible = false;
       return;
     }
-    replaceLinePositions(
-      this.polygonGeometry,
-      this.polygonScratch.subarray(0, written),
-    );
+    replaceLinePositions(this.polygonGeometry, this.polygonScratch.subarray(0, written));
     this.polygon.material = polygonMaterial(is3D);
     this.polygon.visible = true;
   }
 
   // The localizing polygon as segment endpoint pairs, closed back to the start.
-  private writePolygon(
-    sets: LocalizingSetPath | null,
-    index: number,
-    z: number,
-  ): number {
+  private writePolygon(sets: LocalizingSetPath | null, index: number, z: number): number {
     if (!sets || index >= sets.count) return 0;
     const start = sets.offsets[index]!;
     const end = sets.offsets[index + 1]!;
@@ -317,19 +262,9 @@ function slotOpacity(slot: number) {
 
 function slotMaterial(slot: number, is3D: boolean) {
   const newest = slot >= TRAIL_COUNT - 1;
-  return lineDepthMaterial(
-    ELLIPSOID_COLOR,
-    newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS,
-    is3D,
-    Number(slotOpacity(slot).toFixed(3)),
-  );
+  return lineDepthMaterial(ELLIPSOID_COLOR, newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS, is3D, Number(slotOpacity(slot).toFixed(3)));
 }
 
 function polygonMaterial(is3D: boolean) {
-  return lineDepthMaterial(
-    ELLIPSOID_COLOR,
-    POLYGON_THICKNESS,
-    is3D,
-    POLYGON_OPACITY,
-  );
+  return lineDepthMaterial(ELLIPSOID_COLOR, POLYGON_THICKNESS, is3D, POLYGON_OPACITY);
 }

@@ -19,11 +19,7 @@ export type RotationController = {
 // re-solves — at most one solve in flight at a time. Extracted from
 // solverActions so the loop's timing + single-flight + cancellation logic lives
 // in one testable place instead of six module-scoped variables.
-export function createRotationController(deps: {
-  computePath: () => Promise<void>;
-  syncTraceCapacity: () => void;
-  hasCanvas: () => boolean;
-}): RotationController {
+export function createRotationController(deps: { computePath: () => Promise<void>; syncTraceCapacity: () => void; hasCanvas: () => boolean }): RotationController {
   let rafId: number | null = null;
   let lastFrameTime: number | null = null;
   let elapsedMs = 0;
@@ -44,11 +40,7 @@ export function createRotationController(deps: {
         elapsedMs += timestamp - lastFrameTime;
         lastFrameTime = timestamp;
       }
-      const intervalMs = Math.max(
-        1,
-        BASE_ROTATION_WAIT_MS /
-          Math.max(0.1, getState().solverSettings.objectiveRotationSpeed || 1),
-      );
+      const intervalMs = Math.max(1, BASE_ROTATION_WAIT_MS / Math.max(0.1, getState().solverSettings.objectiveRotationSpeed || 1));
       if (!inFlight && elapsedMs >= intervalMs) {
         elapsedMs = 0;
         void step();
@@ -66,10 +58,7 @@ export function createRotationController(deps: {
     const mySession = session;
     const rotationStep = computeObjectiveRotationStep({
       objectiveVector: state.objectiveVector ?? { x: 1, y: 0 },
-      angleStep: Math.max(
-        0.001,
-        state.solverSettings.objectiveAngleStep || 0.001,
-      ),
+      angleStep: Math.max(0.001, state.solverSettings.objectiveAngleStep || 0.001),
       rotationDirection: direction,
       polytope: state.polytope,
     });

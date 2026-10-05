@@ -1,20 +1,7 @@
-import {
-  ALL_VIEWPORT_DIRTY,
-  getState,
-  setState,
-  type SolverMode,
-} from "@/features/core/store";
+import { ALL_VIEWPORT_DIRTY, getState, setState, type SolverMode } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
-import {
-  buildSharedStatePatch,
-  expandSharedAppState,
-  type ShareSettings,
-  type SharedAppState,
-} from "@/features/share/sharedState";
-import type {
-  SolverControl,
-  SolverSettingUpdater,
-} from "@/features/solver/solverControls";
+import { buildSharedStatePatch, expandSharedAppState, type ShareSettings, type SharedAppState } from "@/features/share/sharedState";
+import type { SolverControl, SolverSettingUpdater } from "@/features/solver/solverControls";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import JSONCrush from "jsoncrush";
 
@@ -35,13 +22,8 @@ export function applyUrlParamsOnce({
 }) {
   const params = new URLSearchParams(window.location.search);
   const applySharedSettings = (settings: ShareSettings = {}) => {
-    if (settings.objectiveAngleStep !== undefined)
-      updateSolverSetting("objectiveAngleStep", settings.objectiveAngleStep);
-    if (settings.objectiveRotationSpeed !== undefined)
-      updateSolverSetting(
-        "objectiveRotationSpeed",
-        settings.objectiveRotationSpeed,
-      );
+    if (settings.objectiveAngleStep !== undefined) updateSolverSetting("objectiveAngleStep", settings.objectiveAngleStep);
+    if (settings.objectiveRotationSpeed !== undefined) updateSolverSetting("objectiveRotationSpeed", settings.objectiveRotationSpeed);
     solverControls.forEach((c) => c.applySharedSettings(settings));
   };
   const applySharedState = (sharedState: SharedAppState) => {
@@ -71,11 +53,7 @@ export function applyUrlParamsOnce({
     // in chat logs, in the README, in a paper — so JSONCrush stays on the read
     // path. Anything in the base64url alphabet with a valid version byte is
     // the current format; everything else falls back.
-    const data =
-      decodeSharedState(encoded) ??
-      (expandSharedAppState(
-        JSON.parse(JSONCrush.uncrush(encoded)),
-      ) as SharedAppState);
+    const data = decodeSharedState(encoded) ?? (expandSharedAppState(JSON.parse(JSONCrush.uncrush(encoded))) as SharedAppState);
     if (data) applySharedState(data);
     // strip only the consumed param; keep any other query params and the hash
     const url = new URL(window.location.href);

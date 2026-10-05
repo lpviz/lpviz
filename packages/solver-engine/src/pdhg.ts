@@ -16,17 +16,7 @@ interface PDHGOptions {
 }
 
 export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
-  const {
-    ineq = false,
-    halpern = false,
-    maxit = 1000,
-    eta = 0.25,
-    tau = 0.25,
-    verbose = false,
-    tol = 1e-4,
-    colorByBasis = false,
-    startPoint,
-  } = options;
+  const { ineq = false, halpern = false, maxit = 1000, eta = 0.25, tau = 0.25, verbose = false, tol = 1e-4, colorByBasis = false, startPoint } = options;
   const solverOptions = {
     maxit,
     eta,
@@ -37,7 +27,5 @@ export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
     halpern,
     startPoint,
   };
-  return ineq
-    ? pdhgIneq(lines, objective, solverOptions)
-    : pdhgEq(lines, objective, solverOptions);
+  return ineq ? pdhgIneq(lines, objective, solverOptions) : pdhgEq(lines, objective, solverOptions);
 }

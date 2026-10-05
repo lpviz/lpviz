@@ -19,12 +19,7 @@ const midOf = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
 
 describe("findEdgeNearPoint", () => {
   test("snaps a click on each edge to that edge, not to edge 0", () => {
-    const on = (i: number) =>
-      findEdgeNearPoint(
-        midOf(SMALL_SQUARE[i], SMALL_SQUARE[(i + 1) % 4]),
-        SMALL_SQUARE,
-        "closed",
-      );
+    const on = (i: number) => findEdgeNearPoint(midOf(SMALL_SQUARE[i], SMALL_SQUARE[(i + 1) % 4]), SMALL_SQUARE, "closed");
     expect(on(0)).toBe(0);
     expect(on(1)).toBe(1);
     expect(on(2)).toBe(2);
@@ -32,17 +27,14 @@ describe("findEdgeNearPoint", () => {
   });
 
   test("prefers the closer of two edges both inside the tolerance", () => {
-    const near = (point: { x: number; y: number }) =>
-      findEdgeNearPoint(point, SMALL_SQUARE, "closed");
+    const near = (point: { x: number; y: number }) => findEdgeNearPoint(point, SMALL_SQUARE, "closed");
     // 0.02 off the left edge, 0.10 off the top edge
     expect(near({ x: 0.02, y: 0.2 })).toBe(3);
     expect(near({ x: 0.1, y: 0.28 })).toBe(2);
   });
 
   test("keeps the closing edge reachable in closed mode", () => {
-    expect(
-      findEdgeNearPoint({ x: 0.15, y: 0.02 }, SMALL_SQUARE, "closed"),
-    ).toBe(0);
+    expect(findEdgeNearPoint({ x: 0.15, y: 0.02 }, SMALL_SQUARE, "closed")).toBe(0);
   });
 
   test("does not test the closing edge in draft or open mode", () => {
@@ -56,15 +48,11 @@ describe("findEdgeNearPoint", () => {
 
   test("an exact tie between edges goes to the lowest index", () => {
     // the centre of the square is 0.15 from the bottom, right and top edges
-    expect(
-      findEdgeNearPoint({ x: 0.15, y: 0.15 }, SMALL_SQUARE, "draft"),
-    ).toBe(0);
+    expect(findEdgeNearPoint({ x: 0.15, y: 0.15 }, SMALL_SQUARE, "draft")).toBe(0);
   });
 
   test("returns null when no edge is within tolerance", () => {
-    expect(
-      findEdgeNearPoint({ x: -1, y: 0.15 }, SMALL_SQUARE, "closed"),
-    ).toBeNull();
+    expect(findEdgeNearPoint({ x: -1, y: 0.15 }, SMALL_SQUARE, "closed")).toBeNull();
   });
 
   test("the tolerance is in world units, so a tighter one drops far edges", () => {

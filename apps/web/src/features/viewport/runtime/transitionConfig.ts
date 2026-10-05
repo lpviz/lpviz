@@ -23,9 +23,7 @@ const emit = () => {
   listeners.forEach((listener) => listener());
 };
 
-export function setViewportTransitionConfig(
-  nextConfig: ViewportTransitionConfig,
-) {
+export function setViewportTransitionConfig(nextConfig: ViewportTransitionConfig) {
   config = nextConfig;
   emit();
 }

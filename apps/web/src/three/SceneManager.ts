@@ -1,7 +1,4 @@
-import {
-  getCurrentMouse,
-  subscribeCurrentMouse,
-} from "@/features/core/currentMouse";
+import { getCurrentMouse, subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState, type ViewportDirtyFlags } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Camera, Scene, WebGLRenderer } from "three";
@@ -119,11 +116,7 @@ export class SceneManager {
 
   private setSize(width: number, height: number): void {
     const dpr = Math.min(2, Math.max(1, window.devicePixelRatio));
-    if (
-      this._size.width === width &&
-      this._size.height === height &&
-      this._size.dpr === dpr
-    ) {
+    if (this._size.width === width && this._size.height === height && this._size.dpr === dpr) {
       return;
     }
     this._size = { width, height, dpr };
@@ -165,10 +158,7 @@ export class SceneManager {
     if (this.layersDirty) {
       const layersDirty = this.layersDirty;
       this.layersDirty = null;
-      this.layerHost.update(
-        this.ctx,
-        layersDirty === "all" ? undefined : layersDirty,
-      );
+      this.layerHost.update(this.ctx, layersDirty === "all" ? undefined : layersDirty);
     }
 
     if (this.camera) {
@@ -180,9 +170,7 @@ export class SceneManager {
     }
   };
 
-  invalidate(
-    options: { layers?: boolean; viewportDirty?: ViewportDirtyFlags } = {},
-  ): void {
+  invalidate(options: { layers?: boolean; viewportDirty?: ViewportDirtyFlags } = {}): void {
     if (options.layers ?? true) {
       if (options.viewportDirty && Object.keys(options.viewportDirty).length) {
         if (this.layersDirty !== "all") {
@@ -288,10 +276,7 @@ export class SceneManager {
     for (const pass of RENDER_PASSES) {
       const impostor = this.impostors[pass];
       if (impostor) {
-        substitutions.set(
-          pass,
-          impostor.prepare(this.renderer, camera, this.scenes[pass]),
-        );
+        substitutions.set(pass, impostor.prepare(this.renderer, camera, this.scenes[pass]));
       }
     }
     for (const pass of RENDER_PASSES) {

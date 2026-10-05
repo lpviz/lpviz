@@ -1,11 +1,7 @@
 import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { IteratePath } from "@/features/core/store";
 import type { VecN } from "@lpviz/math/types";
-import type {
-  SolverEngineSuccessResponse,
-  SolverWorkerPayload,
-  SolverWorkerResponse,
-} from "./solverWorker";
+import type { SolverEngineSuccessResponse, SolverWorkerPayload, SolverWorkerResponse } from "./solverWorker";
 
 // Solver results at high maxit are tens of thousands of small Float64Arrays
 // plus as many row objects; structured-cloning that shape costs tens of
@@ -56,10 +52,7 @@ export type PackedSolverWorkerResponse =
       polygonOffsets?: Uint32Array;
     };
 
-function packIterations(
-  entries: Float64Array[],
-  zOf: (entry: Float64Array, index: number) => number,
-): Float64Array {
+function packIterations(entries: Float64Array[], zOf: (entry: Float64Array, index: number) => number): Float64Array {
   const packed = new Float64Array(entries.length * 3);
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
@@ -116,26 +109,13 @@ function packRows(
   return cols;
 }
 
-export function packSolverResponse(
-  response: SolverEngineSuccessResponse,
-  request: SolverWorkerPayload,
-): { wire: PackedSolverWorkerResponse; transfer: ArrayBuffer[] } {
+export function packSolverResponse(response: SolverEngineSuccessResponse, request: SolverWorkerPayload): { wire: PackedSolverWorkerResponse; transfer: ArrayBuffer[] } {
   if (response.solver === "pdhg") {
     const result = response.result;
     const objective = request.objective as VecN;
     const eps = result.eps;
-    const iterations = packIterations(
-      result.iterations,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        PDHG_EPS_Z_LIFT * (eps?.[index] ?? 0),
-    );
-    const rows = packRows(
-      result.rows,
-      (row: { epsilon: number }) => row.epsilon,
-      true,
-    );
+    const iterations = packIterations(result.iterations, (entry, index) => objective[0]! * entry[0]! + objective[1]! * entry[1]! + PDHG_EPS_Z_LIFT * (eps?.[index] ?? 0));
+    const rows = packRows(result.rows, (row: { epsilon: number }) => row.epsilon, true);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
       success: true,
@@ -151,15 +131,7 @@ export function packSolverResponse(
     };
     return {
       wire,
-      transfer: [
-        iterations.buffer,
-        rows.x.buffer,
-        rows.y.buffer,
-        rows.objective.buffer,
-        rows.infeasibility.buffer,
-        rows.extra.buffer,
-        ...(rows.restart ? [rows.restart.buffer] : []),
-      ] as ArrayBuffer[],
+      transfer: [iterations.buffer, rows.x.buffer, rows.y.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.extra.buffer, ...(rows.restart ? [rows.restart.buffer] : [])] as ArrayBuffer[],
     };
   }
 
@@ -167,13 +139,7 @@ export function packSolverResponse(
     const sol = response.result.iterates.solution;
     const objective = request.objective as VecN;
     const mu = sol.mu;
-    const iterations = packIterations(
-      sol.x,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        (mu?.[index] ?? 0),
-    );
+    const iterations = packIterations(sol.x, (entry, index) => objective[0]! * entry[0]! + objective[1]! * entry[1]! + (mu?.[index] ?? 0));
     const rows = packRows(sol.rows, (row: { mu: number }) => row.mu, false);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
@@ -188,14 +154,7 @@ export function packSolverResponse(
     };
     return {
       wire,
-      transfer: [
-        iterations.buffer,
-        rows.x.buffer,
-        rows.y.buffer,
-        rows.objective.buffer,
-        rows.infeasibility.buffer,
-        rows.extra.buffer,
-      ] as ArrayBuffer[],
+      transfer: [iterations.buffer, rows.x.buffer, rows.y.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.extra.buffer] as ArrayBuffer[],
     };
   }
 
@@ -203,13 +162,7 @@ export function packSolverResponse(
     const result = response.result;
     const objective = request.objective as VecN;
     const rho = result.rho;
-    const iterations = packIterations(
-      result.iterations,
-      (entry, index) =>
-        objective[0]! * entry[0]! +
-        objective[1]! * entry[1]! +
-        (rho?.[index] ?? 0),
-    );
+    const iterations = packIterations(result.iterations, (entry, index) => objective[0]! * entry[0]! + objective[1]! * entry[1]! + (rho?.[index] ?? 0));
     const rows = packRows(result.rows, (row: { rho: number }) => row.rho, false);
     const wire: PackedSolverWorkerResponse = {
       id: response.id,
@@ -247,9 +200,7 @@ export function packSolverResponse(
   return { wire: response, transfer: [] };
 }
 
-export function unpackSolverResponse(
-  wire: PackedSolverWorkerResponse,
-): SolverWorkerResponse {
+export function unpackSolverResponse(wire: PackedSolverWorkerResponse): SolverWorkerResponse {
   if (!("packed" in wire) || !wire.packed) {
     return wire;
   }

@@ -21,11 +21,7 @@ import { SolverStartLayer } from "@/three/layers/SolverStartLayer";
 import { TraceLineLayer } from "@/three/layers/TraceLineLayer";
 import { TracePointsLayer } from "@/three/layers/TracePointsLayer";
 
-export function mountCanvasGL(
-  parent: HTMLElement,
-  onBridgeReady: (bridge: ViewportBridge) => void,
-  onBridgeDispose?: () => void,
-) {
+export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: ViewportBridge) => void, onBridgeDispose?: () => void) {
   const canvas = document.createElement("canvas");
   canvas.className = "canvas-stage__gl-canvas";
   canvas.tabIndex = 0;

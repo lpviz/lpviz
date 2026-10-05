@@ -3,11 +3,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import {
-  applyHugeBounds,
-  getSharedLineMaterial,
-  replaceLinePositions,
-} from "../helpers/sharedLineMaterials";
+import { applyHugeBounds, getSharedLineMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { Layer } from "../Layer";
 import type { SceneContext } from "../SceneContext";
 

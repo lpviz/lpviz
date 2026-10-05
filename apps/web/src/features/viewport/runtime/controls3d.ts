@@ -1,8 +1,5 @@
 import type { ViewportPerspectivePose } from "@lpviz/viewport/types";
-import {
-  DEFAULT_VIEWPORT_RENDER_SNAPSHOT,
-  type ViewportRenderSnapshot,
-} from "../types";
+import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
 export type { ViewportPerspectivePose };
 
@@ -32,9 +29,7 @@ const emit = () => {
   listeners.forEach((listener) => listener());
 };
 
-export function setViewport3DControlsConfig(
-  nextConfig: Viewport3DControlsConfig,
-) {
+export function setViewport3DControlsConfig(nextConfig: Viewport3DControlsConfig) {
   config = nextConfig;
   emit();
 }

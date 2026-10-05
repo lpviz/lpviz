@@ -1,17 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { projectWorldPosition3D } from "../src/projection3d";
-import {
-  buildPerspectivePoseFromViewAngle,
-  getViewportVisibleCenterCanvasPoint,
-  projectCanvasPointToWorldPlane,
-} from "../src/transition";
+import { buildPerspectivePoseFromViewAngle, getViewportVisibleCenterCanvasPoint, projectCanvasPointToWorldPlane } from "../src/transition";
 import { createDefaultViewportRenderSnapshot } from "../src/types";
-import {
-  buildResetViewport3DView,
-  buildViewport3DSnapshot,
-  fitViewport3DToBounds,
-  isDefault3DView,
-} from "../src/view3d";
+import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, isDefault3DView } from "../src/view3d";
 
 const W = 1200;
 const H = 800;
@@ -29,11 +20,7 @@ function snapshotAtAngle(viewAngle: { x: number; y: number; z: number }) {
   return buildViewport3DSnapshot(base, pose, rect);
 }
 
-function projectedExtent(
-  snap: ReturnType<typeof snapshotAtAngle>,
-  bounds: { minX: number; maxX: number; minY: number; maxY: number },
-  zBounds?: { minZ: number; maxZ: number },
-) {
+function projectedExtent(snap: ReturnType<typeof snapshotAtAngle>, bounds: { minX: number; maxX: number; minY: number; maxY: number }, zBounds?: { minZ: number; maxZ: number }) {
   let minPx = Infinity;
   let maxPx = -Infinity;
   let minPy = Infinity;
@@ -86,14 +73,7 @@ describe("fitViewport3DToBounds", () => {
   for (const { name, viewAngle, bounds, zBounds } of cases) {
     test(`${name}: projected corners stay inside the padded area`, () => {
       const snap = snapshotAtAngle(viewAngle);
-      const view = fitViewport3DToBounds(
-        snap,
-        rect,
-        SIDEBAR,
-        bounds,
-        PAD,
-        zBounds,
-      );
+      const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds);
       expect(view).not.toBeNull();
       const fitted = buildViewport3DSnapshot(snap, view!.pose, rect);
       const ext = projectedExtent(fitted, bounds, zBounds);
@@ -137,12 +117,7 @@ describe("buildResetViewport3DView", () => {
     const base = createDefaultViewportRenderSnapshot({ width: W, height: H });
     const view = buildResetViewport3DView(base, SIDEBAR, rect);
     const after = buildViewport3DSnapshot(base, view.pose, rect);
-    const worldAtVisibleCenter = projectCanvasPointToWorldPlane(
-      after,
-      rect,
-      getViewportVisibleCenterCanvasPoint(rect, SIDEBAR),
-      0,
-    );
+    const worldAtVisibleCenter = projectCanvasPointToWorldPlane(after, rect, getViewportVisibleCenterCanvasPoint(rect, SIDEBAR), 0);
     expect(worldAtVisibleCenter).not.toBeNull();
     expect(worldAtVisibleCenter!.x).toBeCloseTo(0, 6);
     expect(worldAtVisibleCenter!.y).toBeCloseTo(0, 6);

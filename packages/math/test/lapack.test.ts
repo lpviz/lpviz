@@ -3,14 +3,7 @@ import { invertDenseMatrix, solveDenseSystem } from "../src/lapack";
 
 const solve = (matrix: number[], rhs: number[]) => {
   const size = Math.sqrt(matrix.length);
-  return Array.from(
-    solveDenseSystem(
-      Float64Array.from(matrix),
-      size,
-      Float64Array.from(rhs),
-      new Float64Array(size),
-    ),
-  );
+  return Array.from(solveDenseSystem(Float64Array.from(matrix), size, Float64Array.from(rhs), new Float64Array(size)));
 };
 
 describe("solveDenseSystem", () => {
@@ -29,24 +22,18 @@ describe("solveDenseSystem", () => {
   });
 
   test("throws when NaN sits in a pivot position", () => {
-    expect(() => solve([NaN, 1, 0, 1], [1, 1])).toThrow(
-      "Singular linear system",
-    );
+    expect(() => solve([NaN, 1, 0, 1], [1, 1])).toThrow("Singular linear system");
   });
 
   test("throws when NaN sits off-pivot with finite pivots", () => {
-    expect(() => solve([1, NaN, 0, 1], [1, 1])).toThrow(
-      "Singular linear system",
-    );
+    expect(() => solve([1, NaN, 0, 1], [1, 1])).toThrow("Singular linear system");
   });
 });
 
 describe("invertDenseMatrix", () => {
   const invert = (matrix: number[]) => {
     const size = Math.sqrt(matrix.length);
-    return Array.from(
-      invertDenseMatrix(Float64Array.from(matrix), size, new Float64Array(size * size)),
-    );
+    return Array.from(invertDenseMatrix(Float64Array.from(matrix), size, new Float64Array(size * size)));
   };
 
   test("inverts a matrix that needs a row swap", () => {
@@ -60,12 +47,7 @@ describe("invertDenseMatrix", () => {
     for (let column = 0; column < 3; column++) {
       const unit = [0, 0, 0];
       unit[column] = 1;
-      const solved = solveDenseSystem(
-        Float64Array.from(matrix),
-        3,
-        Float64Array.from(unit),
-        new Float64Array(3),
-      );
+      const solved = solveDenseSystem(Float64Array.from(matrix), 3, Float64Array.from(unit), new Float64Array(3));
       for (let row = 0; row < 3; row++) {
         expect(inverse[row * 3 + column]!).toBeCloseTo(solved[row]!, 12);
       }

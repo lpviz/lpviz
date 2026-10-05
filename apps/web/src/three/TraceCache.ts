@@ -1,23 +1,7 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import {
-  CustomBlending,
-  GLSL3,
-  Mesh,
-  Object3D,
-  OneFactor,
-  OneMinusSrcAlphaFactor,
-  OrthographicCamera,
-  PlaneGeometry,
-  Scene,
-  ShaderMaterial,
-  WebGLRenderer,
-  WebGLRenderTarget,
-} from "three";
-import {
-  setPathRibbonCacheEncode,
-  setPathRibbonResolution,
-} from "./helpers/pathRibbon";
+import { CustomBlending, GLSL3, Mesh, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
+import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
 
 // World-anchored impostor for the trace-lines render pass in 2D mode.
 //
@@ -225,14 +209,8 @@ export class TraceCache {
     const height = snapshot.height || 1;
     const unitsPerPixel = snapshot.unitsPerPixel;
     const dpr = renderer.getPixelRatio();
-    const pixelWidth = Math.min(
-      MAX_CACHE_DIMENSION,
-      Math.ceil(width * CACHE_MARGIN * dpr),
-    );
-    const pixelHeight = Math.min(
-      MAX_CACHE_DIMENSION,
-      Math.ceil(height * CACHE_MARGIN * dpr),
-    );
+    const pixelWidth = Math.min(MAX_CACHE_DIMENSION, Math.ceil(width * CACHE_MARGIN * dpr));
+    const pixelHeight = Math.min(MAX_CACHE_DIMENSION, Math.ceil(height * CACHE_MARGIN * dpr));
     const halfVisibleWidth = (width * unitsPerPixel) / 2;
     const halfVisibleHeight = (height * unitsPerPixel) / 2;
     const centerX = snapshot.target.x;
@@ -241,8 +219,7 @@ export class TraceCache {
     const panContained =
       centerX + halfVisibleWidth <= this.cachedCenterX + this.cachedHalfWidth &&
       centerX - halfVisibleWidth >= this.cachedCenterX - this.cachedHalfWidth &&
-      centerY + halfVisibleHeight <=
-        this.cachedCenterY + this.cachedHalfHeight &&
+      centerY + halfVisibleHeight <= this.cachedCenterY + this.cachedHalfHeight &&
       centerY - halfVisibleHeight >= this.cachedCenterY - this.cachedHalfHeight;
 
     const now = performance.now();
@@ -252,24 +229,10 @@ export class TraceCache {
     this.lastMinSeq = minSeq;
     const evicting = now - this.lastEvictionAt < EVICTION_QUIET_MS;
 
-    if (
-      unitsPerPixel !== this.lastSeenUnitsPerPixel ||
-      centerX !== this.lastSeenCenterX ||
-      centerY !== this.lastSeenCenterY
-    ) {
+    if (unitsPerPixel !== this.lastSeenUnitsPerPixel || centerX !== this.lastSeenCenterX || centerY !== this.lastSeenCenterY) {
       // smoothed per-frame pan velocity, used to lead rebuilt rects
-      this.panVelocityX =
-        0.6 * this.panVelocityX +
-        0.4 *
-          (Number.isNaN(this.lastSeenCenterX)
-            ? 0
-            : centerX - this.lastSeenCenterX);
-      this.panVelocityY =
-        0.6 * this.panVelocityY +
-        0.4 *
-          (Number.isNaN(this.lastSeenCenterY)
-            ? 0
-            : centerY - this.lastSeenCenterY);
+      this.panVelocityX = 0.6 * this.panVelocityX + 0.4 * (Number.isNaN(this.lastSeenCenterX) ? 0 : centerX - this.lastSeenCenterX);
+      this.panVelocityY = 0.6 * this.panVelocityY + 0.4 * (Number.isNaN(this.lastSeenCenterY) ? 0 : centerY - this.lastSeenCenterY);
       this.lastViewChangeAt = now;
       this.lastSeenUnitsPerPixel = unitsPerPixel;
       this.lastSeenCenterX = centerX;
@@ -280,15 +243,8 @@ export class TraceCache {
       this.panVelocityX = 0;
       this.panVelocityY = 0;
     }
-    const zoomRatio =
-      this.cachedUnitsPerPixel > 0
-        ? this.cachedUnitsPerPixel / unitsPerPixel
-        : 1;
-    const zoomDeferred =
-      unitsPerPixel !== this.cachedUnitsPerPixel &&
-      viewMoving &&
-      zoomRatio < ZOOM_REBUILD_RATIO &&
-      zoomRatio > 1 / ZOOM_REBUILD_RATIO;
+    const zoomRatio = this.cachedUnitsPerPixel > 0 ? this.cachedUnitsPerPixel / unitsPerPixel : 1;
+    const zoomDeferred = unitsPerPixel !== this.cachedUnitsPerPixel && viewMoving && zoomRatio < ZOOM_REBUILD_RATIO && zoomRatio > 1 / ZOOM_REBUILD_RATIO;
     const panDeferred =
       !panContained &&
       viewMoving &&
@@ -313,24 +269,16 @@ export class TraceCache {
     ) {
       // under active eviction, leave the oldest chunks out of the bake so
       // the next evictions don't each force another full rebuild
-      const headroom = evicting
-        ? Math.min(TRAILING_HEADROOM, live.length >> 2)
-        : 0;
+      const headroom = evicting ? Math.min(TRAILING_HEADROOM, live.length >> 2) : 0;
       this.bakeStart = minSeq + headroom;
       this.bakedEnd = maxSeq + 1;
       // lead the pan direction so a sustained drag escapes the margin less
       // often; capped so the visible rect stays inside the rebuilt rect
       const slackX = ((pixelWidth / dpr) * unitsPerPixel) / 2 - halfVisibleWidth;
-      const slackY =
-        ((pixelHeight / dpr) * unitsPerPixel) / 2 - halfVisibleHeight;
-      const clampLead = (lead: number, slack: number) =>
-        Math.max(-slack * 0.8, Math.min(slack * 0.8, lead));
-      const leadX = viewMoving
-        ? clampLead(this.panVelocityX * PAN_LEAD_FRAMES, slackX)
-        : 0;
-      const leadY = viewMoving
-        ? clampLead(this.panVelocityY * PAN_LEAD_FRAMES, slackY)
-        : 0;
+      const slackY = ((pixelHeight / dpr) * unitsPerPixel) / 2 - halfVisibleHeight;
+      const clampLead = (lead: number, slack: number) => Math.max(-slack * 0.8, Math.min(slack * 0.8, lead));
+      const leadX = viewMoving ? clampLead(this.panVelocityX * PAN_LEAD_FRAMES, slackX) : 0;
+      const leadY = viewMoving ? clampLead(this.panVelocityY * PAN_LEAD_FRAMES, slackY) : 0;
       this.lastRebuildAt = now;
       this.recache(
         renderer,
@@ -351,55 +299,32 @@ export class TraceCache {
     } else {
       if (maxSeq >= this.bakedEnd) {
         // new chunks: accumulate into the existing target without clearing
-        this.renderSeqRange(
-          renderer,
-          traceLinesScene,
-          this.renderTarget,
-          this.bakedEnd,
-          maxSeq + 1,
-          false,
-        );
+        this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, this.bakedEnd, maxSeq + 1, false);
         this.bakedEnd = maxSeq + 1;
       }
       if (this.bakeStart > minSeq && !evicting) {
         // evictions stopped: fold the trailing chunks into the main bake so
         // the trailing target can be released
-        this.renderSeqRange(
-          renderer,
-          traceLinesScene,
-          this.renderTarget,
-          minSeq,
-          this.bakeStart,
-          false,
-        );
+        this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, minSeq, this.bakeStart, false);
         this.bakeStart = minSeq;
       }
     }
 
-    if (
-      (zoomDeferred ||
-        panDeferred ||
-        this.degraded ||
-        this.bakeStart > minSeq) &&
-      this.settleTimer === null &&
-      this.requestFrame
-    ) {
+    if ((zoomDeferred || panDeferred || this.degraded || this.bakeStart > minSeq) && this.settleTimer === null && this.requestFrame) {
       // demand-driven rendering: without a scheduled frame the settle work
       // (crisp exact-zoom rebuild, trailing fold + target release) would
       // wait for the next unrelated invalidation
-      this.settleTimer = setTimeout(() => {
-        this.settleTimer = null;
-        this.requestFrame!();
-      }, Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2));
+      this.settleTimer = setTimeout(
+        () => {
+          this.settleTimer = null;
+          this.requestFrame!();
+        },
+        Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2),
+      );
     }
 
     if (this.bakeStart > minSeq) {
-      if (
-        trailingDirty ||
-        !this.trailingTarget ||
-        minSeq !== this.trailingStart ||
-        this.bakeStart !== this.trailingEnd
-      ) {
+      if (trailingDirty || !this.trailingTarget || minSeq !== this.trailingStart || this.bakeStart !== this.trailingEnd) {
         this.renderTrailing(renderer, traceLinesScene, minSeq, this.bakeStart);
       }
       this.trailingQuad.visible = true;
@@ -414,11 +339,7 @@ export class TraceCache {
 
   // Temporarily hides every live chunk outside [startSeq, endSeq) — the
   // chunks live in one flat group, so toggling mesh visibility is enough.
-  private withSeqRangeVisible(
-    startSeq: number,
-    endSeq: number,
-    render: () => void,
-  ): void {
+  private withSeqRangeVisible(startSeq: number, endSeq: number, render: () => void): void {
     const live = this.liveMeshes;
     const saved = this.visibilityScratch;
     saved.length = live.length;
@@ -432,14 +353,7 @@ export class TraceCache {
     for (let i = 0; i < live.length; i++) live[i]!.visible = saved[i]!;
   }
 
-  private renderSeqRange(
-    renderer: WebGLRenderer,
-    traceLinesScene: Scene,
-    target: WebGLRenderTarget,
-    startSeq: number,
-    endSeq: number,
-    clear: boolean,
-  ): void {
+  private renderSeqRange(renderer: WebGLRenderer, traceLinesScene: Scene, target: WebGLRenderTarget, startSeq: number, endSeq: number, clear: boolean): void {
     // screen-space line widths must be computed against the cache viewport
     setPathRibbonResolution(this.cachedCssWidth, this.cachedCssHeight);
     setPathRibbonCacheEncode(true);
@@ -455,37 +369,17 @@ export class TraceCache {
     setPathRibbonResolution(snapshot.width || 1, snapshot.height || 1);
   }
 
-  private renderTrailing(
-    renderer: WebGLRenderer,
-    traceLinesScene: Scene,
-    startSeq: number,
-    endSeq: number,
-  ): void {
-    if (
-      !this.trailingTarget ||
-      this.trailingTarget.width !== this.cachedPixelWidth ||
-      this.trailingTarget.height !== this.cachedPixelHeight
-    ) {
+  private renderTrailing(renderer: WebGLRenderer, traceLinesScene: Scene, startSeq: number, endSeq: number): void {
+    if (!this.trailingTarget || this.trailingTarget.width !== this.cachedPixelWidth || this.trailingTarget.height !== this.cachedPixelHeight) {
       this.trailingTarget?.dispose();
       // single-sample: this target re-renders on every eviction (the most
       // frequent cache operation during rotation), the MSAA clear/resolve
       // there dominated steady-state cost on slower GL stacks, and the
       // aliasing on the oldest translucent chunks is not discernible
-      this.trailingTarget = new WebGLRenderTarget(
-        this.cachedPixelWidth,
-        this.cachedPixelHeight,
-        { samples: 0, depthBuffer: false, stencilBuffer: false },
-      );
+      this.trailingTarget = new WebGLRenderTarget(this.cachedPixelWidth, this.cachedPixelHeight, { samples: 0, depthBuffer: false, stencilBuffer: false });
       this.trailingMaterial.uniforms.map!.value = this.trailingTarget.texture;
     }
-    this.renderSeqRange(
-      renderer,
-      traceLinesScene,
-      this.trailingTarget,
-      startSeq,
-      endSeq,
-      true,
-    );
+    this.renderSeqRange(renderer, traceLinesScene, this.trailingTarget, startSeq, endSeq, true);
     this.trailingStart = startSeq;
     this.trailingEnd = endSeq;
     this.trailingQuad.position.copy(this.quad.position);
@@ -499,34 +393,20 @@ export class TraceCache {
     this.trailingMaterial.uniforms.map!.value = null;
   }
 
-  private recache(
-    renderer: WebGLRenderer,
-    traceLinesScene: Scene,
-    view: ViewParams,
-    degrade: boolean,
-  ): void {
+  private recache(renderer: WebGLRenderer, traceLinesScene: Scene, view: ViewParams, degrade: boolean): void {
     // rebuilds while the view is moving or evictions are streaming (sustained
     // rotation at trace capacity) skip multisampling: the MSAA fill and
     // resolve are what makes a full rebuild blow the frame budget, and
     // aliasing is not discernible while the content or camera is churning.
     // One crisp rebuild follows once everything settles.
     const samples = degrade ? 0 : CACHE_SAMPLES;
-    if (
-      !this.renderTarget ||
-      this.renderTarget.width !== view.pixelWidth ||
-      this.renderTarget.height !== view.pixelHeight ||
-      this.renderTarget.samples !== samples
-    ) {
+    if (!this.renderTarget || this.renderTarget.width !== view.pixelWidth || this.renderTarget.height !== view.pixelHeight || this.renderTarget.samples !== samples) {
       this.renderTarget?.dispose();
-      this.renderTarget = new WebGLRenderTarget(
-        view.pixelWidth,
-        view.pixelHeight,
-        {
-          samples,
-          depthBuffer: false,
-          stencilBuffer: false,
-        },
-      );
+      this.renderTarget = new WebGLRenderTarget(view.pixelWidth, view.pixelHeight, {
+        samples,
+        depthBuffer: false,
+        stencilBuffer: false,
+      });
       this.quadMaterial.uniforms.map!.value = this.renderTarget.texture;
     }
     this.degraded = samples === 0;
@@ -551,14 +431,7 @@ export class TraceCache {
     this.cachedCssHeight = cssHeight;
     this.cachedPixelWidth = view.pixelWidth;
     this.cachedPixelHeight = view.pixelHeight;
-    this.renderSeqRange(
-      renderer,
-      traceLinesScene,
-      this.renderTarget,
-      this.bakeStart,
-      this.bakedEnd,
-      true,
-    );
+    this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, this.bakeStart, this.bakedEnd, true);
 
     this.quad.position.set(view.centerX, view.centerY, 0);
     this.quad.scale.set(halfWidth * 2, halfHeight * 2, 1);

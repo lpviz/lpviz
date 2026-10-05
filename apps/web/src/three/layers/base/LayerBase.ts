@@ -40,8 +40,7 @@ export abstract class LayerBase implements Layer {
   // scale.z (the 2D ortho camera ignores z) so neither rebuilds geometry. Layers
   // whose z follows the view opt in by calling this from everyFrame.
   protected applyZScale(ctx: SceneContext): void {
-    this.object3D.scale.z =
-      (ctx.getState().zScale / 100) * ctx.getSnapshot().transitionZMultiplier;
+    this.object3D.scale.z = (ctx.getState().zScale / 100) * ctx.getSnapshot().transitionZMultiplier;
   }
 
   abstract dispose(): void;

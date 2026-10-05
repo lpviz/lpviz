@@ -69,10 +69,7 @@ export class SolverStartLayer extends LayerBase {
     }
     const first = flatPointXYZ(raw.iteratePath, 0, raw.iterateObjectiveVector);
     this.object3D.geometry.dispose();
-    this.object3D.geometry.setAttribute(
-      "position",
-      new BufferAttribute(Float32Array.of(point.x, point.y, first?.[2] ?? 0), 3),
-    );
+    this.object3D.geometry.setAttribute("position", new BufferAttribute(Float32Array.of(point.x, point.y, first?.[2] ?? 0), 3));
     this.object3D.visible = true;
   }
 

@@ -8,11 +8,7 @@ import { mountProblemGallery } from "@/ui/canvas/mountProblemGallery";
 import { mountReplayDurationOverlay } from "@/ui/canvas/mountReplayDurationOverlay";
 import { el } from "@/ui/dom";
 
-export function mountCanvasStage(
-  parent: HTMLElement,
-  ctx: AppContext,
-  onResizeStart: (event: PointerEvent) => void,
-) {
+export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeStart: (event: PointerEvent) => void) {
   const main = el("main", { className: "canvas-stage" });
   const viewport = el("div", { className: "canvas-stage__viewport" });
   main.append(viewport);
@@ -39,13 +35,10 @@ export function mountCanvasStage(
             saveHistory: ctx.services.history.save,
             sendPolytope: ctx.services.polytope.send,
             handleUndoRedo: ctx.services.history.handleUndoRedo,
-            onSolverStartMoved: () =>
-              ctx.actions.recomputeIfModeActive(getState().solverMode),
+            onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
             showReplayDuration: replayDuration.show,
           });
-          ctx.services.viewport.syncViewportLayout(
-            ctx.getViewportSidebarWidth(),
-          );
+          ctx.services.viewport.syncViewportLayout(ctx.getViewportSidebarWidth());
           runtime.draw();
         })
         .catch((e) => console.error("Failed to initialize viewport", e));
@@ -55,8 +48,7 @@ export function mountCanvasStage(
   const gallery = mountProblemGallery(main, ctx);
   const zoom = el("div", { id: "zoomControls" });
   const home = el("button", { attrs: { title: "Reset Zoom (Home)" } });
-  home.innerHTML =
-    '<svg width="25" height="25" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>';
+  home.innerHTML = '<svg width="25" height="25" viewBox="0 0 24 24"><path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" /></svg>';
   home.addEventListener("click", () => ctx.actions.resetView());
   const fit = el("button", { attrs: { title: "Zoom" } });
   fit.innerHTML =
@@ -94,14 +86,8 @@ export function mountCanvasStage(
     },
   }) as HTMLInputElement;
   const zv = el("div", { id: "zScaleValue" });
-  zs.addEventListener("input", () =>
-    ctx.actions.setZScale(parseFloat(zs.value)),
-  );
-  zc.append(
-    el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }),
-    zs,
-    zv,
-  );
+  zs.addEventListener("input", () => ctx.actions.setZScale(parseFloat(zs.value)));
+  zc.append(el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }), zs, zv);
   zoom.append(home, fit, reset, toggle3d, share, zc);
   main.append(zoom);
   const help = mountHelpButton(main);

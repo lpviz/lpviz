@@ -8,15 +8,9 @@ import type { ViewportRenderSnapshot } from "./types";
 // grid (rounded to integer world units so sub-pixel pans don't thrash it); zoom
 // or resize also moves the constant-screen-size objective head; a mode switch or
 // a transition-z change repaints everything affected.
-const getGridPanKey = (snapshot: ViewportRenderSnapshot): string =>
-  snapshot.mode === "2d"
-    ? `${Math.round(snapshot.target.x)}:${Math.round(snapshot.target.y)}`
-    : "";
+const getGridPanKey = (snapshot: ViewportRenderSnapshot): string => (snapshot.mode === "2d" ? `${Math.round(snapshot.target.x)}:${Math.round(snapshot.target.y)}` : "");
 
-export function getSnapshotViewportDirtyFlags(
-  prev: ViewportRenderSnapshot,
-  next: ViewportRenderSnapshot,
-): ViewportDirtyFlags {
+export function getSnapshotViewportDirtyFlags(prev: ViewportRenderSnapshot, next: ViewportRenderSnapshot): ViewportDirtyFlags {
   if (prev.mode !== next.mode) {
     return ALL_VIEWPORT_DIRTY;
   }

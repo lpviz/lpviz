@@ -1,14 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  VRep,
-  centroid,
-  classifyRegion,
-  expandDegenerateBounds,
-  hasOpenBoundaryClosure,
-  isConvexChain,
-  isConvexPolygon,
-  verticesFromLines,
-} from "../src/geometry";
+import { VRep, centroid, classifyRegion, expandDegenerateBounds, hasOpenBoundaryClosure, isConvexChain, isConvexPolygon, verticesFromLines } from "../src/geometry";
 import type { Lines, Vertices } from "../src/types";
 
 describe("VRep.isConvex", () => {
@@ -162,9 +153,7 @@ describe("verticesFromLines", () => {
     ];
     const verts = verticesFromLines(third);
     expect(verts.length).toBe(3);
-    const hasExact = verts.some(
-      ([x, y]) => Math.abs(x - 0) < 1e-9 && Math.abs(y - 1) < 1e-9,
-    );
+    const hasExact = verts.some(([x, y]) => Math.abs(x - 0) < 1e-9 && Math.abs(y - 1) < 1e-9);
     expect(hasExact).toBe(true);
   });
 
@@ -179,18 +168,14 @@ describe("verticesFromLines", () => {
     const verts = verticesFromLines(sliver);
     expect(verts.length).toBe(4);
     const center = centroid(verts);
-    const strictlyFeasible = sliver.every(
-      ([A, B, C]) => A * center[0]! + B * center[1]! < C,
-    );
+    const strictlyFeasible = sliver.every(([A, B, C]) => A * center[0]! + B * center[1]! < C);
     expect(strictlyFeasible).toBe(true);
   });
 });
 
 describe("classifyRegion", () => {
   test("classifies a closed square as bounded", () => {
-    expect(classifyRegion(SQUARE_LINES, verticesFromLines(SQUARE_LINES), true)).toBe(
-      "bounded",
-    );
+    expect(classifyRegion(SQUARE_LINES, verticesFromLines(SQUARE_LINES), true)).toBe("bounded");
   });
 
   test("does not call a receding region with 3 vertices bounded", () => {
@@ -202,9 +187,7 @@ describe("classifyRegion", () => {
       [-s, -s, -s],
       [0, 1, 2],
     ];
-    expect(classifyRegion(open, verticesFromLines(open), true)).toBe(
-      "unbounded",
-    );
+    expect(classifyRegion(open, verticesFromLines(open), true)).toBe("unbounded");
   });
 });
 

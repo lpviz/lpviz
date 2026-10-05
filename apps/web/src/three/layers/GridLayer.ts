@@ -1,11 +1,4 @@
-import {
-  Color,
-  DoubleSide,
-  GLSL3,
-  Mesh,
-  PlaneGeometry,
-  ShaderMaterial,
-} from "three";
+import { Color, DoubleSide, GLSL3, Mesh, PlaneGeometry, ShaderMaterial } from "three";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import type { Layer } from "../Layer";
 import type { SceneContext } from "../SceneContext";
@@ -77,10 +70,7 @@ export class GridLayer implements Layer {
       depthWrite: false,
       side: DoubleSide,
     });
-    const mesh = new Mesh(
-      new PlaneGeometry(GRID_HALF_EXTENT * 2, GRID_HALF_EXTENT * 2),
-      this.material,
-    );
+    const mesh = new Mesh(new PlaneGeometry(GRID_HALF_EXTENT * 2, GRID_HALF_EXTENT * 2), this.material);
     mesh.renderOrder = RENDER_ORDER.grid;
     mesh.frustumCulled = false;
     this.object3D = mesh;
@@ -88,10 +78,7 @@ export class GridLayer implements Layer {
 
   update(ctx: SceneContext): void {
     const target = ctx.getSnapshot().target;
-    if (
-      Math.abs(target.x - this.centerX) > RECENTER_THRESHOLD ||
-      Math.abs(target.y - this.centerY) > RECENTER_THRESHOLD
-    ) {
+    if (Math.abs(target.x - this.centerX) > RECENTER_THRESHOLD || Math.abs(target.y - this.centerY) > RECENTER_THRESHOLD) {
       this.centerX = Math.round(target.x);
       this.centerY = Math.round(target.y);
       this.object3D.position.set(this.centerX, this.centerY, 0);

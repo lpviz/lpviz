@@ -10,12 +10,7 @@ function st(o: Partial<State>): State {
 
 describe("deriveViewportDirty (field -> layers)", () => {
   test("polytope-group fields repaint polytope + constraints + objective", () => {
-    for (const key of [
-      "vertices",
-      "polytope",
-      "completionMode",
-      "interiorPoint",
-    ] as const) {
+    for (const key of ["vertices", "polytope", "completionMode", "interiorPoint"] as const) {
       expect(deriveViewportDirty(st({}), [key])).toEqual({
         polytope: true,
         constraints: true,
@@ -25,15 +20,7 @@ describe("deriveViewportDirty (field -> layers)", () => {
   });
 
   test("iterate fields repaint only the iterate pass", () => {
-    for (const key of [
-      "iteratePath",
-      "iterateEllipsoids",
-      "iteratePhases",
-      "iterateRestartIndices",
-      "iterateObjectiveVector",
-      "highlightIteratePathIndex",
-      "replayActive",
-    ] as const) {
+    for (const key of ["iteratePath", "iterateEllipsoids", "iteratePhases", "iterateRestartIndices", "iterateObjectiveVector", "highlightIteratePathIndex", "replayActive"] as const) {
       expect(deriveViewportDirty(st({}), [key])).toEqual({ iterate: true });
     }
   });
@@ -57,12 +44,8 @@ describe("deriveViewportDirty (field -> layers)", () => {
     expect(deriveViewportDirty(st({}), ["objectiveVector"])).toEqual({
       objective: true,
     });
-    expect(
-      deriveViewportDirty(st({ is3DMode: true }), ["objectiveVector"]),
-    ).toEqual({ polytope: true, objective: true });
-    expect(
-      deriveViewportDirty(st({ isTransitioning3D: true }), ["currentObjective"]),
-    ).toEqual({ polytope: true, objective: true });
+    expect(deriveViewportDirty(st({ is3DMode: true }), ["objectiveVector"])).toEqual({ polytope: true, objective: true });
+    expect(deriveViewportDirty(st({ isTransitioning3D: true }), ["currentObjective"])).toEqual({ polytope: true, objective: true });
   });
 
   test("zScale repaints every world-anchored layer", () => {
@@ -75,9 +58,7 @@ describe("deriveViewportDirty (field -> layers)", () => {
   });
 
   test("union of multiple changed fields", () => {
-    expect(
-      deriveViewportDirty(st({}), ["iteratePath", "traceBuffer"]),
-    ).toEqual({ iterate: true, trace: true });
+    expect(deriveViewportDirty(st({}), ["iteratePath", "traceBuffer"])).toEqual({ iterate: true, trace: true });
   });
 
   test("pure UI / solver-config fields repaint nothing", () => {

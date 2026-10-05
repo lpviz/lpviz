@@ -1,11 +1,4 @@
-import {
-  Euler,
-  PerspectiveCamera,
-  Plane,
-  Raycaster,
-  Vector2,
-  Vector3,
-} from "three";
+import { Euler, PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
@@ -59,17 +52,12 @@ export const TRANSITION_VIEWPORT_DIRTY_FLAGS: ViewportDirtyFlags = {
 };
 
 const ZERO_VIEW_ANGLE: PointXYZ = { x: 0, y: 0, z: 0 };
-const lerp = (start: number, end: number, t: number) =>
-  start + (end - start) * t;
-const getViewportSize = (
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-) => ({
+const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
+const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
   width: rect.width || snapshot.width || 1,
   height: rect.height || snapshot.height || 1,
 });
-const getUnitsPerPixel = (gridSpacing: number, scaleFactor: number) =>
-  1 / (gridSpacing * clampScaleFactor2D(scaleFactor));
+const getUnitsPerPixel = (gridSpacing: number, scaleFactor: number) => 1 / (gridSpacing * clampScaleFactor2D(scaleFactor));
 
 const transitionEuler = new Euler();
 const transitionDirection = new Vector3();
@@ -84,20 +72,12 @@ const projectionRaycaster = new Raycaster();
 const projectionPointerNdc = new Vector2();
 const projectionPointerWorld = new Vector3();
 
-export function getPerspectiveDistanceForUnitsPerPixel(
-  snapshot: ViewportRenderSnapshot,
-  unitsPerPixel: number,
-  height = snapshot.height || 1,
-) {
+export function getPerspectiveDistanceForUnitsPerPixel(snapshot: ViewportRenderSnapshot, unitsPerPixel: number, height = snapshot.height || 1) {
   const fov = snapshot.perspective.fov * (Math.PI / 180);
   return Math.max(10, (height * unitsPerPixel) / (2 * Math.tan(fov / 2)));
 }
 
-export function getScaleFactorFromPerspectiveDistance(
-  snapshot: ViewportRenderSnapshot,
-  distance: number,
-  height = snapshot.height || 1,
-) {
+export function getScaleFactorFromPerspectiveDistance(snapshot: ViewportRenderSnapshot, distance: number, height = snapshot.height || 1) {
   const fov = snapshot.perspective.fov * (Math.PI / 180);
   const safeDistance = Math.max(10, distance);
   const viewportHeight = 2 * Math.tan(fov / 2) * safeDistance;
@@ -105,15 +85,7 @@ export function getScaleFactorFromPerspectiveDistance(
   return clampScaleFactor2D(1 / (unitsPerPixel * snapshot.gridSpacing));
 }
 
-export function buildViewportTransitionPlan({
-  snapshot,
-  targetMode,
-  viewAngle,
-}: {
-  snapshot: ViewportRenderSnapshot;
-  targetMode: boolean;
-  viewAngle: PointXYZ;
-}): ViewportTransitionPlan {
+export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }: { snapshot: ViewportRenderSnapshot; targetMode: boolean; viewAngle: PointXYZ }): ViewportTransitionPlan {
   const direction = targetMode ? "to3d" : "to2d";
   const duration = targetMode ? 400 : 500;
   const startTarget = {
@@ -133,18 +105,10 @@ export function buildViewportTransitionPlan({
   projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
   const snapshotDistance = transitionPosition.distanceTo(projectionTarget);
   const perspectiveDistance = targetMode
-    ? getPerspectiveDistanceForUnitsPerPixel(
-        snapshot,
-        snapshot.unitsPerPixel,
-        snapshot.height,
-      )
+    ? getPerspectiveDistanceForUnitsPerPixel(snapshot, snapshot.unitsPerPixel, snapshot.height)
     : Number.isFinite(snapshotDistance) && snapshotDistance > 0
       ? Math.max(10, snapshotDistance)
-      : getPerspectiveDistanceForUnitsPerPixel(
-          snapshot,
-          snapshot.unitsPerPixel,
-          snapshot.height,
-        );
+      : getPerspectiveDistanceForUnitsPerPixel(snapshot, snapshot.unitsPerPixel, snapshot.height);
 
   return {
     baseSnapshot: snapshot,
@@ -158,10 +122,7 @@ export function buildViewportTransitionPlan({
   };
 }
 
-export function interpolateTransitionViewAngle(
-  plan: ViewportTransitionPlan,
-  progress: number,
-): PointXYZ {
+export function interpolateTransitionViewAngle(plan: ViewportTransitionPlan, progress: number): PointXYZ {
   const clampedProgress = Math.max(0, Math.min(1, progress));
   return {
     x: lerp(plan.startAngles.x, plan.endAngles.x, clampedProgress),
@@ -170,11 +131,7 @@ export function interpolateTransitionViewAngle(
   };
 }
 
-export function buildTransitionStartState(
-  targetMode: boolean,
-  startTime: number,
-  plan: ViewportTransitionPlan,
-): Partial<ViewportTransitionStatePatch> {
+export function buildTransitionStartState(targetMode: boolean, startTime: number, plan: ViewportTransitionPlan): Partial<ViewportTransitionStatePatch> {
   return {
     isTransitioning3D: true,
     transitionStartTime: startTime,
@@ -187,25 +144,14 @@ export function buildTransitionStartState(
   };
 }
 
-export function buildTransitionProgressState(
-  plan: ViewportTransitionPlan,
-  progress: number,
-): Pick<ViewportTransitionStatePatch, "viewAngle" | "transitionProgress"> {
+export function buildTransitionProgressState(plan: ViewportTransitionPlan, progress: number): Pick<ViewportTransitionStatePatch, "viewAngle" | "transitionProgress"> {
   return {
     viewAngle: interpolateTransitionViewAngle(plan, progress),
     transitionProgress: Math.max(0, Math.min(1, progress)),
   };
 }
 
-export function buildTransitionCompleteState(
-  plan: ViewportTransitionPlan,
-): Pick<
-  ViewportTransitionStatePatch,
-  | "isTransitioning3D"
-  | "transitionDirection"
-  | "transitionProgress"
-  | "viewAngle"
-> {
+export function buildTransitionCompleteState(plan: ViewportTransitionPlan): Pick<ViewportTransitionStatePatch, "isTransitioning3D" | "transitionDirection" | "transitionProgress" | "viewAngle"> {
   return {
     isTransitioning3D: false,
     transitionDirection: null,
@@ -214,16 +160,10 @@ export function buildTransitionCompleteState(
   };
 }
 
-export function buildPerspectivePoseFromViewAngle(
-  viewAngle: PointXYZ,
-  distance: number,
-  target: PointXYZ,
-): ViewportPerspectivePose {
+export function buildPerspectivePoseFromViewAngle(viewAngle: PointXYZ, distance: number, target: PointXYZ): ViewportPerspectivePose {
   transitionEuler.set(-viewAngle.x, -viewAngle.y, -viewAngle.z, "XYZ");
   transitionDirection.set(0, 0, 1).applyEuler(transitionEuler).normalize();
-  transitionPosition
-    .set(target.x, target.y, target.z)
-    .add(transitionDirection.multiplyScalar(Math.max(10, distance)));
+  transitionPosition.set(target.x, target.y, target.z).add(transitionDirection.multiplyScalar(Math.max(10, distance)));
   transitionUp.set(0, 1, 0).applyEuler(transitionEuler).normalize();
 
   return {
@@ -245,22 +185,11 @@ export function buildPerspectivePoseFromViewAngle(
   };
 }
 
-export function buildViewportTransitionFrame(
-  plan: ViewportTransitionPlan,
-  progress: number,
-  rect: ViewportRect,
-): ViewportTransitionFrame {
+export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progress: number, rect: ViewportRect): ViewportTransitionFrame {
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const { width, height } = getViewportSize(plan.baseSnapshot, rect);
-  const scaleFactor = getScaleFactorFromPerspectiveDistance(
-    plan.baseSnapshot,
-    plan.perspectiveDistance,
-    height,
-  );
-  const unitsPerPixel = getUnitsPerPixel(
-    plan.baseSnapshot.gridSpacing,
-    scaleFactor,
-  );
+  const scaleFactor = getScaleFactorFromPerspectiveDistance(plan.baseSnapshot, plan.perspectiveDistance, height);
+  const unitsPerPixel = getUnitsPerPixel(plan.baseSnapshot.gridSpacing, scaleFactor);
   const viewAngle = interpolateTransitionViewAngle(plan, clampedProgress);
   const target =
     plan.direction === "to2d"
@@ -270,11 +199,7 @@ export function buildViewportTransitionFrame(
           z: lerp(plan.startTarget.z, plan.endTarget.z, clampedProgress),
         }
       : { ...plan.startTarget };
-  const pose = buildPerspectivePoseFromViewAngle(
-    viewAngle,
-    plan.perspectiveDistance,
-    target,
-  );
+  const pose = buildPerspectivePoseFromViewAngle(viewAngle, plan.perspectiveDistance, target);
 
   return {
     viewAngle,
@@ -287,8 +212,7 @@ export function buildViewportTransitionFrame(
       height,
       scaleFactor,
       unitsPerPixel,
-      transitionZMultiplier:
-        plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress,
+      transitionZMultiplier: plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress,
       target,
       orthographic: {
         left: -(width * unitsPerPixel) / 2,
@@ -311,10 +235,7 @@ export function buildViewportTransitionFrame(
   };
 }
 
-export function getViewportVisibleCenterCanvasPoint(
-  rect: ViewportRect,
-  sidebarWidth: number,
-): PointXY {
+export function getViewportVisibleCenterCanvasPoint(rect: ViewportRect, sidebarWidth: number): PointXY {
   const width = rect.width || 1;
   const height = rect.height || 1;
   return {
@@ -323,12 +244,7 @@ export function getViewportVisibleCenterCanvasPoint(
   };
 }
 
-export function projectCanvasPointToWorldPlane(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  point: PointXY,
-  z = 0,
-): PointXY | null {
+export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, z = 0): PointXY | null {
   const { width, height } = getViewportSize(snapshot, rect);
   if (width === 0 || height === 0) {
     return null;
@@ -338,30 +254,16 @@ export function projectCanvasPointToWorldPlane(
   projectionCamera.aspect = snapshot.perspective.aspect;
   projectionCamera.near = snapshot.perspective.near;
   projectionCamera.far = snapshot.perspective.far;
-  projectionCamera.position.set(
-    snapshot.perspective.position.x,
-    snapshot.perspective.position.y,
-    snapshot.perspective.position.z,
-  );
-  projectionCamera.up.set(
-    snapshot.perspective.up.x,
-    snapshot.perspective.up.y,
-    snapshot.perspective.up.z,
-  );
+  projectionCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
+  projectionCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
   projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
   projectionCamera.lookAt(projectionTarget);
   projectionCamera.updateMatrixWorld();
   projectionCamera.updateProjectionMatrix();
 
-  projectionPointerNdc.set(
-    (point.x / width) * 2 - 1,
-    -((point.y / height) * 2 - 1),
-  );
+  projectionPointerNdc.set((point.x / width) * 2 - 1, -((point.y / height) * 2 - 1));
   projectionRaycaster.setFromCamera(projectionPointerNdc, projectionCamera);
-  projectionPlane.setFromNormalAndCoplanarPoint(
-    projectionPlaneNormal,
-    projectionPlanePoint.set(0, 0, z),
-  );
+  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal, projectionPlanePoint.set(0, 0, z));
 
   // Guard: near-parallel ray produces an intersection point billions of units
   // away. Check the denominator (ray · plane.normal) before intersecting.
@@ -370,25 +272,14 @@ export function projectCanvasPointToWorldPlane(
     return null;
   }
 
-  const hit = projectionRaycaster.ray.intersectPlane(
-    projectionPlane,
-    projectionPointerWorld,
-  );
-  if (
-    !hit ||
-    !Number.isFinite(projectionPointerWorld.x) ||
-    !Number.isFinite(projectionPointerWorld.y)
-  ) {
+  const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+  if (!hit || !Number.isFinite(projectionPointerWorld.x) || !Number.isFinite(projectionPointerWorld.y)) {
     return null;
   }
   return { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
 }
 
-export function buildViewport2DStateFromVisibleCenter(
-  visibleCenter: PointXY,
-  scaleFactor: number,
-  gridSpacing: number,
-): Viewport2DState {
+export function buildViewport2DStateFromVisibleCenter(visibleCenter: PointXY, scaleFactor: number, gridSpacing: number): Viewport2DState {
   return {
     gridSpacing,
     scaleFactor: clampScaleFactor2D(scaleFactor),
@@ -397,33 +288,15 @@ export function buildViewport2DStateFromVisibleCenter(
   };
 }
 
-export function buildViewport2DStateFromTransitionFrame(
-  plan: ViewportTransitionPlan,
-  frame: ViewportTransitionFrame,
-  rect: ViewportRect,
-  sidebarWidth: number,
-): Viewport2DState {
-  const visibleCenter = projectCanvasPointToWorldPlane(
-    frame.snapshot,
-    rect,
-    getViewportVisibleCenterCanvasPoint(rect, sidebarWidth),
-    plan.endTarget.z,
-  ) ?? {
+export function buildViewport2DStateFromTransitionFrame(plan: ViewportTransitionPlan, frame: ViewportTransitionFrame, rect: ViewportRect, sidebarWidth: number): Viewport2DState {
+  const visibleCenter = projectCanvasPointToWorldPlane(frame.snapshot, rect, getViewportVisibleCenterCanvasPoint(rect, sidebarWidth), plan.endTarget.z) ?? {
     x: frame.target.x,
     y: frame.target.y,
   };
 
-  return buildViewport2DStateFromVisibleCenter(
-    visibleCenter,
-    frame.snapshot.scaleFactor,
-    frame.snapshot.gridSpacing,
-  );
+  return buildViewport2DStateFromVisibleCenter(visibleCenter, frame.snapshot.scaleFactor, frame.snapshot.gridSpacing);
 }
 
 function projectionPositionFromSnapshot(snapshot: ViewportRenderSnapshot) {
-  transitionPosition.set(
-    snapshot.perspective.position.x,
-    snapshot.perspective.position.y,
-    snapshot.perspective.position.z,
-  );
+  transitionPosition.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
 }

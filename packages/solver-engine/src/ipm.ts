@@ -1,10 +1,4 @@
-import {
-  dot,
-  infinityNorm,
-  linesToDenseAb,
-  matVec,
-  transposedMatVec,
-} from "@lpviz/math/blas";
+import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, VecM, VecN } from "@lpviz/math/types";
 import { formatMilliseconds } from "./time";
@@ -45,16 +39,7 @@ interface IPMSolutionData {
 }
 
 export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
-  const {
-    eps_p,
-    eps_d,
-    eps_opt,
-    maxit,
-    alphaMax,
-    correctorThreshold,
-    verbose,
-    startPoint,
-  } = opts;
+  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, verbose, startPoint } = opts;
 
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
@@ -86,22 +71,8 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
   );
 }
 
-function ipmCore(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  c: Float64Array,
-  opts: IPMOptions,
-) {
-  const {
-    eps_p,
-    eps_d,
-    eps_opt,
-    maxit,
-    alphaMax,
-    correctorThreshold,
-    verbose,
-    startPoint,
-  } = opts;
+function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, opts: IPMOptions) {
+  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, verbose, startPoint } = opts;
   const m = A.rows;
   const n = A.cols;
 
@@ -203,10 +174,7 @@ function ipmCore(
 
     if (!(alphaP >= correctorThreshold && alphaD >= correctorThreshold)) {
       // mu can reach exactly 0 when alphaMax = 1; (0/0)**p would be NaN
-      const sigma =
-        mu > 0
-          ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER))
-          : SIGMA_MIN;
+      const sigma = mu > 0 ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER)) : SIGMA_MIN;
       for (let i = 0; i < m; i++) {
         rC[i] = -(dsAff[i]! * dyAff[i]! - sigma * mu);
       }
@@ -249,11 +217,7 @@ function ipmCore(
 //   [ 0   Y   S ] [dy]   [rC]        (complementarity)
 //
 //   (Aᵀ D A) dx = Aᵀ((rC + y∘rP)/s) − rD,   D = diag(y/s),
-function createNormalEquations(
-  A: { rows: number; cols: number; data: Float64Array },
-  s: Float64Array,
-  y: Float64Array,
-) {
+function createNormalEquations(A: { rows: number; cols: number; data: Float64Array }, s: Float64Array, y: Float64Array) {
   const m = A.rows;
   const n = A.cols;
   const M = new Float64Array(n * n);
@@ -274,14 +238,7 @@ function createNormalEquations(
         }
       }
     },
-    solve(
-      rP: Float64Array,
-      rD: Float64Array,
-      rC: Float64Array,
-      dx: Float64Array,
-      ds: Float64Array,
-      dy: Float64Array,
-    ) {
+    solve(rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array) {
       for (let i = 0; i < m; i++) {
         weighted[i] = (rC[i]! + y[i]! * rP[i]!) / s[i]!;
       }
@@ -308,27 +265,14 @@ function alphaStep(values: Float64Array, delta: Float64Array) {
   return alpha;
 }
 
-function pushIter(
-  d: IPMSolutionData,
-  x: Float64Array,
-  s: Float64Array,
-  y: Float64Array,
-  mu: number,
-) {
+function pushIter(d: IPMSolutionData, x: Float64Array, s: Float64Array, y: Float64Array, mu: number) {
   d.x.push(x.slice());
   d.s.push(s.slice());
   d.y.push(y.slice());
   d.mu.push(mu);
 }
 
-function logIter(
-  d: IPMSolutionData,
-  verbose: boolean,
-  x: Float64Array,
-  mu: number,
-  pObj: number,
-  pRes: number,
-) {
+function logIter(d: IPMSolutionData, verbose: boolean, x: Float64Array, mu: number, pObj: number, pRes: number) {
   const row = {
     kind: "ipm" as const,
     iteration: d.x.length + 1,
@@ -342,13 +286,7 @@ function logIter(
   d.rows.push(row);
 }
 
-function logFinal(
-  d: IPMSolutionData,
-  verbose: boolean,
-  converged: boolean,
-  solveTime: number,
-  failureMessage: string | null,
-) {
+function logFinal(d: IPMSolutionData, verbose: boolean, converged: boolean, solveTime: number, failureMessage: string | null) {
   d.footer = failureMessage
     ? `${failureMessage}\nStopped after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`
     : converged

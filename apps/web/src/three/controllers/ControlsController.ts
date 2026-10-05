@@ -1,27 +1,7 @@
-import {
-  getViewportCameraRefs,
-  subscribeViewportCameraRefs,
-} from "@/features/viewport/runtime/cameraRefs";
-import {
-  getViewport2DControlsConfig,
-  isViewport2DPanActive,
-  startViewport2DPan,
-  stopViewport2DPan,
-  updateViewport2DPan,
-  zoomViewport2DAtCanvasPoint,
-} from "@/features/viewport/runtime/controls2d";
-import {
-  getViewport3DControlsConfig,
-  subscribeViewport3DControlsConfig,
-  type ViewportPerspectivePose,
-} from "@/features/viewport/runtime/controls3d";
-import {
-  Plane,
-  Raycaster,
-  Vector2,
-  Vector3,
-  type PerspectiveCamera,
-} from "three";
+import { getViewportCameraRefs, subscribeViewportCameraRefs } from "@/features/viewport/runtime/cameraRefs";
+import { getViewport2DControlsConfig, isViewport2DPanActive, startViewport2DPan, stopViewport2DPan, updateViewport2DPan, zoomViewport2DAtCanvasPoint } from "@/features/viewport/runtime/controls2d";
+import { getViewport3DControlsConfig, subscribeViewport3DControlsConfig, type ViewportPerspectivePose } from "@/features/viewport/runtime/controls3d";
+import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
@@ -101,25 +81,17 @@ export class ControlsController {
       startScaleFactor: number;
     } | null = null;
 
-    const startPan = (clientX: number, clientY: number) =>
-      startViewport2DPan(clientX, clientY, canvas.getBoundingClientRect());
+    const startPan = (clientX: number, clientY: number) => startViewport2DPan(clientX, clientY, canvas.getBoundingClientRect());
 
     const getTouchCenter = (touches: TouchList) => ({
       x: (touches[0]!.clientX + touches[1]!.clientX) / 2,
       y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
     });
 
-    const getTouchDistance = (touches: TouchList) =>
-      Math.hypot(
-        touches[1]!.clientX - touches[0]!.clientX,
-        touches[1]!.clientY - touches[0]!.clientY,
-      );
+    const getTouchDistance = (touches: TouchList) => Math.hypot(touches[1]!.clientX - touches[0]!.clientX, touches[1]!.clientY - touches[0]!.clientY);
 
     const clearActivePointerPan = () => {
-      if (
-        activePointerPanId !== null &&
-        canvas.hasPointerCapture(activePointerPanId)
-      ) {
+      if (activePointerPanId !== null && canvas.hasPointerCapture(activePointerPanId)) {
         canvas.releasePointerCapture(activePointerPanId);
       }
       activePointerPanId = null;
@@ -149,11 +121,7 @@ export class ControlsController {
       if (distance <= 0) return false;
       const rect = canvas.getBoundingClientRect();
       const center = getTouchCenter(event.touches);
-      const handled = zoomViewport2DAtCanvasPoint(
-        { x: center.x - rect.left, y: center.y - rect.top },
-        rect,
-        activePinch.startScaleFactor * (distance / activePinch.startDistance),
-      );
+      const handled = zoomViewport2DAtCanvasPoint({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
       if (!handled) return false;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -236,22 +204,12 @@ export class ControlsController {
       event.preventDefault();
     };
     const handleWheel = (event: WheelEvent) => {
-      const dominantDelta =
-        Math.abs(event.deltaY) > Math.abs(event.deltaX)
-          ? event.deltaY
-          : event.deltaX;
+      const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
       if (dominantDelta === 0) return;
 
       const rect = canvas.getBoundingClientRect();
       const { state } = getViewport2DControlsConfig();
-      if (
-        !zoomViewport2DAtCanvasPoint(
-          { x: event.clientX - rect.left, y: event.clientY - rect.top },
-          rect,
-          state.scaleFactor *
-            (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR),
-        )
-      ) {
+      if (!zoomViewport2DAtCanvasPoint({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) {
         return;
       }
       event.preventDefault();
@@ -291,13 +249,8 @@ export class ControlsController {
     };
   }
 
-  private setup3DControls(
-    perspectiveCamera: PerspectiveCamera,
-    canvas: HTMLCanvasElement,
-  ): void {
-    const buildPose = (
-      target = this.controlsTarget,
-    ): ViewportPerspectivePose => ({
+  private setup3DControls(perspectiveCamera: PerspectiveCamera, canvas: HTMLCanvasElement): void {
+    const buildPose = (target = this.controlsTarget): ViewportPerspectivePose => ({
       position: {
         x: perspectiveCamera.position.x,
         y: perspectiveCamera.position.y,
@@ -315,8 +268,7 @@ export class ControlsController {
       },
     });
 
-    const canUse3DControls = () =>
-      this.controlsEnabled && !this.applyingSnapshot;
+    const canUse3DControls = () => this.controlsEnabled && !this.applyingSnapshot;
 
     const syncCamera = (target = this.controlsTarget) => {
       perspectiveCamera.lookAt(target);
@@ -346,10 +298,7 @@ export class ControlsController {
     let activeTwoFingerStartCameraDistance = MIN_DISTANCE;
 
     const getOrbitState = () => {
-      const offset = orbitOffset.subVectors(
-        perspectiveCamera.position,
-        this.controlsTarget,
-      );
+      const offset = orbitOffset.subVectors(perspectiveCamera.position, this.controlsTarget);
       const distance = Math.max(MIN_DISTANCE, offset.length());
       return {
         distance,
@@ -359,9 +308,7 @@ export class ControlsController {
     };
 
     const getPanBasis = (distance: number) => {
-      const forward = panForward
-        .subVectors(this.controlsTarget, perspectiveCamera.position)
-        .normalize();
+      const forward = panForward.subVectors(this.controlsTarget, perspectiveCamera.position).normalize();
       const right = panBasisRight.crossVectors(forward, WORLD_UP);
       if (right.lengthSq() < 1e-8) {
         right.copy(FALLBACK_RIGHT);
@@ -370,9 +317,7 @@ export class ControlsController {
       }
       const up = panBasisUp.crossVectors(right, forward).normalize();
       const fov = (perspectiveCamera.fov * Math.PI) / 180;
-      const unitsPerPixel =
-        (2 * Math.tan(fov / 2) * Math.max(MIN_DISTANCE, distance)) /
-        Math.max(1, canvas.clientHeight);
+      const unitsPerPixel = (2 * Math.tan(fov / 2) * Math.max(MIN_DISTANCE, distance)) / Math.max(1, canvas.clientHeight);
       return { right: right.clone(), up: up.clone(), unitsPerPixel };
     };
 
@@ -384,19 +329,11 @@ export class ControlsController {
 
       if (drag.kind === "rotate") {
         const yaw = drag.startYaw - dx * ROTATE_RADIANS_PER_PIXEL;
-        const elevation = Math.max(
-          MIN_ELEVATION,
-          Math.min(
-            MAX_ELEVATION,
-            drag.startElevation + dy * ROTATE_RADIANS_PER_PIXEL,
-          ),
-        );
+        const elevation = Math.max(MIN_ELEVATION, Math.min(MAX_ELEVATION, drag.startElevation + dy * ROTATE_RADIANS_PER_PIXEL));
         const cosElevation = Math.cos(elevation);
         perspectiveCamera.position.set(
-          drag.startTarget.x +
-            drag.startDistance * cosElevation * Math.cos(yaw),
-          drag.startTarget.y +
-            drag.startDistance * cosElevation * Math.sin(yaw),
+          drag.startTarget.x + drag.startDistance * cosElevation * Math.cos(yaw),
+          drag.startTarget.y + drag.startDistance * cosElevation * Math.sin(yaw),
           drag.startTarget.z + drag.startDistance * Math.sin(elevation),
         );
         emitPose(drag.startTarget);
@@ -412,11 +349,7 @@ export class ControlsController {
       emitPose(target);
     };
 
-    const start3DDrag = (
-      kind: Active3DDrag["kind"],
-      clientX: number,
-      clientY: number,
-    ) => {
+    const start3DDrag = (kind: Active3DDrag["kind"], clientX: number, clientY: number) => {
       if (!canUse3DControls()) return;
       const orbit = getOrbitState();
       const panBasis = getPanBasis(orbit.distance);
@@ -442,31 +375,13 @@ export class ControlsController {
       y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
     });
 
-    const getTouchDistance = (touches: TouchList) =>
-      Math.hypot(
-        touches[1]!.clientX - touches[0]!.clientX,
-        touches[1]!.clientY - touches[0]!.clientY,
-      );
+    const getTouchDistance = (touches: TouchList) => Math.hypot(touches[1]!.clientX - touches[0]!.clientX, touches[1]!.clientY - touches[0]!.clientY);
 
     const apply3DZoomDistance = (nextDistance: number) => {
       if (!canUse3DControls()) return;
-      const offset = new Vector3().subVectors(
-        perspectiveCamera.position,
-        this.controlsTarget,
-      );
+      const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
       if (offset.lengthSq() <= 1e-8) return;
-      perspectiveCamera.position
-        .copy(this.controlsTarget)
-        .add(
-          offset
-            .normalize()
-            .multiplyScalar(
-              Math.min(
-                this.controlsMaxDistance,
-                Math.max(MIN_DISTANCE, nextDistance),
-              ),
-            ),
-        );
+      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(Math.min(this.controlsMaxDistance, Math.max(MIN_DISTANCE, nextDistance))));
       emitPose();
     };
 
@@ -480,10 +395,7 @@ export class ControlsController {
     };
 
     const clearActive3DPointer = () => {
-      if (
-        active3DPointerId !== null &&
-        canvas.hasPointerCapture(active3DPointerId)
-      ) {
+      if (active3DPointerId !== null && canvas.hasPointerCapture(active3DPointerId)) {
         canvas.releasePointerCapture(active3DPointerId);
       }
       active3DPointerId = null;
@@ -491,11 +403,7 @@ export class ControlsController {
 
     const handlePointerDown = (event: MouseEvent) => {
       if (event.button !== 0 && event.button !== 2) return;
-      start3DDrag(
-        event.button === 0 ? "pan" : "rotate",
-        event.clientX,
-        event.clientY,
-      );
+      start3DDrag(event.button === 0 ? "pan" : "rotate", event.clientX, event.clientY);
       if (!this.active3DDrag) return;
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -534,10 +442,7 @@ export class ControlsController {
       apply3DMove(center.x, center.y);
       const distance = getTouchDistance(event.touches);
       if (distance > 0 && activeTwoFingerStartDistance > 0) {
-        apply3DZoomDistance(
-          activeTwoFingerStartCameraDistance *
-            (activeTwoFingerStartDistance / distance),
-        );
+        apply3DZoomDistance(activeTwoFingerStartCameraDistance * (activeTwoFingerStartDistance / distance));
       }
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -583,74 +488,33 @@ export class ControlsController {
     const handleWheel3D = (event: WheelEvent) => {
       if (!canUse3DControls()) return;
       if (event.shiftKey) return;
-      const dominantDelta =
-        Math.abs(event.deltaY) > Math.abs(event.deltaX)
-          ? event.deltaY
-          : event.deltaX;
+      const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
       if (dominantDelta === 0) return;
 
-      const offset = new Vector3().subVectors(
-        perspectiveCamera.position,
-        this.controlsTarget,
-      );
+      const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
       const distance = Math.max(MIN_DISTANCE, offset.length());
       const zoomFactor = Math.pow(1.0015, dominantDelta);
-      const nextDistance = Math.min(
-        this.controlsMaxDistance,
-        Math.max(MIN_DISTANCE, distance * zoomFactor),
-      );
+      const nextDistance = Math.min(this.controlsMaxDistance, Math.max(MIN_DISTANCE, distance * zoomFactor));
       if (!Number.isFinite(nextDistance)) return;
 
       const rect = canvas.getBoundingClientRect();
-      const hasCursorAnchor =
-        rect.width > 0 &&
-        rect.height > 0 &&
-        this.wheelPlaneNormal
-          .subVectors(this.controlsTarget, perspectiveCamera.position)
-          .normalize()
-          .lengthSq() > 0;
+      const hasCursorAnchor = rect.width > 0 && rect.height > 0 && this.wheelPlaneNormal.subVectors(this.controlsTarget, perspectiveCamera.position).normalize().lengthSq() > 0;
       let anchoredZoom = false;
 
       if (hasCursorAnchor) {
-        this.wheelPointerNdc.set(
-          ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          -(((event.clientY - rect.top) / rect.height) * 2 - 1),
-        );
-        this.wheelPlane.setFromNormalAndCoplanarPoint(
-          this.wheelPlaneNormal,
-          this.controlsTarget,
-        );
+        this.wheelPointerNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -(((event.clientY - rect.top) / rect.height) * 2 - 1));
+        this.wheelPlane.setFromNormalAndCoplanarPoint(this.wheelPlaneNormal, this.controlsTarget);
         perspectiveCamera.updateMatrixWorld();
-        this.wheelRaycaster.setFromCamera(
-          this.wheelPointerNdc,
-          perspectiveCamera,
-        );
-        anchoredZoom =
-          this.wheelRaycaster.ray.intersectPlane(
-            this.wheelPlane,
-            this.wheelAnchorBefore,
-          ) !== null;
+        this.wheelRaycaster.setFromCamera(this.wheelPointerNdc, perspectiveCamera);
+        anchoredZoom = this.wheelRaycaster.ray.intersectPlane(this.wheelPlane, this.wheelAnchorBefore) !== null;
       }
 
-      perspectiveCamera.position
-        .copy(this.controlsTarget)
-        .add(offset.normalize().multiplyScalar(nextDistance));
+      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(nextDistance));
       if (anchoredZoom) {
         perspectiveCamera.updateMatrixWorld();
-        this.wheelRaycaster.setFromCamera(
-          this.wheelPointerNdc,
-          perspectiveCamera,
-        );
-        if (
-          this.wheelRaycaster.ray.intersectPlane(
-            this.wheelPlane,
-            this.wheelAnchorAfter,
-          )
-        ) {
-          this.wheelDelta.subVectors(
-            this.wheelAnchorBefore,
-            this.wheelAnchorAfter,
-          );
+        this.wheelRaycaster.setFromCamera(this.wheelPointerNdc, perspectiveCamera);
+        if (this.wheelRaycaster.ray.intersectPlane(this.wheelPlane, this.wheelAnchorAfter)) {
+          this.wheelDelta.subVectors(this.wheelAnchorBefore, this.wheelAnchorAfter);
           perspectiveCamera.position.add(this.wheelDelta);
           this.controlsTarget.add(this.wheelDelta);
         }
@@ -717,8 +581,7 @@ export class ControlsController {
     const perspectiveCamera = this.perspectiveCamera;
     if (!perspectiveCamera) return;
 
-    this.controlsEnabled =
-      this.controlsConfig.enabled && !this.controlsConfig.blocked;
+    this.controlsEnabled = this.controlsConfig.enabled && !this.controlsConfig.blocked;
     this.controlsMaxDistance = this.controlsConfig.maxDistance;
 
     if (this.syncToken === this.controlsConfig.syncToken) {
@@ -733,21 +596,9 @@ export class ControlsController {
     perspectiveCamera.aspect = snapshot.perspective.aspect;
     perspectiveCamera.near = snapshot.perspective.near;
     perspectiveCamera.far = snapshot.perspective.far;
-    perspectiveCamera.position.set(
-      snapshot.perspective.position.x,
-      snapshot.perspective.position.y,
-      snapshot.perspective.position.z,
-    );
-    perspectiveCamera.up.set(
-      snapshot.perspective.up.x,
-      snapshot.perspective.up.y,
-      snapshot.perspective.up.z,
-    );
-    this.controlsTarget.set(
-      snapshot.target.x,
-      snapshot.target.y,
-      snapshot.target.z,
-    );
+    perspectiveCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
+    perspectiveCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
+    this.controlsTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
     perspectiveCamera.lookAt(this.controlsTarget);
     perspectiveCamera.updateProjectionMatrix();
     perspectiveCamera.updateMatrixWorld();

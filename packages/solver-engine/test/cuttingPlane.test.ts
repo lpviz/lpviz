@@ -56,29 +56,21 @@ describe("cuttingPlane", () => {
       const count = 3 + Math.floor(rand() * 5);
       const cx = rand() * 12 - 6;
       const cy = rand() * 12 - 6;
-      const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort(
-        (a, b) => a - b,
-      );
+      const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
       if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.3)) continue;
       const R = 1 + rand() * 6;
-      const hull = angles.map(
-        (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
-      );
+      const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
       const lines = polygonLines(hull);
       const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(objective[0]!) + Math.abs(objective[1]!) < 0.2) continue;
-      const expected = Math.max(
-        ...hull.map((v) => objective[0]! * v[0] + objective[1]! * v[1]),
-      );
+      const expected = Math.max(...hull.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
       runs++;
       for (const queryPoint of QUERY_POINTS) {
         const r = cuttingPlane(hull, lines, objective, opts(queryPoint));
         const last = r.iterations[r.iterations.length - 1]!;
         const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
         expect(got).toBeLessThanOrEqual(expected + 1e-7);
-        expect(expected - got).toBeLessThanOrEqual(
-          1e-6 * (1 + Math.abs(expected)) + 1e-7,
-        );
+        expect(expected - got).toBeLessThanOrEqual(1e-6 * (1 + Math.abs(expected)) + 1e-7);
       }
     }
     expect(runs).toBeGreaterThan(8);
@@ -86,17 +78,8 @@ describe("cuttingPlane", () => {
 
   test("the returned point is feasible for every query point", () => {
     for (const queryPoint of QUERY_POINTS) {
-      for (const objective of [
-        Float64Array.of(1, 1),
-        Float64Array.of(-2, 0.5),
-        Float64Array.of(0, -1),
-      ]) {
-        const r = cuttingPlane(
-          SQUARE_VERTICES,
-          SQUARE,
-          objective,
-          opts(queryPoint),
-        );
+      for (const objective of [Float64Array.of(1, 1), Float64Array.of(-2, 0.5), Float64Array.of(0, -1)]) {
+        const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
         const last = r.iterations[r.iterations.length - 1]!;
         for (const [a1, a2, rhs] of SQUARE) {
           expect(a1 * last[0]! + a2 * last[1]!).toBeLessThanOrEqual(rhs + 1e-7);
@@ -116,34 +99,20 @@ describe("cuttingPlane", () => {
       verbose: false,
     });
     for (const queryPoint of QUERY_POINTS) {
-      const r = cuttingPlane(
-        SQUARE_VERTICES,
-        SQUARE,
-        objective,
-        opts(queryPoint),
-      );
+      const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       expect(r.iterations.length).toBeLessThan(reference.iterations.length / 2);
     }
   });
 
   test("rho is a genuine bound: it never understates the true gap", () => {
     const objective = Float64Array.of(1, 1);
-    const expected = Math.max(
-      ...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]),
-    );
+    const expected = Math.max(...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
     for (const queryPoint of QUERY_POINTS) {
-      const r = cuttingPlane(
-        SQUARE_VERTICES,
-        SQUARE,
-        objective,
-        opts(queryPoint),
-      );
+      const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       // objective at the query point plus rho upper-bounds the optimum at every
       // iteration, which is what makes the stopping gap a certificate
       for (let i = 0; i < r.rows.length; i++) {
-        expect(r.rows[i]!.objective + r.rho[i]!).toBeGreaterThanOrEqual(
-          expected - 1e-6,
-        );
+        expect(r.rows[i]!.objective + r.rho[i]!).toBeGreaterThanOrEqual(expected - 1e-6);
       }
       expect(r.rho[r.rho.length - 1]!).toBeLessThan(r.rho[0]!);
     }
@@ -159,12 +128,7 @@ describe("cuttingPlane", () => {
       for (let k = 0; k < 8; k++) {
         const angle = (k / 8) * 2 * Math.PI;
         const objective = Float64Array.of(Math.cos(angle), Math.sin(angle));
-        const r = cuttingPlane(
-          SQUARE_VERTICES,
-          SQUARE,
-          objective,
-          opts(queryPoint),
-        );
+        const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
         for (let i = 1; i < r.rows.length - 1; i++) {
           const previous = r.rows[i - 1]!.objective + r.rho[i - 1]!;
           const current = r.rows[i]!.objective + r.rho[i]!;
@@ -180,12 +144,7 @@ describe("cuttingPlane", () => {
     // cuts that define it have been discovered
     const objective = Float64Array.of(1, 1);
     for (const queryPoint of QUERY_POINTS) {
-      const r = cuttingPlane(
-        SQUARE_VERTICES,
-        SQUARE,
-        objective,
-        opts(queryPoint),
-      );
+      const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       for (let i = 0; i < r.iterations.length; i++) {
         const p11 = r.ellipsoids[i * 5 + 2]!;
         const p12 = r.ellipsoids[i * 5 + 3]!;
@@ -211,9 +170,7 @@ describe("cuttingPlane", () => {
     let h11 = 0;
     let h12 = 0;
     let h22 = 0;
-    const slacks = rows.map(
-      (row) => row[2]! - row[0]! * x[0]! - row[1]! * x[1]!,
-    );
+    const slacks = rows.map((row) => row[2]! - row[0]! * x[0]! - row[1]! * x[1]!);
     rows.forEach((row, i) => {
       const w = 1 / (slacks[i]! * slacks[i]!);
       h11 += row[0]! * row[0]! * w;
@@ -224,10 +181,7 @@ describe("cuttingPlane", () => {
     const inv = { a11: h22 / det, a12: -h12 / det, a22: h11 / det };
     let total = 0;
     rows.forEach((row, i) => {
-      const quad =
-        inv.a11 * row[0]! * row[0]! +
-        2 * inv.a12 * row[0]! * row[1]! +
-        inv.a22 * row[1]! * row[1]!;
+      const quad = inv.a11 * row[0]! * row[0]! + 2 * inv.a12 * row[0]! * row[1]! + inv.a22 * row[1]! * row[1]!;
       total += quad / (slacks[i]! * slacks[i]!);
     });
     expect(total).toBeCloseTo(2, 10);
@@ -247,12 +201,7 @@ describe("cuttingPlane", () => {
       [1, -1],
     ] as [number, number][];
     for (const queryPoint of QUERY_POINTS) {
-      const r = cuttingPlane(
-        hull,
-        empty,
-        Float64Array.of(1, 1),
-        opts(queryPoint),
-      );
+      const r = cuttingPlane(hull, empty, Float64Array.of(1, 1), opts(queryPoint));
       expect(r.iterations.length).toBeLessThan(500);
       expect(r.footer.startsWith("Converged")).toBe(false);
     }
@@ -273,15 +222,8 @@ describe("cuttingPlane", () => {
     ] as [number, number][];
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
-        const r = cuttingPlane(
-          hull,
-          strip,
-          Float64Array.of(0, 1),
-          opts(queryPoint, { rayShoot }),
-        );
-        expect(r.footer.startsWith("Stopped on the initial box boundary")).toBe(
-          true,
-        );
+        const r = cuttingPlane(hull, strip, Float64Array.of(0, 1), opts(queryPoint, { rayShoot }));
+        expect(r.footer.startsWith("Stopped on the initial box boundary")).toBe(true);
         expect(r.footer).toContain("unbounded");
       }
     }
@@ -307,12 +249,7 @@ describe("cuttingPlane", () => {
     for (const objective of [Float64Array.of(-1, 0), Float64Array.of(-1, 1)]) {
       for (const queryPoint of QUERY_POINTS) {
         for (const rayShoot of [true, false]) {
-          const r = cuttingPlane(
-            WEDGE_CHAIN,
-            WEDGE,
-            objective,
-            opts(queryPoint, { rayShoot }),
-          );
+          const r = cuttingPlane(WEDGE_CHAIN, WEDGE, objective, opts(queryPoint, { rayShoot }));
           expect(r.footer).toContain("unbounded");
         }
       }
@@ -328,12 +265,7 @@ describe("cuttingPlane", () => {
     const objective = Float64Array.of(1, 1);
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
-        const r = cuttingPlane(
-          WEDGE_CHAIN,
-          WEDGE,
-          objective,
-          opts(queryPoint, { rayShoot }),
-        );
+        const r = cuttingPlane(WEDGE_CHAIN, WEDGE, objective, opts(queryPoint, { rayShoot }));
         expect(r.footer).not.toContain("unbounded");
         const last = r.iterations[r.iterations.length - 1]!;
         expect(last[0]! + last[1]!).toBeCloseTo(3, 4);
@@ -343,13 +275,7 @@ describe("cuttingPlane", () => {
 
   test("results are reproducible across repeated solves", () => {
     for (const queryPoint of QUERY_POINTS) {
-      const run = () =>
-        cuttingPlane(
-          SQUARE_VERTICES,
-          SQUARE,
-          Float64Array.of(0.4, 0.9),
-          opts(queryPoint),
-        );
+      const run = () => cuttingPlane(SQUARE_VERTICES, SQUARE, Float64Array.of(0.4, 0.9), opts(queryPoint));
       const first = run();
       for (let i = 0; i < 3; i++) {
         const again = run();

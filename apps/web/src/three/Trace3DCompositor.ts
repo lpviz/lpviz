@@ -1,20 +1,6 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import {
-  Camera,
-  CustomBlending,
-  GLSL3,
-  Material,
-  Mesh,
-  OneFactor,
-  OneMinusSrcAlphaFactor,
-  OrthographicCamera,
-  PlaneGeometry,
-  Scene,
-  ShaderMaterial,
-  WebGLRenderer,
-  WebGLRenderTarget,
-} from "three";
+import { Camera, CustomBlending, GLSL3, Material, Mesh, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
 
 // Motion-time compositor for the trace-lines pass in 3D mode.
@@ -87,12 +73,7 @@ export class Trace3DCompositor {
 
   // Returns the composite quad scene when the pass should go through the
   // offscreen target this frame, or null to render directly.
-  prepare(
-    renderer: WebGLRenderer,
-    camera: Camera,
-    traceLinesScene: Scene,
-    occluderScenes: readonly Scene[],
-  ): Scene | null {
+  prepare(renderer: WebGLRenderer, camera: Camera, traceLinesScene: Scene, occluderScenes: readonly Scene[]): Scene | null {
     const snapshot = getViewportRenderSnapshot();
     const state = getState();
     if (snapshot.mode !== "3d") {
@@ -105,16 +86,12 @@ export class Trace3DCompositor {
     const now = performance.now();
     const t = snapshot.target;
     const viewKey =
-      `${p.position.x},${p.position.y},${p.position.z},` +
-      `${p.up.x},${p.up.y},${p.up.z},${p.fov},${p.aspect},` +
-      `${t.x},${t.y},${t.z},` +
-      `${state.zScale},${snapshot.transitionZMultiplier}`;
+      `${p.position.x},${p.position.y},${p.position.z},` + `${p.up.x},${p.up.y},${p.up.z},${p.fov},${p.aspect},` + `${t.x},${t.y},${t.z},` + `${state.zScale},${snapshot.transitionZMultiplier}`;
     if (viewKey !== this.lastViewKey) {
       this.lastViewChangeAt = now;
       this.lastViewKey = viewKey;
     }
-    const moving =
-      state.isTransitioning3D || now - this.lastViewChangeAt < VIEW_SETTLE_MS;
+    const moving = state.isTransitioning3D || now - this.lastViewChangeAt < VIEW_SETTLE_MS;
     if (!moving) {
       return null;
     }
@@ -129,11 +106,7 @@ export class Trace3DCompositor {
 
     const pixelWidth = Math.max(1, Math.round((snapshot.width || 1) * renderer.getPixelRatio()));
     const pixelHeight = Math.max(1, Math.round((snapshot.height || 1) * renderer.getPixelRatio()));
-    if (
-      !this.renderTarget ||
-      this.renderTarget.width !== pixelWidth ||
-      this.renderTarget.height !== pixelHeight
-    ) {
+    if (!this.renderTarget || this.renderTarget.width !== pixelWidth || this.renderTarget.height !== pixelHeight) {
       this.renderTarget?.dispose();
       this.renderTarget = new WebGLRenderTarget(pixelWidth, pixelHeight, {
         depthBuffer: true,
@@ -161,21 +134,12 @@ export class Trace3DCompositor {
     return this.quadCamera;
   }
 
-  private renderDepthOnly(
-    renderer: WebGLRenderer,
-    scene: Scene,
-    camera: Camera,
-  ): void {
+  private renderDepthOnly(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
     const touched = this.materialScratch;
     touched.length = 0;
     scene.traverse((object) => {
       const material = (object as Mesh).material as Material | undefined;
-      if (
-        material &&
-        !Array.isArray(material) &&
-        material.depthWrite &&
-        material.colorWrite
-      ) {
+      if (material && !Array.isArray(material) && material.depthWrite && material.colorWrite) {
         material.colorWrite = false;
         touched.push(material);
       }

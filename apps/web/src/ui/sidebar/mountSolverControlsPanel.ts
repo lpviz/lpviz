@@ -1,33 +1,15 @@
 import type { AppContext } from "@/app/appContext";
-import {
-  computeDrawingPhase,
-  getState,
-  on,
-  type EllipsoidQueryPoint,
-  type SolverMode,
-  type SolverSettings,
-  type State,
-} from "@/features/core/store";
+import { computeDrawingPhase, getState, on, type EllipsoidQueryPoint, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
-import {
-  ENTERING_RULES,
-  LEAVING_RULES,
-  type EnteringRule,
-  type LeavingRule,
-} from "@lpviz/solver-engine/simplex";
+import { ENTERING_RULES, LEAVING_RULES, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
 
 const MAXIT_LOG_MIN = 0,
   MAXIT_LOG_MAX = 5,
   MAXIT_LOG_STEP = 0.01;
-const maxitToSliderValue = (value: number) =>
-  Math.min(
-    MAXIT_LOG_MAX,
-    Math.max(MAXIT_LOG_MIN, Math.log10(Math.max(1, value))),
-  );
-const sliderValueToMaxit = (value: string) =>
-  Math.max(1, Math.round(10 ** parseFloat(value)));
+const maxitToSliderValue = (value: number) => Math.min(MAXIT_LOG_MAX, Math.max(MAXIT_LOG_MIN, Math.log10(Math.max(1, value))));
+const sliderValueToMaxit = (value: string) => Math.max(1, Math.round(10 ** parseFloat(value)));
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const fmt = (value: number) => NUMBER_FORMAT.format(value);
 
@@ -42,12 +24,8 @@ const LEAVING_RULE_LABELS: Record<LeavingRule, string> = {
   first: "Lowest index",
   last: "Highest index",
 };
-const ENTERING_RULE_OPTIONS = ENTERING_RULES.map(
-  (value) => [value, ENTERING_RULE_LABELS[value]] as const,
-);
-const LEAVING_RULE_OPTIONS = LEAVING_RULES.map(
-  (value) => [value, LEAVING_RULE_LABELS[value]] as const,
-);
+const ENTERING_RULE_OPTIONS = ENTERING_RULES.map((value) => [value, ENTERING_RULE_LABELS[value]] as const);
+const LEAVING_RULE_OPTIONS = LEAVING_RULES.map((value) => [value, LEAVING_RULE_LABELS[value]] as const);
 const QUERY_POINT_OPTIONS = [
   ["ellipsoid", "Ellipsoid"],
   ["chebyshev", "Chebyshev"],
@@ -55,10 +33,7 @@ const QUERY_POINT_OPTIONS = [
   ["volumetric", "Volumetric"],
 ] as const satisfies readonly (readonly [EllipsoidQueryPoint, string])[];
 
-type MaxitSettingKey = Extract<
-  keyof SolverSettings,
-  "maxitIPM" | "maxitPDHG" | "maxitEllipsoid"
->;
+type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG" | "maxitEllipsoid">;
 type SettingsSync = (state: State) => void;
 type SettingField = HTMLInputElement | HTMLSelectElement;
 
@@ -67,13 +42,7 @@ type SolverButtonUiState = {
   disabled: boolean;
 };
 
-function range(
-  id: string,
-  min: string,
-  max: string,
-  step: string,
-  onInput: (v: string) => void,
-) {
+function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
   const i = el("input", {
     attrs: { type: "range", id, min, max, step, autocomplete: "off" },
   });
@@ -87,26 +56,12 @@ function checkbox(id: string, onChange: (v: boolean) => void) {
   i.addEventListener("change", () => onChange(i.checked));
   return i;
 }
-function select<T extends string>(
-  id: string,
-  options: readonly (readonly [T, string])[],
-  onChange: (v: T) => void,
-) {
-  const s = el("select", { attrs: { id, autocomplete: "off" } }, [
-    ...options.map(([value, label]) =>
-      el("option", { attrs: { value }, text: label }),
-    ),
-  ]) as HTMLSelectElement;
+function select<T extends string>(id: string, options: readonly (readonly [T, string])[], onChange: (v: T) => void) {
+  const s = el("select", { attrs: { id, autocomplete: "off" } }, [...options.map(([value, label]) => el("option", { attrs: { value }, text: label }))]) as HTMLSelectElement;
   s.addEventListener("change", () => onChange(s.value as T));
   return s;
 }
-function labeled(
-  text: string,
-  id: string,
-  control: HTMLElement,
-  value?: HTMLElement,
-  includeBreak = false,
-) {
+function labeled(text: string, id: string, control: HTMLElement, value?: HTMLElement, includeBreak = false) {
   const fragment = document.createDocumentFragment();
   const label = el("label", { attrs: { for: id } });
   label.append(text);
@@ -144,25 +99,14 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     if (document.activeElement !== input) input.value = value;
   }
 
-  function renderMaxit(
-    id: string,
-    value: number,
-    key: MaxitSettingKey,
-    mode: SolverMode,
-  ): { element: HTMLElement; sync: (settings: SolverSettings) => void } {
+  function renderMaxit(id: string, value: number, key: MaxitSettingKey, mode: SolverMode): { element: HTMLElement; sync: (settings: SolverSettings) => void } {
     const span = el("span", { text: fmt(value) });
-    const input = range(
-      id,
-      String(MAXIT_LOG_MIN),
-      String(MAXIT_LOG_MAX),
-      String(MAXIT_LOG_STEP),
-      (v) => {
-        const maxit = sliderValueToMaxit(v);
-        span.textContent = fmt(maxit);
-        ctx.actions.updateSolverSetting(key, maxit);
-        ctx.actions.recomputeIfModeActive(mode);
-      },
-    );
+    const input = range(id, String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP), (v) => {
+      const maxit = sliderValueToMaxit(v);
+      span.textContent = fmt(maxit);
+      ctx.actions.updateSolverSetting(key, maxit);
+      ctx.actions.recomputeIfModeActive(mode);
+    });
     input.classList.add("log-slider");
     input.value = String(maxitToSliderValue(value));
     const wrap = el("div", { className: "log-slider-control" });
@@ -174,18 +118,14 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     wrap.append(
       label,
       input,
-      el(
-        "div",
-        { className: "log-slider-scale", attrs: { "aria-hidden": "true" } },
-        [
-          el("span", { text: "1" }),
-          el("span", { text: "10" }),
-          el("span", { text: "100" }),
-          el("span", { text: "1k" }),
-          el("span", { text: "10k" }),
-          el("span", { text: "100k" }),
-        ],
-      ),
+      el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, [
+        el("span", { text: "1" }),
+        el("span", { text: "10" }),
+        el("span", { text: "100" }),
+        el("span", { text: "1k" }),
+        el("span", { text: "10k" }),
+        el("span", { text: "100k" }),
+      ]),
     );
     return {
       element: wrap,
@@ -210,46 +150,18 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
         ctx.actions.recomputeIfModeActive("ipm");
       });
       a.value = String(st.alphaMax);
-      sec.append(
-        labeled(
-          "αmax (maximum step size ratio):",
-          "alphaMaxSlider",
-          a,
-          v1,
-          true,
-        ),
-      );
+      sec.append(labeled("αmax (maximum step size ratio):", "alphaMaxSlider", a, v1, true));
 
       const v2 = el("span", { text: st.correctorThreshold.toFixed(3) });
-      const c = range(
-        "correctorThresholdSlider",
-        "0.001",
-        "0.999",
-        "0.001",
-        (v) => {
-          const next = parseFloat(v);
-          v2.textContent = next.toFixed(3);
-          ctx.actions.updateSolverSetting("correctorThreshold", next);
-          ctx.actions.recomputeIfModeActive("ipm");
-        },
-      );
+      const c = range("correctorThresholdSlider", "0.001", "0.999", "0.001", (v) => {
+        const next = parseFloat(v);
+        v2.textContent = next.toFixed(3);
+        ctx.actions.updateSolverSetting("correctorThreshold", next);
+        ctx.actions.recomputeIfModeActive("ipm");
+      });
       c.value = String(st.correctorThreshold);
-      const maxit = renderMaxit(
-        "maxitSliderIPM",
-        st.maxitIPM,
-        "maxitIPM",
-        "ipm",
-      );
-      sec.append(
-        labeled(
-          "Corrector threshold:",
-          "correctorThresholdSlider",
-          c,
-          v2,
-          true,
-        ),
-        maxit.element,
-      );
+      const maxit = renderMaxit("maxitSliderIPM", st.maxitIPM, "maxitIPM", "ipm");
+      sec.append(labeled("Corrector threshold:", "correctorThresholdSlider", c, v2, true), maxit.element);
       return (s) => {
         const next = s.solverSettings;
         v1.textContent = next.alphaMax.toFixed(3);
@@ -278,30 +190,9 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
         ctx.actions.recomputeIfModeActive("pdhg");
       });
       tau.value = String(st.pdhgTau);
-      const maxit = renderMaxit(
-        "maxitSliderPDHG",
-        st.maxitPDHG,
-        "maxitPDHG",
-        "pdhg",
-      );
+      const maxit = renderMaxit("maxitSliderPDHG", st.maxitPDHG, "maxitPDHG", "pdhg");
 
-      sec.append(
-        labeled(
-          "η (primal step size factor):",
-          "pdhgEtaSlider",
-          eta,
-          etaValue,
-          true,
-        ),
-        labeled(
-          "τ (dual step size factor):",
-          "pdhgTauSlider",
-          tau,
-          tauValue,
-          true,
-        ),
-        maxit.element,
-      );
+      sec.append(labeled("η (primal step size factor):", "pdhgEtaSlider", eta, etaValue, true), labeled("τ (dual step size factor):", "pdhgTauSlider", tau, tauValue, true), maxit.element);
       const row = el("div", { className: "settings-checkbox-row" });
       const checkboxes = (
         [
@@ -315,9 +206,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
           ctx.actions.recomputeIfModeActive("pdhg");
         });
         cb.checked = st[key];
-        row.append(
-          el("label", { attrs: { for: key }, text: label + " " }, [cb]),
-        );
+        row.append(el("label", { attrs: { for: key }, text: label + " " }, [cb]));
         return [key, cb] as const;
       });
       sec.append(row);
@@ -336,43 +225,19 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       const scaleValue = el("span", {
         text: st.ellipsoidInitialScale.toFixed(2),
       });
-      const scale = range(
-        "ellipsoidInitialScaleSlider",
-        "1.05",
-        "4",
-        "0.05",
-        (v) => {
-          const next = parseFloat(v);
-          scaleValue.textContent = next.toFixed(2);
-          ctx.actions.updateSolverSetting("ellipsoidInitialScale", next);
-          ctx.actions.recomputeIfModeActive("ellipsoid");
-        },
-      );
+      const scale = range("ellipsoidInitialScaleSlider", "1.05", "4", "0.05", (v) => {
+        const next = parseFloat(v);
+        scaleValue.textContent = next.toFixed(2);
+        ctx.actions.updateSolverSetting("ellipsoidInitialScale", next);
+        ctx.actions.recomputeIfModeActive("ellipsoid");
+      });
       scale.value = String(st.ellipsoidInitialScale);
-      const maxit = renderMaxit(
-        "maxitSliderEllipsoid",
-        st.maxitEllipsoid,
-        "maxitEllipsoid",
-        "ellipsoid",
-      );
-      sec.append(
-        labeled(
-          "Initial ellipsoid size:",
-          "ellipsoidInitialScaleSlider",
-          scale,
-          scaleValue,
-          true,
-        ),
-        maxit.element,
-      );
-      const query = select(
-        "ellipsoidQueryPoint",
-        QUERY_POINT_OPTIONS,
-        (v) => {
-          ctx.actions.updateSolverSetting("ellipsoidQueryPoint", v);
-          ctx.actions.recomputeIfModeActive("ellipsoid");
-        },
-      );
+      const maxit = renderMaxit("maxitSliderEllipsoid", st.maxitEllipsoid, "maxitEllipsoid", "ellipsoid");
+      sec.append(labeled("Initial ellipsoid size:", "ellipsoidInitialScaleSlider", scale, scaleValue, true), maxit.element);
+      const query = select("ellipsoidQueryPoint", QUERY_POINT_OPTIONS, (v) => {
+        ctx.actions.updateSolverSetting("ellipsoidQueryPoint", v);
+        ctx.actions.recomputeIfModeActive("ellipsoid");
+      });
       query.value = st.ellipsoidQueryPoint;
       sec.append(
         el("div", { className: "settings-inline-row" }, [
@@ -396,9 +261,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
           ctx.actions.recomputeIfModeActive("ellipsoid");
         });
         cb.checked = st[key];
-        const wrap = el("label", { attrs: { for: key }, text: label + " " }, [
-          cb,
-        ]);
+        const wrap = el("label", { attrs: { for: key }, text: label + " " }, [cb]);
         row.append(wrap);
         return [key, cb, wrap] as const;
       });
@@ -440,13 +303,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       });
       leaving.value = st.simplexLeavingRule;
       sec.append(
-        el("div", { className: "settings-checkbox-row" }, [
-          el(
-            "label",
-            { attrs: { for: "simplexDualMode" }, text: "Dual simplex mode " },
-            [dual],
-          ),
-        ]),
+        el("div", { className: "settings-checkbox-row" }, [el("label", { attrs: { for: "simplexDualMode" }, text: "Dual simplex mode " }, [dual])]),
         // label + dropdown on one line, selects aligned via a 2-column grid
         el("div", { className: "settings-select-grid" }, [
           el("label", { attrs: { for: "simplexEnteringRule" }, text: "Entering:" }),
@@ -470,24 +327,16 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       ctx.actions.recomputeIfModeActive("central");
     });
     n.value = String(st.centralPathIter);
-    sec.append(
-      labeled("N (number of steps):", "centralPathIterSlider", n, nValue),
-    );
+    sec.append(labeled("N (number of steps):", "centralPathIterSlider", n, nValue));
     return (s) => {
       nValue.textContent = String(s.solverSettings.centralPathIter);
       setInputValue(n, String(s.solverSettings.centralPathIter));
     };
   }
 
-  function getSolverButtonUiState(
-    state: State,
-    mode: SolverMode,
-  ): SolverButtonUiState {
+  function getSolverButtonUiState(state: State, mode: SolverMode): SolverButtonUiState {
     const hasComputedLines = hasPolytopeLines(state.polytope);
-    const readyForSolvers =
-      computeDrawingPhase(state) === "ready_for_solvers" &&
-      hasComputedLines &&
-      state.objectiveVector !== null;
+    const readyForSolvers = computeDrawingPhase(state) === "ready_for_solvers" && hasComputedLines && state.objectiveVector !== null;
 
     return {
       active: state.solverMode === mode,
@@ -497,33 +346,17 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
 
   function isSolverSelectable(state: State, mode: SolverMode): boolean {
     if (!hasPolytopeLines(state.polytope)) return false;
-    if (
-      state.polytope.kind !== "bounded" &&
-      state.polytope.kind !== "unbounded"
-    ) {
+    if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded") {
       return false;
     }
-    if (
-      mode !== "central" ||
-      !state.objectiveVector ||
-      state.polytope.kind !== "unbounded"
-    ) {
+    if (mode !== "central" || !state.objectiveVector || state.polytope.kind !== "unbounded") {
       return true;
     }
-    return !isObjectiveDirectionUnbounded(state.polytope.lines, [
-      state.objectiveVector.x,
-      state.objectiveVector.y,
-    ]);
+    return !isObjectiveDirectionUnbounded(state.polytope.lines, [state.objectiveVector.x, state.objectiveVector.y]);
   }
 
   function render(s: State) {
-    for (const mode of [
-      "ipm",
-      "pdhg",
-      "simplex",
-      "ellipsoid",
-      "central",
-    ] as SolverMode[]) {
+    for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as SolverMode[]) {
       const ui = getSolverButtonUiState(s, mode);
       const b = buttons.get(mode)!;
       b.className = ui.active ? "button-active" : "";
@@ -538,19 +371,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
 
   render(getState());
   const controller = new AbortController();
-  on(
-    [
-      "solverMode",
-      "solverSettings",
-      "polytope",
-      "vertices",
-      "completionMode",
-      "objectiveVector",
-      "currentObjective",
-    ],
-    () => render(getState()),
-    controller.signal,
-  );
+  on(["solverMode", "solverSettings", "polytope", "vertices", "completionMode", "objectiveVector", "currentObjective"], () => render(getState()), controller.signal);
   return {
     destroy: () => {
       controller.abort();

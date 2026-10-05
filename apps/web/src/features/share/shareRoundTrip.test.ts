@@ -9,17 +9,14 @@ const MAX_OPTIMUM_ERROR = 0.001;
 const ROUND_TRIPS = 10;
 
 // Seedable LCG from solvers.test.ts
-const lcg = (seed: number) => () =>
-  (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // Random convex polygon on a circle (same approach as solvers.test.ts)
 function randomConvexPolygon(rand: () => number) {
   const cnt = 3 + Math.floor(rand() * 5);
   const cx = rand() * 16 - 8;
   const cy = rand() * 16 - 8;
-  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort(
-    (a, b) => a - b,
-  );
+  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
   if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
   const R = 1 + rand() * 8;
   return angles.map(
@@ -38,9 +35,7 @@ const MAX_TRIES = 40;
 const MIN_FILL = 0.04;
 
 function getDeltas(count: number, rand: () => number): number[] {
-  const sample = Array.from({ length: count }, () => rand()).sort(
-    (a, b) => a - b,
-  );
+  const sample = Array.from({ length: count }, () => rand()).sort((a, b) => a - b);
   const plus: number[] = [];
   const minus: number[] = [];
   for (let i = 1; i < sample.length - 1; i++) {
@@ -56,10 +51,7 @@ function getDeltas(count: number, rand: () => number): number[] {
   return deltas;
 }
 
-function valtrPolygon(
-  count: number,
-  rand: () => number,
-): { x: number; y: number }[] {
+function valtrPolygon(count: number, rand: () => number): { x: number; y: number }[] {
   const xDeltas = getDeltas(count, rand);
   const yDeltas = getDeltas(count, rand);
   // shuffle yDeltas
@@ -68,9 +60,7 @@ function valtrPolygon(
     [yDeltas[i], yDeltas[j]] = [yDeltas[j]!, yDeltas[i]!];
   }
   const vectors = xDeltas.map((x, i) => ({ x, y: yDeltas[i]! }));
-  vectors.sort(
-    (a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x),
-  );
+  vectors.sort((a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
   let x = 0;
   let y = 0;
   const raw = [{ x: 0, y: 0 }];
@@ -104,10 +94,7 @@ function isWellProportioned(points: { x: number; y: number }[]): boolean {
   return Math.abs(area / 2) / (w * h) >= MIN_FILL;
 }
 
-function exactVertexPolygon(
-  vertexCount: number,
-  rand: () => number,
-): { x: number; y: number }[] {
+function exactVertexPolygon(vertexCount: number, rand: () => number): { x: number; y: number }[] {
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     const pts = valtrPolygon(vertexCount, rand);
     if (isWellProportioned(pts)) return pts;
@@ -115,29 +102,17 @@ function exactVertexPolygon(
   return valtrPolygon(vertexCount, rand);
 }
 
-function bruteForceOptimum(
-  vertices: { x: number; y: number }[],
-  objective: { x: number; y: number },
-): number {
-  return Math.max(
-    ...vertices.map((v) => objective.x * v.x + objective.y * v.y),
-  );
+function bruteForceOptimum(vertices: { x: number; y: number }[], objective: { x: number; y: number }): number {
+  return Math.max(...vertices.map((v) => objective.x * v.x + objective.y * v.y));
 }
 
-function solveForOptimum(
-  vertices: { x: number; y: number }[],
-  objective: { x: number; y: number },
-): { value: number; x: number; y: number } | null {
+function solveForOptimum(vertices: { x: number; y: number }[], objective: { x: number; y: number }): { value: number; x: number; y: number } | null {
   const { lines } = buildConstraintRep(
     vertices.map((v) => [v.x, v.y]),
     true,
   );
   if (lines.length === 0) return null;
-  const result = simplex(
-    lines,
-    Float64Array.of(objective.x, objective.y),
-    { tol: 1e-9, verbose: false, dual: false },
-  );
+  const result = simplex(lines, Float64Array.of(objective.x, objective.y), { tol: 1e-9, verbose: false, dual: false });
   if (result.status !== "optimal") return null;
   const last = result.iterations[result.iterations.length - 1]!;
   return { value: objective.x * last[0]! + objective.y * last[1]!, x: last[0]!, y: last[1]! };
@@ -235,29 +210,23 @@ const GALLERY_PROBLEMS: SharedAppState[] = [
 ];
 
 describe("share link round-trip stability", () => {
-  test.each(GALLERY_PROBLEMS.map((p, i) => [i, p] as const))(
-    "gallery problem #%i: optimum within tolerance and polytope convex after %i round-trips",
-    (_index, original) => {
-      const originalOptimum = bruteForceOptimum(
-        original.vertices,
-        original.objective!,
-      );
+  test.each(GALLERY_PROBLEMS.map((p, i) => [i, p] as const))("gallery problem #%i: optimum within tolerance and polytope convex after %i round-trips", (_index, original) => {
+    const originalOptimum = bruteForceOptimum(original.vertices, original.objective!);
 
-      const final = roundTripN(original, ROUND_TRIPS);
+    const final = roundTripN(original, ROUND_TRIPS);
 
-      expect(final.vertices.length).toBe(original.vertices.length);
+    expect(final.vertices.length).toBe(original.vertices.length);
 
-      // convexity
-      const vrep = VRep.fromPoints(final.vertices);
-      expect(vrep.isConvex()).toBe(true);
+    // convexity
+    const vrep = VRep.fromPoints(final.vertices);
+    expect(vrep.isConvex()).toBe(true);
 
-      // optimum within tolerance
-      const solved = solveForOptimum(final.vertices, final.objective!);
-      expect(solved).not.toBeNull();
-      expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
-      expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
-    },
-  );
+    // optimum within tolerance
+    const solved = solveForOptimum(final.vertices, final.objective!);
+    expect(solved).not.toBeNull();
+    expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
+    expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+  });
 
   test("random polygons: optimum within tolerance and polytope convex after %i round-trips", () => {
     const rand = lcg(42);
@@ -307,21 +276,18 @@ describe("share link round-trip stability", () => {
       solverMode: "simplex",
       settings: {},
     };
-    const originalOptimum = bruteForceOptimum(
-      original.vertices,
-      original.objective!,
-    );
+    const originalOptimum = bruteForceOptimum(original.vertices, original.objective!);
 
-let current = original;
-      for (let i = 0; i < ROUND_TRIPS; i++) {
-        const encoded = encodeSharedState(current);
-        const decoded = decodeSharedState(encoded);
-        expect(decoded).not.toBeNull();
-        current = decoded!;
+    let current = original;
+    for (let i = 0; i < ROUND_TRIPS; i++) {
+      const encoded = encodeSharedState(current);
+      const decoded = decodeSharedState(encoded);
+      expect(decoded).not.toBeNull();
+      current = decoded!;
 
-        expect(current.vertices.length).toBe(original.vertices.length);
+      expect(current.vertices.length).toBe(original.vertices.length);
 
-        const vrep = VRep.fromPoints(current.vertices);
+      const vrep = VRep.fromPoints(current.vertices);
       expect(vrep.isConvex()).toBe(true);
 
       const solved = solveForOptimum(current.vertices, current.objective!);
@@ -362,12 +328,8 @@ let current = original;
 
         const solved = solveForOptimum(final.vertices, final.objective!);
         expect(solved).not.toBeNull();
-        expect(solved!.value).toBeGreaterThanOrEqual(
-          originalOptimum - MAX_OPTIMUM_ERROR,
-        );
-        expect(solved!.value).toBeLessThanOrEqual(
-          originalOptimum + MAX_OPTIMUM_ERROR,
-        );
+        expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
+        expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
       }
       expect(runs).toBe(instancesPerCount);
     });

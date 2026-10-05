@@ -16,8 +16,7 @@ const BASE: SharedAppState = {
   settings: {},
 };
 
-const roundTrip = (state: SharedAppState) =>
-  decodeSharedState(encodeSharedState(state));
+const roundTrip = (state: SharedAppState) => decodeSharedState(encodeSharedState(state));
 
 describe("compact share links", () => {
   test("only ever emits characters that survive a linkifier", () => {
@@ -72,13 +71,7 @@ describe("compact share links", () => {
   });
 
   test("round-trips every solver mode and completion mode", () => {
-    for (const solverMode of [
-      "central",
-      "ipm",
-      "simplex",
-      "pdhg",
-      "ellipsoid",
-    ] as const) {
+    for (const solverMode of ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const) {
       for (const completionMode of ["draft", "closed", "open"] as const) {
         const decoded = roundTrip({ ...BASE, solverMode, completionMode })!;
         expect(decoded.solverMode).toBe(solverMode);

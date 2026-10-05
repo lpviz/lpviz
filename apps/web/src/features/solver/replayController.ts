@@ -38,9 +38,7 @@ export function createReplayController(deps: {
       iteratePath: state.originalIteratePath,
       iteratePhases: state.originalIteratePhases,
       replayActive: false,
-      ...(deps.isIterateHoverActive()
-        ? {}
-        : { highlightIteratePathIndex: null }),
+      ...(deps.isIterateHoverActive() ? {} : { highlightIteratePathIndex: null }),
     });
     deps.getCanvasManager()?.draw();
   };
@@ -125,17 +123,13 @@ export function createReplayController(deps: {
         // the phase array has to be exactly `count` long or IterateLineLayer
         // drops phase colouring; it only changes when the head crosses an
         // iterate, so most frames skip the slice
-        ...(origPhases.length > 0 && count !== shownCount
-          ? { iteratePhases: origPhases.slice(0, count) }
-          : {}),
+        ...(origPhases.length > 0 && count !== shownCount ? { iteratePhases: origPhases.slice(0, count) } : {}),
         // The index tracks the last *whole* iterate the head has passed, for
         // everything that needs a real one (EllipsoidLayer reveals that
         // iterate's localizing ellipse). The green marker does not read it —
         // it rides the interpolated head instead, so it sweeps rather than
         // snapping — see IterateHighlightLayer.
-        ...(deps.isIterateHoverActive()
-          ? {}
-          : { highlightIteratePathIndex: base }),
+        ...(deps.isIterateHoverActive() ? {} : { highlightIteratePathIndex: base }),
       });
       shownCount = count;
       canvas.draw();

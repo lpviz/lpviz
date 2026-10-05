@@ -10,14 +10,8 @@ import {
 } from "@lpviz/viewport/transition";
 import { getViewAngleFromSnapshot3D } from "@lpviz/viewport/view3d";
 import type { ViewportRenderSnapshot } from "../types";
-import {
-  setViewport2DControlsConfig,
-  setViewport2DControlsState,
-} from "./controls2d";
-import {
-  resetViewportTransitionConfig,
-  setViewportTransitionConfig,
-} from "./transitionConfig";
+import { setViewport2DControlsConfig, setViewport2DControlsState } from "./controls2d";
+import { resetViewportTransitionConfig, setViewportTransitionConfig } from "./transitionConfig";
 
 export type TransitionController = {
   // animate the 2D<->3D mode switch toward targetMode (true = 3D)
@@ -62,17 +56,9 @@ export function createTransitionController(deps: {
   // While a to-2D transition runs, keep the 2D controls' planar state in lockstep
   // with the animated frame so the handoff at completion is seamless. (to-3D
   // transitions have no planar control state to track.)
-  const syncPlanarState = (
-    p: ViewportTransitionPlan,
-    frame: ReturnType<typeof buildViewportTransitionFrame>,
-  ) => {
+  const syncPlanarState = (p: ViewportTransitionPlan, frame: ReturnType<typeof buildViewportTransitionFrame>) => {
     if (p.direction !== "to2d") return;
-    const planarState = buildViewport2DStateFromTransitionFrame(
-      p,
-      frame,
-      deps.getViewportRect(),
-      deps.getSidebarWidth(),
-    );
+    const planarState = buildViewport2DStateFromTransitionFrame(p, frame, deps.getViewportRect(), deps.getSidebarWidth());
     setViewport2DControlsConfig(
       {
         sidebarWidth: deps.getSidebarWidth(),
@@ -116,12 +102,8 @@ export function createTransitionController(deps: {
       // Clear it now, before the transition disables the controls that set it.
       deps.clearActiveNavigation();
 
-      const baseSnapshot = deps.shouldUseExternal2DViewport()
-        ? deps.getExternal2DSnapshot()
-        : deps.getManagerSnapshot();
-      const viewAngle = deps.isExternal3DControlsActive()
-        ? getViewAngleFromSnapshot3D(baseSnapshot)
-        : getState().viewAngle;
+      const baseSnapshot = deps.shouldUseExternal2DViewport() ? deps.getExternal2DSnapshot() : deps.getManagerSnapshot();
+      const viewAngle = deps.isExternal3DControlsActive() ? getViewAngleFromSnapshot3D(baseSnapshot) : getState().viewAngle;
       const startTime = performance.now();
 
       if (deps.shouldUseExternal2DViewport()) {
@@ -178,11 +160,7 @@ export function createTransitionController(deps: {
             });
           }
           resetViewportTransitionConfig();
-          deps.publishSnapshot(
-            deps.shouldUseExternal2DViewport()
-              ? deps.getExternal2DSnapshot()
-              : deps.getManagerSnapshot(),
-          );
+          deps.publishSnapshot(deps.shouldUseExternal2DViewport() ? deps.getExternal2DSnapshot() : deps.getManagerSnapshot());
         },
       });
     },

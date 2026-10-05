@@ -16,9 +16,7 @@ const DEGENERATE_COEFFICIENT = 1e-12;
 // Each row is [a_0, ..., a_{n-1}, b], meaning a'x <= b.
 export type LpRow = readonly number[];
 
-export type SmallLpResult =
-  | { status: "optimal"; x: Float64Array; value: number }
-  | { status: "infeasible" };
+export type SmallLpResult = { status: "optimal"; x: Float64Array; value: number } | { status: "infeasible" };
 
 function makeRandom(seed: number) {
   let state = seed >>> 0 || 0x9e3779b9;
@@ -45,12 +43,7 @@ function shuffledIndices(count: number, random: () => number): number[] {
 
 // Substitute x_k = (row_n - sum_{j != k} row_j x_j) / row_k into `target`,
 // dropping coordinate k. Used for both constraints and the objective.
-function eliminate(
-  target: LpRow,
-  row: LpRow,
-  k: number,
-  n: number,
-): number[] {
+function eliminate(target: LpRow, row: LpRow, k: number, n: number): number[] {
   const scale = target[k]! / row[k]!;
   const reduced: number[] = [];
   for (let j = 0; j < n; j++) {
@@ -63,12 +56,7 @@ function eliminate(
 
 // The eliminated coordinate is still one of the original variables, so it is
 // still boxed; re-express |x_k| <= bound in the remaining coordinates.
-function boxRowsForEliminated(
-  row: LpRow,
-  k: number,
-  n: number,
-  bound: number,
-): number[][] {
+function boxRowsForEliminated(row: LpRow, k: number, n: number, bound: number): number[][] {
   const pivot = row[k]!;
   const rest: number[] = [];
   for (let j = 0; j < n; j++) if (j !== k) rest.push(row[j]!);
@@ -82,13 +70,7 @@ function boxRowsForEliminated(
   return [upper, lower];
 }
 
-function solveRecursive(
-  rows: LpRow[],
-  n: number,
-  objective: readonly number[],
-  bound: number,
-  random: () => number,
-): Float64Array | null {
+function solveRecursive(rows: LpRow[], n: number, objective: readonly number[], bound: number, random: () => number): Float64Array | null {
   if (n === 1) {
     let low = -bound;
     let high = bound;
@@ -128,18 +110,10 @@ function solveRecursive(
     }
     if (Math.abs(row[pivot]!) < DEGENERATE_COEFFICIENT) return null;
 
-    const reducedRows: LpRow[] = processed.map((p) =>
-      eliminate(p, row, pivot, n),
-    );
+    const reducedRows: LpRow[] = processed.map((p) => eliminate(p, row, pivot, n));
     reducedRows.push(...boxRowsForEliminated(row, pivot, n, bound));
     const reducedObjective = eliminate(objective, row, pivot, n);
-    const sub = solveRecursive(
-      reducedRows,
-      n - 1,
-      reducedObjective,
-      bound,
-      random,
-    );
+    const sub = solveRecursive(reducedRows, n - 1, reducedObjective, bound, random);
     if (!sub) return null;
 
     let restIndex = 0;
@@ -160,12 +134,7 @@ function solveRecursive(
  * `|x_j| <= bound`. The box is what makes the problem bounded, so pick it large
  * enough to be inert unless you mean it as a constraint.
  */
-export function solveSmallLp(
-  objective: readonly number[],
-  rows: readonly LpRow[],
-  bound: number,
-  seed = 1,
-): SmallLpResult {
+export function solveSmallLp(objective: readonly number[], rows: readonly LpRow[], bound: number, seed = 1): SmallLpResult {
   const n = objective.length;
   if (n === 0) return { status: "optimal", x: new Float64Array(0), value: 0 };
   const objectiveRow = [...objective, 0];
@@ -188,12 +157,7 @@ export function solveSmallLp(
  * interior (it is empty or flat), which the cutting-plane solvers read as "the
  * localizing set is exhausted".
  */
-export function chebyshevCenter(
-  rows: readonly LpRow[],
-  dimension: number,
-  bound: number,
-  seed = 1,
-): { center: Float64Array; radius: number } | null {
+export function chebyshevCenter(rows: readonly LpRow[], dimension: number, bound: number, seed = 1): { center: Float64Array; radius: number } | null {
   const lifted: number[][] = rows.map((row) => {
     let norm = 0;
     for (let j = 0; j < dimension; j++) norm += row[j]! * row[j]!;

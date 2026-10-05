@@ -83,12 +83,7 @@ export function packPolygons(polygons: readonly (readonly number[])[]) {
  * localizing set is an intersection of half-planes, so clipping the initial box
  * by each cut in turn is the whole construction.
  */
-export function clipPolygon(
-  polygon: readonly number[],
-  a0: number,
-  a1: number,
-  b: number,
-): number[] {
+export function clipPolygon(polygon: readonly number[], a0: number, a1: number, b: number): number[] {
   const out: number[] = [];
   const count = polygon.length / 2;
   if (count === 0) return out;
@@ -109,12 +104,7 @@ export function clipPolygon(
   return out;
 }
 
-type Termination =
-  | "converged"
-  | "maxit"
-  | "infeasible"
-  | "degenerate"
-  | "unbounded";
+type Termination = "converged" | "maxit" | "infeasible" | "degenerate" | "unbounded";
 
 // The initial ellipsoid must strictly contain the drawn region: that is what
 // makes the method's guarantee hold, and it is what makes the test below
@@ -157,20 +147,8 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
  * contains it) while the incumbent lower-bounds it, so the two bracket the true
  * optimality gap. That gap is never larger than rho and closes sooner.
  */
-export function ellipsoid(
-  vertices: Vertices,
-  lines: Lines,
-  objective: VecN,
-  opts: EllipsoidOptions,
-): EllipsoidResultData {
-  const {
-    maxit,
-    tol,
-    deepCuts,
-    rayShoot,
-    initialScale,
-    verbose,
-  } = opts;
+export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): EllipsoidResultData {
+  const { maxit, tol, deepCuts, rayShoot, initialScale, verbose } = opts;
 
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
@@ -186,9 +164,7 @@ export function ellipsoid(
   const objectiveNormSquared = dotSlice(c, c);
   const { center, P } = initialEllipsoid(vertices, n, initialScale);
   const initialCenter = center.slice();
-  const initialSemiAxes = Float64Array.from({ length: n }, (_, j) =>
-    Math.sqrt(P[j * n + j]!),
-  );
+  const initialSemiAxes = Float64Array.from({ length: n }, (_, j) => Math.sqrt(P[j * n + j]!));
 
   const iterations: Float64Array[] = [];
   const rows: EllipsoidRow[] = [];
@@ -209,11 +185,7 @@ export function ellipsoid(
   const header = " Iter        x        y        Obj     Infeas          ρ";
   if (verbose) console.log(header);
 
-  const record = (
-    objectiveValue: number,
-    infeasibility: number,
-    objectiveRadius: number,
-  ) => {
+  const record = (objectiveValue: number, infeasibility: number, objectiveRadius: number) => {
     const base = iterations.length * ELLIPSOID_STRIDE;
     ellipsoids[base] = center[0]!;
     ellipsoids[base + 1] = center[1]!;
@@ -263,11 +235,7 @@ export function ellipsoid(
     // Feasibility of the center is still required so that the last iterate the
     // viewport marks as the answer is a point of the region.
     const gap = objectiveValue + objectiveRadius - bestObjective;
-    if (
-      feasible &&
-      bestObjective > -Infinity &&
-      gap <= tol * (1 + Math.abs(bestObjective))
-    ) {
+    if (feasible && bestObjective > -Infinity && gap <= tol * (1 + Math.abs(bestObjective))) {
       termination = "converged";
       break;
     }
@@ -323,27 +291,14 @@ export function ellipsoid(
   // tested on the converged center, not on the incumbent: a ray shoot can adopt
   // a feasible point far outside the initial ellipsoid on an unbounded region
   // whose objective is nonetheless bounded, and that is not this condition
-  if (
-    termination === "converged" &&
-    onInitialBoundary(center, initialCenter, initialSemiAxes, n)
-  ) {
+  if (termination === "converged" && onInitialBoundary(center, initialCenter, initialSemiAxes, n)) {
     termination = "unbounded";
   }
 
-  const footer = buildFooter(
-    termination,
-    iterations.length,
-    performance.now() - startTime,
-    bestObjective,
-  );
+  const footer = buildFooter(termination, iterations.length, performance.now() - startTime, bestObjective);
   if (verbose) console.log(footer);
 
-  appendIncumbent(
-    { iterations, rows, rho, ellipsoids },
-    best,
-    bestObjective,
-    upperBound,
-  );
+  appendIncumbent({ iterations, rows, rho, ellipsoids }, best, bestObjective, upperBound);
 
   return {
     iterations,
@@ -362,12 +317,7 @@ export function ellipsoid(
 
 // The initial ellipsoid is axis-aligned, so its defining quadratic form is just
 // a sum of squares over the semi-axes.
-function onInitialBoundary(
-  x: Float64Array,
-  center: Float64Array,
-  semiAxes: Float64Array,
-  n: number,
-) {
+function onInitialBoundary(x: Float64Array, center: Float64Array, semiAxes: Float64Array, n: number) {
   let quadratic = 0;
   for (let j = 0; j < n; j++) {
     const ratio = (x[j]! - center[j]!) / semiAxes[j]!;
@@ -382,11 +332,7 @@ function onInitialBoundary(
  * the ellipsoid method circumscribes an ellipsoid around this box, the
  * cutting-plane methods take the box itself as their initial localizing set.
  */
-export function regionBoundingBox(
-  vertices: Vertices,
-  n: number,
-  scale: number,
-) {
+export function regionBoundingBox(vertices: Vertices, n: number, scale: number) {
   const center = new Float64Array(n);
   const halfExtents = new Float64Array(n).fill(FALLBACK_HALF_EXTENT);
   const inflation = Math.max(MIN_INITIAL_SCALE, scale);
@@ -461,11 +407,7 @@ export function appendIncumbent(
   if (bestObjective === -Infinity) return;
   const count = result.iterations.length;
   const previous = count > 0 ? result.iterations[count - 1]! : null;
-  if (
-    previous &&
-    Math.abs(previous[0]! - best[0]!) < INCUMBENT_MERGE_TOLERANCE &&
-    Math.abs(previous[1]! - best[1]!) < INCUMBENT_MERGE_TOLERANCE
-  ) {
+  if (previous && Math.abs(previous[0]! - best[0]!) < INCUMBENT_MERGE_TOLERANCE && Math.abs(previous[1]! - best[1]!) < INCUMBENT_MERGE_TOLERANCE) {
     return;
   }
 
@@ -494,11 +436,7 @@ export function appendIncumbent(
 
 // The separation oracle every method in this family shares: the constraint
 // `x` violates by the most, or a nonpositive violation when `x` is feasible.
-export function mostViolatedConstraint(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  x: Float64Array,
-) {
+export function mostViolatedConstraint(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, x: Float64Array) {
   let row = 0;
   let violation = -Infinity;
   for (let i = 0; i < A.rows; i++) {
@@ -517,13 +455,7 @@ export function mostViolatedConstraint(
 // blocks it: max t with A(x + t*c) <= b. Zero when the point is already on a
 // blocking face, and zero (rather than infinity) when nothing blocks at all —
 // an unbounded direction has no boundary point to adopt as an incumbent.
-export function objectiveRayStep(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  x: Float64Array,
-  c: Float64Array,
-  n: number,
-) {
+export function objectiveRayStep(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, x: Float64Array, c: Float64Array, n: number) {
   let step = Infinity;
   for (let i = 0; i < A.rows; i++) {
     const offset = i * n;
@@ -547,12 +479,7 @@ function dotSlice(a: Float64Array, x: Float64Array) {
 }
 
 // out = P v, returning v'Pv
-function symmetricMatVec(
-  P: Float64Array,
-  v: Float64Array,
-  out: Float64Array,
-  n: number,
-) {
+function symmetricMatVec(P: Float64Array, v: Float64Array, out: Float64Array, n: number) {
   let quadratic = 0;
   for (let j = 0; j < n; j++) {
     let sum = 0;
@@ -571,12 +498,7 @@ function quadraticForm(P: Float64Array, v: Float64Array, n: number) {
   return quadratic;
 }
 
-function buildFooter(
-  termination: Termination,
-  iterationCount: number,
-  solveTime: number,
-  bestObjective: number,
-) {
+function buildFooter(termination: Termination, iterationCount: number, solveTime: number, bestObjective: number) {
   const elapsed = formatMilliseconds(solveTime);
   switch (termination) {
     case "converged":

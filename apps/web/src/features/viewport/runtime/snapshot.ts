@@ -1,7 +1,4 @@
-import {
-  DEFAULT_VIEWPORT_RENDER_SNAPSHOT,
-  type ViewportRenderSnapshot,
-} from "../types";
+import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
 let snapshot = DEFAULT_VIEWPORT_RENDER_SNAPSHOT;
 // Fire on every snapshot update (camera pose included). The render loop is
@@ -19,9 +16,7 @@ export function resetViewportRenderSnapshot(): void {
   listeners.forEach((l) => l());
 }
 
-export function subscribeFullViewportRenderSnapshot(
-  listener: () => void,
-): () => void {
+export function subscribeFullViewportRenderSnapshot(listener: () => void): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }

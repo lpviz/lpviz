@@ -27,16 +27,10 @@ export function computeObjectiveRotationStep({
   let nextAngle = angle + angleStep * nextDirection;
 
   if (hasPolytopeLines(polytope) && polytope.kind === "unbounded") {
-    const candidateDirections: Array<1 | -1> = [
-      rotationDirection,
-      rotationDirection === 1 ? -1 : 1,
-    ];
+    const candidateDirections: Array<1 | -1> = [rotationDirection, rotationDirection === 1 ? -1 : 1];
     const allowedDirection = candidateDirections.find((direction) => {
       const candidateAngle = angle + angleStep * direction;
-      const candidateObjective: [number, number] = [
-        magnitude * Math.cos(candidateAngle),
-        magnitude * Math.sin(candidateAngle),
-      ];
+      const candidateObjective: [number, number] = [magnitude * Math.cos(candidateAngle), magnitude * Math.sin(candidateAngle)];
       return !isObjectiveDirectionUnbounded(polytope.lines, candidateObjective);
     });
 

@@ -57,34 +57,21 @@ export abstract class SinglePointSpriteLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      ...this.selectorDeps(raw),
-      raw.iteratePath,
-      raw.iterateObjectiveVector,
-      ctx.getSnapshot().mode,
-    ];
+    return [...this.selectorDeps(raw), raw.iteratePath, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
     const raw = ctx.getState();
     const snap: ViewportRenderSnapshot = ctx.getSnapshot();
-    const index = shouldRenderSnapshotMode(snap.mode, raw)
-      ? this.selectIndex(raw)
-      : null;
-    const xyz =
-      index === null
-        ? null
-        : flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+    const index = shouldRenderSnapshotMode(snap.mode, raw) ? this.selectIndex(raw) : null;
+    const xyz = index === null ? null : flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
     if (!xyz) {
       this.object3D.visible = false;
       return;
     }
     // free the old GL buffer before the attribute is replaced
     this.object3D.geometry.dispose();
-    this.object3D.geometry.setAttribute(
-      "position",
-      new BufferAttribute(new Float32Array(xyz), 3),
-    );
+    this.object3D.geometry.setAttribute("position", new BufferAttribute(new Float32Array(xyz), 3));
     this.object3D.visible = true;
   }
 
