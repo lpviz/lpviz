@@ -1,7 +1,8 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { CustomBlending, GLSL3, Mesh, Object3D, OneFactor, OneMinusSrcAlphaFactor, OrthographicCamera, PlaneGeometry, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
+import { Mesh, Object3D, OrthographicCamera, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
+import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
 // World-anchored impostor for the trace-lines render pass in 2D mode.
 //
@@ -73,41 +74,8 @@ void main() {
 }
 `;
 
-// Rendering translucent strokes onto a transparent black target yields
-// premultiplied alpha, so the composite uses (ONE, ONE_MINUS_SRC_ALPHA).
-// The ribbons bake sRGB-encoded values into the targets (see cacheEncode in
-// pathRibbon.ts), so blending and MSAA resolve happen in the same encoded
-// space as direct canvas rendering and the composite is a pure passthrough.
-const QUAD_FRAGMENT_SHADER = /* glsl */ `
-uniform sampler2D map;
-in vec2 vUv;
-out vec4 outColor;
-
-void main() {
-  outColor = texture(map, vUv);
-}
-`;
-
 function getTraceSeq(object: Object3D): number | undefined {
   return object.userData.traceSeq as number | undefined;
-}
-
-function makeQuad(): { mesh: Mesh; material: ShaderMaterial } {
-  const material = new ShaderMaterial({
-    glslVersion: GLSL3,
-    vertexShader: QUAD_VERTEX_SHADER,
-    fragmentShader: QUAD_FRAGMENT_SHADER,
-    uniforms: { map: { value: null } },
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-    blending: CustomBlending,
-    blendSrc: OneFactor,
-    blendDst: OneMinusSrcAlphaFactor,
-  });
-  const mesh = new Mesh(new PlaneGeometry(1, 1), material);
-  mesh.frustumCulled = false;
-  return { mesh, material };
 }
 
 type ViewParams = {
@@ -147,7 +115,7 @@ export class TraceCache {
   private panVelocityX = 0;
   private panVelocityY = 0;
   private degraded = false;
-  private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  private settle: SettleTimer;
   private liveMeshes: Mesh[] = [];
   private visibilityScratch: boolean[] = [];
   private cachedUnitsPerPixel = 0;
@@ -160,11 +128,12 @@ export class TraceCache {
   private cachedCssWidth = 0;
   private cachedCssHeight = 0;
 
-  constructor(private requestFrame?: () => void) {
-    const main = makeQuad();
+  constructor(requestFrame: () => void) {
+    this.settle = new SettleTimer(requestFrame, Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2));
+    const main = makeCompositeQuad(QUAD_VERTEX_SHADER, 1);
     this.quad = main.mesh;
     this.quadMaterial = main.material;
-    const trailing = makeQuad();
+    const trailing = makeCompositeQuad(QUAD_VERTEX_SHADER, 1);
     this.trailingQuad = trailing.mesh;
     this.trailingMaterial = trailing.material;
     this.trailingQuad.renderOrder = 1;
@@ -310,17 +279,11 @@ export class TraceCache {
       }
     }
 
-    if ((zoomDeferred || panDeferred || this.degraded || this.bakeStart > minSeq) && this.settleTimer === null && this.requestFrame) {
-      // demand-driven rendering: without a scheduled frame the settle work
-      // (crisp exact-zoom rebuild, trailing fold + target release) would
-      // wait for the next unrelated invalidation
-      this.settleTimer = setTimeout(
-        () => {
-          this.settleTimer = null;
-          this.requestFrame!();
-        },
-        Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2),
-      );
+    if (zoomDeferred || panDeferred || this.degraded || this.bakeStart > minSeq) {
+      // without a scheduled frame the settle work (crisp exact-zoom rebuild,
+      // trailing fold + target release) would wait for the next unrelated
+      // invalidation
+      this.settle.arm();
     }
 
     if (this.bakeStart > minSeq) {
@@ -445,10 +408,7 @@ export class TraceCache {
   }
 
   dispose(): void {
-    if (this.settleTimer !== null) {
-      clearTimeout(this.settleTimer);
-      this.settleTimer = null;
-    }
+    this.settle.dispose();
     this.renderTarget?.dispose();
     this.renderTarget = null;
     this.releaseTrailingTarget();
