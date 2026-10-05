@@ -1,28 +1,6 @@
-import type { CompletionMode, EllipsoidQueryPoint, SolverMode, State } from "@/features/core/store";
-import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
+import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 
-export type ShareSettings = {
-  alphaMax?: number;
-  correctorThreshold?: number;
-  maxitIPM?: number;
-  simplexDualMode?: boolean;
-  simplexEnteringRule?: EnteringRule;
-  simplexLeavingRule?: LeavingRule;
-  pdhgEta?: number;
-  pdhgTau?: number;
-  maxitPDHG?: number;
-  pdhgIneqMode?: boolean;
-  pdhgHalpernMode?: boolean;
-  pdhgColorByBasis?: boolean;
-  centralPathIter?: number;
-  maxitEllipsoid?: number;
-  ellipsoidDeepCuts?: boolean;
-  ellipsoidRayShoot?: boolean;
-  ellipsoidQueryPoint?: EllipsoidQueryPoint;
-  ellipsoidInitialScale?: number;
-  objectiveAngleStep?: number;
-  objectiveRotationSpeed?: number;
-};
+export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 
 export type SharedAppState = {
   vertices: { x: number; y: number }[];
@@ -49,8 +27,6 @@ const shareKeyMap = {
   settings: "g",
   zScale: "l",
   is3DMode: "b",
-  x: "x",
-  y: "y",
   alphaMax: "a",
   correctorThreshold: "f",
   maxitIPM: "i",
@@ -103,16 +79,14 @@ export function expandSharedAppState<T>(value: T): T {
 
 // The shared payload is the only untrusted input path in the app: a crafted
 // link must not be able to push NaN or arbitrary values into the store.
-const COMPLETION_MODES: ReadonlySet<string> = new Set(["draft", "closed", "open"]);
-const SOLVER_MODES: ReadonlySet<string> = new Set(["central", "ipm", "simplex", "pdhg", "ellipsoid"]);
-
 const isFinitePoint = (value: unknown): value is { x: number; y: number } =>
   typeof value === "object" && value !== null && Number.isFinite((value as { x: unknown }).x) && Number.isFinite((value as { y: unknown }).y);
 
 export function buildSharedStatePatch(sharedState: SharedAppState): Partial<State> {
   const mappedVertices = Array.isArray(sharedState.vertices) ? sharedState.vertices.filter(isFinitePoint).map((vertex) => ({ x: vertex.x, y: vertex.y })) : [];
-  const completionMode = sharedState.completionMode !== undefined && COMPLETION_MODES.has(sharedState.completionMode) ? sharedState.completionMode : mappedVertices.length > 2 ? "closed" : "draft";
-  const solverMode = SOLVER_MODES.has(sharedState.solverMode) ? sharedState.solverMode : "central";
+  const completionMode =
+    sharedState.completionMode !== undefined && COMPLETION_MODES.includes(sharedState.completionMode) ? sharedState.completionMode : mappedVertices.length > 2 ? "closed" : "draft";
+  const solverMode = SOLVER_MODES.includes(sharedState.solverMode) ? sharedState.solverMode : "central";
 
   return {
     vertices: mappedVertices,

@@ -1,4 +1,4 @@
-import type { DragTarget, DragViewAnchor3D, State } from "@/features/core/store";
+import type { CompletionMode, DragTarget, DragViewAnchor3D, State } from "@/features/core/store";
 import { displayedSolverStartPoint, getState } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
@@ -53,7 +53,7 @@ export function worldDistanceForPixels(canvasManager: ViewportApi, worldPoint: P
 
 // The nearest edge within `tolerance` (world units); a draft or open chain
 // has no closing edge.
-export function findEdgeNearPoint(point: PointXY, vertices: PointXY[], completionMode: "draft" | "closed" | "open", tolerance = 0.5): number | null {
+export function findEdgeNearPoint(point: PointXY, vertices: PointXY[], completionMode: CompletionMode, tolerance = 0.5): number | null {
   return VRep.fromPoints(vertices).findEdgeNearPoint(point, tolerance, completionMode === "closed");
 }
 

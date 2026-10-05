@@ -17,13 +17,17 @@ import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 export const MAX_TRACE_POINT_SPRITES = 1200;
 export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE };
 
-export type SolverMode = "central" | "ipm" | "simplex" | "pdhg" | "ellipsoid";
+// Index order is the share link's wire identity (compactUrl): only ever append.
+export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
+export type SolverMode = (typeof SOLVER_MODES)[number];
 // Which point of the localizing set the ellipsoid mode queries next. "ellipsoid"
 // is the ellipsoid method proper (localize with a covering ellipsoid, query its
 // center); the rest localize with a polyhedron of accumulated cuts and differ
 // only in which interior point they pick. See @lpviz/solver-engine/cuttingPlane.
-export type EllipsoidQueryPoint = "ellipsoid" | "chebyshev" | "analytic" | "volumetric";
-export type CompletionMode = "draft" | "closed" | "open";
+export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
+export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
+export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
+export type CompletionMode = (typeof COMPLETION_MODES)[number];
 type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; lines: Line[] } | { kind: "open-vertices"; vertexIndices: [number, number] };

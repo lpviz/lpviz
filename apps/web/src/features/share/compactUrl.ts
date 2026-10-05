@@ -1,4 +1,4 @@
-import { DEFAULT_SOLVER_SETTINGS, type SolverSettings } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES, type SolverSettings } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 
 // A share link is a URL people paste into chat, email and papers, so the
@@ -31,12 +31,9 @@ const COORDINATE_SCALE = 1e4;
 const OBJECTIVE_SCALE = 1e6;
 const Z_SCALE_SCALE = 1e3;
 
-const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
-const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
-const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
 
 type SettingKey = keyof ShareSettings;
 

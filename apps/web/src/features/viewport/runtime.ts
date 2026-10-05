@@ -5,7 +5,6 @@ import { buildViewport2DSnapshot, fitViewport2DToBounds, toCanvasCoords2D, toLog
 import { getObjectiveScreenPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/transition";
 import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D } from "@lpviz/viewport/view3d";
-import { getViewportUnboundedClipBounds, isViewport3DState } from "./dirtyFlags";
 import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
 import {
   getViewport2DControlsConfig,
@@ -21,6 +20,7 @@ import { createTransitionController } from "./runtime/transitionController";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportBridge, type ViewportRenderSnapshot } from "./types";
 
 const VIEWPORT_NAVIGATION_IDLE_MS = 100;
+const VIEWPORT_UNBOUNDED_EXTENT = 5000;
 
 type ViewportZBounds = {
   minZ: number;
@@ -171,7 +171,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
   const buildInitialSnapshot = () => {
     const initial2DSnapshot = getExternal2DSnapshot();
     const state = getState();
-    if (!isViewport3DState(state)) {
+    if (!state.is3DMode && !state.isTransitioning3D) {
       return initial2DSnapshot;
     }
 
@@ -512,7 +512,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
       return getObjectiveScreenPosition3D(managerSnapshot, getViewportRect(), point);
     },
-    getUnboundedClipBounds: () => getViewportUnboundedClipBounds(),
+    getUnboundedClipBounds: () => ({ minX: -VIEWPORT_UNBOUNDED_EXTENT, maxX: VIEWPORT_UNBOUNDED_EXTENT, minY: -VIEWPORT_UNBOUNDED_EXTENT, maxY: VIEWPORT_UNBOUNDED_EXTENT }),
     start3DTransition: (targetMode) => transition.begin(targetMode),
     getCanvasElement: () => viewportBridge.getCanvasElement(),
     getCanvasRect: () => getViewportRect() as DOMRect,
