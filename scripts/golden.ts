@@ -316,7 +316,7 @@ if (import.meta.main) {
   const args = process.argv.slice(2);
   const write = args.includes("--write");
   const only = args.includes("--only") ? args[args.indexOf("--only") + 1] : null;
-  const actual = await runGolden({ only, dumpDir: args.includes("--dump") ? args[args.indexOf("--dump") + 1] : null });
+  const actual = await runGolden({ only: only ?? null, dumpDir: (args.includes("--dump") ? args[args.indexOf("--dump") + 1] : null) ?? null });
   console.log(`${Object.keys(actual.cases).length} cases, total ${actual.total}`);
   if (write) {
     writeFileSync(GOLDEN_PATH, JSON.stringify(actual, null, 2) + "\n");
