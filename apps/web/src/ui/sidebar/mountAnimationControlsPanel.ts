@@ -1,6 +1,6 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
-import { el } from "@/ui/dom";
+import { el, range } from "@/ui/dom";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
 export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
@@ -17,28 +17,8 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
   stop.addEventListener("click", () => ctx.actions.stopRotation());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation is-hidden" });
-  const angle = el("input", {
-    attrs: {
-      type: "range",
-      id: "objectiveAngleStepSlider",
-      min: "0.01",
-      max: "0.5",
-      step: "0.01",
-      autocomplete: "off",
-    },
-  });
-  angle.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(angle.value)));
-  const speed = el("input", {
-    attrs: {
-      type: "range",
-      id: "objectiveRotationSpeedSlider",
-      min: "0.2",
-      max: "3",
-      step: "0.1",
-      autocomplete: "off",
-    },
-  });
-  speed.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(speed.value)));
+  const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
+  const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
   const trace = el("input", {
     attrs: { type: "checkbox", id: "traceCheckbox" },
   });

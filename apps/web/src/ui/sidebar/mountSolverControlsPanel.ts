@@ -1,6 +1,6 @@
 import type { AppContext } from "@/app/appContext";
 import { computeDrawingPhase, getState, on, type EllipsoidQueryPoint, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
-import { el } from "@/ui/dom";
+import { el, range } from "@/ui/dom";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { ENTERING_RULES, LEAVING_RULES, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
@@ -33,11 +33,6 @@ type SettingsSync = (state: State) => void;
 type SettingField = HTMLInputElement | HTMLSelectElement;
 type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: string; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
 
-function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
-  const i = el("input", { attrs: { type: "range", id, min, max, step, autocomplete: "off" } });
-  i.addEventListener("input", () => onInput(i.value));
-  return i;
-}
 function checkbox(id: string, onChange: (v: boolean) => void) {
   const i = el("input", { attrs: { type: "checkbox", id } });
   i.addEventListener("change", () => onChange(i.checked));

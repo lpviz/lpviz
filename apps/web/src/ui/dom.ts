@@ -14,3 +14,10 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   node.append(...children);
   return node;
 }
+
+// A range input; onInput receives the slider's string value on every input event.
+export function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
+  const i = el("input", { attrs: { type: "range", id, min, max, step, autocomplete: "off" } });
+  i.addEventListener("input", () => onInput(i.value));
+  return i;
+}
