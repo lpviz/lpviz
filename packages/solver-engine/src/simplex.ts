@@ -215,7 +215,7 @@ class BasisInverse {
       const scale = v[i]!;
       if (scale === 0) continue;
       const offset = i * m;
-      for (let k = 0; k < m; k++) out[k] += inverse[offset + k]! * scale;
+      for (let k = 0; k < m; k++) out[k]! += inverse[offset + k]! * scale;
     }
     return out;
   }
@@ -225,13 +225,13 @@ class BasisInverse {
     const pivotValue = direction[leavingRow]!;
     const rowR = leavingRow * m;
     const scale = 1 / pivotValue;
-    for (let k = 0; k < m; k++) inverse[rowR + k] *= scale;
+    for (let k = 0; k < m; k++) inverse[rowR + k]! *= scale;
     for (let i = 0; i < m; i++) {
       if (i === leavingRow) continue;
       const factor = direction[i]!;
       if (factor === 0) continue;
       const rowI = i * m;
-      for (let k = 0; k < m; k++) inverse[rowI + k] -= factor * inverse[rowR + k]!;
+      for (let k = 0; k < m; k++) inverse[rowI + k]! -= factor * inverse[rowR + k]!;
     }
     this.basisIndices[leavingRow] = enteringIndex;
     if (++this.pivotsSinceRefactor >= REFACTOR_INTERVAL || Math.abs(pivotValue) < UNSTABLE_PIVOT) {
@@ -373,14 +373,15 @@ function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[],
   const support = sorted.filter((index) => index < lines.length).slice(0, 2);
   if (support.length < 2) return new Float64Array(2);
 
-  const [i, j] = support;
+  const i = support[0]!;
+  const j = support[1]!;
   const first = lines[i]!;
   const second = lines[j]!;
-  const determinant = first[0]! * second[1]! - first[1]! * second[0]!;
+  const determinant = first[0] * second[1] - first[1] * second[0];
   if (Math.abs(determinant) <= tol) return new Float64Array(2);
 
-  const x = (first[2]! * second[1]! - first[1]! * second[2]!) / determinant;
-  const y = (first[0]! * second[2]! - first[2]! * second[0]!) / determinant;
+  const x = (first[2] * second[1] - first[1] * second[2]) / determinant;
+  const y = (first[0] * second[2] - first[2] * second[0]) / determinant;
   return Float64Array.of(x, y);
 }
 

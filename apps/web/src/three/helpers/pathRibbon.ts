@@ -1,5 +1,5 @@
 import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
-import { applyHugeBounds } from "./sharedLineMaterials";
+import { applyHugeBounds } from "./hugeBounds";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
 // one uncapped quad per segment, extruded in the vertex shader along that segment's own
@@ -130,7 +130,7 @@ const WHITE = new Color(1, 1, 1);
 // (grow-only): solver steps replace paths dozens of times per second, and
 // allocating a texture per step churns both the GC and the GL driver.
 function ensureTexture(texture: DataTexture | null, rows: number, type: typeof FloatType | typeof UnsignedByteType): DataTexture {
-  if (texture && (texture.image.height as number) >= rows) return texture;
+  if (texture && texture.image.height >= rows) return texture;
   texture?.dispose();
   const length = TEX_WIDTH * rows * 4;
   const next = new DataTexture(type === FloatType ? new Float32Array(length) : new Uint8Array(length), TEX_WIDTH, rows, RGBAFormat, type);

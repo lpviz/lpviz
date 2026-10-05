@@ -15,7 +15,7 @@ interface IPMOptions {
   alphaMax: number;
   correctorThreshold: number;
   /** Optional primal warm start; need not be feasible (infeasible-start method). */
-  startPoint?: number[];
+  startPoint?: number[] | undefined;
 }
 
 interface IPMSolutionData {
@@ -58,9 +58,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
     rows: [],
   };
 
-  let x = new Float64Array(n);
-  let s = new Float64Array(m).fill(1);
-  let y = new Float64Array(m).fill(1);
+  const x = new Float64Array(n);
+  const s = new Float64Array(m).fill(1);
+  const y = new Float64Array(m).fill(1);
   if (startPoint && startPoint.length === n) {
     // Relocate only the primal point and keep s = y = 1, so a start at the default position
     // reproduces the cold trajectory. x0 need not be feasible (infeasible-start method), but
@@ -164,10 +164,10 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
 
     const stepP = alphaMax * alphaStep(s, ds);
     const stepD = alphaMax * alphaStep(y, dy);
-    for (let j = 0; j < n; j++) x[j] += dx[j]! * stepP;
+    for (let j = 0; j < n; j++) x[j]! += dx[j]! * stepP;
     for (let i = 0; i < m; i++) {
-      s[i] += ds[i]! * stepP;
-      y[i] += dy[i]! * stepD;
+      s[i]! += ds[i]! * stepP;
+      y[i]! += dy[i]! * stepD;
     }
   }
 
@@ -198,7 +198,7 @@ function createNormalEquations(A: { rows: number; cols: number; data: Float64Arr
         for (let j = 0; j < n; j++) {
           const dj = d * A.data[offset + j]!;
           for (let k = 0; k < n; k++) {
-            M[j * n + k] += dj * A.data[offset + k]!;
+            M[j * n + k]! += dj * A.data[offset + k]!;
           }
         }
       }
@@ -208,11 +208,11 @@ function createNormalEquations(A: { rows: number; cols: number; data: Float64Arr
         weighted[i] = (rC[i]! + y[i]! * rP[i]!) / s[i]!;
       }
       transposedMatVec(A, weighted, rhs);
-      for (let j = 0; j < n; j++) rhs[j] -= rD[j]!;
+      for (let j = 0; j < n; j++) rhs[j]! -= rD[j]!;
       solveDenseSystem(M, n, rhs, dx, luScratch);
       matVec(A, dx, ds);
       for (let i = 0; i < m; i++) {
-        ds[i] -= rP[i]!;
+        ds[i]! -= rP[i]!;
         dy[i] = (rC[i]! - y[i]! * ds[i]!) / s[i]!;
       }
     },

@@ -3,7 +3,7 @@ import type { PointXY } from "@lpviz/math/types";
 export type ViewportBridge = {
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
-  invalidate: (options?: { layers?: boolean; viewportDirty?: ViewportDirtyFlags }) => void;
+  invalidate: (options?: { layers?: boolean; viewportDirty?: ViewportDirtyFlags | undefined }) => void;
 };
 
 export type ViewportDirtyFlags = Partial<{

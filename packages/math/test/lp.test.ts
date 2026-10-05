@@ -26,7 +26,7 @@ function bruteForce(objective: number[], rows: LpRow[], n: number) {
   };
   build(0, []);
   for (const combo of combos) {
-    const A = combo.map((i) => boxed[i]!.slice(0, n) as number[]);
+    const A = combo.map((i) => boxed[i]!.slice(0, n));
     const b = combo.map((i) => boxed[i]![n]!);
     const x = solveSquare(A, b, n);
     if (!x) continue;

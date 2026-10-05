@@ -53,7 +53,7 @@ const mulberry32 =
 const shuffle = <T>(values: T[], rng: Rng): T[] => {
   for (let i = values.length - 1; i > 0; i--) {
     const j = Math.floor(rng() * (i + 1));
-    [values[i], values[j]] = [values[j], values[i]];
+    [values[i], values[j]] = [values[j]!, values[i]!];
   }
   return values;
 };
@@ -72,10 +72,10 @@ const getDeltas = (count: number, rng: Rng): number[] => {
   const sample = Array.from({ length: count }, () => rng()).sort((a, b) => a - b);
   const [plus, minus] = randomPartition(sample.slice(1, -1), rng);
   minus.reverse();
-  const sequence = [sample[0], ...plus, sample[count - 1], ...minus, sample[0]];
+  const sequence = [sample[0]!, ...plus, sample[count - 1]!, ...minus, sample[0]!];
   const deltas: number[] = [];
   for (let i = 1; i < sequence.length; i++) {
-    deltas.push(sequence[i] - sequence[i - 1]);
+    deltas.push(sequence[i]! - sequence[i - 1]!);
   }
   return deltas;
 };
@@ -84,7 +84,7 @@ export const valtrPolygon = (count: number, rng: Rng): PointXY[] => {
   const xDeltas = getDeltas(count, rng);
   const yDeltas = getDeltas(count, rng);
   shuffle(yDeltas, rng);
-  const vectors = xDeltas.map((x, index) => ({ x, y: yDeltas[index] }));
+  const vectors = xDeltas.map((x, index) => ({ x, y: yDeltas[index]! }));
   vectors.sort((a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
   let x = 0;
   let y = 0;

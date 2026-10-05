@@ -178,7 +178,7 @@ export function getEditorTransition(
         // vertex stays equally easy at any zoom (it is otherwise a tiny target
         // when zoomed out, e.g. on mobile). Defaults to a world distance.
         const closeThreshold = action.closeThreshold ?? 0.5;
-        if (VRep.distance(action.point, state.vertices[0]) < closeThreshold) {
+        if (VRep.distance(action.point, state.vertices[0]!) < closeThreshold) {
           return edit(state.vertices, "closed", polytope.centroidPoint());
         }
 

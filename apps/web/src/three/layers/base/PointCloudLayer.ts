@@ -1,5 +1,6 @@
 import type { ViewportDirtyFlags } from "@/features/core/store";
-import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
+import type { Points, PointsMaterial } from "three";
+import { BufferAttribute, DynamicDrawUsage, type Texture } from "three";
 import { makePoints, pointsMaterial } from "../../helpers/points";
 import type { RenderPassName } from "../../Layer";
 import { ZScaledLayer } from "./LayerBase";

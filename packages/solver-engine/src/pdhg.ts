@@ -108,8 +108,8 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   let nextY = new Float64Array(m);
   let halpernX = new Float64Array(n);
   let halpernY = new Float64Array(m);
-  let anchorX = new Float64Array(n);
-  let anchorY = new Float64Array(m).fill(ineq ? 1 : 0);
+  const anchorX = new Float64Array(n);
+  const anchorY = new Float64Array(m).fill(ineq ? 1 : 0);
   const axScratch = new Float64Array(m);
   const atYScratch = new Float64Array(n);
   const extrapolated = new Float64Array(ineq ? m : n);

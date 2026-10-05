@@ -11,7 +11,9 @@ export function applySolverResult(response: SolverWorkerSuccessResponse, updateR
       return applySimplexResult(response.result, updateResult);
     case "central":
       return applyCentralPathResult(response.result, updateResult);
-    default:
+    case "ipm":
+    case "pdhg":
+    case "ellipsoid":
       return applyIterateResult(response.result, updateResult);
   }
 }
@@ -33,7 +35,7 @@ export interface VirtualResultPayload {
   type: "virtual";
   header: string;
   rows: ResultRowsView;
-  footer?: string;
+  footer?: string | undefined;
 }
 
 interface BlocksResultPayload {
@@ -64,8 +66,8 @@ export type IterateResult = {
   header: string;
   rows: ResultRowsView;
   footer?: string;
-  phases?: number[];
-  restartIndices?: number[];
+  phases?: number[] | undefined;
+  restartIndices?: number[] | undefined;
   ellipsoids?: EllipsoidPath;
   localizingSets?: LocalizingSetPath | null;
 };

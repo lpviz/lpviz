@@ -118,3 +118,5 @@ dist
 .ralph
 /tmp
 PLAN.md
+# Playwright MCP page snapshots
+.playwright-mcp/

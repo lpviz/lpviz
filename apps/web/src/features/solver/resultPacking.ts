@@ -18,7 +18,7 @@ type PackedRowsColumns = {
   infeasibility: Float64Array;
   // epsilon for pdhg rows, mu for ipm rows, rho for ellipsoid rows
   extra: Float64Array;
-  restart?: Uint8Array;
+  restart?: Uint8Array | undefined;
 };
 
 type PackedFields = {
@@ -26,9 +26,9 @@ type PackedFields = {
   lift: (index: number) => number;
   rows: PackedRowsColumns;
   header: string;
-  footer?: string;
-  phases?: number[];
-  restartIndices?: number[];
+  footer?: string | undefined;
+  phases?: number[] | undefined;
+  restartIndices?: number[] | undefined;
   // flat [cx, cy, p11, p12, p22] per iteration; ellipsoid method only
   ellipsoids?: Float64Array;
   // localizing polygons, only for the cutting-plane query points

@@ -9,7 +9,7 @@ export type Viewport3DInteractionOptions = {
   editorInteractionKind: string;
   is3DMode: boolean;
   isTransitioning3D: boolean;
-  viewAnchor3D?: { x: number; y: number; z: number };
+  viewAnchor3D?: { x: number; y: number; z: number } | undefined;
 };
 
 const MAX_3D_DRAG_BOUND = 5000;

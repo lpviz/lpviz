@@ -1,7 +1,7 @@
-import { Box3, type BufferGeometry, Sphere, Vector3 } from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { applyHugeBounds } from "./hugeBounds";
 import { setPathRibbonResolution } from "./pathRibbon";
 
 const materialCache = new Map<string, LineMaterial>();
@@ -29,21 +29,6 @@ export function tickSharedLineMaterialResolutions(w: number, h: number): void {
   _lastH = h;
   materialCache.forEach((mat) => mat.resolution.set(w, h));
   setPathRibbonResolution(w, h);
-}
-
-// ─── Bounding volume helpers ──────────────────────────────────────────────────
-// Pre-set a huge bounding box/sphere and no-op the compute methods so
-// setPositions() (which calls them internally) does no unnecessary work.
-
-const HUGE = 1e10;
-const HUGE_BOX = new Box3(new Vector3(-HUGE, -HUGE, -HUGE), new Vector3(HUGE, HUGE, HUGE));
-const HUGE_SPHERE = new Sphere(new Vector3(0, 0, 0), HUGE);
-
-export function applyHugeBounds(geo: BufferGeometry): void {
-  geo.boundingBox = HUGE_BOX.clone();
-  geo.boundingSphere = HUGE_SPHERE.clone();
-  geo.computeBoundingBox = () => {};
-  geo.computeBoundingSphere = () => {};
 }
 
 export function lineGeometry(): LineSegmentsGeometry {

@@ -7,7 +7,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
   const collectShareSettings = (mode: SolverMode): ShareSettings => {
     const settings = getState().solverSettings;
     const solverControl = getSolverControls().find((c) => c.mode === mode);
-    return { ...Object.fromEntries(GLOBAL_SHARE_KEYS.map((key) => [key, settings[key]])), ...(solverControl?.collectShareSettings() ?? {}) };
+    return { ...Object.fromEntries(GLOBAL_SHARE_KEYS.map((key) => [key, settings[key]])), ...solverControl?.collectShareSettings() };
   };
   const share = () => {
     const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getState();

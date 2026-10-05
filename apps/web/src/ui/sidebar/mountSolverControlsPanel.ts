@@ -39,7 +39,11 @@ function checkbox(id: string, onChange: (v: boolean) => void) {
   return i;
 }
 function select<T extends string>(id: string, options: readonly (readonly [T, string])[], onChange: (v: T) => void) {
-  const s = el("select", { attrs: { id, autocomplete: "off" } }, [...options.map(([value, label]) => el("option", { attrs: { value }, text: label }))]);
+  const s = el(
+    "select",
+    { attrs: { id, autocomplete: "off" } },
+    options.map(([value, label]) => el("option", { attrs: { value }, text: label })),
+  );
   s.addEventListener("change", () => onChange(s.value as T));
   return s;
 }

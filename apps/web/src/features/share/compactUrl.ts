@@ -135,8 +135,8 @@ const SETTINGS: readonly SettingCodec[] = [
 export function encodeSharedState(state: SharedAppState): string {
   const bytes: number[] = [VERSION];
 
-  const completion = Math.max(0, COMPLETION_MODES.indexOf((state.completionMode ?? "draft") as (typeof COMPLETION_MODES)[number]));
-  const solver = Math.max(0, SOLVER_MODES.indexOf(state.solverMode as (typeof SOLVER_MODES)[number]));
+  const completion = Math.max(0, COMPLETION_MODES.indexOf(state.completionMode ?? "draft"));
+  const solver = Math.max(0, SOLVER_MODES.indexOf(state.solverMode));
   const hasObjective = state.objective !== null && state.objective !== undefined;
   const hasZScale = state.zScale !== undefined && Number.isFinite(state.zScale);
   const start = state.solverStartPoint;

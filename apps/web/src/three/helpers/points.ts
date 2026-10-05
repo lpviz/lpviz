@@ -1,5 +1,5 @@
 import { BufferGeometry, Points, PointsMaterial, type Texture } from "three";
-import { applyHugeBounds } from "./sharedLineMaterials";
+import { applyHugeBounds } from "./hugeBounds";
 
 // Every point sprite in the app: a fixed screen-size, depth-ignoring sprite
 // whose shape is an alpha map (see sharedTextures.ts).

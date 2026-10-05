@@ -135,7 +135,7 @@ function buildTranscript() {
               record(`${key} canvas ${x},${y}`, [
                 toCanvasCoords3D(snap, rect, { x, y }, undefined, 0.1),
                 toCanvasCoords3D(snap, rect, { x, y }, 7, 0.1),
-                toCanvasCoords3D(snap, rect, { x, y }, 7, 2.5, (entry) => entry[0] * 2 + entry[1]),
+                toCanvasCoords3D(snap, rect, { x, y }, 7, 2.5, (entry) => entry[0]! * 2 + entry[1]!),
                 projectWorldPosition3D(snap, rect, { x, y, z: 0 }),
               ]);
             }
@@ -237,7 +237,7 @@ describe("viewport pin", () => {
   });
 
   test("a grazing ray falls back to the target, and to the view-anchor plane when one is given", () => {
-    const rect = RECTS[0];
+    const rect = RECTS[0]!;
     // camera 1.5 rad from top-down: nearly in the z = 0 plane, so the top of
     // the canvas looks above the horizon and never meets the plane
     const snap = buildViewport3DSnapshot(createDefaultViewportRenderSnapshot(rect), buildPerspectivePoseFromViewAngle({ x: -1.5, y: 0, z: 0 }, 100, { x: 5, y: -3, z: 2 }), rect);

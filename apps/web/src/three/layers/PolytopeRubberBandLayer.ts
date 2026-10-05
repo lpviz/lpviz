@@ -5,7 +5,8 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
+import { applyHugeBounds } from "../helpers/hugeBounds";
+import { lineDepthMaterial, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import type { Layer } from "../Layer";
 
 const POLYTOPE_OUTLINE_COLOR = "#000000";

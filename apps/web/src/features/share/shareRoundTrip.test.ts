@@ -20,13 +20,10 @@ function randomConvexPolygon(rand: () => number) {
   const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
   if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
   const R = 1 + rand() * 8;
-  return angles.map(
-    (a) =>
-      ({
-        x: cx + R * Math.cos(a),
-        y: cy + R * Math.sin(a),
-      }) as { x: number; y: number },
-  );
+  return angles.map((a) => ({
+    x: cx + R * Math.cos(a),
+    y: cy + R * Math.sin(a),
+  }));
 }
 
 // Valtr's algorithm (the gallery's) for a random convex polygon with an exact vertex count.
@@ -149,7 +146,8 @@ const GALLERY_PROBLEMS: SharedAppState[] = [
 
 describe("share link round-trip stability", () => {
   test.each(GALLERY_PROBLEMS.map((p, i) => [i, p] as const))("gallery problem #%i: optimum within tolerance and polytope convex after %i round-trips", (_index, original) => {
-    const originalOptimum = bruteForceOptimum(original.vertices, original.objective!);
+    if (!original.objective) throw new Error("fixture has no objective");
+    const originalOptimum = bruteForceOptimum(original.vertices, original.objective);
 
     const final = roundTripN(original, ROUND_TRIPS);
 

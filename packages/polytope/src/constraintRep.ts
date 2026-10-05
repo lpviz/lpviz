@@ -79,8 +79,8 @@ export function buildConstraintRep(points: Vertices, closed: boolean, tol = 1e-6
   const turnSign = closed ? 0 : chainTurnSign(points, tol);
 
   for (let index = 0; index < edgeCount; index++) {
-    const start = points[index];
-    const end = points[(index + 1) % pointCount];
+    const start = points[index]!;
+    const end = points[(index + 1) % pointCount]!;
 
     const A = end[1] - start[1];
     const B = -(end[0] - start[0]);

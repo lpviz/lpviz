@@ -6,7 +6,8 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
+import { applyHugeBounds } from "../helpers/hugeBounds";
+import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { ZScaledGroupLayer } from "./base/LayerBase";
 
 const ELLIPSOID_COLOR = "#377eb8";
