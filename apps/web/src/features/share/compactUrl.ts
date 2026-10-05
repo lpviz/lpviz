@@ -1,4 +1,4 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES, type SolverSettings } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 
 // A share link is a URL people paste into chat, email and papers, so the
@@ -34,34 +34,6 @@ const Z_SCALE_SCALE = 1e3;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
-
-type SettingKey = keyof ShareSettings;
-
-type SettingCodec =
-  { key: SettingKey; kind: "bool" } | { key: SettingKey; kind: "int" } | { key: SettingKey; kind: "scaled"; scale: number } | { key: SettingKey; kind: "enum"; values: readonly string[] };
-
-// Index is the wire identity of a setting: only ever append to this list, and
-// never reorder it, or old links decode into the wrong fields.
-const SETTINGS: readonly SettingCodec[] = [
-  { key: "alphaMax", kind: "scaled", scale: 1e4 },
-  { key: "correctorThreshold", kind: "scaled", scale: 1e4 },
-  { key: "maxitIPM", kind: "int" },
-  { key: "simplexDualMode", kind: "bool" },
-  { key: "pdhgEta", kind: "scaled", scale: 1e4 },
-  { key: "pdhgTau", kind: "scaled", scale: 1e4 },
-  { key: "maxitPDHG", kind: "int" },
-  { key: "pdhgIneqMode", kind: "bool" },
-  { key: "pdhgHalpernMode", kind: "bool" },
-  { key: "pdhgColorByBasis", kind: "bool" },
-  { key: "centralPathIter", kind: "int" },
-  { key: "maxitEllipsoid", kind: "int" },
-  { key: "ellipsoidDeepCuts", kind: "bool" },
-  { key: "ellipsoidRayShoot", kind: "bool" },
-  { key: "ellipsoidQueryPoint", kind: "enum", values: QUERY_POINTS },
-  { key: "ellipsoidInitialScale", kind: "scaled", scale: 1e4 },
-  { key: "objectiveAngleStep", kind: "scaled", scale: 1e4 },
-  { key: "objectiveRotationSpeed", kind: "scaled", scale: 1e4 },
-];
 
 // ─── varints ────────────────────────────────────────────────────────────────
 // Written with arithmetic rather than bit operations: quantized coordinates can
@@ -119,6 +91,55 @@ function fromBase64Url(text: string): Uint8Array {
   return bytes;
 }
 
+// ─── setting codecs ─────────────────────────────────────────────────────────
+
+const readByte = (bytes: Uint8Array, cursor: Cursor): number => {
+  if (cursor.at >= bytes.length) throw new Error("truncated setting");
+  return bytes[cursor.at++]!;
+};
+
+type SettingCodec = { key: keyof ShareSettings; write: (out: number[], value: unknown) => void; read: (bytes: Uint8Array, cursor: Cursor) => boolean | number | string | undefined };
+
+const bool = (key: SettingCodec["key"]): SettingCodec => ({ key, write: (out, value) => out.push(value ? 1 : 0), read: (bytes, cursor) => readByte(bytes, cursor) !== 0 });
+const int = (key: SettingCodec["key"]): SettingCodec => ({ key, write: (out, value) => writeVarint(out, value as number), read: readVarint });
+const scaled = (key: SettingCodec["key"], scale: number): SettingCodec => ({
+  key,
+  write: (out, value) => writeZigZag(out, quantize(value as number, scale)),
+  read: (bytes, cursor) => dequantize(readZigZag(bytes, cursor), scale),
+});
+// an unknown value writes index 0; an unknown index reads as undefined (left unset)
+const enumeration = (key: SettingCodec["key"], values: readonly string[]): SettingCodec => ({
+  key,
+  write: (out, value) => {
+    const at = values.indexOf(value as string);
+    out.push(at < 0 ? 0 : at);
+  },
+  read: (bytes, cursor) => values[readByte(bytes, cursor)],
+});
+
+// Index is the wire identity of a setting: only ever append to this list, and
+// never reorder it, or old links decode into the wrong fields.
+const SETTINGS: readonly SettingCodec[] = [
+  scaled("alphaMax", 1e4),
+  scaled("correctorThreshold", 1e4),
+  int("maxitIPM"),
+  bool("simplexDualMode"),
+  scaled("pdhgEta", 1e4),
+  scaled("pdhgTau", 1e4),
+  int("maxitPDHG"),
+  bool("pdhgIneqMode"),
+  bool("pdhgHalpernMode"),
+  bool("pdhgColorByBasis"),
+  int("centralPathIter"),
+  int("maxitEllipsoid"),
+  bool("ellipsoidDeepCuts"),
+  bool("ellipsoidRayShoot"),
+  enumeration("ellipsoidQueryPoint", QUERY_POINTS),
+  scaled("ellipsoidInitialScale", 1e4),
+  scaled("objectiveAngleStep", 1e4),
+  scaled("objectiveRotationSpeed", 1e4),
+];
+
 // ─── encode / decode ────────────────────────────────────────────────────────
 
 export function encodeSharedState(state: SharedAppState): string {
@@ -167,26 +188,11 @@ export function encodeSharedState(state: SharedAppState): string {
     const value = settings[codec.key];
     if (value === undefined) return;
     // a setting still at its default costs nothing to leave out
-    if (value === DEFAULT_SOLVER_SETTINGS[codec.key as keyof SolverSettings]) {
+    if (value === DEFAULT_SOLVER_SETTINGS[codec.key]) {
       return;
     }
     written.push(index);
-    switch (codec.kind) {
-      case "bool":
-        payload.push(value ? 1 : 0);
-        break;
-      case "int":
-        writeVarint(payload, value as number);
-        break;
-      case "scaled":
-        writeZigZag(payload, quantize(value as number, codec.scale));
-        break;
-      case "enum": {
-        const at = codec.values.indexOf(value as string);
-        payload.push(at < 0 ? 0 : at);
-        break;
-      }
-    }
+    codec.write(payload, value);
   });
   // keys first, then values, so a reader can validate the count cheaply
   writeVarint(bytes, written.length);
@@ -256,26 +262,8 @@ export function decodeSharedState(text: string): SharedAppState | null {
       // an unknown index means a link from a newer build; the rest of the
       // payload can no longer be located, so stop rather than mis-read it
       if (!codec) break;
-      switch (codec.kind) {
-        case "bool":
-          if (cursor.at >= bytes.length) return null;
-          (settings[codec.key] as boolean) = bytes[cursor.at++] !== 0;
-          break;
-        case "int":
-          (settings[codec.key] as number) = readVarint(bytes, cursor);
-          break;
-        case "scaled":
-          (settings[codec.key] as number) = dequantize(readZigZag(bytes, cursor), codec.scale);
-          break;
-        case "enum": {
-          if (cursor.at >= bytes.length) return null;
-          const value = codec.values[bytes[cursor.at++]!];
-          if (value !== undefined) {
-            (settings[codec.key] as string) = value;
-          }
-          break;
-        }
-      }
+      const value = codec.read(bytes, cursor);
+      if (value !== undefined) (settings as Record<string, unknown>)[codec.key] = value;
     }
 
     return {
