@@ -1,19 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cuttingPlane, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
-
-const SQUARE = [
-  [1, 0, -4],
-  [-1, 0, 6],
-  [0, 1, -4],
-  [0, -1, 6],
-] as [number, number, number][];
-const SQUARE_VERTICES = [
-  [-6, -6],
-  [-4, -6],
-  [-4, -4],
-  [-6, -4],
-] as [number, number][];
+import { SQUARE, SQUARE_VERTICES, lastIterate, lcg, randomPolygon } from "./fixtures";
 
 const QUERY_POINTS: QueryPoint[] = ["chebyshev", "analytic", "volumetric"];
 
@@ -26,47 +14,21 @@ const opts = (queryPoint: QueryPoint, o: Record<string, unknown> = {}) => ({
   ...o,
 });
 
-function polygonLines(hull: [number, number][]) {
-  const cx = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-  const cy = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-  return hull.map((start, i) => {
-    const end = hull[(i + 1) % hull.length]!;
-    let A = end[1] - start[1];
-    let B = -(end[0] - start[0]);
-    const norm = Math.hypot(A, B);
-    A /= norm;
-    B /= norm;
-    let C = A * start[0] + B * start[1];
-    if (A * cx + B * cy > C) {
-      A = -A;
-      B = -B;
-      C = -C;
-    }
-    return [A, B, C] as [number, number, number];
-  });
-}
-
 describe("cuttingPlane", () => {
   test("every query point finds the optimum of random polygons", () => {
-    let seed = 13;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(13);
     let runs = 0;
     for (let t = 0; t < 60 && runs < 12; t++) {
-      const count = 3 + Math.floor(rand() * 5);
-      const cx = rand() * 12 - 6;
-      const cy = rand() * 12 - 6;
-      const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
-      if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.3)) continue;
-      const R = 1 + rand() * 6;
-      const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
-      const lines = polygonLines(hull);
+      const polygon = randomPolygon(rand, { gap: 0.3, radius: 6, spread: 12 });
+      if (!polygon) continue;
+      const { hull, lines } = polygon;
       const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(objective[0]!) + Math.abs(objective[1]!) < 0.2) continue;
       const expected = Math.max(...hull.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
       runs++;
       for (const queryPoint of QUERY_POINTS) {
         const r = cuttingPlane(hull, lines, objective, opts(queryPoint));
-        const last = r.iterations[r.iterations.length - 1]!;
+        const last = lastIterate(r);
         const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
         expect(got).toBeLessThanOrEqual(expected + 1e-7);
         expect(expected - got).toBeLessThanOrEqual(1e-6 * (1 + Math.abs(expected)) + 1e-7);
@@ -79,7 +41,7 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       for (const objective of [Float64Array.of(1, 1), Float64Array.of(-2, 0.5), Float64Array.of(0, -1)]) {
         const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
-        const last = r.iterations[r.iterations.length - 1]!;
+        const last = lastIterate(r);
         for (const [a1, a2, rhs] of SQUARE) {
           expect(a1 * last[0]! + a2 * last[1]!).toBeLessThanOrEqual(rhs + 1e-7);
         }
@@ -265,7 +227,7 @@ describe("cuttingPlane", () => {
       for (const rayShoot of [true, false]) {
         const r = cuttingPlane(WEDGE_CHAIN, WEDGE, objective, opts(queryPoint, { rayShoot }));
         expect(r.footer).not.toContain("unbounded");
-        const last = r.iterations[r.iterations.length - 1]!;
+        const last = lastIterate(r);
         expect(last[0]! + last[1]!).toBeCloseTo(3, 4);
       }
     }
