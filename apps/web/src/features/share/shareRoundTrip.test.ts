@@ -4,6 +4,7 @@ import type { SharedAppState } from "./sharedState";
 import { buildConstraintRep } from "@lpviz/polytope/constraintRep";
 import { simplex } from "@lpviz/solver-engine/simplex";
 import { VRep } from "@lpviz/math/geometry";
+import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/problems";
 
 const MAX_OPTIMUM_ERROR = 0.001;
 const ROUND_TRIPS = 10;
@@ -28,71 +29,8 @@ function randomConvexPolygon(rand: () => number) {
   );
 }
 
-// Valtr's algorithm for a random convex polygon with an exact vertex count.
-// Mirrors the gallery implementation in problems.ts.
-const SCALE = 24;
+// Valtr's algorithm (the gallery's) for a random convex polygon with an exact vertex count.
 const MAX_TRIES = 40;
-const MIN_FILL = 0.04;
-
-function getDeltas(count: number, rand: () => number): number[] {
-  const sample = Array.from({ length: count }, () => rand()).sort((a, b) => a - b);
-  const plus: number[] = [];
-  const minus: number[] = [];
-  for (let i = 1; i < sample.length - 1; i++) {
-    if (rand() < 0.5) plus.push(sample[i]!);
-    else minus.push(sample[i]!);
-  }
-  minus.reverse();
-  const sequence = [sample[0], ...plus, sample[sample.length - 1]!, ...minus, sample[0]!];
-  const deltas: number[] = [];
-  for (let i = 1; i < sequence.length; i++) {
-    deltas.push(sequence[i]! - sequence[i - 1]!);
-  }
-  return deltas;
-}
-
-function valtrPolygon(count: number, rand: () => number): { x: number; y: number }[] {
-  const xDeltas = getDeltas(count, rand);
-  const yDeltas = getDeltas(count, rand);
-  // shuffle yDeltas
-  for (let i = yDeltas.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [yDeltas[i], yDeltas[j]] = [yDeltas[j]!, yDeltas[i]!];
-  }
-  const vectors = xDeltas.map((x, i) => ({ x, y: yDeltas[i]! }));
-  vectors.sort((a, b) => Math.atan2(a.y, a.x) - Math.atan2(b.y, b.x));
-  let x = 0;
-  let y = 0;
-  const raw = [{ x: 0, y: 0 }];
-  for (const v of vectors) {
-    x += v.x;
-    y += v.y;
-    raw.push({ x, y });
-  }
-  raw.pop();
-  const minX = Math.min(...raw.map((p) => p.x));
-  const minY = Math.min(...raw.map((p) => p.y));
-  return raw.map((p) => ({
-    x: (p.x - minX - 0.5) * SCALE,
-    y: (p.y - minY - 0.5) * SCALE,
-  }));
-}
-
-function isWellProportioned(points: { x: number; y: number }[]): boolean {
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  const w = Math.max(...xs) - Math.min(...xs);
-  const h = Math.max(...ys) - Math.min(...ys);
-  if (w <= 0 || h <= 0) return false;
-  // signed area via shoelace
-  let area = 0;
-  for (let i = 0; i < points.length; i++) {
-    const cur = points[i]!;
-    const next = points[(i + 1) % points.length]!;
-    area += cur.x * next.y - next.x * cur.y;
-  }
-  return Math.abs(area / 2) / (w * h) >= MIN_FILL;
-}
 
 function exactVertexPolygon(vertexCount: number, rand: () => number): { x: number; y: number }[] {
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {

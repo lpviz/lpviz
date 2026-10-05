@@ -15,6 +15,8 @@ import { mountSidebar } from "@/ui/sidebar/mountSidebar";
 const DEFAULT_SIDEBAR_WIDTH = 450;
 const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
 
+const pick = <T, K extends keyof T>(source: T, ...keys: K[]): Pick<T, K> => Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>;
+
 export function boot(root: HTMLElement) {
   root.replaceChildren();
 
@@ -24,19 +26,16 @@ export function boot(root: HTMLElement) {
   let mobileLayout = mobileQuery.matches;
   let canvasManager: ViewportRuntime | null = null;
   let urlApplied = false;
-  let solverHandleProblemChange = () => {};
 
   const history = createHistoryService(() => {
     canvasManager?.draw();
     polytope.send();
   });
 
-  const polytope = createPolytopeService(() => solverHandleProblemChange);
   const solver = createSolverActions(() => canvasManager);
+  const polytope = createPolytopeService(solver.handleProblemChange);
   const viewport = createViewportActions(() => canvasManager, sidebarWidth);
   const share = createShareService(() => solver.solverControls);
-
-  solverHandleProblemChange = solver.handleProblemChange;
 
   const getViewportSidebarWidth = () => (mobileLayout ? 0 : sidebarWidth);
   const applyLayoutMode = () => {
@@ -81,17 +80,7 @@ export function boot(root: HTMLElement) {
   };
 
   const actions: AppActions = {
-    setConstraintHighlight: solver.setConstraintHighlight,
-    setIterateHighlight: solver.setIterateHighlight,
-
-    updateSolverSetting: solver.updateSolverSetting,
-    recomputeIfModeActive: solver.recomputeIfModeActive,
-    setTraceEnabled: solver.setTraceEnabled,
-
-    toggleReplay: solver.toggleReplay,
-    startRotation: solver.startRotation,
-    stopRotation: solver.stopRotation,
-
+    ...pick(solver, "setConstraintHighlight", "setIterateHighlight", "updateSolverSetting", "recomputeIfModeActive", "setTraceEnabled", "toggleReplay", "startRotation", "stopRotation"),
     share: share.share,
     reset: () => {
       if (!window.confirm("Reset lpviz? This clears the drawing and every setting.")) return;
@@ -111,14 +100,8 @@ export function boot(root: HTMLElement) {
       });
     },
 
-    zoomToFit: viewport.zoomToFit,
-    resetView: viewport.resetView,
-    toggle3D: viewport.toggle3D,
-    setZScale: viewport.setZScale,
-
+    ...pick(viewport, "zoomToFit", "resetView", "toggle3D", "setZScale", "setSidebarWidth", "syncViewportLayout"),
     setActiveSolverMode: (mode) => solver.setActiveSolverMode(mode, true),
-    setSidebarWidth: viewport.setSidebarWidth,
-    syncViewportLayout: viewport.syncViewportLayout,
 
     loadGalleryProblem: (problem: GalleryProblem) => {
       history.save();
@@ -153,7 +136,7 @@ export function boot(root: HTMLElement) {
 
   const ctx: AppContext = {
     actions,
-    services: { history, polytope, solver, viewport },
+    services: { history, polytope, viewport },
 
     getCanvasManager: () => canvasManager,
     setCanvasManager,
@@ -169,49 +152,13 @@ export function boot(root: HTMLElement) {
   // can remove them if teardown happens mid-drag
   let activeResizeCleanup: (() => void) | null = null;
 
-  const onResizeStart = (startEvent: PointerEvent) => {
-    if (mobileLayout) {
-      const applyHeight = (clientY: number) => {
-        mobileSidebarHeight = Math.max(180, Math.min(window.innerHeight * 0.72, window.innerHeight - clientY));
-        root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
-        viewport.setSidebarWidth(0);
-        stage.updateLayout();
-      };
-      applyHeight(startEvent.clientY);
-
-      const move = (event: PointerEvent) => {
-        if (event.pointerId !== startEvent.pointerId) return;
-        applyHeight(event.clientY);
-      };
-      const stop = () => {
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", up);
-        activeResizeCleanup = null;
-      };
-      const up = (event: PointerEvent) => {
-        if (event.pointerId !== startEvent.pointerId) return;
-        stop();
-        viewport.syncViewportLayout(0);
-      };
-      activeResizeCleanup = stop;
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-      window.addEventListener("pointercancel", up);
-      return;
-    }
-
-    const applyWidth = (clientX: number) => {
-      sidebarWidth = Math.max(260, Math.min(window.innerWidth - 240, clientX));
-      sidebar.updateWidth(sidebarWidth);
-      viewport.setSidebarWidth(getViewportSidebarWidth());
-      stage.updateLayout();
-    };
-    applyWidth(startEvent.clientX);
-
+  // Follows one pointer from `startEvent` until it lifts: `apply` sees the
+  // start event and every move, `onUp` runs once after the listeners are gone.
+  const trackPointerDrag = (startEvent: PointerEvent, apply: (event: PointerEvent) => void, onUp: () => void) => {
+    apply(startEvent);
     const move = (event: PointerEvent) => {
       if (event.pointerId !== startEvent.pointerId) return;
-      applyWidth(event.clientX);
+      apply(event);
     };
     const stop = () => {
       window.removeEventListener("pointermove", move);
@@ -222,13 +169,30 @@ export function boot(root: HTMLElement) {
     const up = (event: PointerEvent) => {
       if (event.pointerId !== startEvent.pointerId) return;
       stop();
-      viewport.syncViewportLayout(getViewportSidebarWidth());
+      onUp();
     };
     activeResizeCleanup = stop;
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
     window.addEventListener("pointercancel", up);
   };
+
+  const applyHeight = (event: PointerEvent) => {
+    mobileSidebarHeight = Math.max(180, Math.min(window.innerHeight * 0.72, window.innerHeight - event.clientY));
+    root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
+    viewport.setSidebarWidth(0);
+    stage.updateLayout();
+  };
+  const applyWidth = (event: PointerEvent) => {
+    sidebarWidth = Math.max(260, Math.min(window.innerWidth - 240, event.clientX));
+    sidebar.updateWidth(sidebarWidth);
+    viewport.setSidebarWidth(getViewportSidebarWidth());
+    stage.updateLayout();
+  };
+  const onResizeStart = (startEvent: PointerEvent) =>
+    mobileLayout
+      ? trackPointerDrag(startEvent, applyHeight, () => viewport.syncViewportLayout(0))
+      : trackPointerDrag(startEvent, applyWidth, () => viewport.syncViewportLayout(getViewportSidebarWidth()));
 
   const stage = mountCanvasStage(root, ctx, onResizeStart);
 

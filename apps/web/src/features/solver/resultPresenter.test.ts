@@ -18,7 +18,7 @@ const run = (count: number): VirtualResultPayload => ({
             y: 0,
             objective: 0,
             infeasibility: 0,
-            rho: 0,
+            extra: 0,
           }
         : undefined,
   },

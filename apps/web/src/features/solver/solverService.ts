@@ -12,61 +12,30 @@ import type { ResultTextBlock } from "@/features/solver/types";
 import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
 import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
 
-// Dispatch an unpacked worker result to the matching apply*Result. Replaces the
-// per-solver applyResult that each SolverControl used to carry (each of which
-// re-narrowed the response by solver — redundant, since the response already
-// discriminates on `solver`).
+// Dispatch an unpacked worker result. simplex/central keep their own log
+// shapes; pdhg/ipm/ellipsoid arrive as one IterateResult (see resultPacking).
 export function applySolverResult(response: SolverWorkerSuccessResponse, updateResult: (payload: ResultRenderPayload) => void): void {
   switch (response.solver) {
-    case "ipm":
-      return applyIPMResult(response.result, updateResult);
-    case "pdhg":
-      return applyPDHGResult(response.result, updateResult);
     case "simplex":
       return applySimplexResult(response.result, updateResult);
     case "central":
       return applyCentralPathResult(response.result, updateResult);
-    case "ellipsoid":
-      return applyEllipsoidResult(response.result, updateResult);
+    default:
+      return applyIterateResult(response.result, updateResult);
   }
 }
 
-type VirtualResultRow =
-  | string
-  | {
-      kind: "ipm";
-      iteration: number;
-      x: number;
-      y: number;
-      objective: number;
-      infeasibility: number;
-      mu: number;
-    }
-  | {
-      kind: "pdhg";
-      iteration: number;
-      restart?: boolean;
-      x: number;
-      y: number;
-      objective: number;
-      infeasibility: number;
-      epsilon: number;
-    }
-  | {
-      kind: "ellipsoid";
-      iteration: number;
-      x: number;
-      y: number;
-      objective: number;
-      infeasibility: number;
-      rho: number;
-    };
+export type PackedSolver = "pdhg" | "ipm" | "ellipsoid";
+
+// One row shape for the three packed solvers; `extra` is each one's convergence
+// measure (pdhg eps, ipm mu, ellipsoid rho), the trailing log column.
+type VirtualResultRow = string | { kind: PackedSolver; iteration: number; restart?: boolean; x: number; y: number; objective: number; infeasibility: number; extra: number };
 
 // Rows materialize lazily through this view so that a 100k-iteration result
 // never pays for building row objects that are not scrolled into view.
-type ResultRowsView<T = VirtualResultRow> = {
+type ResultRowsView = {
   length: number;
-  at(index: number): T | undefined;
+  at(index: number): VirtualResultRow | undefined;
 };
 
 export interface VirtualResultPayload {
@@ -83,21 +52,6 @@ interface BlocksResultPayload {
 
 export type ResultRenderPayload = VirtualResultPayload | BlocksResultPayload;
 
-// Generic over the iterates representation: the worker/solver side emits one
-// Float64Array per iterate (the default); after the worker packs and the client
-// unpacks, the iterates are one flat IteratePath (no per-iterate views).
-export interface IPMResult<I = Float64Array[]> {
-  iterates: {
-    solution: {
-      x: I;
-      header: string;
-      rows: ResultRowsView<Extract<VirtualResultRow, { kind: "ipm" }>>;
-      footer?: string;
-      mu?: number[];
-    };
-  };
-}
-
 export interface SimplexResult {
   iterations: Float64Array[];
   phase1Iterations?: Float64Array[];
@@ -106,51 +60,24 @@ export interface SimplexResult {
   status?: "optimal" | "unbounded" | "infeasible";
 }
 
-export interface PDHGResult<I = Float64Array[]> {
-  iterations: I;
-  header: string;
-  rows: ResultRowsView<Extract<VirtualResultRow, { kind: "pdhg" }>>;
-  footer: string;
-  eps?: number[];
-  phases?: number[];
-  restartIndices?: number[];
-}
-
 export interface CentralPathResult {
   iterations: Float64Array[];
   logs: string[];
   tsolve: number;
 }
 
-// `E` is the ellipse representation: a flat stride-5 Float64Array on the worker
-// side, an EllipsoidPath once unpacked on the client (see resultPacking).
-export interface EllipsoidResult<I = Float64Array[], E = Float64Array> {
-  iterations: I;
-  ellipsoids: E;
-  // the cutting-plane query points also carry the localizing polyhedron: flat
-  // on the worker side, a LocalizingSetPath once unpacked
-  polygonPoints?: Float64Array;
-  polygonOffsets?: Uint32Array;
-  localizingSets?: LocalizingSetPath | null;
+// What the client receives for pdhg/ipm/ellipsoid once unpacked: the iterates
+// flat with the display z already baked in, plus whatever the solver drew.
+export type IterateResult = {
+  iterations: IteratePath;
   header: string;
-  rows: ResultRowsView<Extract<VirtualResultRow, { kind: "ellipsoid" }>>;
-  footer: string;
-  rho?: number[];
-}
-
-function applyIPMResult(result: IPMResult<IteratePath>, updateResult: (payload: ResultRenderPayload) => void) {
-  const sol = result.iterates.solution;
-  // worker-packed results arrive flat with the display z already baked in
-  applyCanonicalIterateResult(
-    {
-      iterations: sol.x,
-      header: sol.header,
-      rows: sol.rows,
-      footer: sol.footer,
-    },
-    updateResult,
-  );
-}
+  rows: ResultRowsView;
+  footer?: string;
+  phases?: number[];
+  restartIndices?: number[];
+  ellipsoids?: EllipsoidPath;
+  localizingSets?: LocalizingSetPath | null;
+};
 
 function applySimplexResult(result: SimplexResult, updateResult: (payload: ResultRenderPayload) => void) {
   const phase1Iterations = result.phase1Iterations ?? [];
@@ -163,39 +90,9 @@ function applySimplexResult(result: SimplexResult, updateResult: (payload: Resul
   });
 }
 
-function applyPDHGResult(result: PDHGResult<IteratePath>, updateResult: (payload: ResultRenderPayload) => void) {
-  // worker-packed results arrive flat with the display z already baked in
-  applyCanonicalIterateResult(
-    {
-      iterations: result.iterations,
-      header: result.header,
-      rows: result.rows,
-      footer: result.footer,
-      phases: result.phases,
-      restartIndices: result.restartIndices,
-    },
-    updateResult,
-  );
-}
-
-function applyEllipsoidResult(result: EllipsoidResult<IteratePath, EllipsoidPath>, updateResult: (payload: ResultRenderPayload) => void) {
-  // worker-packed results arrive flat with the display z already baked in
-  applyCanonicalIterateResult(
-    {
-      iterations: result.iterations,
-      header: result.header,
-      rows: result.rows,
-      footer: result.footer,
-      ellipsoids: result.ellipsoids,
-      localizingSets: result.localizingSets ?? null,
-    },
-    updateResult,
-  );
-}
-
 function applyCentralPathResult(result: CentralPathResult, updateResult: (payload: ResultRenderPayload) => void) {
   const path = flattenIteratesToPath(result.iterations);
-  applyCanonicalIterateResult(
+  applyIterateResult(
     {
       iterations: path,
       header: result.logs[0] ?? "",
@@ -213,30 +110,14 @@ function applyCentralPathResult(result: CentralPathResult, updateResult: (payloa
   }
 }
 
-type CanonicalIterateResult = {
-  iterations: IteratePath;
-  header: string;
-  rows: ResultRowsView;
-  footer?: string;
-  updateTrace?: boolean;
-  phases?: number[];
-  restartIndices?: number[];
-  ellipsoids?: EllipsoidPath;
-  localizingSets?: LocalizingSetPath | null;
-};
-
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
-  if (row.kind === "ipm" || row.kind === "ellipsoid") {
-    const trailing = row.kind === "ipm" ? row.mu : row.rho;
-    return `${fmtInt(row.iteration, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(trailing, 10, 1, false)}`;
-  }
-  const iterationLabel = row.restart ? `${row.iteration}r` : `${row.iteration}`;
-  return `${fmtStr(iterationLabel, 5)} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.epsilon, 10, 1, false)}`;
+  const iteration = row.kind === "pdhg" ? fmtStr(row.restart ? `${row.iteration}r` : `${row.iteration}`, 5) : fmtInt(row.iteration, 5);
+  return `${iteration} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.extra, 10, 1, false)}`;
 }
 
-function applyCanonicalIterateResult(
-  { iterations, header, rows, footer, updateTrace = true, phases, restartIndices, ellipsoids, localizingSets }: CanonicalIterateResult,
+function applyIterateResult(
+  { iterations, header, rows, footer, updateTrace = true, phases, restartIndices, ellipsoids, localizingSets }: IterateResult & { updateTrace?: boolean },
   updateResult: (payload: ResultRenderPayload) => void,
 ) {
   if (updateTrace) {
@@ -245,7 +126,7 @@ function applyCanonicalIterateResult(
     updateIteratePaths(iterations, phases, restartIndices, ellipsoids, localizingSets);
   }
 
-  updateResult(buildIteratePayload({ header, rows, footer }));
+  updateResult({ type: "virtual", header, rows, footer });
 }
 
 function generateSimplexBlocks(
@@ -287,13 +168,4 @@ function generateSimplexBlocks(
     ...phase2Rows.map((log, i) => (i < phase2IterationCount ? createBlock("iterate-item", log, phase1IterationCount + i) : createBlock("iterate-item-nohover", log))),
     ...(phase2Footer ? [createBlock("iterate-footer", phase2Footer)] : []),
   ];
-}
-
-function buildIteratePayload({ header, rows, footer }: { header: string; rows: ResultRowsView; footer?: string }): VirtualResultPayload {
-  return {
-    type: "virtual",
-    header,
-    rows,
-    footer,
-  };
 }

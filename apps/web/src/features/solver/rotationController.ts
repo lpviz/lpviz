@@ -3,6 +3,9 @@ import { computeObjectiveRotationStep } from "@lpviz/polytope/objectiveDirection
 
 const BASE_ROTATION_WAIT_MS = 30;
 
+// the per-step rotation angle, never zero (a zero step would rotate forever)
+export const objectiveAngleStep = (settings: { objectiveAngleStep: number }) => Math.max(0.001, settings.objectiveAngleStep || 0.001);
+
 export type RotationController = {
   // start rotating from the current objective (resets direction + timing)
   begin: () => void;
@@ -58,7 +61,7 @@ export function createRotationController(deps: { computePath: () => Promise<void
     const mySession = session;
     const rotationStep = computeObjectiveRotationStep({
       objectiveVector: state.objectiveVector ?? { x: 1, y: 0 },
-      angleStep: Math.max(0.001, state.solverSettings.objectiveAngleStep || 0.001),
+      angleStep: objectiveAngleStep(state.solverSettings),
       rotationDirection: direction,
       polytope: state.polytope,
     });

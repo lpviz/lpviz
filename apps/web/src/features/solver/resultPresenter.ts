@@ -19,6 +19,8 @@ const createVirtualBlock = (row: NonNullable<ReturnType<VirtualResultPayload["ro
   index,
 });
 const createResultBlock = (className: ResultTextBlock["className"], text: string): ResultTextBlock => ({ className, text });
+// fresh per call: resultVirtualRows must be a new array so the store sees a change
+const noVirtualRows = () => ({ resultVirtualHeader: null, resultVirtualFooter: null, resultVirtualShowEmpty: false, resultVirtualRows: [] });
 
 export type ResultPresenter = {
   // push a solver result into the store's result-display fields (deferred while
@@ -50,7 +52,6 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
     const cm = deps.getCanvasManager();
     const limitVirtualRows = options.limitVirtualRows ?? getState().rotateObjectiveMode;
     if (payload.type === "virtual") {
-      lastVirtualResult = payload;
       const rows = payload.rows;
       const windowed = limitVirtualRows && rows.length > ROTATE_ROW_LIMIT;
       const rowCount = windowed ? ROTATE_ROW_LIMIT : rows.length;
@@ -81,23 +82,20 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
         highlightIteratePathIndex: null,
       });
     } else {
-      lastVirtualResult = null;
       setState({
         resultDisplayMode: "blocks",
         resultBlocks: payload.blocks,
-        resultVirtualHeader: null,
-        resultVirtualFooter: null,
-        resultVirtualShowEmpty: false,
-        resultVirtualRows: [],
+        ...noVirtualRows(),
         resultMaxLineChars: getMaxLineChars(payload.blocks.map((b) => b.text)),
         highlightIteratePathIndex: null,
       });
     }
     cm?.draw();
   };
+  // the only writer besides clearResult: a deferred render is flushed with the
+  // payload recorded here, so applyRender need not set it again
   const render = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
-    if (payload.type === "virtual") lastVirtualResult = payload;
-    else lastVirtualResult = null;
+    lastVirtualResult = payload.type === "virtual" ? payload : null;
     if (getState().isNavigatingViewport) {
       pendingRender = { payload, options };
       deps.getCanvasManager()?.draw();
@@ -123,16 +121,7 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
     clearResult: () => {
       lastVirtualResult = null;
       pendingRender = null;
-      setState({
-        resultDisplayMode: "usage",
-        resultBlocks: null,
-        resultVirtualHeader: null,
-        resultVirtualFooter: null,
-        resultVirtualShowEmpty: false,
-        resultVirtualRows: [],
-        resultMaxLineChars: 0,
-        highlightIteratePathIndex: null,
-      });
+      setState({ resultDisplayMode: "usage", resultBlocks: null, ...noVirtualRows(), resultMaxLineChars: 0, highlightIteratePathIndex: null });
       deps.getCanvasManager()?.draw();
     },
     restoreFullVirtualResult: () => {
