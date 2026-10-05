@@ -175,7 +175,7 @@ describe("verticesFromLines", () => {
 
 describe("classifyRegion", () => {
   test("classifies a closed square as bounded", () => {
-    expect(classifyRegion(SQUARE_LINES, verticesFromLines(SQUARE_LINES), true)).toBe("bounded");
+    expect(classifyRegion(SQUARE_LINES, verticesFromLines(SQUARE_LINES))).toBe("bounded");
   });
 
   test("does not call a receding region with 3 vertices bounded", () => {
@@ -187,7 +187,7 @@ describe("classifyRegion", () => {
       [-s, -s, -s],
       [0, 1, 2],
     ];
-    expect(classifyRegion(open, verticesFromLines(open), true)).toBe("unbounded");
+    expect(classifyRegion(open, verticesFromLines(open))).toBe("unbounded");
   });
 });
 

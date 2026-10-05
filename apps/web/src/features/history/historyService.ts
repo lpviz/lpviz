@@ -29,7 +29,6 @@ export function createHistoryService(onRestore: () => void): HistoryService {
     const currentEntry = captureEntry(getState());
     const { historyStack, redoStack } = getState();
     const sourceStack = isRedo ? redoStack : historyStack;
-    if (sourceStack.length === 0) return;
     const stateToRestore = sourceStack[sourceStack.length - 1]!;
     const trimmed = sourceStack.slice(0, -1);
     setState(

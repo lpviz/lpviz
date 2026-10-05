@@ -74,8 +74,7 @@ describe("fitViewport3DToBounds", () => {
     test(`${name}: projected corners stay inside the padded area`, () => {
       const snap = snapshotAtAngle(viewAngle);
       const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds);
-      expect(view).not.toBeNull();
-      const fitted = buildViewport3DSnapshot(snap, view!.pose, rect);
+      const fitted = buildViewport3DSnapshot(snap, view.pose, rect);
       const ext = projectedExtent(fitted, bounds, zBounds);
       expect(ext.minPx).toBeGreaterThanOrEqual(SIDEBAR + PAD - 1);
       expect(ext.maxPx).toBeLessThanOrEqual(W - PAD + 1);
@@ -89,8 +88,7 @@ describe("fitViewport3DToBounds", () => {
     for (const { viewAngle, bounds, zBounds } of cases) {
       const snap = snapshotAtAngle(viewAngle);
       const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds, inset);
-      expect(view).not.toBeNull();
-      const fitted = buildViewport3DSnapshot(snap, view!.pose, rect);
+      const fitted = buildViewport3DSnapshot(snap, view.pose, rect);
       const ext = projectedExtent(fitted, bounds, zBounds);
       expect(ext.minPx).toBeGreaterThanOrEqual(SIDEBAR + PAD - 1);
       expect(ext.maxPx).toBeLessThanOrEqual(W - PAD + 1);
@@ -107,8 +105,7 @@ describe("fitViewport3DToBounds", () => {
       minY: -3,
       maxY: -3,
     });
-    expect(view).not.toBeNull();
-    expect(view!.target.y).toBeCloseTo(-3, 6);
+    expect(view.target.y).toBeCloseTo(-3, 6);
   });
 });
 

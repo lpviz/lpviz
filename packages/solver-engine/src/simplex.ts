@@ -113,9 +113,6 @@ function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
   const out = createDenseMatrix(rows, cols);
   let colOffset = 0;
   for (const matrix of matrices) {
-    if (matrix.rows !== rows) {
-      throw new Error("hstackMatrices: all matrices must have the same number of rows");
-    }
     for (let row = 0; row < rows; row++) {
       const srcOffset = row * matrix.cols;
       const dstOffset = row * cols + colOffset;
@@ -177,9 +174,6 @@ class BasisInverse {
     basisIndices: readonly number[],
   ) {
     this.m = A.rows;
-    if (basisIndices.length !== this.m) {
-      throw new Error(`Basis size ${basisIndices.length} does not match number of constraints ${this.m}.`);
-    }
     this.basisIndices = basisIndices.slice();
     this.inverse = new Float64Array(this.m * this.m);
     this.work = new Float64Array(this.m * this.m);
@@ -213,13 +207,11 @@ class BasisInverse {
 
   /** out = B⁻¹ v */
   solveExact(v: Float64Array, out: Float64Array): Float64Array {
-    if (this.stale) throw new Error("solveExact needs a fresh factorization");
     return solveDenseSystem(this.matrix, this.m, v, out, this.work);
   }
 
   /** out = B⁻ᵀ v, direct solve; see solveExact. */
   solveTransposeExact(v: Float64Array, out: Float64Array): Float64Array {
-    if (this.stale) throw new Error("solveExact needs a fresh factorization");
     const { m } = this;
     if (!this.transposed) {
       this.transposed = new Float64Array(m * m);

@@ -253,7 +253,7 @@ export function fitViewport3DToBounds(
   padding = 50,
   zBounds?: ViewportZBounds,
   topInset = 0,
-): Viewport3DViewState | null {
+): Viewport3DViewState {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
   const viewAngle = getViewAngleFromSnapshot3D(snapshot);

@@ -32,7 +32,7 @@ export function deriveRegionFromPoints(points: Vertices, completionMode: "closed
   }
 
   const vertices = verticesFromLines(lines);
-  const kind = classifyRegion(lines, vertices, true);
+  const kind = classifyRegion(lines, vertices);
 
   return {
     kind,

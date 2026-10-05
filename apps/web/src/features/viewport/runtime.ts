@@ -440,9 +440,6 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
             : undefined,
           topInset,
         );
-        if (!nextView) {
-          return;
-        }
         applyExternalPerspectivePose(nextView.pose, { syncControls: true });
         return;
       }

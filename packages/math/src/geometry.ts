@@ -236,8 +236,7 @@ export class VRep {
     lower.pop();
     upper.pop();
 
-    const hull = lower.concat(upper);
-    return hull.length > 0 ? hull : uniqueSorted.map((pt) => ({ x: pt.x, y: pt.y }));
+    return lower.concat(upper);
   }
 
   toVertices(): Vertices {
@@ -330,7 +329,7 @@ function hasNontrivialRecessionDirection(lines: Lines, tol = 1e-6): boolean {
   return false;
 }
 
-export function classifyRegion(lines: Lines, vertices: Vertices, closed: boolean): RegionKind {
+export function classifyRegion(lines: Lines, vertices: Vertices): RegionKind {
   if (lines.length === 0) {
     return "degenerate";
   }
@@ -346,12 +345,7 @@ export function classifyRegion(lines: Lines, vertices: Vertices, closed: boolean
     return "empty";
   }
 
-  const strictFeasiblePoint = findStrictFeasiblePoint(lines);
-  if (!strictFeasiblePoint || closed) {
-    return "degenerate";
-  }
-
-  return "unbounded";
+  return "degenerate";
 }
 
 export function verticesFromLines(lines: Lines, tol = 1e-6): Vertices {
