@@ -112,7 +112,7 @@ function solveForOptimum(vertices: { x: number; y: number }[], objective: { x: n
     true,
   );
   if (lines.length === 0) return null;
-  const result = simplex(lines, Float64Array.of(objective.x, objective.y), { tol: 1e-9, verbose: false, dual: false });
+  const result = simplex(lines, Float64Array.of(objective.x, objective.y), { tol: 1e-9, dual: false });
   if (result.status !== "optimal") return null;
   const last = result.iterations[result.iterations.length - 1]!;
   return { value: objective.x * last[0]! + objective.y * last[1]!, x: last[0]!, y: last[1]! };

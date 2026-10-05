@@ -36,7 +36,6 @@ interface EllipsoidOptions {
   deepCuts: boolean;
   rayShoot: boolean;
   initialScale: number;
-  verbose: boolean;
 }
 
 export interface EllipsoidResultData {
@@ -148,7 +147,7 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
  * optimality gap. That gap is never larger than rho and closes sooner.
  */
 export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): EllipsoidResultData {
-  const { maxit, tol, deepCuts, rayShoot, initialScale, verbose } = opts;
+  const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
 
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
@@ -183,7 +182,6 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
   const startTime = performance.now();
 
   const header = " Iter        x        y        Obj     Infeas          ρ";
-  if (verbose) console.log(header);
 
   const record = (objectiveValue: number, infeasibility: number, objectiveRadius: number) => {
     const base = iterations.length * ELLIPSOID_STRIDE;
@@ -202,7 +200,6 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
       infeasibility,
       rho: objectiveRadius,
     };
-    if (verbose) console.log(row);
     rows.push(row);
     rho.push(objectiveRadius);
     iterations.push(Float64Array.of(center[0]!, center[1]!));
@@ -296,7 +293,6 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
   }
 
   const footer = buildFooter(termination, iterations.length, performance.now() - startTime, bestObjective);
-  if (verbose) console.log(footer);
 
   appendIncumbent({ iterations, rows, rho, ellipsoids }, best, bestObjective, upperBound);
 

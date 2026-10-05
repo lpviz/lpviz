@@ -9,19 +9,17 @@ interface PDHGOptions {
   eta: number;
   tau: number;
   tol: number;
-  verbose: boolean;
   colorByBasis: boolean;
   /** Optional primal warm start; safe from any x0 (duals derived per mode). */
   startPoint?: number[];
 }
 
 export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
-  const { ineq = false, halpern = false, maxit = 1000, eta = 0.25, tau = 0.25, verbose = false, tol = 1e-4, colorByBasis = false, startPoint } = options;
+  const { ineq = false, halpern = false, maxit = 1000, eta = 0.25, tau = 0.25, tol = 1e-4, colorByBasis = false, startPoint } = options;
   const solverOptions = {
     maxit,
     eta,
     tau,
-    verbose,
     tol,
     colorByBasis,
     halpern,

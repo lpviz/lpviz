@@ -16,13 +16,11 @@ const BARRIER_PARAM_END = -5.0;
 
 interface CentralPathOptions {
   niter: number;
-  verbose: boolean;
 }
 
 interface CentralPathXkOptions {
   maxit: number;
   epsilon: number;
-  verbose: boolean;
 }
 
 function computeObjective(
@@ -125,7 +123,7 @@ function performLineSearch(
 }
 
 function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, mu: number, x0: Float64Array, opts: CentralPathXkOptions) {
-  const { maxit, epsilon, verbose } = opts;
+  const { maxit, epsilon } = opts;
 
   const currentPoint = Float64Array.from(x0);
   const gradient = new Float64Array(c.length);
@@ -146,31 +144,23 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
     const decrement = dot(gradient, newtonStep);
     const currentObjective = computeObjective(A, b, c, mu, currentPoint, axScratch, slackScratch);
     if (gradientInfinityNorm < epsilon || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(currentObjective))) {
-      if (verbose) console.log(`Converged in ${iteration} iterations with mu = ${mu}`);
       return Float64Array.from(currentPoint);
     }
 
     const stepSize = performLineSearch(A, b, c, mu, currentPoint, currentObjective, newtonStep, decrement, candidatePoint, axScratch, slackScratch);
     if (stepSize === 0) {
-      if (verbose) console.warn(`Line search failed to find a feasible step for mu = ${mu}`);
       return null;
     }
     for (let j = 0; j < currentPoint.length; j++) {
       currentPoint[j] += newtonStep[j]! * stepSize;
     }
-
-    if (verbose) {
-      const objectiveValue = computeObjective(A, b, c, mu, currentPoint, axScratch, slackScratch);
-      console.log(`Iter ${iteration}: f(x) = ${objectiveValue.toFixed(6)}, ||grad||_inf = ${gradientInfinityNorm.toExponential(2)}, alpha = ${stepSize.toFixed(2)}`);
-    }
   }
 
-  if (verbose) console.warn(`Did not converge after ${maxit} iterations for mu = ${mu}`);
   return null;
 }
 
 export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, opts: CentralPathOptions) {
-  const { niter, verbose } = opts;
+  const { niter } = opts;
 
   if (niter > 2 ** 10) {
     throw new Error("niter > 2^10 not allowed");
@@ -184,7 +174,6 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   const points: VecNs = [];
   const logs: string[] = [];
   const header = `  ${fmtStrL("Iter", 4)} ${fmtStr("x", 8)} ${fmtStr("y", 8)} ${fmtStr("Obj", 10)} ${fmtStr("µ", 10)}  \n`;
-  if (verbose) console.log(header);
   logs.push(header);
 
   const startPoint = vertices.length >= 3 ? centroid(vertices) : findStrictFeasiblePoint(lines);
@@ -198,13 +187,11 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
 
   for (const mu of barrierParameters) {
     const optimalPoint = centralPathXk(A, b, c, mu, currentPoint, {
-      verbose,
       epsilon: DEFAULT_CONVERGENCE_TOLERANCE,
       maxit: DEFAULT_MAX_NEWTON_ITERATIONS,
     });
 
     if (!optimalPoint) {
-      if (verbose) console.log(`Failed to find optimal point for μ = ${mu}. Skipping.`);
       continue;
     }
 
@@ -213,7 +200,6 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
     points.push(Float64Array.of(optimalPoint[0] ?? 0, optimalPoint[1] ?? 0, totalObjective));
 
     const progressLog = `  ${fmtIntL(points.length, 4)} ${fmtF(optimalPoint[0] ?? 0, 8, 2)} ${fmtF(optimalPoint[1] ?? 0, 8, 2)} ${fmtE(linearObjective, 10, 1)} ${fmtE(mu, 10, 1, false)}  \n`;
-    if (verbose) console.log(progressLog);
     logs.push(progressLog);
 
     currentPoint = optimalPoint;
