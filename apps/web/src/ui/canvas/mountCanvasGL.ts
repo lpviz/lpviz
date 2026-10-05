@@ -28,7 +28,7 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   const transitionCtl = new TransitionController(mgr);
   mgr.addTick(() => transitionCtl.tick());
   const cameraCtl = new CameraController(mgr);
-  const controlsCtl = new ControlsController(mgr);
+  const controlsCtl = new ControlsController(mgr, cameraCtl.perspective);
   const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),

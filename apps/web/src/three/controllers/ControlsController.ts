@@ -1,8 +1,8 @@
-import { getViewportCameraRefs, subscribeViewportCameraRefs } from "@/features/viewport/runtime/cameraRefs";
 import { getViewport2DControlsConfig, isViewport2DPanActive, startViewport2DPan, stopViewport2DPan, updateViewport2DPan, zoomViewport2DAtCanvasPoint } from "@/features/viewport/runtime/controls2d";
 import { getViewport3DControlsConfig, subscribeViewport3DControlsConfig, type ViewportPerspectivePose } from "@/features/viewport/runtime/controls3d";
 import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
+import { xyz } from "./CameraController";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
 const ROTATE_RADIANS_PER_PIXEL = 0.008;
@@ -26,16 +26,32 @@ type Active3DDrag = {
   unitsPerPixel: number;
 };
 
+type ListenerEntry = {
+  [K in keyof GlobalEventHandlersEventMap]: readonly [EventTarget, K, (event: GlobalEventHandlersEventMap[K]) => void, AddEventListenerOptions?];
+}[keyof GlobalEventHandlersEventMap];
+
+// Registers the listeners in table order (the 2D set precedes the 3D set on
+// the same targets) and returns the matching remover.
+function addListeners(entries: readonly ListenerEntry[]): () => void {
+  for (const [target, type, handler, options] of entries) target.addEventListener(type, handler as EventListener, options);
+  return () => {
+    for (const [target, type, handler] of entries) target.removeEventListener(type, handler as EventListener);
+  };
+}
+
+const getTouchCenter = (touches: TouchList) => ({
+  x: (touches[0]!.clientX + touches[1]!.clientX) / 2,
+  y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
+});
+
+const getTouchDistance = (touches: TouchList) => Math.hypot(touches[1]!.clientX - touches[0]!.clientX, touches[1]!.clientY - touches[0]!.clientY);
+
 export class ControlsController {
   private syncToken = -1;
   private controlsConfig = getViewport3DControlsConfig();
-  private perspectiveCamera = getViewportCameraRefs().perspective;
   private unsubscribeConfig: () => void;
-  private unsubscribeCameras: () => void;
-  private cleanup2D: (() => void) | null = null;
-  private cleanup3D: (() => void) | null = null;
-  private controlsEnabled = false;
-  private controlsMaxDistance = 1000;
+  private cleanup2D: () => void;
+  private cleanup3D: () => void;
   private controlsTarget = new Vector3();
   private active3DDrag: Active3DDrag | null = null;
   private wheelAnchorAfter = new Vector3();
@@ -46,34 +62,27 @@ export class ControlsController {
   private wheelPointerNdc = new Vector2();
   private wheelRaycaster = new Raycaster();
 
-  constructor(private sceneManager: SceneManager) {
+  constructor(
+    private sceneManager: SceneManager,
+    private perspectiveCamera: PerspectiveCamera,
+  ) {
     const canvas = sceneManager.renderer.domElement;
-    this.setup2DListeners(canvas);
+    this.cleanup2D = this.setup2DListeners(canvas);
 
     this.unsubscribeConfig = subscribeViewport3DControlsConfig(() => {
       this.controlsConfig = getViewport3DControlsConfig();
       this.applyControlsConfig();
     });
 
-    this.unsubscribeCameras = subscribeViewportCameraRefs(() => {
-      const next = getViewportCameraRefs().perspective;
-      if (next !== this.perspectiveCamera) {
-        this.perspectiveCamera = next;
-        this.dispose3DControls();
-        if (next) {
-          this.setup3DControls(next, canvas);
-        }
-      }
-    });
-
-    if (this.perspectiveCamera) {
-      this.setup3DControls(this.perspectiveCamera, canvas);
-    }
-
+    this.cleanup3D = this.setup3DControls(canvas);
     this.applyControlsConfig();
   }
 
-  private setup2DListeners(canvas: HTMLCanvasElement): void {
+  private get controlsEnabled(): boolean {
+    return this.controlsConfig.enabled && !this.controlsConfig.blocked;
+  }
+
+  private setup2DListeners(canvas: HTMLCanvasElement): () => void {
     let activePointerPanId: number | null = null;
     let activePinch: {
       startDistance: number;
@@ -81,13 +90,6 @@ export class ControlsController {
     } | null = null;
 
     const startPan = (clientX: number, clientY: number) => startViewport2DPan(clientX, clientY, canvas.getBoundingClientRect());
-
-    const getTouchCenter = (touches: TouchList) => ({
-      x: (touches[0]!.clientX + touches[1]!.clientX) / 2,
-      y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
-    });
-
-    const getTouchDistance = (touches: TouchList) => Math.hypot(touches[1]!.clientX - touches[0]!.clientX, touches[1]!.clientY - touches[0]!.clientY);
 
     const clearActivePointerPan = () => {
       if (activePointerPanId !== null && canvas.hasPointerCapture(activePointerPanId)) {
@@ -168,6 +170,8 @@ export class ControlsController {
       if (!stopViewport2DPan()) return;
       event.preventDefault();
     };
+    // single-finger touches are handled here as well as through the pointer
+    // events above: this touchstart preventDefault is what blocks page scroll
     const handleTouchStart = (event: TouchEvent) => {
       if (startPinch(event)) return;
       if (event.touches.length !== 1) return;
@@ -215,68 +219,40 @@ export class ControlsController {
       event.stopImmediatePropagation();
     };
 
-    canvas.addEventListener("mousedown", handleMouseDown);
-    canvas.addEventListener("pointerdown", handlePointerDown);
-    canvas.addEventListener("pointermove", handlePointerMove);
-    canvas.addEventListener("pointerup", handlePointerUp);
-    canvas.addEventListener("pointercancel", handlePointerUp);
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("mouseup", handleMouseUp);
-    canvas.addEventListener("touchstart", handleTouchStart, { passive: false });
-    window.addEventListener("touchmove", handleTouchMove, { passive: false });
-    window.addEventListener("touchend", handleTouchEnd, { passive: false });
-    window.addEventListener("touchcancel", handleTouchCancel, {
-      passive: false,
-    });
-    canvas.addEventListener("wheel", handleWheel, { passive: false });
+    const removeListeners = addListeners([
+      [canvas, "mousedown", handleMouseDown],
+      [canvas, "pointerdown", handlePointerDown],
+      [canvas, "pointermove", handlePointerMove],
+      [canvas, "pointerup", handlePointerUp],
+      [canvas, "pointercancel", handlePointerUp],
+      [window, "mousemove", handleMouseMove],
+      [window, "mouseup", handleMouseUp],
+      [canvas, "touchstart", handleTouchStart, { passive: false }],
+      [window, "touchmove", handleTouchMove, { passive: false }],
+      [window, "touchend", handleTouchEnd, { passive: false }],
+      [window, "touchcancel", handleTouchCancel, { passive: false }],
+      [canvas, "wheel", handleWheel, { passive: false }],
+    ]);
 
-    this.cleanup2D = () => {
-      canvas.removeEventListener("mousedown", handleMouseDown);
-      canvas.removeEventListener("pointerdown", handlePointerDown);
-      canvas.removeEventListener("pointermove", handlePointerMove);
-      canvas.removeEventListener("pointerup", handlePointerUp);
-      canvas.removeEventListener("pointercancel", handlePointerUp);
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("mouseup", handleMouseUp);
-      canvas.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
-      window.removeEventListener("touchcancel", handleTouchCancel);
-      canvas.removeEventListener("wheel", handleWheel);
+    return () => {
+      removeListeners();
       clearActivePointerPan();
       activePinch = null;
     };
   }
 
-  private setup3DControls(perspectiveCamera: PerspectiveCamera, canvas: HTMLCanvasElement): void {
+  private setup3DControls(canvas: HTMLCanvasElement): () => void {
+    const perspectiveCamera = this.perspectiveCamera;
     const buildPose = (target = this.controlsTarget): ViewportPerspectivePose => ({
-      position: {
-        x: perspectiveCamera.position.x,
-        y: perspectiveCamera.position.y,
-        z: perspectiveCamera.position.z,
-      },
-      up: {
-        x: perspectiveCamera.up.x,
-        y: perspectiveCamera.up.y,
-        z: perspectiveCamera.up.z,
-      },
-      target: {
-        x: target.x,
-        y: target.y,
-        z: target.z,
-      },
+      position: xyz(perspectiveCamera.position),
+      up: xyz(perspectiveCamera.up),
+      target: xyz(target),
     });
-
-    const canUse3DControls = () => this.controlsEnabled;
 
     const syncCamera = (target = this.controlsTarget) => {
       perspectiveCamera.lookAt(target);
       perspectiveCamera.updateMatrixWorld();
-      perspectiveCamera.userData.lpvizLookAtTarget = {
-        x: target.x,
-        y: target.y,
-        z: target.z,
-      };
+      perspectiveCamera.userData.lpvizLookAtTarget = xyz(target);
     };
 
     const emitPose = (target = this.controlsTarget) => {
@@ -322,7 +298,7 @@ export class ControlsController {
 
     const apply3DMove = (clientX: number, clientY: number) => {
       const drag = this.active3DDrag;
-      if (!drag || !canUse3DControls()) return;
+      if (!drag || !this.controlsEnabled) return;
       const dx = clientX - drag.startClientX;
       const dy = clientY - drag.startClientY;
 
@@ -349,7 +325,7 @@ export class ControlsController {
     };
 
     const start3DDrag = (kind: Active3DDrag["kind"], clientX: number, clientY: number) => {
-      if (!canUse3DControls()) return;
+      if (!this.controlsEnabled) return;
       const orbit = getOrbitState();
       const panBasis = getPanBasis(orbit.distance);
       this.active3DDrag = {
@@ -369,18 +345,11 @@ export class ControlsController {
       this.controlsConfig.onStart?.();
     };
 
-    const getTouchCenter = (touches: TouchList) => ({
-      x: (touches[0]!.clientX + touches[1]!.clientX) / 2,
-      y: (touches[0]!.clientY + touches[1]!.clientY) / 2,
-    });
-
-    const getTouchDistance = (touches: TouchList) => Math.hypot(touches[1]!.clientX - touches[0]!.clientX, touches[1]!.clientY - touches[0]!.clientY);
-
     const apply3DZoomDistance = (nextDistance: number) => {
-      if (!canUse3DControls()) return;
+      if (!this.controlsEnabled) return;
       const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
       if (offset.lengthSq() <= 1e-8) return;
-      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(Math.min(this.controlsMaxDistance, Math.max(MIN_DISTANCE, nextDistance))));
+      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(Math.min(this.controlsConfig.maxDistance, Math.max(MIN_DISTANCE, nextDistance))));
       emitPose();
     };
 
@@ -409,7 +378,7 @@ export class ControlsController {
     };
 
     const handlePointerMove = (event: MouseEvent) => {
-      if (!this.active3DDrag || !canUse3DControls()) return;
+      if (!this.active3DDrag || !this.controlsEnabled) return;
       apply3DMove(event.clientX, event.clientY);
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -478,14 +447,13 @@ export class ControlsController {
       if (activeTwoFingerOrbit) return;
       if (active3DPointerId !== event.pointerId || !this.active3DDrag) return;
       clearActive3DPointer();
-      this.active3DDrag = null;
+      stop3DDrag();
       event.preventDefault();
       event.stopImmediatePropagation();
-      this.controlsConfig.onEnd?.();
     };
 
     const handleWheel3D = (event: WheelEvent) => {
-      if (!canUse3DControls()) return;
+      if (!this.controlsEnabled) return;
       if (event.shiftKey) return;
       const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
       if (dominantDelta === 0) return;
@@ -493,7 +461,7 @@ export class ControlsController {
       const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
       const distance = Math.max(MIN_DISTANCE, offset.length());
       const zoomFactor = Math.pow(1.0015, dominantDelta);
-      const nextDistance = Math.min(this.controlsMaxDistance, Math.max(MIN_DISTANCE, distance * zoomFactor));
+      const nextDistance = Math.min(this.controlsConfig.maxDistance, Math.max(MIN_DISTANCE, distance * zoomFactor));
       if (!Number.isFinite(nextDistance)) return;
 
       const rect = canvas.getBoundingClientRect();
@@ -530,40 +498,24 @@ export class ControlsController {
       event.preventDefault();
     };
 
-    canvas.addEventListener("mousedown", handlePointerDown);
-    canvas.addEventListener("pointerdown", handleTouchPointerDown);
-    canvas.addEventListener("pointermove", handleTouchPointerMove);
-    canvas.addEventListener("pointerup", handleTouchPointerUp);
-    canvas.addEventListener("pointercancel", handleTouchPointerUp);
-    canvas.addEventListener("touchstart", handleTouchStart3D, {
-      passive: false,
-    });
-    window.addEventListener("touchmove", handleTouchMove3D, {
-      passive: false,
-    });
-    window.addEventListener("touchend", handleTouchEnd3D, { passive: false });
-    window.addEventListener("touchcancel", handleTouchEnd3D, {
-      passive: false,
-    });
-    window.addEventListener("mousemove", handlePointerMove);
-    window.addEventListener("mouseup", handlePointerUp);
-    canvas.addEventListener("wheel", handleWheel3D, { passive: false });
-    canvas.addEventListener("contextmenu", handleContextMenu);
+    const removeListeners = addListeners([
+      [canvas, "mousedown", handlePointerDown],
+      [canvas, "pointerdown", handleTouchPointerDown],
+      [canvas, "pointermove", handleTouchPointerMove],
+      [canvas, "pointerup", handleTouchPointerUp],
+      [canvas, "pointercancel", handleTouchPointerUp],
+      [canvas, "touchstart", handleTouchStart3D, { passive: false }],
+      [window, "touchmove", handleTouchMove3D, { passive: false }],
+      [window, "touchend", handleTouchEnd3D, { passive: false }],
+      [window, "touchcancel", handleTouchEnd3D, { passive: false }],
+      [window, "mousemove", handlePointerMove],
+      [window, "mouseup", handlePointerUp],
+      [canvas, "wheel", handleWheel3D, { passive: false }],
+      [canvas, "contextmenu", handleContextMenu],
+    ]);
 
-    this.cleanup3D = () => {
-      canvas.removeEventListener("mousedown", handlePointerDown);
-      canvas.removeEventListener("pointerdown", handleTouchPointerDown);
-      canvas.removeEventListener("pointermove", handleTouchPointerMove);
-      canvas.removeEventListener("pointerup", handleTouchPointerUp);
-      canvas.removeEventListener("pointercancel", handleTouchPointerUp);
-      canvas.removeEventListener("touchstart", handleTouchStart3D);
-      window.removeEventListener("touchmove", handleTouchMove3D);
-      window.removeEventListener("touchend", handleTouchEnd3D);
-      window.removeEventListener("touchcancel", handleTouchEnd3D);
-      window.removeEventListener("mousemove", handlePointerMove);
-      window.removeEventListener("mouseup", handlePointerUp);
-      canvas.removeEventListener("wheel", handleWheel3D);
-      canvas.removeEventListener("contextmenu", handleContextMenu);
+    return () => {
+      removeListeners();
       this.active3DDrag = null;
       clearActive3DPointer();
       activeTwoFingerOrbit = false;
@@ -571,42 +523,31 @@ export class ControlsController {
     };
   }
 
-  private dispose3DControls(): void {
-    this.cleanup3D?.();
-    this.cleanup3D = null;
-  }
-
   private applyControlsConfig(): void {
-    const perspectiveCamera = this.perspectiveCamera;
-    if (!perspectiveCamera) return;
-
-    this.controlsEnabled = this.controlsConfig.enabled && !this.controlsConfig.blocked;
-    this.controlsMaxDistance = this.controlsConfig.maxDistance;
-
     if (this.syncToken === this.controlsConfig.syncToken) {
       return;
     }
 
     this.syncToken = this.controlsConfig.syncToken;
-    const snapshot = this.controlsConfig.snapshot;
-    perspectiveCamera.fov = snapshot.perspective.fov;
-    perspectiveCamera.aspect = snapshot.perspective.aspect;
-    perspectiveCamera.near = snapshot.perspective.near;
-    perspectiveCamera.far = snapshot.perspective.far;
-    perspectiveCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
-    perspectiveCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
-    this.controlsTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
-    perspectiveCamera.lookAt(this.controlsTarget);
-    perspectiveCamera.updateProjectionMatrix();
-    perspectiveCamera.updateMatrixWorld();
+    const { perspective, target } = this.controlsConfig.snapshot;
+    const camera = this.perspectiveCamera;
+    camera.fov = perspective.fov;
+    camera.aspect = perspective.aspect;
+    camera.near = perspective.near;
+    camera.far = perspective.far;
+    camera.position.copy(perspective.position);
+    camera.up.copy(perspective.up);
+    this.controlsTarget.copy(target);
+    camera.lookAt(this.controlsTarget);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
 
     this.sceneManager.invalidate({ layers: false });
   }
 
   dispose(): void {
     this.unsubscribeConfig();
-    this.unsubscribeCameras();
-    this.cleanup2D?.();
-    this.dispose3DControls();
+    this.cleanup2D();
+    this.cleanup3D();
   }
 }

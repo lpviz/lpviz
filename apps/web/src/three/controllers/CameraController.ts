@@ -1,13 +1,15 @@
-import { resetViewportCameraRefs, setViewportCameraRefs } from "@/features/viewport/runtime/cameraRefs";
 import { getViewportRenderSnapshot, subscribeFullViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { OrthographicCamera, PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
 
 const EPS = 1e-9;
 
+// a plain {x, y, z} copy, as the viewport runtime's pose/snapshot types want
+export const xyz = ({ x, y, z }: { x: number; y: number; z: number }) => ({ x, y, z });
+
 export class CameraController {
   private ortho: OrthographicCamera;
-  private perspective: PerspectiveCamera;
+  readonly perspective: PerspectiveCamera;
   private unsubscribe: () => void;
   private pendingSnapshot = false;
   private lastOrthoProjection: { left: number; right: number; top: number; bottom: number } | null = null;
@@ -17,11 +19,6 @@ export class CameraController {
   constructor(private sceneManager: SceneManager) {
     this.ortho = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
     this.perspective = new PerspectiveCamera(45, 1, 0.1, 10000);
-
-    setViewportCameraRefs({
-      ortho: this.ortho,
-      perspective: this.perspective,
-    });
 
     this.unsubscribe = subscribeFullViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;
@@ -102,11 +99,7 @@ export class CameraController {
     this.perspective.up.set(snap.perspective.up.x, snap.perspective.up.y, snap.perspective.up.z);
     this.perspective.lookAt(snap.target.x, snap.target.y, snap.target.z);
     this.perspective.updateMatrixWorld();
-    this.perspective.userData.lpvizLookAtTarget = {
-      x: snap.target.x,
-      y: snap.target.y,
-      z: snap.target.z,
-    };
+    this.perspective.userData.lpvizLookAtTarget = xyz(snap.target);
   }
 
   private perspectiveAlreadyMatchesSnapshot(): boolean {
@@ -133,7 +126,6 @@ export class CameraController {
   dispose(): void {
     this.unsubscribe();
     this.sceneManager.removeTick(this.tick);
-    resetViewportCameraRefs();
   }
 }
 
