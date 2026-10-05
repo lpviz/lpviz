@@ -222,18 +222,6 @@ export const GALLERY_PROBLEMS: GalleryProblem[] = [
     interiorPoint: { x: 0, y: 0 },
     objectiveVector: { x: 9, y: 2 },
   },
-  // {
-  //   id: "diamond",
-  //   name: "Diamond",
-  //   vertices: [
-  //     { x: 0, y: -9 },
-  //     { x: -10, y: 0 },
-  //     { x: 0, y: 9 },
-  //     { x: 10, y: 0 },
-  //   ],
-  //   interiorPoint: { x: 0, y: 0 },
-  //   objectiveVector: { x: 4, y: 8 },
-  // },
   {
     id: "wide-box",
     name: "Rectangle",

@@ -9,7 +9,6 @@ interface PDHGEqOptions {
   eta: number;
   tau: number;
   tol: number;
-  verbose: boolean;
   colorByBasis: boolean;
   halpern: boolean;
   startPoint?: number[];
@@ -86,7 +85,7 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
 }
 
 function pdhgStandardForm(A: ReturnType<typeof createDenseMatrix>, b: Float64Array, c: Float64Array, options: PDHGEqOptions, chi0?: Float64Array) {
-  const { maxit, eta, tau, tol, verbose, colorByBasis, halpern } = options;
+  const { maxit, eta, tau, tol, colorByBasis, halpern } = options;
 
   const { rows: m, cols: n } = A;
   const slackOffset = n - m;
@@ -139,8 +138,6 @@ function pdhgStandardForm(A: ReturnType<typeof createDenseMatrix>, b: Float64Arr
   const restartIndices: number[] = [];
   const startTime = performance.now();
 
-  if (verbose) console.log(header);
-
   while (k <= maxit) {
     iterates.push(xk.slice());
     if (colorByBasis) {
@@ -164,7 +161,6 @@ function pdhgStandardForm(A: ReturnType<typeof createDenseMatrix>, b: Float64Arr
       infeasibility: pFeas,
       epsilon: epsilonK,
     };
-    if (verbose) console.log(row);
     rows.push(row);
     eps.push(epsilonK);
 
@@ -233,7 +229,6 @@ function pdhgStandardForm(A: ReturnType<typeof createDenseMatrix>, b: Float64Arr
   const formattedSolveTime = formatMilliseconds(solveTime);
   const footer =
     epsilonK <= tol ? `Converged to optimal solution in ${formattedSolveTime} / ${iterates.length} iterations` : `Did not converge after ${iterates.length} iterations in ${formattedSolveTime}`;
-  if (verbose) console.log(footer);
 
   return {
     header,
@@ -247,7 +242,7 @@ function pdhgStandardForm(A: ReturnType<typeof createDenseMatrix>, b: Float64Arr
 }
 
 export function pdhgEq(lines: Lines, objective: VecN, options: PDHGEqOptions) {
-  const { maxit = 1000, eta = 0.25, tau = 0.25, verbose = false, tol = 1e-4, colorByBasis = false, halpern = false, startPoint } = options;
+  const { maxit = 1000, eta = 0.25, tau = 0.25, tol = 1e-4, colorByBasis = false, halpern = false, startPoint } = options;
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
   }
@@ -307,7 +302,6 @@ export function pdhgEq(lines: Lines, objective: VecN, options: PDHGEqOptions) {
       maxit,
       eta,
       tau,
-      verbose,
       tol,
       colorByBasis,
       halpern,

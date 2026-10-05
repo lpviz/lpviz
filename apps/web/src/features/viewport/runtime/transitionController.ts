@@ -59,14 +59,11 @@ export function createTransitionController(deps: {
   const syncPlanarState = (p: ViewportTransitionPlan, frame: ReturnType<typeof buildViewportTransitionFrame>) => {
     if (p.direction !== "to2d") return;
     const planarState = buildViewport2DStateFromTransitionFrame(p, frame, deps.getViewportRect(), deps.getSidebarWidth());
-    setViewport2DControlsConfig(
-      {
-        sidebarWidth: deps.getSidebarWidth(),
-        fallbackSnapshot: frame.snapshot,
-      },
-      { emit: false },
-    );
-    setViewport2DControlsState(planarState, { notify: false, emit: false });
+    setViewport2DControlsConfig({
+      sidebarWidth: deps.getSidebarWidth(),
+      fallbackSnapshot: frame.snapshot,
+    });
+    setViewport2DControlsState(planarState, { notify: false });
   };
 
   // derive the frame at progress `at`, keep planar state in lockstep, and adopt
@@ -111,7 +108,7 @@ export function createTransitionController(deps: {
         deps.syncExternal2DControls(false);
       }
       if (deps.isExternal3DControlsActive()) {
-        setState({ viewAngle }, { viewportDirty: {} });
+        setState({ viewAngle });
         deps.syncExternal3DControls(false);
       }
 
@@ -134,7 +131,6 @@ export function createTransitionController(deps: {
       setViewportTransitionConfig({
         active: true,
         runId,
-        targetMode,
         startTime,
         duration: nextPlan.duration,
         onFrame: (_progress, easedProgress) => {

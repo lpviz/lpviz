@@ -9,7 +9,6 @@ interface PDHGIneqOptions {
   eta: number;
   tau: number;
   tol: number;
-  verbose: boolean;
   colorByBasis: boolean;
   halpern: boolean;
   startPoint?: number[];
@@ -86,7 +85,7 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
 }
 
 export function pdhgIneq(lines: Lines, objective: VecN, options: PDHGIneqOptions) {
-  const { maxit = 1000, eta = 0.25, tau = 0.25, verbose = false, tol = 1e-4, colorByBasis = false, halpern = false, startPoint } = options;
+  const { maxit = 1000, eta = 0.25, tau = 0.25, tol = 1e-4, colorByBasis = false, halpern = false, startPoint } = options;
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
   }
@@ -142,8 +141,6 @@ export function pdhgIneq(lines: Lines, objective: VecN, options: PDHGIneqOptions
     epsilon: number;
   }> = [];
 
-  if (verbose) console.log(header);
-
   while (k <= maxit) {
     iterates.push(xk.slice());
     if (colorByBasis) {
@@ -166,7 +163,6 @@ export function pdhgIneq(lines: Lines, objective: VecN, options: PDHGIneqOptions
       infeasibility,
       epsilon: epsilonK,
     };
-    if (verbose) console.log(row);
     rows.push(row);
     eps.push(epsilonK);
 
@@ -235,7 +231,6 @@ export function pdhgIneq(lines: Lines, objective: VecN, options: PDHGIneqOptions
   const formattedSolveTime = formatMilliseconds(solveTime);
   const footer =
     epsilonK <= tol ? `Converged to optimal solution in ${formattedSolveTime} / ${iterates.length} iterations` : `Did not converge after ${iterates.length} iterations in ${formattedSolveTime}`;
-  if (verbose) console.log(footer);
 
   return {
     header,

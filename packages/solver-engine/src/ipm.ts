@@ -15,7 +15,6 @@ interface IPMOptions {
   maxit: number;
   alphaMax: number;
   correctorThreshold: number;
-  verbose: boolean;
   /** Optional primal warm start; need not be feasible (infeasible-start method). */
   startPoint?: number[];
 }
@@ -39,7 +38,7 @@ interface IPMSolutionData {
 }
 
 export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
-  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, verbose, startPoint } = opts;
+  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
@@ -65,14 +64,13 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
       maxit,
       alphaMax,
       correctorThreshold,
-      verbose,
       startPoint,
     },
   );
 }
 
 function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, opts: IPMOptions) {
-  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, verbose, startPoint } = opts;
+  const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
   const m = A.rows;
   const n = A.cols;
 
@@ -127,8 +125,6 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
   let failureMessage: string | null = null;
   const startTime = performance.now();
 
-  if (verbose) console.log(solution.header);
-
   while (++iteration <= maxit) {
     matVec(A, x, ax);
     transposedMatVec(A, y, aty);
@@ -145,7 +141,7 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
     const gap = Math.abs(pObj - dot(b, y)) / (1 + Math.abs(pObj));
     const pRes = infinityNorm(rP);
 
-    logIter(solution, verbose, x, mu, pObj, pRes);
+    logIter(solution, x, mu, pObj, pRes);
     pushIter(solution, x, s, y, mu);
 
     if (pRes <= eps_p && infinityNorm(rD) <= eps_d && gap <= eps_opt) {
@@ -160,7 +156,6 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
       normal.solve(rP, rD, rC, dxAff, dsAff, dyAff);
     } catch (error) {
       failureMessage = `IPM linear solve failed: ${error instanceof Error ? error.message : String(error)}`;
-      if (verbose) console.log(failureMessage);
       break;
     }
 
@@ -183,7 +178,6 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
         normal.solve(zeroP, zeroD, rC, dxCor, dsCor, dyCor);
       } catch (error) {
         failureMessage = `IPM corrector solve failed: ${error instanceof Error ? error.message : String(error)}`;
-        if (verbose) console.log(failureMessage);
         break;
       }
 
@@ -208,7 +202,7 @@ function ipmCore(A: { rows: number; cols: number; data: Float64Array }, b: Float
   }
 
   const solveTime = performance.now() - startTime;
-  logFinal(solution, verbose, converged, solveTime, failureMessage);
+  logFinal(solution, converged, solveTime, failureMessage);
   return res;
 }
 
@@ -272,7 +266,7 @@ function pushIter(d: IPMSolutionData, x: Float64Array, s: Float64Array, y: Float
   d.mu.push(mu);
 }
 
-function logIter(d: IPMSolutionData, verbose: boolean, x: Float64Array, mu: number, pObj: number, pRes: number) {
+function logIter(d: IPMSolutionData, x: Float64Array, mu: number, pObj: number, pRes: number) {
   const row = {
     kind: "ipm" as const,
     iteration: d.x.length + 1,
@@ -282,15 +276,13 @@ function logIter(d: IPMSolutionData, verbose: boolean, x: Float64Array, mu: numb
     infeasibility: pRes,
     mu,
   };
-  if (verbose) console.log(row);
   d.rows.push(row);
 }
 
-function logFinal(d: IPMSolutionData, verbose: boolean, converged: boolean, solveTime: number, failureMessage: string | null) {
+function logFinal(d: IPMSolutionData, converged: boolean, solveTime: number, failureMessage: string | null) {
   d.footer = failureMessage
     ? `${failureMessage}\nStopped after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`
     : converged
       ? `Converged to optimal solution in ${formatMilliseconds(solveTime)} / ${d.x.length} iterations\n`
       : `Did not converge after ${d.x.length} iterations in ${formatMilliseconds(solveTime)}\n`;
-  if (verbose) console.log(d.footer);
 }

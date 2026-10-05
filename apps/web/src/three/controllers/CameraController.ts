@@ -43,7 +43,7 @@ export class CameraController {
   private applySnapshot(): void {
     const snap = getViewportRenderSnapshot();
     const nextCamera = snap.mode === "2d" ? this.ortho : this.perspective;
-    this.sceneManager.setCamera(nextCamera, { invalidate: false });
+    this.sceneManager.setCamera(nextCamera);
 
     if (snap.mode === "2d") {
       const projectionChanged =
@@ -128,10 +128,6 @@ export class CameraController {
       nearlyEqual(target.y, snap.target.y) &&
       nearlyEqual(target.z, snap.target.z)
     );
-  }
-
-  getCameras() {
-    return { ortho: this.ortho, perspective: this.perspective };
   }
 
   dispose(): void {

@@ -23,7 +23,6 @@ const opts = (queryPoint: QueryPoint, o: Record<string, unknown> = {}) => ({
   rayShoot: true,
   initialScale: 1.5,
   queryPoint,
-  verbose: false,
   ...o,
 });
 
@@ -96,7 +95,6 @@ describe("cuttingPlane", () => {
       deepCuts: true,
       rayShoot: true,
       initialScale: 1.5,
-      verbose: false,
     });
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));

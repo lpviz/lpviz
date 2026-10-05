@@ -10,7 +10,6 @@
 
 export const RENDER_ORDER = {
   grid: 0,
-  axis: 1,
 
   polytopeFill: 2,
 

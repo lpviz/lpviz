@@ -107,7 +107,6 @@ const pdhgDefaults = {
   eta: 0.25,
   tau: 0.25,
   tol: 1e-4,
-  verbose: false,
   colorByBasis: false,
 };
 
@@ -148,7 +147,7 @@ describe("pdhg", () => {
 });
 
 describe("simplex", () => {
-  const opts = (dual: boolean) => ({ tol: 1e-9, verbose: false, dual });
+  const opts = (dual: boolean) => ({ tol: 1e-9, dual });
 
   test("every pivot-rule combination reaches the square optimum in primal and dual mode", () => {
     for (const dual of [false, true]) {
@@ -248,7 +247,7 @@ describe("simplex", () => {
 });
 
 describe("simplex pivot rules", () => {
-  const opts = { tol: 1e-9, verbose: false, dual: false };
+  const opts = { tol: 1e-9, dual: false };
 
   test("index rules take different routes through a degenerate vertex but agree on the optimum", () => {
     const trajectories = new Map<string, string>();
@@ -291,7 +290,7 @@ describe("simplex pivot rules", () => {
     // open in the objective direction, so the right answer is "unbounded",
     // which Bland's rule reaches in a handful of pivots. Rows pivoted under
     // the fallback carry a "d" after the iteration number.
-    const stall = { tol: 1e-5, verbose: false, dual: false };
+    const stall = { tol: 1e-5, dual: false };
     const bland = simplex(STALL_LINES, STALL_OBJECTIVE, stall);
     const cycling = simplex(STALL_LINES, STALL_OBJECTIVE, {
       ...stall,
@@ -320,7 +319,6 @@ describe("ipm", () => {
     maxit: 200,
     alphaMax,
     correctorThreshold: 0.9,
-    verbose: false,
   });
 
   test("converges to the square optimum", () => {
@@ -373,7 +371,6 @@ describe("ellipsoid", () => {
     deepCuts: true,
     rayShoot: true,
     initialScale: 1.5,
-    verbose: false,
     ...o,
   });
 
@@ -577,7 +574,6 @@ describe("centralPath", () => {
   test("emits one log row per traced point plus a header, no footer", () => {
     const r = centralPath(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), {
       niter: 10,
-      verbose: false,
     });
     expect(r.iterations.length).toBe(10);
     expect(r.logs.length).toBe(11);
@@ -601,7 +597,6 @@ describe("centralPath", () => {
     ] as [number, number][];
     const r = centralPath(sliverVertices, sliverLines, Float64Array.of(1, 1), {
       niter: 20,
-      verbose: false,
     });
     expect(r.iterations.length).toBeGreaterThan(0);
     for (const p of r.iterations) {
@@ -617,7 +612,7 @@ describe("centralPath", () => {
       const obj = Float64Array.of(7, -1.4);
       const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       const start = performance.now();
-      const r = centralPath(hull, lines, obj, { niter: 75, verbose: false });
+      const r = centralPath(hull, lines, obj, { niter: 75 });
       const elapsed = performance.now() - start;
       expect(r.iterations.length).toBe(75);
       const last = r.iterations[r.iterations.length - 1]!;
@@ -636,7 +631,6 @@ describe("draggable start point", () => {
     maxit: 500,
     alphaMax: 0.9,
     correctorThreshold: 0.9,
-    verbose: false,
     startPoint,
   });
 
@@ -727,7 +721,6 @@ describe("draggable start point", () => {
   test("simplex warm starts from a vertex and skips Phase 1", () => {
     const r = simplex(SQUARE, Float64Array.of(1, 1), {
       tol: 1e-9,
-      verbose: false,
       dual: false,
       startVertex: [-6, -6],
     });
@@ -750,7 +743,6 @@ describe("draggable start point", () => {
     ]) {
       const r = simplex(SQUARE, Float64Array.of(1, 1), {
         tol: 1e-9,
-        verbose: false,
         dual: false,
         startVertex: start,
       });

@@ -35,7 +35,6 @@ export interface CuttingPlaneOptions {
   rayShoot: boolean;
   initialScale: number;
   queryPoint: QueryPoint;
-  verbose: boolean;
 }
 
 type Termination = "converged" | "maxit" | "exhausted" | "degenerate" | "unbounded";
@@ -83,7 +82,7 @@ type QueryResult = {
  * solved exactly each iteration.
  */
 export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): EllipsoidResultData {
-  const { maxit, tol, rayShoot, initialScale, queryPoint, verbose } = opts;
+  const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
 
   if (maxit > MAX_ITERATIONS_LIMIT) {
     throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
@@ -128,7 +127,6 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
   const startTime = performance.now();
 
   const header = " Iter        x        y        Obj     Infeas          ρ";
-  if (verbose) console.log(header);
 
   while (iterations.length < maxit) {
     const query = computeQueryPoint(queryPoint, localizing);
@@ -193,7 +191,6 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
       infeasibility: Math.max(0, violation),
       rho: objectiveRadius,
     };
-    if (verbose) console.log(row);
     rows.push(row);
     rho.push(objectiveRadius);
     iterations.push(Float64Array.of(point[0]!, point[1]!));
@@ -221,7 +218,6 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
   }
 
   const footer = buildFooter(termination, iterations.length, performance.now() - startTime, bestObjective);
-  if (verbose) console.log(footer);
 
   appendIncumbent({ iterations, rows, rho, ellipsoids, polygons }, best, bestObjective, upperBound);
 

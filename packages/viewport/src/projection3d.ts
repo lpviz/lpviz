@@ -179,16 +179,6 @@ export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: Viewpo
     }
 
     if (!point) {
-      projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.set(0, 0, 1), projectionPlanePoint.set(0, 0, 0));
-      const dotXY = Math.abs(projectionRaycaster.ray.direction.z);
-      if (dotXY >= PLANE_PARALLEL_THRESHOLD) {
-        const xyHit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
-        if (xyHit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
-          point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
-        }
-      }
-    }
-    if (!point) {
       point = { x: snapshot.target.x, y: snapshot.target.y };
     }
   }

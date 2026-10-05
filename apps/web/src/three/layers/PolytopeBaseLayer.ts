@@ -2,7 +2,7 @@ import type { State } from "@/features/core/store";
 import { type BoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
 import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
-import { DoubleSide, Float32BufferAttribute, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
+import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -121,12 +121,9 @@ type PolytopeRenderResult = {
   isNonconvex: boolean;
   normalSegments: number[];
   highlightSegments: number[];
-  mode: ReturnType<SceneContext["getSnapshot"]>["mode"];
 };
 
-function buildPolytopeGeometry(state: State, snap: ReturnType<SceneContext["getSnapshot"]>): PolytopeRenderResult | null {
-  if (state.vertices.length === 0 || !shouldRenderSnapshotMode(snap.mode, state)) return null;
-
+function buildPolytopeGeometry(state: State, snap: ReturnType<SceneContext["getSnapshot"]>): PolytopeRenderResult {
   const { vertices, completionMode, highlightIndex, polytope } = state;
   const regionFinished = completionMode !== "draft";
   const hasDerived = completionMode === "open" && polytope?.kind === "bounded" && polytope.vertices.length >= 3;
@@ -184,7 +181,6 @@ function buildPolytopeGeometry(state: State, snap: ReturnType<SceneContext["getS
     isNonconvex,
     normalSegments,
     highlightSegments,
-    mode: snap.mode,
   };
 }
 
@@ -241,7 +237,6 @@ export class PolytopeBaseLayer extends LayerBase {
     const nEdges = new LineSegments2(nGeo, getPolytopeEdgeMat(POLYTOPE_OUTLINE_COLOR, false));
     nEdges.frustumCulled = false;
     nEdges.renderOrder = RENDER_ORDER.polyEdges;
-    nEdges.computeLineDistances = () => nEdges;
     nEdges.visible = false;
 
     const hGeo = new LineSegmentsGeometry();
@@ -249,7 +244,6 @@ export class PolytopeBaseLayer extends LayerBase {
     const hEdges = new LineSegments2(hGeo, getPolytopeEdgeMat(POLYTOPE_HIGHLIGHT_COLOR, false));
     hEdges.frustumCulled = false;
     hEdges.renderOrder = RENDER_ORDER.polyEdges;
-    hEdges.computeLineDistances = () => hEdges;
     hEdges.visible = false;
 
     const edgeGroup = new Group();
@@ -302,27 +296,10 @@ export class PolytopeBaseLayer extends LayerBase {
     }
 
     const is3D = snap.mode === "3d";
-    this.fillMesh.position.set(0, 0, 0);
-
     const result = buildPolytopeGeometry(raw, snap);
-
-    if (!result) {
-      this.object3D.visible = false;
-      this.fillMesh.visible = false;
-      return;
-    }
 
     if (result.fillVertices.length >= 3) {
       const newFillGeo = new ShapeGeometry(buildShapeFromVertices(result.fillVertices));
-      if (is3D) {
-        const pos = newFillGeo.getAttribute("position") as Float32BufferAttribute;
-        for (let i = 0; i < pos.count; i++) {
-          pos.setZ(i, 0);
-        }
-        pos.needsUpdate = true;
-        newFillGeo.computeBoundingBox();
-        newFillGeo.computeBoundingSphere();
-      }
       if (this.prevFillGeo) this.prevFillGeo.dispose();
       this.prevFillGeo = newFillGeo;
       this.fillMesh.geometry = newFillGeo;

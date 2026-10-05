@@ -28,7 +28,6 @@ type Active3DDrag = {
 
 export class ControlsController {
   private syncToken = -1;
-  private applyingSnapshot = false;
   private controlsConfig = getViewport3DControlsConfig();
   private perspectiveCamera = getViewportCameraRefs().perspective;
   private unsubscribeConfig: () => void;
@@ -268,7 +267,7 @@ export class ControlsController {
       },
     });
 
-    const canUse3DControls = () => this.controlsEnabled && !this.applyingSnapshot;
+    const canUse3DControls = () => this.controlsEnabled;
 
     const syncCamera = (target = this.controlsTarget) => {
       perspectiveCamera.lookAt(target);
@@ -589,8 +588,6 @@ export class ControlsController {
     }
 
     this.syncToken = this.controlsConfig.syncToken;
-    this.applyingSnapshot = true;
-
     const snapshot = this.controlsConfig.snapshot;
     perspectiveCamera.fov = snapshot.perspective.fov;
     perspectiveCamera.aspect = snapshot.perspective.aspect;
@@ -603,7 +600,6 @@ export class ControlsController {
     perspectiveCamera.updateProjectionMatrix();
     perspectiveCamera.updateMatrixWorld();
 
-    this.applyingSnapshot = false;
     this.sceneManager.invalidate({ layers: false });
   }
 

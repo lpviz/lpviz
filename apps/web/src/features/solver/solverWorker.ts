@@ -95,12 +95,10 @@ const DEFAULT_TOLERANCE = 1e-5;
 
 interface BaseSolverOptions {
   tol: number;
-  verbose: boolean;
 }
 
 const DEFAULT_BASE_OPTIONS: BaseSolverOptions = {
   tol: DEFAULT_TOLERANCE,
-  verbose: false,
 };
 
 async function wrapSolverCall<T>(solverName: string, solverFunction: () => T | Promise<T>): Promise<T> {
@@ -123,7 +121,6 @@ async function runSimplex(lines: Lines, objective: VecN, dual: boolean, entering
   return wrapSolverCall("Simplex", () => {
     const options = {
       tol: DEFAULT_TOLERANCE,
-      verbose: false,
       dual,
       enteringRule,
       leavingRule,

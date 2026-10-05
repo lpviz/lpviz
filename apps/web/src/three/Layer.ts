@@ -18,7 +18,7 @@ export interface Layer {
   readonly object3D: Object3D;
   readonly renderPass?: RenderPassName;
   readonly renderObjects?: readonly LayerRenderObject[];
-  readonly invalidationKeys?: readonly LayerInvalidationKey[];
+  readonly invalidationKeys: readonly LayerInvalidationKey[];
   update(ctx: SceneContext): void;
   dispose(): void;
 }

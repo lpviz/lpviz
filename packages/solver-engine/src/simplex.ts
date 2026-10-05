@@ -47,7 +47,6 @@ function resolvePivotRules(opts: Pick<SimplexOptions, "enteringRule" | "leavingR
 
 interface SimplexOptions {
   tol: number;
-  verbose: boolean;
   dual: boolean;
   /**
    * Optional warm start: a vertex of {Ax <= b} to begin Phase 2 from,
@@ -114,9 +113,6 @@ function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
   const out = createDenseMatrix(rows, cols);
   let colOffset = 0;
   for (const matrix of matrices) {
-    if (matrix.rows !== rows) {
-      throw new Error("hstackMatrices: all matrices must have the same number of rows");
-    }
     for (let row = 0; row < rows; row++) {
       const srcOffset = row * matrix.cols;
       const dstOffset = row * cols + colOffset;
@@ -178,9 +174,6 @@ class BasisInverse {
     basisIndices: readonly number[],
   ) {
     this.m = A.rows;
-    if (basisIndices.length !== this.m) {
-      throw new Error(`Basis size ${basisIndices.length} does not match number of constraints ${this.m}.`);
-    }
     this.basisIndices = basisIndices.slice();
     this.inverse = new Float64Array(this.m * this.m);
     this.work = new Float64Array(this.m * this.m);
@@ -214,13 +207,11 @@ class BasisInverse {
 
   /** out = B⁻¹ v */
   solveExact(v: Float64Array, out: Float64Array): Float64Array {
-    if (this.stale) throw new Error("solveExact needs a fresh factorization");
     return solveDenseSystem(this.matrix, this.m, v, out, this.work);
   }
 
   /** out = B⁻ᵀ v, direct solve; see solveExact. */
   solveTransposeExact(v: Float64Array, out: Float64Array): Float64Array {
-    if (this.stale) throw new Error("solveExact needs a fresh factorization");
     const { m } = this;
     if (!this.transposed) {
       this.transposed = new Float64Array(m * m);
@@ -439,13 +430,12 @@ function simplexCoreStandard(
   basisInit: boolean[],
   cfg: {
     tol: number;
-    verbose: boolean;
     pointFromBasis: (basisIndices: number[]) => [number, number];
     completionLabel: string;
     pivotRules: PivotRules;
   },
 ) {
-  const { tol, verbose, pointFromBasis, completionLabel, pivotRules } = cfg;
+  const { tol, pointFromBasis, completionLabel, pivotRules } = cfg;
   const mRows = A.rows;
   const nCols = A.cols;
   let basis = basisInit.slice();
@@ -454,7 +444,6 @@ function simplexCoreStandard(
   const logs: string[] = [];
   const header = `${"Iter".padStart(5)} ${"x".padStart(8)} ${"y".padStart(8)} ${"Obj".padStart(10)} ${"basis".padEnd(nCols, " ")}\n`;
 
-  if (verbose) console.log(header);
   logs.push(header);
   const guard = createCyclingGuard(pivotRules, tol);
 
@@ -483,7 +472,6 @@ function simplexCoreStandard(
 
     const [x, y] = pointFromBasis(sortedBasis);
     const line = `${iterationLabel(iteration, guard.active)} ${fmtF(x, 8, 2)} ${fmtF(y, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`;
-    if (verbose) console.log(line);
     logs.push(line);
 
     if (enterIndex === -1) break;
@@ -495,7 +483,6 @@ function simplexCoreStandard(
 
     if (leaveBasisIndex === -1) {
       const message = "LP is unbounded. No leaving variable found.";
-      if (verbose) console.log(message);
       logs.push(message);
       status = "unbounded";
       break;
@@ -509,7 +496,6 @@ function simplexCoreStandard(
 
   const finalBasis = basis.slice();
   const tail = `${completionLabel} finished in ${iteration} iterations – basis ${basisString(finalBasis)}\n`;
-  if (verbose) console.log(tail);
   logs.push(tail);
 
   return {
@@ -529,14 +515,13 @@ function simplexCore(
   basisInit: boolean[],
   cfg: {
     tol: number;
-    verbose: boolean;
     phase1: boolean;
     nOrig: number;
     m: number;
     pivotRules: PivotRules;
   },
 ) {
-  const { tol, verbose, phase1, nOrig, m, pivotRules } = cfg;
+  const { tol, phase1, nOrig, m, pivotRules } = cfg;
   const mRows = A.rows;
   const nCols = A.cols;
 
@@ -548,7 +533,6 @@ function simplexCore(
   const iterations: Vec2Ns = [];
   const logs: string[] = [];
   const header = `${"Iter".padStart(5)} ${"x".padStart(8)} ${"y".padStart(8)} ${"Obj".padStart(10)} ${"basis".padEnd(nCols, " ")}\n`;
-  if (verbose) console.log(header);
   logs.push(header);
   const guard = createCyclingGuard(pivotRules, tol);
 
@@ -576,7 +560,6 @@ function simplexCore(
     iterations.push(xTableau);
 
     const line = formatIterationLog(iteration, guard.active, xTableau, objective, basis, nOrig);
-    if (verbose) console.log(line);
     logs.push(line);
 
     if (enterIndex === -1) break;
@@ -588,7 +571,6 @@ function simplexCore(
 
     if (leaveIndexInBasis === -1) {
       const message = "LP is unbounded. No leaving variable found.";
-      if (verbose) console.log(message);
       logs.push(message);
       status = "unbounded";
       break;
@@ -605,13 +587,11 @@ function simplexCore(
     // The Phase-1 objective equals -(sum of artificial values), so a
     // negative optimum means no feasible point exists.
     const message = "Problem infeasible (Phase-1 optimum is negative: no feasible point exists)";
-    if (verbose) console.log(message);
     logs.push(message);
     throw new Error(message);
   }
 
   const tail = `Phase ${phase1 ? 1 : 2} finished in ${iteration} iterations – basis ${basisString(finalBasis)}\n`;
-  if (verbose) console.log(tail);
   logs.push(tail);
 
   return {
@@ -667,8 +647,8 @@ function pivotOutArtificialVariables(phase1Matrix: DenseMatrix, bVec: Float64Arr
   return phase2Basis;
 }
 
-function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array, objective: Float64Array, cfg: { tol: number; verbose: boolean; pivotRules: PivotRules }) {
-  const { tol, verbose, pivotRules } = cfg;
+function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array, objective: Float64Array, cfg: { tol: number; pivotRules: PivotRules }) {
+  const { tol, pivotRules } = cfg;
   const dualAFull = transposeMatrix(primalA);
   const bDualFull = Float64Array.from(objective);
 
@@ -714,10 +694,8 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
 
   const dualPointFromBasis = (basisIndices: number[]) => recoverPrimalPointFromDualBasis(lines, basisIndices, tol);
 
-  if (verbose) console.log("Phase 1");
   const phase1 = simplexCoreStandard(cPhase1, aPhase1, bPhase1, phase1Basis, {
     tol,
-    verbose,
     pointFromBasis: dualPointFromBasis,
     completionLabel: "Phase 1",
     pivotRules,
@@ -730,7 +708,6 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
     // primal LP is unbounded. Report it like the primal solver does and still
     // plot the Phase 1 trajectory.
     const phase2Logs = ["The dual LP is infeasible, so the primal LP is unbounded.\n"];
-    if (verbose) console.log("Dual LP infeasible: primal LP is unbounded.");
     return {
       iterations: [] as Float64Array[],
       phase1Iterations: phase1.basisHistory.map((basisIndices) => Float64Array.from(dualPointFromBasis(basisIndices))),
@@ -741,10 +718,8 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
 
   const phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, phase1.finalBasis, aPhase2.cols, tol);
 
-  if (verbose) console.log("Phase 2");
   const phase2 = simplexCoreStandard(cDual, aPhase2, bPhase1, phase2Basis, {
     tol,
-    verbose,
     pointFromBasis: dualPointFromBasis,
     completionLabel: "Phase 2",
     pivotRules,
@@ -821,7 +796,7 @@ function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Floa
 }
 
 export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
-  const { tol, verbose, dual, startVertex } = opts;
+  const { tol, dual, startVertex } = opts;
   const pivotRules = resolvePivotRules(opts);
   const { A: aOriginal, b } = linesToDenseAb(lines);
   const m = aOriginal.rows;
@@ -832,7 +807,6 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
     return {
       ...solveDualMode(lines, aOriginal, b, cObjective, {
         tol,
-        verbose,
         pivotRules,
       }),
       mode: "dual" as const,
@@ -865,10 +839,8 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
 
   const warmBasis = startVertex && startVertex.length === n ? warmStartBasisFromVertex(aOriginal, b, cPhase2, aPhase2, startVertex, tol) : null;
   if (warmBasis) {
-    if (verbose) console.log("Warm start (Phase 1 skipped)");
     const { iterations, logs, status } = simplexCore(cPhase2, aPhase2, b, warmBasis, {
       tol,
-      verbose,
       phase1: false,
       nOrig: n,
       m,
@@ -883,14 +855,12 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
     };
   }
 
-  if (verbose) console.log("Phase One");
   const {
     finalBasis: rawBasis1,
     iterations: phase1TableauIterations,
     logs: log1,
   } = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, {
     tol,
-    verbose,
     phase1: true,
     nOrig: n,
     m,
@@ -899,10 +869,8 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
 
   const phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, rawBasis1, 2 * n + m, tol);
 
-  if (verbose) console.log("Primal Simplex");
   const { iterations, logs, status } = simplexCore(cPhase2, aPhase2, b, phase2Basis, {
     tol,
-    verbose,
     phase1: false,
     nOrig: n,
     m,

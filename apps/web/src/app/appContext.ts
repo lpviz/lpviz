@@ -18,6 +18,4 @@ export type AppContext = {
   getSidebarWidth: () => number;
   getViewportSidebarWidth: () => number;
   isMobileLayout: () => boolean;
-  setSidebarWidthValue: (width: number) => void;
-  disposers: Array<() => void>;
 };

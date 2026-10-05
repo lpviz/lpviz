@@ -29,5 +29,5 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
     });
     window.prompt("Share this link:", `${window.location.origin}${window.location.pathname}?s=${encoded}`);
   };
-  return { share, collectShareSettings };
+  return { share };
 }

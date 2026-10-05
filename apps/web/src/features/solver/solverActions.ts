@@ -18,16 +18,11 @@ export type SolverActions = {
   toggleReplay: () => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
   invalidatePendingSolveResults: () => void;
-  computePath: () => Promise<void>;
   handleProblemChange: () => void;
-  flushDeferredRender: () => void;
   clearComputedState: () => void;
   setConstraintHighlight: (index: number | null) => void;
   setIterateHighlight: (index: number | null) => void;
-  restoreFullVirtualResult: () => void;
   solverControls: SolverControl[];
-  getSolverControl: (mode: SolverMode) => SolverControl | undefined;
-  hasUnboundedObjectiveDirection: (state: State) => boolean;
   destroy: () => void;
 };
 
@@ -215,16 +210,11 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
     toggleReplay: replay.toggle,
     recomputeIfModeActive,
     invalidatePendingSolveResults,
-    computePath,
     handleProblemChange,
-    flushDeferredRender: present.flushDeferred,
     clearComputedState,
     setConstraintHighlight,
     setIterateHighlight,
-    restoreFullVirtualResult: present.restoreFullVirtualResult,
     solverControls,
-    getSolverControl,
-    hasUnboundedObjectiveDirection,
     destroy: () => {
       rotation.cancel();
       // stop any active replay; its RAF loop would otherwise keep mutating

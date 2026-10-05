@@ -2,7 +2,6 @@ import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
 import type { ViewportRenderSnapshot } from "./types";
 
-const EPS = 1e-6;
 const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const ORTHO_MAX_SCALE_FACTOR = 400;
 
@@ -170,9 +169,4 @@ export function fitViewport2DToBounds(
     offsetX: -(bounds.minX + bounds.maxX) / 2,
     offsetY: -((bounds.minY + bounds.maxY) / 2 + (topInset / 2) * unitsPerPixel),
   };
-}
-
-export function isDefault2DView(snapshot: ViewportRenderSnapshot, sidebarWidth: number) {
-  const defaultTargetX = -((sidebarWidth / 2) * snapshot.unitsPerPixel);
-  return snapshot.mode === "2d" && Math.abs(snapshot.scaleFactor - 1) <= EPS && Math.abs(snapshot.target.x - defaultTargetX) <= EPS && Math.abs(snapshot.target.y) <= EPS;
 }

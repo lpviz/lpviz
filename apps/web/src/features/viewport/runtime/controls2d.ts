@@ -36,19 +36,11 @@ const DEFAULT_VIEWPORT_2D_CONTROLS_CONFIG: Viewport2DControlsConfig = {
 
 let config = DEFAULT_VIEWPORT_2D_CONTROLS_CONFIG;
 let activePanState: ActivePanState | null = null;
-const listeners = new Set<() => void>();
 
-const emit = () => {
-  listeners.forEach((listener) => listener());
-};
-
-const applyConfig = (nextConfig: Viewport2DControlsConfig, options: { emit?: boolean } = {}) => {
+const applyConfig = (nextConfig: Viewport2DControlsConfig) => {
   config = nextConfig;
   if (!config.enabled || config.blocked || !config.panEnabled) {
     activePanState = null;
-  }
-  if (options.emit !== false) {
-    emit();
   }
 };
 
@@ -56,20 +48,16 @@ const canZoomViewport2D = () => config.enabled && !config.blocked;
 
 const canPanViewport2D = () => canZoomViewport2D() && config.panEnabled && getState().editorInteraction.kind === "idle";
 
-export function setViewport2DControlsConfig(nextConfig: Partial<Viewport2DControlsConfig>, options: { emit?: boolean } = {}) {
-  applyConfig(
-    {
-      ...config,
-      ...nextConfig,
-    },
-    options,
-  );
+export function setViewport2DControlsConfig(nextConfig: Partial<Viewport2DControlsConfig>) {
+  applyConfig({
+    ...config,
+    ...nextConfig,
+  });
 }
 
 export function resetViewport2DControlsConfig() {
   activePanState = null;
   config = DEFAULT_VIEWPORT_2D_CONTROLS_CONFIG;
-  emit();
 }
 
 export function getViewport2DControlsConfig() {
@@ -80,28 +68,25 @@ export function getViewport2DControlsSnapshot(rect: ViewportRect) {
   return buildViewport2DSnapshot(config.state, config.sidebarWidth, rect, config.fallbackSnapshot);
 }
 
-export function setViewport2DControlsState(state: Viewport2DState, options: { notify?: boolean; emit?: boolean } = {}) {
+export function setViewport2DControlsState(state: Viewport2DState, options: { notify?: boolean } = {}) {
   const nextConfig = {
     ...config,
     state,
   };
   const onStateChange = nextConfig.onStateChange;
-  applyConfig(nextConfig, { emit: options.emit });
+  applyConfig(nextConfig);
   if (options.notify !== false) {
     onStateChange?.(state);
   }
 }
 
-export function syncViewport2DControlsStateFromSnapshot(snapshot: ViewportRenderSnapshot, sidebarWidth: number, options: { emit?: boolean } = {}) {
-  applyConfig(
-    {
-      ...config,
-      sidebarWidth,
-      fallbackSnapshot: snapshot,
-      state: deriveViewport2DState(snapshot, sidebarWidth),
-    },
-    options,
-  );
+export function syncViewport2DControlsStateFromSnapshot(snapshot: ViewportRenderSnapshot, sidebarWidth: number) {
+  applyConfig({
+    ...config,
+    sidebarWidth,
+    fallbackSnapshot: snapshot,
+    state: deriveViewport2DState(snapshot, sidebarWidth),
+  });
 }
 
 export function startViewport2DPan(clientX: number, clientY: number, rect: ViewportRect) {
@@ -137,7 +122,6 @@ export function updateViewport2DPan(clientX: number, clientY: number) {
       activePanState.gridSpacing,
       config.sidebarWidth,
     ),
-    { emit: false },
   );
   config.onNavigationFrame?.();
   return true;

@@ -64,8 +64,6 @@ const configureFitBasisFromViewAngle = (viewAngle: PointXYZ) => {
   fitRight.crossVectors(fitUp, fitForward).normalize();
 };
 
-const approxEqual = (a: number, b: number, tolerance = 1e-3) => Math.abs(a - b) <= tolerance;
-
 const clampPerspectiveDistance3D = (snapshot: ViewportRenderSnapshot, distance: number, rect?: ViewportRect) =>
   Math.min(getMaxPerspectiveDistance3D(snapshot, rect), Math.max(MIN_PERSPECTIVE_DISTANCE, distance));
 
@@ -207,7 +205,7 @@ export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): Po
   };
 }
 
-export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
+function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
   return snapshotCamera.position
     .set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z)
     .distanceTo(snapshotTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
@@ -255,7 +253,7 @@ export function fitViewport3DToBounds(
   padding = 50,
   zBounds?: ViewportZBounds,
   topInset = 0,
-): Viewport3DViewState | null {
+): Viewport3DViewState {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
   const viewAngle = getViewAngleFromSnapshot3D(snapshot);
@@ -325,24 +323,4 @@ export function buildViewport3DSnapshot(snapshot: ViewportRenderSnapshot, pose: 
       aspect: width / Math.max(1, height),
     },
   };
-}
-
-export function isDefault3DView(snapshot: ViewportRenderSnapshot, sidebarWidth = 0, rect?: ViewportRect) {
-  if (snapshot.mode !== "3d") {
-    return false;
-  }
-
-  // Compare against the target a reset would produce: with a sidebar the
-  // reset target is offset so the world origin sits at the visible center.
-  const resetView = buildResetViewport3DView(snapshot, sidebarWidth, rect ?? getViewportSize(snapshot));
-  const viewAngle = getViewAngleFromSnapshot3D(snapshot);
-  return (
-    approxEqual(snapshot.scaleFactor, 1) &&
-    approxEqual(snapshot.target.x, resetView.target.x) &&
-    approxEqual(snapshot.target.y, resetView.target.y) &&
-    approxEqual(snapshot.target.z, resetView.target.z) &&
-    approxEqual(viewAngle.x, DEFAULT_VIEW_ANGLE.x, 1e-2) &&
-    approxEqual(viewAngle.y, DEFAULT_VIEW_ANGLE.y, 1e-2) &&
-    approxEqual(viewAngle.z, DEFAULT_VIEW_ANGLE.z, 1e-2)
-  );
 }
