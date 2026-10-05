@@ -2,7 +2,7 @@ import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointXY } from "@lpviz/math/types";
 import { BufferAttribute, Group, Points, PointsMaterial } from "three";
-import { makePointsGeo } from "../helpers/makePointsGeo";
+import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE, SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
@@ -41,32 +41,8 @@ export class PolytopeVerticesLayer extends LayerBase {
 
   constructor() {
     super();
-    const circleMat = new PointsMaterial({
-      color: VERTEX_COLOR,
-      size: VERTEX_PIXEL_SIZE,
-      sizeAttenuation: false,
-      transparent: false,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: SHARED_CIRCLE_TEXTURE,
-      alphaTest: 0.2,
-    });
-    const squareMat = new PointsMaterial({
-      color: OPEN_ANCHOR_COLOR,
-      size: VERTEX_PIXEL_SIZE,
-      sizeAttenuation: false,
-      transparent: false,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: SHARED_SQUARE_TEXTURE,
-      alphaTest: 0.2,
-    });
-    const cPts = new Points(makePointsGeo(), circleMat);
-    cPts.renderOrder = VERTEX_RENDER_ORDER;
-    cPts.frustumCulled = false;
-    const sPts = new Points(makePointsGeo(), squareMat);
-    sPts.renderOrder = VERTEX_RENDER_ORDER;
-    sPts.frustumCulled = false;
+    const cPts = makePoints(pointsMaterial(SHARED_CIRCLE_TEXTURE, VERTEX_PIXEL_SIZE, VERTEX_COLOR), VERTEX_RENDER_ORDER, true);
+    const sPts = makePoints(pointsMaterial(SHARED_SQUARE_TEXTURE, VERTEX_PIXEL_SIZE, OPEN_ANCHOR_COLOR), VERTEX_RENDER_ORDER, true);
     const g = new Group();
     g.add(cPts, sPts);
     this.object3D = g;

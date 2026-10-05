@@ -3,10 +3,9 @@ import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot"
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
-import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { LayerBase } from "./base/LayerBase";
 
 const OBJECTIVE_COLOR = "#008000";
@@ -18,21 +17,8 @@ const ARROW_HALF_ANGLE = Math.PI / 6;
 const OBJECTIVE_EPSILON = 1e-3;
 
 export class ObjectiveLayer extends LayerBase {
-  readonly object3D: LineSegments2;
+  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(OBJECTIVE_COLOR, OBJECTIVE_LINE_THICKNESS, false)), OBJECTIVE_RENDER_ORDER);
   override readonly invalidationKeys = ["objective"] as const;
-  private objGeo: LineSegmentsGeometry;
-
-  constructor() {
-    super();
-    const objGeo = new LineSegmentsGeometry();
-    applyHugeBounds(objGeo);
-    const objSegs = new LineSegments2(objGeo, lineDepthMaterial(OBJECTIVE_COLOR, OBJECTIVE_LINE_THICKNESS, false));
-    objSegs.renderOrder = OBJECTIVE_RENDER_ORDER;
-    objSegs.frustumCulled = false;
-    objSegs.visible = false;
-    this.object3D = objSegs;
-    this.objGeo = objGeo;
-  }
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
@@ -66,7 +52,7 @@ export class ObjectiveLayer extends LayerBase {
       positions.push(target.x, target.y, 0, target.x - headLength * Math.cos(a), target.y - headLength * Math.sin(a), 0);
     }
 
-    replaceLinePositions(this.objGeo, positions);
+    replaceLinePositions(this.object3D.geometry, positions);
 
     const isUnbounded = raw.polytope?.kind === "unbounded" && hasPolytopeLines(raw.polytope) && isObjectiveDirectionUnbounded(raw.polytope.lines, [target.x, target.y]);
 
@@ -75,6 +61,6 @@ export class ObjectiveLayer extends LayerBase {
   }
 
   dispose(): void {
-    this.objGeo.dispose();
+    this.object3D.geometry.dispose();
   }
 }

@@ -2,7 +2,7 @@ import type { State } from "@/features/core/store";
 import { computeFlatZ, getState, MAX_TRACE_POINT_SPRITES } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { BufferAttribute, DynamicDrawUsage, Group, Points, PointsMaterial } from "three";
-import { makePointsGeo } from "../helpers/makePointsGeo";
+import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
@@ -88,19 +88,7 @@ export class TracePointsLayer extends LayerBase {
 
   constructor() {
     super();
-    const mat = new PointsMaterial({
-      color: TRACE_COLOR,
-      size: TRACE_POINT_PIXEL_SIZE,
-      sizeAttenuation: false,
-      transparent: false,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: SHARED_CIRCLE_TEXTURE,
-      alphaTest: 0.2,
-    });
-    const pts = new Points(makePointsGeo(), mat);
-    pts.renderOrder = TRACE_POINTS_RENDER_ORDER;
-    pts.frustumCulled = false;
+    const pts = makePoints(pointsMaterial(SHARED_CIRCLE_TEXTURE, TRACE_POINT_PIXEL_SIZE, TRACE_COLOR), TRACE_POINTS_RENDER_ORDER, true);
     const group = new Group();
     group.add(pts);
     this.object3D = group;

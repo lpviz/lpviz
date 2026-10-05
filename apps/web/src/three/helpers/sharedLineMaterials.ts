@@ -1,6 +1,7 @@
 import { Box3, type BufferGeometry, Sphere, Vector3 } from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import type { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { setPathRibbonResolution } from "./pathRibbon";
 
 const materialCache = new Map<string, LineMaterial>();
@@ -43,6 +44,21 @@ export function applyHugeBounds(geo: BufferGeometry): void {
   geo.boundingSphere = HUGE_SPHERE.clone();
   geo.computeBoundingBox = () => {};
   geo.computeBoundingSphere = () => {};
+}
+
+export function lineGeometry(): LineSegmentsGeometry {
+  const geo = new LineSegmentsGeometry();
+  applyHugeBounds(geo);
+  return geo;
+}
+
+// Every fat-line object in the app: never frustum-culled (its geometry's
+// bounds are fake) and hidden until its first rebuild.
+export function setupLine<T extends LineSegments2>(line: T, renderOrder: number): T {
+  line.renderOrder = renderOrder;
+  line.frustumCulled = false;
+  line.visible = false;
+  return line;
 }
 
 // setPositions() wraps its input in a brand-new interleaved buffer on every

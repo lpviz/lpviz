@@ -1,6 +1,6 @@
 import type { ViewportDirtyFlags } from "@/features/core/store";
 import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
-import { makePointsGeo } from "../../helpers/makePointsGeo";
+import { makePoints, pointsMaterial } from "../../helpers/points";
 import type { RenderPassName } from "../../Layer";
 import { LayerBase } from "./LayerBase";
 
@@ -31,24 +31,9 @@ export abstract class PointCloudLayer extends LayerBase {
 
   constructor(config: PointCloudConfig) {
     super();
-    const opacity = config.opacity ?? 1;
-    const shared = {
-      size: config.pixelSize,
-      sizeAttenuation: false,
-      transparent: opacity < 1,
-      opacity,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: config.texture,
-      alphaTest: 0.2,
-    };
-    this.matPlain = new PointsMaterial({ ...shared, color: config.color });
-    this.matColored = config.vertexColors ? new PointsMaterial({ ...shared, color: "#ffffff", vertexColors: true }) : null;
-    const points = new Points(makePointsGeo(), this.matPlain);
-    points.renderOrder = config.renderOrder;
-    points.frustumCulled = false;
-    points.visible = false;
-    this.object3D = points;
+    this.matPlain = pointsMaterial(config.texture, config.pixelSize, config.color, config.opacity);
+    this.matColored = config.vertexColors ? pointsMaterial(config.texture, config.pixelSize, "#ffffff", config.opacity, true) : null;
+    this.object3D = makePoints(this.matPlain, config.renderOrder, false);
     this.renderPass = config.renderPass;
     this.invalidationKeys = config.invalidationKeys;
   }

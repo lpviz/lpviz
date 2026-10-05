@@ -6,10 +6,9 @@ import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/transition";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
-import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { CLIP_MARGIN_UNITS, visibleBounds2D } from "../helpers/visibleBounds";
 import { LayerBase } from "./base/LayerBase";
 
@@ -70,23 +69,10 @@ function clipLineToBounds(line: Line, b: BoundingBox): [PointXY, PointXY] | null
 }
 
 export class ConstraintHighlightLayer extends LayerBase {
-  readonly object3D: LineSegments2;
+  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, false)), CONSTRAINT_RENDER_ORDER);
   // "grid" fires on zoom/resize/pan, which move the visible bounds this
   // layer clips against; the dependency check below keeps updates cheap.
   override readonly invalidationKeys = ["constraints", "grid"] as const;
-  private cGeo: LineSegmentsGeometry;
-
-  constructor() {
-    super();
-    const cGeo = new LineSegmentsGeometry();
-    applyHugeBounds(cGeo);
-    const cSegs = new LineSegments2(cGeo, lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, false));
-    cSegs.renderOrder = CONSTRAINT_RENDER_ORDER;
-    cSegs.frustumCulled = false;
-    cSegs.visible = false;
-    this.object3D = cSegs;
-    this.cGeo = cGeo;
-  }
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
@@ -133,13 +119,13 @@ export class ConstraintHighlightLayer extends LayerBase {
     }
 
     const [start, end] = clipped;
-    replaceLinePositions(this.cGeo, [start.x, start.y, 0, end.x, end.y, 0]);
+    replaceLinePositions(this.object3D.geometry, [start.x, start.y, 0, end.x, end.y, 0]);
 
     this.object3D.material = lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, snap.mode === "3d");
     this.object3D.visible = true;
   }
 
   dispose(): void {
-    this.cGeo.dispose();
+    this.object3D.geometry.dispose();
   }
 }

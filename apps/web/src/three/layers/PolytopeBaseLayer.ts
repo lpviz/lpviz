@@ -6,10 +6,9 @@ import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
-import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { visibleBounds2D } from "../helpers/visibleBounds";
 import type { LayerRenderObject } from "../Layer";
 import { LayerBase } from "./base/LayerBase";
@@ -195,19 +194,8 @@ export class PolytopeBaseLayer extends LayerBase {
     mesh.frustumCulled = false;
     mesh.visible = false;
 
-    const nGeo = new LineSegmentsGeometry();
-    applyHugeBounds(nGeo);
-    const nEdges = new LineSegments2(nGeo, lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false));
-    nEdges.frustumCulled = false;
-    nEdges.renderOrder = RENDER_ORDER.polyEdges;
-    nEdges.visible = false;
-
-    const hGeo = new LineSegmentsGeometry();
-    applyHugeBounds(hGeo);
-    const hEdges = new LineSegments2(hGeo, lineDepthMaterial(POLYTOPE_HIGHLIGHT_COLOR, POLY_LINE_THICKNESS, false));
-    hEdges.frustumCulled = false;
-    hEdges.renderOrder = RENDER_ORDER.polyEdges;
-    hEdges.visible = false;
+    const nEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+    const hEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(POLYTOPE_HIGHLIGHT_COLOR, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
 
     const edgeGroup = new Group();
     edgeGroup.add(nEdges, hEdges);

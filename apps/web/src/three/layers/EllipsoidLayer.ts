@@ -6,7 +6,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { applyHugeBounds, lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { LayerBase } from "./base/LayerBase";
 
 const ELLIPSOID_COLOR = "#377eb8";
@@ -107,7 +107,6 @@ export class EllipsoidLayer extends LayerBase {
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
-  private readonly polygonGeometry: LineSegmentsGeometry;
   private readonly polygon: LineSegments2;
   private readonly matrix = new Matrix4();
   private readonly indices: number[] = [];
@@ -121,20 +120,12 @@ export class EllipsoidLayer extends LayerBase {
     this.geometry = geometry;
 
     const group = new Group();
-    this.polygonGeometry = new LineSegmentsGeometry();
-    applyHugeBounds(this.polygonGeometry);
-    this.polygon = new LineSegments2(this.polygonGeometry, polygonMaterial(false));
-    this.polygon.renderOrder = RENDER_ORDER.ellipsoid;
-    this.polygon.frustumCulled = false;
-    this.polygon.visible = false;
+    this.polygon = setupLine(new LineSegments2(lineGeometry(), polygonMaterial(false)), RENDER_ORDER.ellipsoid);
     group.add(this.polygon);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
-      const segments = new LineSegments2(geometry, slotMaterial(slot, false));
-      segments.renderOrder = RENDER_ORDER.ellipsoid;
-      segments.frustumCulled = false;
+      const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), RENDER_ORDER.ellipsoid);
       segments.matrixAutoUpdate = false;
-      segments.visible = false;
       this.slots.push(segments);
       group.add(segments);
     }
@@ -219,7 +210,7 @@ export class EllipsoidLayer extends LayerBase {
       this.polygon.visible = false;
       return;
     }
-    replaceLinePositions(this.polygonGeometry, this.polygonScratch.subarray(0, written));
+    replaceLinePositions(this.polygon.geometry, this.polygonScratch.subarray(0, written));
     this.polygon.material = polygonMaterial(is3D);
     this.polygon.visible = true;
   }
@@ -258,7 +249,7 @@ export class EllipsoidLayer extends LayerBase {
 
   dispose(): void {
     this.geometry.dispose();
-    this.polygonGeometry.dispose();
+    this.polygon.geometry.dispose();
   }
 }
 
