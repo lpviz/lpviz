@@ -7,18 +7,22 @@ const EPS = 1e-9;
 // a plain {x, y, z} copy, as the viewport runtime's pose/snapshot types want
 export const xyz = ({ x, y, z }: { x: number; y: number; z: number }) => ({ x, y, z });
 
+type PerspectiveProjection = { fov: number; aspect: number; near: number; far: number };
+
 export class CameraController {
-  private ortho: OrthographicCamera;
-  readonly perspective: PerspectiveCamera;
+  private ortho = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
+  readonly perspective = new PerspectiveCamera(45, 1, 0.1, 10000);
   private unsubscribe: () => void;
   private pendingSnapshot = false;
-  private lastOrthoProjection: { left: number; right: number; top: number; bottom: number } | null = null;
-  private lastPerspectiveProjection: { fov: number; aspect: number; near: number; far: number } | null = null;
-  private orthoOriented = false;
+  // tracked apart from the camera's own fields, which ControlsController also
+  // writes when it syncs from its config
+  private lastPerspectiveProjection: PerspectiveProjection | null = null;
 
   constructor(private sceneManager: SceneManager) {
-    this.ortho = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
-    this.perspective = new PerspectiveCamera(45, 1, 0.1, 10000);
+    // every 2D snapshot looks straight down from z = 10 with +y up, so the
+    // orientation is fixed here once; applySnapshot only moves the camera
+    this.ortho.position.set(0, 0, 10);
+    this.ortho.lookAt(0, 0, 0);
 
     this.unsubscribe = subscribeFullViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;
@@ -39,36 +43,16 @@ export class CameraController {
 
   private applySnapshot(): void {
     const snap = getViewportRenderSnapshot();
-    const nextCamera = snap.mode === "2d" ? this.ortho : this.perspective;
-    this.sceneManager.setCamera(nextCamera);
+    this.sceneManager.setCamera(snap.mode === "2d" ? this.ortho : this.perspective);
 
     if (snap.mode === "2d") {
-      const projectionChanged =
-        !this.lastOrthoProjection ||
-        this.lastOrthoProjection.left !== snap.orthographic.left ||
-        this.lastOrthoProjection.right !== snap.orthographic.right ||
-        this.lastOrthoProjection.top !== snap.orthographic.top ||
-        this.lastOrthoProjection.bottom !== snap.orthographic.bottom;
-      if (projectionChanged) {
-        this.ortho.left = snap.orthographic.left;
-        this.ortho.right = snap.orthographic.right;
-        this.ortho.top = snap.orthographic.top;
-        this.ortho.bottom = snap.orthographic.bottom;
-        this.ortho.updateProjectionMatrix();
-        this.lastOrthoProjection = {
-          left: snap.orthographic.left,
-          right: snap.orthographic.right,
-          top: snap.orthographic.top,
-          bottom: snap.orthographic.bottom,
-        };
+      const ortho = this.ortho;
+      const { left, right, top, bottom, position } = snap.orthographic;
+      if (ortho.left !== left || ortho.right !== right || ortho.top !== top || ortho.bottom !== bottom) {
+        Object.assign(ortho, { left, right, top, bottom }).updateProjectionMatrix();
       }
-      this.ortho.position.set(snap.orthographic.position.x, snap.orthographic.position.y, snap.orthographic.position.z);
-      if (!this.orthoOriented) {
-        this.ortho.up.set(0, 1, 0);
-        this.ortho.lookAt(snap.orthographic.position.x, snap.orthographic.position.y, 0);
-        this.orthoOriented = true;
-      }
-      this.ortho.updateMatrixWorld();
+      ortho.position.copy(position);
+      ortho.updateMatrixWorld();
       return;
     }
 
@@ -76,27 +60,14 @@ export class CameraController {
       return;
     }
 
-    const projectionChanged =
-      !this.lastPerspectiveProjection ||
-      this.lastPerspectiveProjection.fov !== snap.perspective.fov ||
-      this.lastPerspectiveProjection.aspect !== snap.perspective.aspect ||
-      this.lastPerspectiveProjection.near !== snap.perspective.near ||
-      this.lastPerspectiveProjection.far !== snap.perspective.far;
-    if (projectionChanged) {
-      this.perspective.fov = snap.perspective.fov;
-      this.perspective.aspect = snap.perspective.aspect;
-      this.perspective.near = snap.perspective.near;
-      this.perspective.far = snap.perspective.far;
-      this.perspective.updateProjectionMatrix();
-      this.lastPerspectiveProjection = {
-        fov: snap.perspective.fov,
-        aspect: snap.perspective.aspect,
-        near: snap.perspective.near,
-        far: snap.perspective.far,
-      };
+    const { fov, aspect, near, far, position, up } = snap.perspective;
+    const last = this.lastPerspectiveProjection;
+    if (!last || last.fov !== fov || last.aspect !== aspect || last.near !== near || last.far !== far) {
+      this.lastPerspectiveProjection = { fov, aspect, near, far };
+      Object.assign(this.perspective, this.lastPerspectiveProjection).updateProjectionMatrix();
     }
-    this.perspective.position.set(snap.perspective.position.x, snap.perspective.position.y, snap.perspective.position.z);
-    this.perspective.up.set(snap.perspective.up.x, snap.perspective.up.y, snap.perspective.up.z);
+    this.perspective.position.copy(position);
+    this.perspective.up.copy(up);
     this.perspective.lookAt(snap.target.x, snap.target.y, snap.target.z);
     this.perspective.updateMatrixWorld();
     this.perspective.userData.lpvizLookAtTarget = xyz(snap.target);
