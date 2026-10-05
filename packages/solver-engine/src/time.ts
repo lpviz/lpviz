@@ -4,7 +4,7 @@ export function assertMaxit(maxit: number) {
   if (maxit > MAX_ITERATIONS_LIMIT) throw new Error(`maxit > ${MAX_ITERATIONS_LIMIT} not allowed`);
 }
 
-export function formatMilliseconds(milliseconds: number) {
+function formatMilliseconds(milliseconds: number) {
   return `${Math.round(milliseconds)}ms`;
 }
 

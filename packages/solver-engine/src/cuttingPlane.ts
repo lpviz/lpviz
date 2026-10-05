@@ -1,10 +1,24 @@
 import { linesToDenseAb } from "@lpviz/math/blas";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
-import { ELLIPSOID_STRIDE, appendIncumbent, clipPolygon, mostViolatedConstraint, objectiveRayStep, packPolygons, regionBoundingBox, type EllipsoidResultData, type EllipsoidRow } from "./ellipsoid";
-import { assertMaxit, formatMilliseconds } from "./time";
+import {
+  ELLIPSOID_HEADER,
+  ELLIPSOID_STRIDE,
+  FEASIBILITY_TOLERANCE,
+  Incumbent,
+  appendIncumbent,
+  buildFooter,
+  clipPolygon,
+  mostViolatedConstraint,
+  newTrace,
+  packPolygons,
+  recordIterate,
+  regionBoundingBox,
+  type EllipsoidResultData,
+  type Termination,
+} from "./ellipsoid";
+import { assertMaxit } from "./time";
 
-const FEASIBILITY_TOLERANCE = 1e-9;
 const MAX_NEWTON_STEPS = 80;
 const NEWTON_DECREMENT_TOLERANCE = 1e-12;
 const DAMPED_NEWTON_THRESHOLD = 0.25;
@@ -35,8 +49,6 @@ export interface CuttingPlaneOptions {
   initialScale: number;
   queryPoint: QueryPoint;
 }
-
-type Termination = "converged" | "maxit" | "exhausted" | "degenerate" | "unbounded";
 
 type QueryResult = {
   point: Float64Array;
@@ -92,7 +104,6 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
   }
 
   const c = Float64Array.from({ length: n }, (_, j) => objective[j] ?? 0);
-  const objectiveNormSquared = c[0]! * c[0]! + c[1]! * c[1]!;
   const { center: boxCenter, halfExtents } = regionBoundingBox(vertices, n, initialScale);
 
   // the initial localizing set: the same inflated bounding box the ellipsoid
@@ -110,20 +121,13 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
   const boxRowCount = localizing.length;
   const boxPolygon = [minX, minY, maxX, minY, maxX, maxY, minX, maxY];
   const polygons: number[][] = [];
+  const trace = newTrace(maxit, polygons);
+  const { iterations, rows, rho, ellipsoids } = trace;
 
-  const iterations: Float64Array[] = [];
-  const rows: EllipsoidRow[] = [];
-  const rho: number[] = [];
-  // one slot spare for the incumbent appended at the end
-  const ellipsoids = new Float64Array((maxit + 1) * ELLIPSOID_STRIDE);
-
-  const best = new Float64Array(n);
-  let bestObjective = -Infinity;
+  const incumbent = new Incumbent(A, b, c, rayShoot, c[0]! * c[0]! + c[1]! * c[1]!);
   let upperBound = Infinity;
   let termination: Termination = "maxit";
   const startTime = performance.now();
-
-  const header = " Iter        x        y        Obj     Infeas          ρ";
 
   while (iterations.length < maxit) {
     const query = computeQueryPoint(queryPoint, localizing);
@@ -140,18 +144,7 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
     const objectiveValue = c[0]! * point[0]! + c[1]! * point[1]!;
     const { row: worstRow, violation } = mostViolatedConstraint(A, b, point);
     const feasible = violation <= FEASIBILITY_TOLERANCE;
-    if (feasible && objectiveValue > bestObjective) {
-      bestObjective = objectiveValue;
-      best.set(point);
-    }
-    if (feasible && rayShoot) {
-      const step = objectiveRayStep(A, b, point, c, n);
-      const shotObjective = objectiveValue + step * objectiveNormSquared;
-      if (shotObjective > bestObjective) {
-        bestObjective = shotObjective;
-        for (let j = 0; j < n; j++) best[j] = point[j]! + step * c[j]!;
-      }
-    }
+    if (feasible) incumbent.offer(point, objectiveValue);
 
     // rho keeps the meaning it has for the ellipsoid method: how much better
     // than the query point anything still under consideration could be
@@ -173,27 +166,9 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
     }
     polygons.push(polygon === boxPolygon ? [...boxPolygon] : polygon);
 
-    const base = iterations.length * ELLIPSOID_STRIDE;
-    ellipsoids[base] = point[0]!;
-    ellipsoids[base + 1] = point[1]!;
-    ellipsoids[base + 2] = query.p11;
-    ellipsoids[base + 3] = query.p12;
-    ellipsoids[base + 4] = query.p22;
-    const row: EllipsoidRow = {
-      kind: "ellipsoid",
-      iteration: iterations.length + 1,
-      x: point[0]!,
-      y: point[1]!,
-      objective: objectiveValue,
-      infeasibility: Math.max(0, violation),
-      rho: objectiveRadius,
-    };
-    rows.push(row);
-    rho.push(objectiveRadius);
-    iterations.push(Float64Array.of(point[0]!, point[1]!));
+    recordIterate(trace, point, query.p11, query.p12, query.p22, objectiveValue, Math.max(0, violation), objectiveRadius);
 
-    const gap = bound.value - bestObjective;
-    if (feasible && bestObjective > -Infinity && gap <= tol * (1 + Math.abs(bestObjective))) {
+    if (feasible && incumbent.certifies(upperBound, tol)) {
       termination = "converged";
       break;
     }
@@ -204,26 +179,28 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
       localizing.push([A.data[worstRow * n]!, A.data[worstRow * n + 1]!, b[worstRow]!]);
     } else {
       // discard everything no better than the incumbent
-      localizing.push([-c[0]!, -c[1]!, -bestObjective]);
+      localizing.push([-c[0]!, -c[1]!, -incumbent.objective]);
     }
   }
 
   // Both of these are claims of optimality, and both are wrong when the
   // objective is unbounded: nothing but the initial box stopped the method.
-  if ((termination === "converged" || termination === "exhausted") && bestObjective > -Infinity && objectiveIsUnbounded(A, c)) {
+  if ((termination === "converged" || termination === "exhausted") && incumbent.objective > -Infinity && objectiveIsUnbounded(A, c)) {
     termination = "unbounded";
   }
 
-  const footer = buildFooter(termination, iterations.length, performance.now() - startTime, bestObjective);
-
-  appendIncumbent({ iterations, rows, rho, ellipsoids, polygons }, best, bestObjective, upperBound);
+  const footer = buildFooter(termination, iterations.length, performance.now() - startTime, {
+    exhausted: incumbent.objective === -Infinity ? ["No feasible point inside the initial box"] : ["Localizing set exhausted", "Nothing better than the incumbent remains, so it is optimal"],
+    unbounded: ["Stopped on the initial box boundary", "The objective is unbounded over this region: the method only searches inside the initial box"],
+  });
+  appendIncumbent(trace, incumbent, upperBound);
 
   return {
     iterations,
     ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
     ...packPolygons(polygons),
     rho,
-    header,
+    header: ELLIPSOID_HEADER,
     rows,
     footer,
   };
@@ -273,7 +250,7 @@ function computeQueryPoint(kind: QueryPoint, rows: LpRow[]): QueryResult | null 
 
   // the inscribed ball's center is strictly interior, which is exactly what
   // both barriers need to start from — no cut-restoration step required
-  const center = kind === "analytic" ? analyticCenter(rows, ball.center) : volumetricCenter(rows, ball.center);
+  const center = barrierCenter(rows, ball.center, kind === "volumetric");
   if (!center) return null;
 
   const hessian = barrierHessian(rows, center, kind === "volumetric");
@@ -310,41 +287,41 @@ function logBarrier(rows: LpRow[], x: Float64Array): number {
   return value;
 }
 
-// ½ log det H(x), Vaidya's volumetric barrier
-function volumetricBarrier(rows: LpRow[], x: Float64Array): number {
-  const slacks = slacksOf(rows, x);
-  if (!slacks) return Infinity;
+// sum_i w_i a_i a_i' as its three distinct entries
+function weightedGram(rows: LpRow[], weight: (i: number) => number) {
   let h11 = 0;
   let h12 = 0;
   let h22 = 0;
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
-    const inverseSquare = 1 / (slacks[i]! * slacks[i]!);
-    h11 += row[0]! * row[0]! * inverseSquare;
-    h12 += row[0]! * row[1]! * inverseSquare;
-    h22 += row[1]! * row[1]! * inverseSquare;
+    const w = weight(i);
+    h11 += row[0]! * row[0]! * w;
+    h12 += row[0]! * row[1]! * w;
+    h22 += row[1]! * row[1]! * w;
   }
+  return { h11, h12, h22 };
+}
+
+// H(x) = sum a_i a_i' / s_i^2
+const barrierGram = (rows: LpRow[], slacks: Float64Array) => weightedGram(rows, (i) => 1 / (slacks[i]! * slacks[i]!));
+
+// ½ log det H(x), Vaidya's volumetric barrier
+function volumetricBarrier(rows: LpRow[], x: Float64Array): number {
+  const slacks = slacksOf(rows, x);
+  if (!slacks) return Infinity;
+  const { h11, h12, h22 } = barrierGram(rows, slacks);
   const determinant = h11 * h22 - h12 * h12;
   return determinant > 0 ? 0.5 * Math.log(determinant) : Infinity;
 }
 
-// H(x) = sum a_i a_i' / s_i^2, plus (for Vaidya) each face's leverage score
+// H(x), plus (for Vaidya) each face's leverage score
 // sigma_i = a_i' H^-1 a_i / s_i^2 and the leverage-weighted matrix Q that
 // stands in for the volumetric barrier's Hessian.
 function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean) {
   const slacks = slacksOf(rows, x);
   if (!slacks) return null;
 
-  let h11 = 0;
-  let h12 = 0;
-  let h22 = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
-    const inverseSquare = 1 / (slacks[i]! * slacks[i]!);
-    h11 += row[0]! * row[0]! * inverseSquare;
-    h12 += row[0]! * row[1]! * inverseSquare;
-    h22 += row[1]! * row[1]! * inverseSquare;
-  }
+  const { h11, h12, h22 } = barrierGram(rows, slacks);
   const inverse = invertSymmetric2(h11, h12, h22);
   if (!inverse) return null;
 
@@ -355,18 +332,7 @@ function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean) {
     leverage[i] = quadratic / (slacks[i]! * slacks[i]!);
   }
   if (!weighted) return { h11, h12, h22, leverage, slacks };
-
-  let q11 = 0;
-  let q12 = 0;
-  let q22 = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i]!;
-    const weight = leverage[i]! / (slacks[i]! * slacks[i]!);
-    q11 += row[0]! * row[0]! * weight;
-    q12 += row[0]! * row[1]! * weight;
-    q22 += row[1]! * row[1]! * weight;
-  }
-  return { h11: q11, h12: q12, h22: q22, leverage, slacks };
+  return { ...weightedGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!)), leverage, slacks };
 }
 
 function invertSymmetric2(a11: number, a12: number, a22: number) {
@@ -418,11 +384,14 @@ function minimizeBarrier(
   return x;
 }
 
-function analyticCenter(rows: LpRow[], start: Float64Array) {
+// The analytic center minimizes the log barrier, whose gradient is
+// sum a_i / s_i; the volumetric center minimizes ½ log det H, whose gradient
+// weights each face by its leverage score: sum sigma_i a_i / s_i.
+function barrierCenter(rows: LpRow[], start: Float64Array, volumetric: boolean) {
   return minimizeBarrier(
     start,
     (x) => {
-      const hessian = barrierHessian(rows, x, false);
+      const hessian = barrierHessian(rows, x, volumetric);
       if (!hessian) return null;
       const inverse = invertSymmetric2(hessian.h11, hessian.h12, hessian.h22);
       if (!inverse) return null;
@@ -430,35 +399,7 @@ function analyticCenter(rows: LpRow[], start: Float64Array) {
       let g1 = 0;
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i]!;
-        const inverseSlack = 1 / hessian.slacks[i]!;
-        g0 += row[0]! * inverseSlack;
-        g1 += row[1]! * inverseSlack;
-      }
-      return {
-        g0,
-        g1,
-        d0: -(inverse.a11 * g0 + inverse.a12 * g1),
-        d1: -(inverse.a12 * g0 + inverse.a22 * g1),
-      };
-    },
-    (x) => logBarrier(rows, x),
-  );
-}
-
-function volumetricCenter(rows: LpRow[], start: Float64Array) {
-  return minimizeBarrier(
-    start,
-    (x) => {
-      const weighted = barrierHessian(rows, x, true);
-      if (!weighted) return null;
-      const inverse = invertSymmetric2(weighted.h11, weighted.h12, weighted.h22);
-      if (!inverse) return null;
-      // grad ½logdet H = sum sigma_i a_i / s_i
-      let g0 = 0;
-      let g1 = 0;
-      for (let i = 0; i < rows.length; i++) {
-        const row = rows[i]!;
-        const weight = weighted.leverage[i]! / weighted.slacks[i]!;
+        const weight = volumetric ? hessian.leverage[i]! / hessian.slacks[i]! : 1 / hessian.slacks[i]!;
         g0 += row[0]! * weight;
         g1 += row[1]! * weight;
       }
@@ -469,7 +410,7 @@ function volumetricCenter(rows: LpRow[], start: Float64Array) {
         d1: -(inverse.a12 * g0 + inverse.a22 * g1),
       };
     },
-    (x) => volumetricBarrier(rows, x),
+    (x) => (volumetric ? volumetricBarrier(rows, x) : logBarrier(rows, x)),
   );
 }
 
@@ -478,23 +419,5 @@ function dropRedundantCuts(rows: number[][], boxRowCount: number, leverage: Floa
   if (rows.length !== leverage.length) return;
   for (let i = rows.length - 1; i >= boxRowCount; i--) {
     if (leverage[i]! < VAIDYA_DROP_LEVERAGE) rows.splice(i, 1);
-  }
-}
-
-function buildFooter(termination: Termination, iterationCount: number, solveTime: number, bestObjective: number) {
-  const elapsed = formatMilliseconds(solveTime);
-  switch (termination) {
-    case "converged":
-      return `Converged to optimal solution in ${elapsed} / ${iterationCount} iterations\n`;
-    case "exhausted":
-      return bestObjective === -Infinity
-        ? `No feasible point inside the initial box after ${iterationCount} iterations in ${elapsed}\n`
-        : `Localizing set exhausted after ${iterationCount} iterations in ${elapsed}\nNothing better than the incumbent remains, so it is optimal\n`;
-    case "degenerate":
-      return `Query point degenerated numerically after ${iterationCount} iterations in ${elapsed}\n`;
-    case "unbounded":
-      return `Stopped on the initial box boundary after ${iterationCount} iterations in ${elapsed}\nThe objective is unbounded over this region: the method only searches inside the initial box\n`;
-    default:
-      return `Did not converge after ${iterationCount} iterations in ${elapsed}\n`;
   }
 }
