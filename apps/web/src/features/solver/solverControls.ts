@@ -71,6 +71,14 @@ const messageBlocks = (header: string, message: string): ResultRenderPayload => 
   ],
 });
 
+const emptyRegionBlock =
+  (message: string): SolverControl["getRunBlock"] =>
+  (s) =>
+    isEmptyRegion(s) ? messageBlocks("No valid region", message) : null;
+
+// A control declares which settings it shares; collect/apply derive from that.
+type SolverControlSpec = Omit<SolverControl, "collectShareSettings" | "applySharedSettings"> & { shareKeys: readonly SharedKey[] };
+
 export function createSolverControls({
   updateSolverSetting,
   hasUnboundedObjectiveDirection,
@@ -78,20 +86,7 @@ export function createSolverControls({
   updateSolverSetting: SolverSettingUpdater;
   hasUnboundedObjectiveDirection: (state: State) => boolean;
 }): SolverControl[] {
-  const collectShared = (keys: readonly SharedKey[]): ShareSettings => {
-    const s = getState().solverSettings;
-    const out: ShareSettings = {};
-    for (const k of keys) (out[k] as SolverSettings[SharedKey]) = s[k];
-    return out;
-  };
-  const applyShared = (settings: ShareSettings, keys: readonly SharedKey[]): void => {
-    for (const k of keys) {
-      const v: unknown = settings[k];
-      if (isValidSharedSetting(k, v)) updateSolverSetting(k, v);
-    }
-  };
-
-  return [
+  const specs: SolverControlSpec[] = [
     {
       mode: "central",
       isSelectable: (s) => hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
@@ -105,8 +100,7 @@ export function createSolverControls({
           );
         return null;
       },
-      collectShareSettings: () => collectShared(["centralPathIter"]),
-      applySharedSettings: (settings) => applyShared(settings, ["centralPathIter"]),
+      shareKeys: ["centralPathIter"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base || !hasPolytopeLines(s.polytope)) return null;
@@ -121,9 +115,8 @@ export function createSolverControls({
     {
       mode: "ipm",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "IPM requires a feasible region.") : null),
-      collectShareSettings: () => collectShared(["alphaMax", "correctorThreshold", "maxitIPM"]),
-      applySharedSettings: (settings) => applyShared(settings, ["alphaMax", "correctorThreshold", "maxitIPM"]),
+      getRunBlock: emptyRegionBlock("IPM requires a feasible region."),
+      shareKeys: ["alphaMax", "correctorThreshold", "maxitIPM"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -141,9 +134,8 @@ export function createSolverControls({
     {
       mode: "simplex",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "Simplex requires a valid feasible region.") : null),
-      collectShareSettings: () => collectShared(["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
-      applySharedSettings: (settings) => applyShared(settings, ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"]),
+      getRunBlock: emptyRegionBlock("Simplex requires a valid feasible region."),
+      shareKeys: ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -163,9 +155,8 @@ export function createSolverControls({
     {
       mode: "ellipsoid",
       isSelectable: hasFeasibleRegion,
-      getRunBlock: (s) => (isEmptyRegion(s) ? messageBlocks("No valid region", "The ellipsoid method requires a feasible region.") : null),
-      collectShareSettings: () => collectShared(["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"]),
-      applySharedSettings: (settings) => applyShared(settings, ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"]),
+      getRunBlock: emptyRegionBlock("The ellipsoid method requires a feasible region."),
+      shareKeys: ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base || !hasPolytopeLines(s.polytope)) return null;
@@ -187,8 +178,7 @@ export function createSolverControls({
       mode: "pdhg",
       isSelectable: hasFeasibleRegion,
       getRunBlock: () => null,
-      collectShareSettings: () => collectShared(["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
-      applySharedSettings: (settings) => applyShared(settings, ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"]),
+      shareKeys: ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
         if (!base) return null;
@@ -207,4 +197,20 @@ export function createSolverControls({
       },
     },
   ];
+
+  return specs.map(({ shareKeys, ...control }) => ({
+    ...control,
+    collectShareSettings: () => {
+      const s = getState().solverSettings;
+      const out: ShareSettings = {};
+      for (const k of shareKeys) (out[k] as SolverSettings[SharedKey]) = s[k];
+      return out;
+    },
+    applySharedSettings: (settings) => {
+      for (const k of shareKeys) {
+        const v: unknown = settings[k];
+        if (isValidSharedSetting(k, v)) updateSolverSetting(k, v);
+      }
+    },
+  }));
 }
