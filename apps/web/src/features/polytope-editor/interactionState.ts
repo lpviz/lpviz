@@ -128,10 +128,8 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Poin
   return null;
 }
 
-function getViewAnchor3D(state: State, vertex: { x: number; y: number }): DragViewAnchor3D | undefined {
-  if (!state.is3DMode && !state.isTransitioning3D) return undefined;
-  const z = 0;
-  return { x: vertex.x, y: vertex.y, z };
+function getViewAnchor3D(state: State, point: PointXY): DragViewAnchor3D | undefined {
+  return state.is3DMode || state.isTransitioning3D ? { x: point.x, y: point.y, z: 0 } : undefined;
 }
 
 export function getDragStartTarget(canvasManager: ViewportApi, state: State, clientX: number, clientY: number): DragTarget | null {
@@ -139,24 +137,19 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
   const local = getLocalFromClient(canvasManager, clientX, clientY);
   const { session } = getEditorContext(state);
   const edgeTolerance = worldDistanceForPixels(canvasManager, logicalCoords, EDGE_HIT_RADIUS_PX);
-
-  if (session.kind === "drafting") {
+  const vertexTarget = (): DragTarget | null => {
     const index = findVertexNearLocalPoint(canvasManager, local.x, local.y, state.vertices);
     if (index === -1) return null;
     const vertex = state.vertices[index];
-    return {
-      kind: "point",
-      index,
-      viewAnchor3D: vertex ? getViewAnchor3D(state, vertex) : undefined,
-    };
-  }
+    return { kind: "point", index, viewAnchor3D: vertex ? getViewAnchor3D(state, vertex) : undefined };
+  };
+
+  if (session.kind === "drafting") return vertexTarget();
 
   if (state.objectiveVector) {
     const tip = canvasManager.getObjectiveScreenPosition(state.objectiveVector);
     if (Math.hypot(local.x - tip.x, local.y - tip.y) < 10) {
-      const { objectiveVector } = state;
-      const viewAnchor3D = state.is3DMode || state.isTransitioning3D ? { x: objectiveVector.x, y: objectiveVector.y, z: 0 } : undefined;
-      return { kind: "objective", viewAnchor3D };
+      return { kind: "objective", viewAnchor3D: getViewAnchor3D(state, state.objectiveVector) };
     }
   }
 
@@ -172,15 +165,8 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
     };
   }
 
-  const vertexIndex = findVertexNearLocalPoint(canvasManager, local.x, local.y, state.vertices);
-  if (vertexIndex !== -1) {
-    const vertex = state.vertices[vertexIndex];
-    return {
-      kind: "point",
-      index: vertexIndex,
-      viewAnchor3D: vertex ? getViewAnchor3D(state, vertex) : undefined,
-    };
-  }
+  const vertex = vertexTarget();
+  if (vertex) return vertex;
 
   if (session.kind === "editing-closed" && state.vertices.length >= 3) {
     const polytope = VRep.fromPoints(state.vertices);

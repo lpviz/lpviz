@@ -2,7 +2,7 @@ import { clearIterateState, computeDrawingPhase, getState, resetTraceState, setS
 import { createSolverControls, type SolverControl, type SolverSettingUpdater } from "@/features/solver/solverControls";
 import { applySolverResult } from "@/features/solver/solverService";
 import { createReplayController } from "@/features/solver/replayController";
-import { createRotationController } from "@/features/solver/rotationController";
+import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { runSolverWorker } from "@/features/solver/workerClient";
 import type { ViewportApi } from "@/features/viewport/runtime";
@@ -56,10 +56,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
   const invalidatePendingSolveResults = () => {
     requestGeneration++;
   };
-  const syncTraceCapacity = () => {
-    const angleStep = Math.max(0.001, getState().solverSettings.objectiveAngleStep || 0.001);
-    setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / angleStep)));
-  };
+  const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
 
   const replay = createReplayController({
     getCanvasManager,

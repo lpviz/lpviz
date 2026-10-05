@@ -31,22 +31,12 @@ export function createHistoryService(onRestore: () => void): HistoryService {
     const sourceStack = isRedo ? redoStack : historyStack;
     const stateToRestore = sourceStack[sourceStack.length - 1]!;
     const trimmed = sourceStack.slice(0, -1);
-    setState(
-      isRedo
-        ? {
-            redoStack: trimmed,
-            vertices: stateToRestore.vertices,
-            objectiveVector: stateToRestore.objectiveVector,
-            completionMode: stateToRestore.completionMode,
-          }
-        : {
-            historyStack: trimmed,
-            redoStack: [...redoStack, currentEntry],
-            vertices: stateToRestore.vertices,
-            objectiveVector: stateToRestore.objectiveVector,
-            completionMode: stateToRestore.completionMode,
-          },
-    );
+    setState({
+      ...(isRedo ? { redoStack: trimmed } : { historyStack: trimmed, redoStack: [...redoStack, currentEntry] }),
+      vertices: stateToRestore.vertices,
+      objectiveVector: stateToRestore.objectiveVector,
+      completionMode: stateToRestore.completionMode,
+    });
     onRestore();
   };
   return { save, handleUndoRedo };

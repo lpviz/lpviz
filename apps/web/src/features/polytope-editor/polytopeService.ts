@@ -4,18 +4,14 @@ import { computeEditorRegionForState } from "@/features/polytope-editor/editorSe
 export type PolytopeService = { send: () => void };
 
 export function createPolytopeService(handleProblemChange: () => void): PolytopeService {
+  const fail = (inequalitiesMessage: string) => {
+    setState({ polytope: null, inequalitiesMessage, highlightIndex: null });
+    handleProblemChange();
+  };
   const send = () => {
     try {
       const regionResult = computeEditorRegionForState(getState());
-      if (regionResult.status === "nonconvex") {
-        setState({
-          polytope: null,
-          inequalitiesMessage: "Nonconvex",
-          highlightIndex: null,
-        });
-        handleProblemChange();
-        return;
-      }
+      if (regionResult.status === "nonconvex") return fail("Nonconvex");
       const promotion = regionResult.promotion;
       if (promotion)
         setState({
@@ -24,15 +20,7 @@ export function createPolytopeService(handleProblemChange: () => void): Polytope
           interiorPoint: promotion.interiorPoint,
         });
       const result = regionResult.polytope;
-      if (!result.inequalities) {
-        setState({
-          polytope: null,
-          inequalitiesMessage: "No inequalities returned.",
-          highlightIndex: null,
-        });
-        handleProblemChange();
-        return;
-      }
+      if (!result.inequalities) return fail("No inequalities returned.");
       const { highlightIndex } = getState();
       setState({
         polytope: result,
@@ -42,12 +30,7 @@ export function createPolytopeService(handleProblemChange: () => void): Polytope
       handleProblemChange();
     } catch (error) {
       console.error("Error:", error);
-      setState({
-        polytope: null,
-        inequalitiesMessage: "Error computing inequalities.",
-        highlightIndex: null,
-      });
-      handleProblemChange();
+      fail("Error computing inequalities.");
     }
   };
   return { send };

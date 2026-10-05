@@ -2,6 +2,9 @@ import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type SolverMode, t
 
 export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 
+// shared with every solver mode, on top of the active control's own keys
+export const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
+
 export type SharedAppState = {
   vertices: { x: number; y: number }[];
   completionMode?: CompletionMode;

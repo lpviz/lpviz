@@ -1,6 +1,6 @@
 import { ALL_VIEWPORT_DIRTY, getState, setState, type SolverMode } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
-import { buildSharedStatePatch, expandSharedAppState, type ShareSettings, type SharedAppState } from "@/features/share/sharedState";
+import { buildSharedStatePatch, expandSharedAppState, GLOBAL_SHARE_KEYS, type ShareSettings, type SharedAppState } from "@/features/share/sharedState";
 import type { SolverControl, SolverSettingUpdater } from "@/features/solver/solverControls";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import JSONCrush from "jsoncrush";
@@ -22,8 +22,10 @@ export function applyUrlParamsOnce({
 }) {
   const params = new URLSearchParams(window.location.search);
   const applySharedSettings = (settings: ShareSettings = {}) => {
-    if (settings.objectiveAngleStep !== undefined) updateSolverSetting("objectiveAngleStep", settings.objectiveAngleStep);
-    if (settings.objectiveRotationSpeed !== undefined) updateSolverSetting("objectiveRotationSpeed", settings.objectiveRotationSpeed);
+    for (const key of GLOBAL_SHARE_KEYS) {
+      const value = settings[key];
+      if (value !== undefined) updateSolverSetting(key, value);
+    }
     solverControls.forEach((c) => c.applySharedSettings(settings));
   };
   const applySharedState = (sharedState: SharedAppState) => {

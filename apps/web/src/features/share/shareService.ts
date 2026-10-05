@@ -1,17 +1,13 @@
 import { getState, type SolverMode } from "@/features/core/store";
 import { encodeSharedState } from "@/features/share/compactUrl";
-import type { ShareSettings } from "@/features/share/sharedState";
+import { GLOBAL_SHARE_KEYS, type ShareSettings } from "@/features/share/sharedState";
 import type { SolverControl } from "@/features/solver/solverControls";
 
 export function createShareService(getSolverControls: () => SolverControl[]) {
   const collectShareSettings = (mode: SolverMode): ShareSettings => {
     const settings = getState().solverSettings;
     const solverControl = getSolverControls().find((c) => c.mode === mode);
-    return {
-      objectiveAngleStep: settings.objectiveAngleStep,
-      objectiveRotationSpeed: settings.objectiveRotationSpeed,
-      ...(solverControl?.collectShareSettings() ?? {}),
-    };
+    return { ...Object.fromEntries(GLOBAL_SHARE_KEYS.map((key) => [key, settings[key]])), ...(solverControl?.collectShareSettings() ?? {}) };
   };
   const share = () => {
     const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getState();
