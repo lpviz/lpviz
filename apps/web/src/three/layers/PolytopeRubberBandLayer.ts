@@ -50,7 +50,6 @@ export class PolytopeRubberBandLayer implements Layer {
     const ln = new Line2(geo, rbMat);
     ln.frustumCulled = false;
     ln.renderOrder = RENDER_ORDER.polyEdges;
-    ln.computeLineDistances = () => ln;
     ln.visible = false;
     this.object3D = ln;
     this.geometry = geo;

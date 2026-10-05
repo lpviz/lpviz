@@ -22,7 +22,6 @@ export class SceneManager {
     trace: new Scene(),
     overlay: new Scene(),
   };
-  readonly scene = this.scenes.foreground;
   readonly renderer: WebGLRenderer;
   readonly layerHost = new LayerHost();
   private traceImpostor = new TracePassImpostor(
@@ -91,18 +90,10 @@ export class SceneManager {
     });
     this.resizeObserver.observe(canvas);
 
-    const manager = this;
     this.ctx = {
-      scene: this.scene,
-      // live getter: setSize replaces the _size object on every resize
-      get size() {
-        return manager._size;
-      },
       getSnapshot: getViewportRenderSnapshot,
-      getFullSnapshot: getViewportRenderSnapshot,
       getState,
       getCurrentMouse,
-      invalidate: () => this.invalidate(),
     };
 
     this.unsubscribeCurrentMouse = subscribeCurrentMouse(() => {
@@ -127,9 +118,6 @@ export class SceneManager {
   }
 
   start(): void {
-    if (this.disposed) {
-      return;
-    }
     this.scheduleFrame();
   }
 
@@ -186,24 +174,12 @@ export class SceneManager {
         this.traceImpostor.markContentDirty();
       }
     }
-    if (!this.dirty) {
-      this.dirty = true;
-    }
+    this.dirty = true;
     this.scheduleFrame();
   }
 
-  setCamera(cam: Camera, options: { invalidate?: boolean } = {}): void {
-    const shouldInvalidate = options.invalidate ?? true;
-    if (this.camera === cam) {
-      if (shouldInvalidate) {
-        this.invalidate({ layers: false });
-      }
-      return;
-    }
+  setCamera(cam: Camera): void {
     this.camera = cam;
-    if (shouldInvalidate) {
-      this.invalidate();
-    }
   }
 
   addLayer(layer: Layer): void {

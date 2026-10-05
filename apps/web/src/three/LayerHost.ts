@@ -18,7 +18,7 @@ export class LayerHost {
 
   update(ctx: SceneContext, dirty?: ViewportDirtyFlags): void {
     for (const layer of this.layers) {
-      if (dirty && layer.invalidationKeys?.every((key) => !dirty[key])) {
+      if (dirty && layer.invalidationKeys.every((key) => !dirty[key])) {
         continue;
       }
       layer.update(ctx);

@@ -17,7 +17,7 @@ import type { SceneContext } from "../../SceneContext";
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass?: RenderPassName;
-  readonly invalidationKeys?: readonly (keyof ViewportDirtyFlags)[];
+  abstract readonly invalidationKeys: readonly (keyof ViewportDirtyFlags)[];
 
   private deps: readonly unknown[] | null = null;
 
