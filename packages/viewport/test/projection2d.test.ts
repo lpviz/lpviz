@@ -1,12 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  buildViewport2DSnapshot,
-  buildViewport2DStateFromTarget,
-  fitViewport2DToBounds,
-  toCanvasCoords2D,
-  toLogicalCoords2D,
-  zoomViewport2DStateAtCanvasPoint,
-} from "../src/projection2d";
+import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D, zoomViewport2DStateAtCanvasPoint } from "../src/projection2d";
 import { createDefaultViewportRenderSnapshot } from "../src/types";
 
 // Round-trip invariants for the 2D projection. These pin the canvas<->world
@@ -54,14 +47,7 @@ describe("2D projection round-trips", () => {
     const before = buildViewport2DSnapshot(state, 0, rect, fallback);
     const cursor = { x: 800, y: 250 };
     const worldBefore = toLogicalCoords2D(before, rect, cursor.x, cursor.y);
-    const zoomed = zoomViewport2DStateAtCanvasPoint(
-      state,
-      0,
-      rect,
-      before,
-      cursor,
-      state.scaleFactor * 1.2,
-    );
+    const zoomed = zoomViewport2DStateAtCanvasPoint(state, 0, rect, before, cursor, state.scaleFactor * 1.2);
     const after = buildViewport2DSnapshot(zoomed, 0, rect, fallback);
     const worldAfter = toLogicalCoords2D(after, rect, cursor.x, cursor.y);
     expect(worldAfter.x).toBeCloseTo(worldBefore.x, 4);
@@ -72,8 +58,7 @@ describe("2D projection round-trips", () => {
 describe("fitViewport2DToBounds", () => {
   const bounds = { minX: -10, maxX: 10, minY: -30, maxY: 30 };
   const base = buildViewport2DStateFromTarget({ x: 0, y: 0 }, 1, 30, 0);
-  const canvasOf = (state: typeof base, point: { x: number; y: number }) =>
-    toCanvasCoords2D(buildViewport2DSnapshot(state, 0, rect, fallback), rect, point);
+  const canvasOf = (state: typeof base, point: { x: number; y: number }) => toCanvasCoords2D(buildViewport2DSnapshot(state, 0, rect, fallback), rect, point);
 
   test("with no inset the content is centered and fills the padded height", () => {
     const fitted = fitViewport2DToBounds(base, 0, rect, fallback, bounds, 50);

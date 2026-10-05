@@ -70,15 +70,7 @@ function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
   return event.deltaY;
 }
 
-export function createSidebarLogExpansion({
-  sidebar,
-  content,
-  logPanel,
-}: {
-  sidebar: HTMLElement;
-  content: HTMLElement;
-  logPanel: HTMLElement;
-}) {
+export function createSidebarLogExpansion({ sidebar, content, logPanel }: { sidebar: HTMLElement; content: HTMLElement; logPanel: HTMLElement }) {
   let expansion = 0;
 
   // Distance from the top of the scrollable content to the top of the log
@@ -86,10 +78,7 @@ export function createSidebarLogExpansion({
   // can grow — at the limit it fills the viewport with the controls scrolled
   // off. Measured in content space (hence adding scrollTop back), so it does
   // not move as the sidebar scrolls.
-  const roomAbove = () =>
-    logPanel.getBoundingClientRect().top -
-    content.getBoundingClientRect().top +
-    content.scrollTop;
+  const roomAbove = () => logPanel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
 
   const applyExpansion = () => {
     if (expansion <= 0) {
@@ -112,9 +101,7 @@ export function createSidebarLogExpansion({
     // a sidebar that genuinely overflows — a short window, a tall settings
     // panel — scrolls normally first and only then starts trading controls for
     // log.
-    const atBottom =
-      content.scrollHeight - content.clientHeight - content.scrollTop <=
-      OVERFLOW_SLACK_PX;
+    const atBottom = content.scrollHeight - content.clientHeight - content.scrollTop <= OVERFLOW_SLACK_PX;
     if (delta > 0 && !atBottom) return;
     // Shrinking, though, is always available while there is expansion to give
     // back. Gating it on the same condition strands the log: anything that
@@ -141,8 +128,7 @@ export function createSidebarLogExpansion({
     // discrepancy correct itself; shrinking keeps its relative step, since it
     // can legitimately start away from the bottom.
     const maxScroll = content.scrollHeight - content.clientHeight;
-    content.scrollTop =
-      applied > 0 ? maxScroll : Math.min(maxScroll, scrollTop + applied);
+    content.scrollTop = applied > 0 ? maxScroll : Math.min(maxScroll, scrollTop + applied);
     event.preventDefault();
   };
 

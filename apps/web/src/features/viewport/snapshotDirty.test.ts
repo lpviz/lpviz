@@ -11,10 +11,7 @@ describe("getSnapshotViewportDirtyFlags", () => {
   });
 
   test("a mode switch repaints everything", () => {
-    const flags = getSnapshotViewportDirtyFlags(
-      next({ mode: "2d" }),
-      next({ mode: "3d" }),
-    );
+    const flags = getSnapshotViewportDirtyFlags(next({ mode: "2d" }), next({ mode: "3d" }));
     expect(flags).toMatchObject({
       grid: true,
       polytope: true,
@@ -26,27 +23,17 @@ describe("getSnapshotViewportDirtyFlags", () => {
   });
 
   test("a transition-z change repaints the transition layers", () => {
-    const flags = getSnapshotViewportDirtyFlags(
-      base,
-      next({ transitionZMultiplier: base.transitionZMultiplier + 0.5 }),
-    );
+    const flags = getSnapshotViewportDirtyFlags(base, next({ transitionZMultiplier: base.transitionZMultiplier + 0.5 }));
     // transition flags include the world-anchored layers
     expect(Object.keys(flags).length).toBeGreaterThan(0);
   });
 
   test("zoom repaints grid + objective", () => {
-    expect(
-      getSnapshotViewportDirtyFlags(
-        base,
-        next({ scaleFactor: base.scaleFactor * 1.5 }),
-      ),
-    ).toEqual({ grid: true, objective: true });
+    expect(getSnapshotViewportDirtyFlags(base, next({ scaleFactor: base.scaleFactor * 1.5 }))).toEqual({ grid: true, objective: true });
   });
 
   test("resize repaints grid + objective", () => {
-    expect(
-      getSnapshotViewportDirtyFlags(base, next({ width: base.width + 200 })),
-    ).toEqual({ grid: true, objective: true });
+    expect(getSnapshotViewportDirtyFlags(base, next({ width: base.width + 200 }))).toEqual({ grid: true, objective: true });
   });
 
   test("a 2D pan past one world unit repaints only the grid", () => {

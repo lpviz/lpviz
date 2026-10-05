@@ -14,15 +14,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
     };
   };
   const share = () => {
-    const {
-      vertices,
-      completionMode,
-      objectiveVector,
-      solverMode,
-      zScale,
-      is3DMode,
-      solverStartPoint,
-    } = getSnapshot();
+    const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getSnapshot();
     // base64url only, so the whole link survives being pasted into chat,
     // email or a paper without a linkifier clipping its tail
     const encoded = encodeSharedState({
@@ -35,10 +27,7 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
       zScale,
       ...(is3DMode ? { is3DMode } : {}),
     });
-    window.prompt(
-      "Share this link:",
-      `${window.location.origin}${window.location.pathname}?s=${encoded}`,
-    );
+    window.prompt("Share this link:", `${window.location.origin}${window.location.pathname}?s=${encoded}`);
   };
   return { share, collectShareSettings };
 }

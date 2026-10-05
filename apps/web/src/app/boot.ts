@@ -1,12 +1,6 @@
 import type { AppContext } from "@/app/appContext";
 import type { AppActions } from "@/features/core/actions";
-import {
-  ALL_VIEWPORT_DIRTY,
-  freshState,
-  getState,
-  on,
-  setState,
-} from "@/features/core/store";
+import { ALL_VIEWPORT_DIRTY, freshState, getState, on, setState } from "@/features/core/store";
 import { createHistoryService } from "@/features/history/historyService";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
@@ -50,10 +44,7 @@ export function boot(root: HTMLElement) {
   const applyLayoutMode = () => {
     mobileLayout = mobileQuery.matches;
     root.classList.toggle("mobile-layout", mobileLayout);
-    root.style.setProperty(
-      "--mobile-sidebar-height",
-      `${mobileSidebarHeight}px`,
-    );
+    root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
   };
   applyLayoutMode();
 
@@ -105,12 +96,7 @@ export function boot(root: HTMLElement) {
 
     share: share.share,
     reset: () => {
-      if (
-        !window.confirm(
-          "Reset lpviz? This clears the drawing and every setting.",
-        )
-      )
-        return;
+      if (!window.confirm("Reset lpviz? This clears the drawing and every setting.")) return;
       // In place rather than by reloading the page, so it works offline.
       solver.invalidatePendingSolveResults();
       solver.stopRotation();
@@ -193,14 +179,8 @@ export function boot(root: HTMLElement) {
   const onResizeStart = (startEvent: PointerEvent) => {
     if (mobileLayout) {
       const applyHeight = (clientY: number) => {
-        mobileSidebarHeight = Math.max(
-          180,
-          Math.min(window.innerHeight * 0.72, window.innerHeight - clientY),
-        );
-        root.style.setProperty(
-          "--mobile-sidebar-height",
-          `${mobileSidebarHeight}px`,
-        );
+        mobileSidebarHeight = Math.max(180, Math.min(window.innerHeight * 0.72, window.innerHeight - clientY));
+        root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
         viewport.setSidebarWidth(0);
         stage.updateLayout();
       };
@@ -261,10 +241,7 @@ export function boot(root: HTMLElement) {
   const stage = mountCanvasStage(root, ctx, onResizeStart);
 
   const onResize = () => {
-    mobileSidebarHeight = Math.min(
-      mobileSidebarHeight,
-      window.innerHeight * 0.72,
-    );
+    mobileSidebarHeight = Math.min(mobileSidebarHeight, window.innerHeight * 0.72);
     applyLayoutMode();
     viewport.syncViewportLayout(getViewportSidebarWidth());
     stage.updateLayout();

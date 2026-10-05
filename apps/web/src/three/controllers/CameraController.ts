@@ -1,11 +1,5 @@
-import {
-  resetViewportCameraRefs,
-  setViewportCameraRefs,
-} from "@/features/viewport/runtime/cameraRefs";
-import {
-  getViewportRenderSnapshot,
-  subscribeFullViewportRenderSnapshot,
-} from "@/features/viewport/runtime/snapshot";
+import { resetViewportCameraRefs, setViewportCameraRefs } from "@/features/viewport/runtime/cameraRefs";
+import { getViewportRenderSnapshot, subscribeFullViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { OrthographicCamera, PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
 
@@ -16,12 +10,8 @@ export class CameraController {
   private perspective: PerspectiveCamera;
   private unsubscribe: () => void;
   private pendingSnapshot = false;
-  private lastOrthoProjection:
-    | { left: number; right: number; top: number; bottom: number }
-    | null = null;
-  private lastPerspectiveProjection:
-    | { fov: number; aspect: number; near: number; far: number }
-    | null = null;
+  private lastOrthoProjection: { left: number; right: number; top: number; bottom: number } | null = null;
+  private lastPerspectiveProjection: { fov: number; aspect: number; near: number; far: number } | null = null;
   private orthoOriented = false;
 
   constructor(private sceneManager: SceneManager) {
@@ -75,18 +65,10 @@ export class CameraController {
           bottom: snap.orthographic.bottom,
         };
       }
-      this.ortho.position.set(
-        snap.orthographic.position.x,
-        snap.orthographic.position.y,
-        snap.orthographic.position.z,
-      );
+      this.ortho.position.set(snap.orthographic.position.x, snap.orthographic.position.y, snap.orthographic.position.z);
       if (!this.orthoOriented) {
         this.ortho.up.set(0, 1, 0);
-        this.ortho.lookAt(
-          snap.orthographic.position.x,
-          snap.orthographic.position.y,
-          0,
-        );
+        this.ortho.lookAt(snap.orthographic.position.x, snap.orthographic.position.y, 0);
         this.orthoOriented = true;
       }
       this.ortho.updateMatrixWorld();
@@ -116,16 +98,8 @@ export class CameraController {
         far: snap.perspective.far,
       };
     }
-    this.perspective.position.set(
-      snap.perspective.position.x,
-      snap.perspective.position.y,
-      snap.perspective.position.z,
-    );
-    this.perspective.up.set(
-      snap.perspective.up.x,
-      snap.perspective.up.y,
-      snap.perspective.up.z,
-    );
+    this.perspective.position.set(snap.perspective.position.x, snap.perspective.position.y, snap.perspective.position.z);
+    this.perspective.up.set(snap.perspective.up.x, snap.perspective.up.y, snap.perspective.up.z);
     this.perspective.lookAt(snap.target.x, snap.target.y, snap.target.z);
     this.perspective.updateMatrixWorld();
     this.perspective.userData.lpvizLookAtTarget = {
@@ -137,9 +111,7 @@ export class CameraController {
 
   private perspectiveAlreadyMatchesSnapshot(): boolean {
     const snap = getViewportRenderSnapshot();
-    const target = this.perspective.userData.lpvizLookAtTarget as
-      | { x?: number; y?: number; z?: number }
-      | undefined;
+    const target = this.perspective.userData.lpvizLookAtTarget as { x?: number; y?: number; z?: number } | undefined;
     return (
       nearlyEqual(this.perspective.fov, snap.perspective.fov) &&
       nearlyEqual(this.perspective.aspect, snap.perspective.aspect) &&

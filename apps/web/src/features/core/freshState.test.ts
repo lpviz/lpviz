@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  DEFAULT_SOLVER_SETTINGS,
-  freshState,
-  getState,
-  setState,
-} from "./store";
+import { DEFAULT_SOLVER_SETTINGS, freshState, getState, setState } from "./store";
 
 // A reset applies freshState() over whatever the store holds. These pin what
 // that must restore, and what it must leave to the viewport.

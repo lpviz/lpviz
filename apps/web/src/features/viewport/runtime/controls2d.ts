@@ -1,16 +1,7 @@
 import { getState } from "@/features/core/store";
 import type { PointXY } from "@lpviz/math/types";
-import {
-  buildViewport2DSnapshot,
-  buildViewport2DStateFromTarget,
-  deriveViewport2DState,
-  type Viewport2DState,
-  zoomViewport2DStateAtCanvasPoint,
-} from "@lpviz/viewport/projection2d";
-import {
-  DEFAULT_VIEWPORT_RENDER_SNAPSHOT,
-  type ViewportRenderSnapshot,
-} from "../types";
+import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, deriveViewport2DState, type Viewport2DState, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
+import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
 type ViewportRect = Pick<DOMRect, "width" | "height">;
 
@@ -51,10 +42,7 @@ const emit = () => {
   listeners.forEach((listener) => listener());
 };
 
-const applyConfig = (
-  nextConfig: Viewport2DControlsConfig,
-  options: { emit?: boolean } = {},
-) => {
+const applyConfig = (nextConfig: Viewport2DControlsConfig, options: { emit?: boolean } = {}) => {
   config = nextConfig;
   if (!config.enabled || config.blocked || !config.panEnabled) {
     activePanState = null;
@@ -66,15 +54,9 @@ const applyConfig = (
 
 const canZoomViewport2D = () => config.enabled && !config.blocked;
 
-const canPanViewport2D = () =>
-  canZoomViewport2D() &&
-  config.panEnabled &&
-  getState().editorInteraction.kind === "idle";
+const canPanViewport2D = () => canZoomViewport2D() && config.panEnabled && getState().editorInteraction.kind === "idle";
 
-export function setViewport2DControlsConfig(
-  nextConfig: Partial<Viewport2DControlsConfig>,
-  options: { emit?: boolean } = {},
-) {
+export function setViewport2DControlsConfig(nextConfig: Partial<Viewport2DControlsConfig>, options: { emit?: boolean } = {}) {
   applyConfig(
     {
       ...config,
@@ -95,18 +77,10 @@ export function getViewport2DControlsConfig() {
 }
 
 export function getViewport2DControlsSnapshot(rect: ViewportRect) {
-  return buildViewport2DSnapshot(
-    config.state,
-    config.sidebarWidth,
-    rect,
-    config.fallbackSnapshot,
-  );
+  return buildViewport2DSnapshot(config.state, config.sidebarWidth, rect, config.fallbackSnapshot);
 }
 
-export function setViewport2DControlsState(
-  state: Viewport2DState,
-  options: { notify?: boolean; emit?: boolean } = {},
-) {
+export function setViewport2DControlsState(state: Viewport2DState, options: { notify?: boolean; emit?: boolean } = {}) {
   const nextConfig = {
     ...config,
     state,
@@ -118,11 +92,7 @@ export function setViewport2DControlsState(
   }
 }
 
-export function syncViewport2DControlsStateFromSnapshot(
-  snapshot: ViewportRenderSnapshot,
-  sidebarWidth: number,
-  options: { emit?: boolean } = {},
-) {
+export function syncViewport2DControlsStateFromSnapshot(snapshot: ViewportRenderSnapshot, sidebarWidth: number, options: { emit?: boolean } = {}) {
   applyConfig(
     {
       ...config,
@@ -134,11 +104,7 @@ export function syncViewport2DControlsStateFromSnapshot(
   );
 }
 
-export function startViewport2DPan(
-  clientX: number,
-  clientY: number,
-  rect: ViewportRect,
-) {
+export function startViewport2DPan(clientX: number, clientY: number, rect: ViewportRect) {
   if (!canPanViewport2D()) {
     return false;
   }
@@ -160,17 +126,12 @@ export function updateViewport2DPan(clientX: number, clientY: number) {
     return false;
   }
 
-  const unitsPerPixel =
-    1 / (activePanState.gridSpacing * activePanState.scaleFactor);
+  const unitsPerPixel = 1 / (activePanState.gridSpacing * activePanState.scaleFactor);
   setViewport2DControlsState(
     buildViewport2DStateFromTarget(
       {
-        x:
-          activePanState.targetX -
-          (clientX - activePanState.startClientX) * unitsPerPixel,
-        y:
-          activePanState.targetY +
-          (clientY - activePanState.startClientY) * unitsPerPixel,
+        x: activePanState.targetX - (clientX - activePanState.startClientX) * unitsPerPixel,
+        y: activePanState.targetY + (clientY - activePanState.startClientY) * unitsPerPixel,
       },
       activePanState.scaleFactor,
       activePanState.gridSpacing,
@@ -194,25 +155,12 @@ export function stopViewport2DPan() {
   return true;
 }
 
-export function zoomViewport2DAtCanvasPoint(
-  point: PointXY,
-  rect: ViewportRect,
-  scaleFactor: number,
-) {
+export function zoomViewport2DAtCanvasPoint(point: PointXY, rect: ViewportRect, scaleFactor: number) {
   if (!canZoomViewport2D()) {
     return false;
   }
 
-  setViewport2DControlsState(
-    zoomViewport2DStateAtCanvasPoint(
-      config.state,
-      config.sidebarWidth,
-      rect,
-      config.fallbackSnapshot,
-      point,
-      scaleFactor,
-    ),
-  );
+  setViewport2DControlsState(zoomViewport2DStateAtCanvasPoint(config.state, config.sidebarWidth, rect, config.fallbackSnapshot, point, scaleFactor));
   config.onNavigationFrame?.();
   return true;
 }

@@ -3,10 +3,7 @@
 // that aren't dirty-flag derivation.
 const VIEWPORT_UNBOUNDED_EXTENT = 5000;
 
-export function isViewport3DState(state: {
-  is3DMode: boolean;
-  isTransitioning3D: boolean;
-}) {
+export function isViewport3DState(state: { is3DMode: boolean; isTransitioning3D: boolean }) {
   return state.is3DMode || state.isTransitioning3D;
 }
 

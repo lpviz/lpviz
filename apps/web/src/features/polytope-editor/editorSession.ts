@@ -1,11 +1,6 @@
 import type { CompletionMode, State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/core/store";
-import {
-  centroid,
-  isConvexChain,
-  isConvexPolygon,
-  VRep,
-} from "@lpviz/math/geometry";
+import { centroid, isConvexChain, isConvexPolygon, VRep } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
 import { type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import { deriveRegionFromPoints } from "@lpviz/polytope/regionAssembly";
@@ -57,14 +52,10 @@ export function getEditorContext(state: State) {
             ? { kind: "editing-open" as const }
             : { kind: "drafting" as const };
 
-  const isDraggingGeometry =
-    state.editorInteraction.kind === "dragging" &&
-    state.editorInteraction.target.kind !== "objective";
+  const isDraggingGeometry = state.editorInteraction.kind === "dragging" && state.editorInteraction.target.kind !== "objective";
   const geometry =
     session.kind === "editing-open"
-      ? !isDraggingGeometry &&
-        state.polytope?.kind === "bounded" &&
-        state.polytope.vertices.length >= 3
+      ? !isDraggingGeometry && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3
         ? {
             vertices: state.polytope.vertices.map(([x, y]) => ({ x, y })),
             mode: "closed" as const,
@@ -75,8 +66,7 @@ export function getEditorContext(state: State) {
             mode: "open" as const,
             isDerivedClosed: false,
           }
-      : session.kind === "editing-closed" ||
-          session.kind === "selecting-objective"
+      : session.kind === "editing-closed" || session.kind === "selecting-objective"
         ? {
             vertices: state.vertices,
             mode: "closed" as const,
@@ -97,17 +87,10 @@ export function getEditorContext(state: State) {
 
 export function computeEditorRegionForState(state: State): EditorRegionResult {
   const { geometry, isDraggingGeometry } = getEditorContext(state);
-  const sourceVertices = geometry.isDerivedClosed
-    ? geometry.vertices
-    : state.vertices;
-  const sourceMode: CompletionMode = geometry.isDerivedClosed
-    ? "closed"
-    : state.completionMode;
+  const sourceVertices = geometry.isDerivedClosed ? geometry.vertices : state.vertices;
+  const sourceMode: CompletionMode = geometry.isDerivedClosed ? "closed" : state.completionMode;
 
-  const isConvex =
-    sourceMode === "open"
-      ? isConvexChain(sourceVertices)
-      : isConvexPolygon(sourceVertices);
+  const isConvex = sourceMode === "open" ? isConvexChain(sourceVertices) : isConvexPolygon(sourceVertices);
   if (!isConvex) {
     return { status: "nonconvex" };
   }
@@ -117,9 +100,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     sourceMode === "draft"
       ? deriveRegionFromPoints(vertexRep.toVertices(), "closed")
       : deriveRegionFromPoints(
-          sourceVertices.map(
-            (vertex) => [vertex.x, vertex.y] as [number, number],
-          ),
+          sourceVertices.map((vertex) => [vertex.x, vertex.y] as [number, number]),
           sourceMode,
         );
 
@@ -135,11 +116,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     };
   }
 
-  const shouldPromoteOpenRegion =
-    sourceMode === "open" &&
-    !isDraggingGeometry &&
-    region.kind === "bounded" &&
-    region.vertices.length >= 3;
+  const shouldPromoteOpenRegion = sourceMode === "open" && !isDraggingGeometry && region.kind === "bounded" && region.vertices.length >= 3;
 
   if (!shouldPromoteOpenRegion) {
     return {
@@ -228,8 +205,7 @@ export function getEditorTransition(
       if (tentative.length >= 3 && !VRep.fromPoints(tentative).isConvex()) {
         return {
           kind: "reject-nonconvex",
-          reason:
-            "Adding this vertex would make the polytope nonconvex. Please choose another point.",
+          reason: "Adding this vertex would make the polytope nonconvex. Please choose another point.",
         };
       }
 
@@ -251,8 +227,7 @@ export function getEditorTransition(
       if (!isConvexChain(state.vertices)) {
         return {
           kind: "reject-nonconvex",
-          reason:
-            "This open region is nonconvex. Please adjust the vertices before pressing Enter.",
+          reason: "This open region is nonconvex. Please adjust the vertices before pressing Enter.",
         };
       }
 
@@ -270,9 +245,7 @@ export function getEditorTransition(
         session,
         geometry: { vertices: displayVertices, isDerivedClosed },
       } = context;
-      const nextVertices = displayVertices.filter(
-        (_, index) => index !== action.deleteIndex,
-      );
+      const nextVertices = displayVertices.filter((_, index) => index !== action.deleteIndex);
 
       // The polygon stays closed, minus the vertex: dropping a vertex of a
       // convex polygon keeps it convex, so there is nothing to reject. A
@@ -340,14 +313,7 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      const t = Math.max(
-        0,
-        Math.min(
-          1,
-          ((action.point.x - start.x) * dx + (action.point.y - start.y) * dy) /
-            len2,
-        ),
-      );
+      const t = Math.max(0, Math.min(1, ((action.point.x - start.x) * dx + (action.point.y - start.y) * dy) / len2));
       const nextVertices = displayVertices.slice();
       nextVertices.splice(action.edgeIndex + 1, 0, {
         x: start.x + t * dx,

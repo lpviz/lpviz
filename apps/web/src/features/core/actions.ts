@@ -4,10 +4,7 @@ import type { SolverMode, SolverSettings } from "./store";
 export type AppActions = {
   setConstraintHighlight: (index: number | null) => void;
   setIterateHighlight: (index: number | null) => void;
-  updateSolverSetting: <K extends keyof SolverSettings>(
-    key: K,
-    value: SolverSettings[K],
-  ) => void;
+  updateSolverSetting: <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
   setTraceEnabled: (enabled: boolean) => void;
   // one control for both directions: starts a replay, or stops the running one

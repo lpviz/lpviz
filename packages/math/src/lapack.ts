@@ -1,10 +1,4 @@
-export function solveDenseSystem(
-  matrix: Float64Array,
-  size: number,
-  rhs: Float64Array,
-  out: Float64Array,
-  luScratch?: Float64Array,
-) {
+export function solveDenseSystem(matrix: Float64Array, size: number, rhs: Float64Array, out: Float64Array, luScratch?: Float64Array) {
   const lu = luScratch ?? new Float64Array(size * size);
   lu.set(matrix);
   out.set(rhs);
@@ -70,12 +64,7 @@ export function solveDenseSystem(
   return out;
 }
 
-export function invertDenseMatrix(
-  matrix: Float64Array,
-  size: number,
-  out: Float64Array,
-  scratch?: Float64Array,
-): Float64Array {
+export function invertDenseMatrix(matrix: Float64Array, size: number, out: Float64Array, scratch?: Float64Array): Float64Array {
   const work = scratch ?? new Float64Array(size * size);
   work.set(matrix);
   out.fill(0);

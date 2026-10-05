@@ -79,11 +79,7 @@ function chainTurnSign(points: Vertices, tol: number): -1 | 0 | 1 {
   return sign as -1 | 0 | 1;
 }
 
-export function buildConstraintRep(
-  points: Vertices,
-  closed: boolean,
-  tol = 1e-6,
-): ConstraintRep {
+export function buildConstraintRep(points: Vertices, closed: boolean, tol = 1e-6): ConstraintRep {
   const inequalities: string[] = [];
   const lines: Lines = [];
   const pointCount = points.length;
@@ -116,12 +112,7 @@ export function buildConstraintRep(
       normalizedA = -normalizedA;
       normalizedB = -normalizedB;
       normalizedC = -normalizedC;
-    } else if (
-      turnSign === 0 &&
-      interiorPoint &&
-      normalizedA * interiorPoint[0] + normalizedB * interiorPoint[1] >
-        normalizedC + tol
-    ) {
+    } else if (turnSign === 0 && interiorPoint && normalizedA * interiorPoint[0] + normalizedB * interiorPoint[1] > normalizedC + tol) {
       normalizedA = -normalizedA;
       normalizedB = -normalizedB;
       normalizedC = -normalizedC;

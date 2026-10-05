@@ -15,10 +15,7 @@ const ITERATE_LINE_THICKNESS = 3;
 let pointScratch = new Float32Array(0);
 let colorScratch = new Uint8Array(0);
 
-function buildPositions(
-  path: IteratePath,
-  objectiveVector: PointXY | null,
-): Float32Array {
+function buildPositions(path: IteratePath, objectiveVector: PointXY | null): Float32Array {
   // raw z: zScale and the 2D/3D transition flattening are applied via
   // object3D.scale.z, so neither rebuilds the path
   if (pointScratch.length < path.count * 3) {
@@ -65,20 +62,12 @@ export class IterateLineLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.iteratePath,
-      raw.iteratePhases,
-      raw.iterateObjectiveVector,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
     const raw = ctx.getState();
-    if (
-      raw.iteratePath.count < 2 ||
-      !shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)
-    ) {
+    if (raw.iteratePath.count < 2 || !shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)) {
       this.object3D.visible = false;
       return;
     }
@@ -93,14 +82,8 @@ export class IterateLineLayer extends LayerBase {
       this.object3D.add(this.ribbon.mesh);
     }
 
-    const hasPhases =
-      raw.iteratePhases.length === raw.iteratePath.count &&
-      raw.iteratePhases.length > 0;
-    this.ribbon.setPath(
-      buildPositions(raw.iteratePath, raw.iterateObjectiveVector),
-      raw.iteratePath.count,
-      hasPhases ? buildPhaseColors(raw.iteratePhases) : null,
-    );
+    const hasPhases = raw.iteratePhases.length === raw.iteratePath.count && raw.iteratePhases.length > 0;
+    this.ribbon.setPath(buildPositions(raw.iteratePath, raw.iterateObjectiveVector), raw.iteratePath.count, hasPhases ? buildPhaseColors(raw.iteratePhases) : null);
     this.ribbon.mesh.visible = true;
     this.object3D.visible = true;
   }

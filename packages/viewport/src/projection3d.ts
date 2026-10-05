@@ -34,31 +34,18 @@ const projectionPlane = new Plane(projectionPlaneNormal, 0);
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
 
-const getViewportSize = (
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-) => ({
+const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
   width: rect.width || snapshot.width || 1,
   height: rect.height || snapshot.height || 1,
 });
 
-const configurePerspectiveCameraFromSnapshot = (
-  snapshot: ViewportRenderSnapshot,
-) => {
+const configurePerspectiveCameraFromSnapshot = (snapshot: ViewportRenderSnapshot) => {
   projectionCamera.fov = snapshot.perspective.fov;
   projectionCamera.aspect = snapshot.perspective.aspect;
   projectionCamera.near = snapshot.perspective.near;
   projectionCamera.far = snapshot.perspective.far;
-  projectionCamera.position.set(
-    snapshot.perspective.position.x,
-    snapshot.perspective.position.y,
-    snapshot.perspective.position.z,
-  );
-  projectionCamera.up.set(
-    snapshot.perspective.up.x,
-    snapshot.perspective.up.y,
-    snapshot.perspective.up.z,
-  );
+  projectionCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
+  projectionCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
   projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z);
   projectionCamera.lookAt(projectionTarget);
   projectionCamera.updateMatrixWorld();
@@ -76,18 +63,8 @@ const snapPoint = (point: PointXY, snapToGrid: boolean): PointXY => {
   };
 };
 
-const clamp3DInteractionPoint = (
-  point: PointXY,
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  options: Viewport3DInteractionOptions,
-): PointXY => {
-  if (
-    !(
-      options.editorInteractionKind !== "idle" &&
-      (options.is3DMode || options.isTransitioning3D)
-    )
-  ) {
+const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DInteractionOptions): PointXY => {
+  if (!(options.editorInteractionKind !== "idle" && (options.is3DMode || options.isTransitioning3D))) {
     return point;
   }
 
@@ -102,14 +79,8 @@ const clamp3DInteractionPoint = (
   }
 
   return {
-    x: Math.max(
-      snapshot.target.x - bound,
-      Math.min(snapshot.target.x + bound, point.x),
-    ),
-    y: Math.max(
-      snapshot.target.y - bound,
-      Math.min(snapshot.target.y + bound, point.y),
-    ),
+    x: Math.max(snapshot.target.x - bound, Math.min(snapshot.target.x + bound, point.x)),
+    y: Math.max(snapshot.target.y - bound, Math.min(snapshot.target.y + bound, point.y)),
   };
 };
 
@@ -117,16 +88,10 @@ const clamp3DInteractionPoint = (
 // so distance-based hit tests against it are well-defined and never match.
 const OFFSCREEN_CANVAS_COORD = -1e9;
 
-export function projectWorldPosition3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  position: { x: number; y: number; z: number },
-): PointXY {
+export function projectWorldPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, position: { x: number; y: number; z: number }): PointXY {
   configurePerspectiveCameraFromSnapshot(snapshot);
   const { width, height } = getViewportSize(snapshot, rect);
-  projectedPosition
-    .set(position.x, position.y, position.z)
-    .applyMatrix4(projectionCamera.matrixWorldInverse);
+  projectedPosition.set(position.x, position.y, position.z).applyMatrix4(projectionCamera.matrixWorldInverse);
   if (projectedPosition.z >= 0) {
     // Behind the camera: projecting would mirror the point onto the screen,
     // making it spuriously hoverable/draggable.
@@ -148,10 +113,7 @@ export function toCanvasCoords3D(
   zScale: number,
   zValueForPoint?: (entry: Float64Array) => number,
 ): PointXY {
-  const entry =
-    z === undefined
-      ? Float64Array.of(point.x, point.y)
-      : Float64Array.of(point.x, point.y, z);
+  const entry = z === undefined ? Float64Array.of(point.x, point.y) : Float64Array.of(point.x, point.y, z);
   const zValue = zValueForPoint ? zValueForPoint(entry) : (z ?? 0);
   // Render layers flatten z by transitionZMultiplier during the 2D/3D
   // transition; match them so screen positions agree with drawn geometry.
@@ -162,11 +124,7 @@ export function toCanvasCoords3D(
   });
 }
 
-export function getObjectiveScreenPosition3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  point: PointXY,
-): PointXY {
+export function getObjectiveScreenPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY): PointXY {
   return projectWorldPosition3D(snapshot, rect, {
     x: point.x,
     y: point.y,
@@ -174,13 +132,7 @@ export function getObjectiveScreenPosition3D(
   });
 }
 
-export function toLogicalCoords3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  x: number,
-  y: number,
-  options: Viewport3DInteractionOptions,
-): PointXY {
+export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: Viewport3DInteractionOptions): PointXY {
   const { width, height } = getViewportSize(snapshot, rect);
   if (width === 0 || height === 0) {
     return snapPoint(
@@ -198,26 +150,14 @@ export function toLogicalCoords3D(
   projectionRaycaster.setFromCamera(projectionPointerNdc, projectionCamera);
 
   projectionPlaneNormal.set(0, 0, 1);
-  projectionPlane.setFromNormalAndCoplanarPoint(
-    projectionPlaneNormal,
-    projectionPlanePoint.set(0, 0, 0),
-  );
+  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal, projectionPlanePoint.set(0, 0, 0));
 
-  const dotTilted = projectionRaycaster.ray.direction.dot(
-    projectionPlane.normal,
-  );
+  const dotTilted = projectionRaycaster.ray.direction.dot(projectionPlane.normal);
   let point: PointXY | null = null;
 
   if (Math.abs(dotTilted) >= PLANE_PARALLEL_THRESHOLD) {
-    const hit = projectionRaycaster.ray.intersectPlane(
-      projectionPlane,
-      projectionPointerWorld,
-    );
-    if (
-      hit &&
-      Number.isFinite(projectionPointerWorld.x) &&
-      Number.isFinite(projectionPointerWorld.y)
-    ) {
+    const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+    if (hit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
       point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
     }
   }
@@ -227,55 +167,23 @@ export function toLogicalCoords3D(
     // This plane is always well-conditioned because its normal points toward
     // the camera — the ray can never be parallel to it for reasonable FOVs.
     if (options.viewAnchor3D) {
-      projectionViewDir
-        .set(
-          snapshot.target.x - snapshot.perspective.position.x,
-          snapshot.target.y - snapshot.perspective.position.y,
-          snapshot.target.z - snapshot.perspective.position.z,
-        )
-        .normalize();
-      projectionPlane.setFromNormalAndCoplanarPoint(
-        projectionPlaneNormal.copy(projectionViewDir),
-        projectionPlanePoint.set(
-          options.viewAnchor3D.x,
-          options.viewAnchor3D.y,
-          options.viewAnchor3D.z,
-        ),
-      );
-      const dotView = projectionRaycaster.ray.direction.dot(
-        projectionPlane.normal,
-      );
+      projectionViewDir.set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z).normalize();
+      projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.copy(projectionViewDir), projectionPlanePoint.set(options.viewAnchor3D.x, options.viewAnchor3D.y, options.viewAnchor3D.z));
+      const dotView = projectionRaycaster.ray.direction.dot(projectionPlane.normal);
       if (Math.abs(dotView) >= PLANE_PARALLEL_THRESHOLD) {
-        const viewHit = projectionRaycaster.ray.intersectPlane(
-          projectionPlane,
-          projectionPointerWorld,
-        );
-        if (
-          viewHit &&
-          Number.isFinite(projectionPointerWorld.x) &&
-          Number.isFinite(projectionPointerWorld.y)
-        ) {
+        const viewHit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+        if (viewHit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
           point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
         }
       }
     }
 
     if (!point) {
-      projectionPlane.setFromNormalAndCoplanarPoint(
-        projectionPlaneNormal.set(0, 0, 1),
-        projectionPlanePoint.set(0, 0, 0),
-      );
+      projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.set(0, 0, 1), projectionPlanePoint.set(0, 0, 0));
       const dotXY = Math.abs(projectionRaycaster.ray.direction.z);
       if (dotXY >= PLANE_PARALLEL_THRESHOLD) {
-        const xyHit = projectionRaycaster.ray.intersectPlane(
-          projectionPlane,
-          projectionPointerWorld,
-        );
-        if (
-          xyHit &&
-          Number.isFinite(projectionPointerWorld.x) &&
-          Number.isFinite(projectionPointerWorld.y)
-        ) {
+        const xyHit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+        if (xyHit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y)) {
           point = { x: projectionPointerWorld.x, y: projectionPointerWorld.y };
         }
       }
@@ -285,8 +193,5 @@ export function toLogicalCoords3D(
     }
   }
 
-  return snapPoint(
-    clamp3DInteractionPoint(point, snapshot, rect, options),
-    options.snapToGrid,
-  );
+  return snapPoint(clamp3DInteractionPoint(point, snapshot, rect, options), options.snapToGrid);
 }

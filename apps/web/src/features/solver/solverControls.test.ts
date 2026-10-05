@@ -45,9 +45,7 @@ describe("shared solver settings", () => {
         simplexLeavingRule: {},
       }),
     );
-    ipm.applySharedSettings(
-      untrusted({ alphaMax: NaN, maxitIPM: "100", correctorThreshold: 0.5 }),
-    );
+    ipm.applySharedSettings(untrusted({ alphaMax: NaN, maxitIPM: "100", correctorThreshold: 0.5 }));
     expect(applied).toEqual({ correctorThreshold: 0.5 });
   });
 

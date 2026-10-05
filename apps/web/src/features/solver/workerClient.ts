@@ -1,12 +1,5 @@
-import {
-  unpackSolverResponse,
-  type PackedSolverWorkerResponse,
-} from "./resultPacking";
-import type {
-  SolverWorkerPayload,
-  SolverWorkerResponse,
-  SolverWorkerSuccessResponse,
-} from "./solverWorker";
+import { unpackSolverResponse, type PackedSolverWorkerResponse } from "./resultPacking";
+import type { SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./solverWorker";
 import SolverWorker from "./solverWorker?worker";
 
 const MAX_WORKER_QUEUE = 4;
@@ -26,16 +19,13 @@ const pending = new Map<number, PendingResolver>();
 const requestQueue: QueueEntry[] = [];
 let nextRequestId = 0;
 
-worker.addEventListener(
-  "message",
-  (event: MessageEvent<PackedSolverWorkerResponse>) => {
-    const entry = pending.get(event.data.id);
-    if (!entry) return;
-    pending.delete(event.data.id);
-    scheduleDispatch();
-    entry.resolve(unpackSolverResponse(event.data));
-  },
-);
+worker.addEventListener("message", (event: MessageEvent<PackedSolverWorkerResponse>) => {
+  const entry = pending.get(event.data.id);
+  if (!entry) return;
+  pending.delete(event.data.id);
+  scheduleDispatch();
+  entry.resolve(unpackSolverResponse(event.data));
+});
 
 function rejectAll(reason: unknown) {
   pending.forEach(({ reject }) => reject(reason));
@@ -72,17 +62,13 @@ function dropOverflow() {
   }
 }
 
-export async function runSolverWorker(
-  payload: SolverWorkerPayload,
-): Promise<SolverWorkerSuccessResponse> {
+export async function runSolverWorker(payload: SolverWorkerPayload): Promise<SolverWorkerSuccessResponse> {
   const id = ++nextRequestId;
-  const response = await new Promise<SolverWorkerResponse>(
-    (resolve, reject) => {
-      requestQueue.push({ id, payload, resolve, reject });
-      dropOverflow();
-      scheduleDispatch();
-    },
-  );
+  const response = await new Promise<SolverWorkerResponse>((resolve, reject) => {
+    requestQueue.push({ id, payload, resolve, reject });
+    dropOverflow();
+    scheduleDispatch();
+  });
 
   if (!response.success) {
     throw new Error(response.error);

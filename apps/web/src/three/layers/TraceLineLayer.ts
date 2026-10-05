@@ -19,13 +19,7 @@ function buildEntryPoints(entry: TraceEntry): Float32Array {
   if (pointScratch.length < entry.count * 3) {
     pointScratch = new Float32Array(entry.count * 3);
   }
-  writeFlatXYZ(
-    pointScratch,
-    entry.points,
-    entry.count,
-    entry.stride,
-    entry.objectiveVector,
-  );
+  writeFlatXYZ(pointScratch, entry.points, entry.count, entry.stride, entry.objectiveVector);
   return pointScratch;
 }
 
@@ -70,13 +64,7 @@ export class TraceLineLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.traceEnabled,
-      raw.traceBuffer,
-      raw.is3DMode,
-      raw.isTransitioning3D,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -85,10 +73,7 @@ export class TraceLineLayer extends LayerBase {
     const modeChanged = this.lastMode !== snap.mode;
     this.lastMode = snap.mode;
 
-    const shouldShow =
-      raw.traceEnabled &&
-      raw.traceBuffer.length > 0 &&
-      shouldRenderSnapshotMode(snap.mode, raw);
+    const shouldShow = raw.traceEnabled && raw.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
     if (!shouldShow) {
       this.object3D.visible = false;
       return;

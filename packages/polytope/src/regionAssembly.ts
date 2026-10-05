@@ -1,18 +1,9 @@
 import type { Vertices } from "@lpviz/math/types";
-import {
-  buildOpenBoundaryRays,
-  classifyRegion,
-  findFeasiblePoint,
-  hasOpenBoundaryClosure,
-  verticesFromLines,
-} from "@lpviz/math/geometry";
+import { buildOpenBoundaryRays, classifyRegion, findFeasiblePoint, hasOpenBoundaryClosure, verticesFromLines } from "@lpviz/math/geometry";
 import { buildConstraintRep } from "./constraintRep";
 import type { PolytopeRepresentation } from "./polytopeTypes";
 
-export function deriveRegionFromPoints(
-  points: Vertices,
-  completionMode: "closed" | "open",
-): PolytopeRepresentation {
+export function deriveRegionFromPoints(points: Vertices, completionMode: "closed" | "open"): PolytopeRepresentation {
   if (points.length > 256) {
     throw new Error("points.length > 256 not allowed");
   }
@@ -28,14 +19,7 @@ export function deriveRegionFromPoints(
     // With no constraints the region is the whole plane, not infeasible
     // (findFeasiblePoint returns null for an empty line set by design);
     // mirror classifyRegion's handling of the closed case.
-    const kind: PolytopeRepresentation["kind"] =
-      lines.length === 0
-        ? "degenerate"
-        : hasClosure && allVertices.length >= 3
-          ? "bounded"
-          : feasiblePoint
-            ? "unbounded"
-            : "empty";
+    const kind: PolytopeRepresentation["kind"] = lines.length === 0 ? "degenerate" : hasClosure && allVertices.length >= 3 ? "bounded" : feasiblePoint ? "unbounded" : "empty";
     const vertices = hasClosure && allVertices.length >= 3 ? allVertices : [];
 
     return {

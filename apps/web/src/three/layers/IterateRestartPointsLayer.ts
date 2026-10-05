@@ -22,13 +22,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.iteratePath,
-      raw.iteratePhases,
-      raw.iterateRestartIndices,
-      raw.iterateObjectiveVector,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -38,9 +32,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    const indices = raw.iterateRestartIndices.filter(
-      (idx) => idx >= 0 && idx < count,
-    );
+    const indices = raw.iterateRestartIndices.filter((idx) => idx >= 0 && idx < count);
     if (indices.length === 0) {
       this.hide();
       return;
@@ -61,10 +53,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
       hasPhases
         ? (col) => {
             for (let i = 0; i < indices.length; i++) {
-              const rgb =
-                PHASE_COLORS_LINEAR[
-                  phases[indices[i]!]! % PHASE_COLORS_LINEAR.length
-                ]!;
+              const rgb = PHASE_COLORS_LINEAR[phases[indices[i]!]! % PHASE_COLORS_LINEAR.length]!;
               col[i * 3] = rgb[0];
               col[i * 3 + 1] = rgb[1];
               col[i * 3 + 2] = rgb[2];

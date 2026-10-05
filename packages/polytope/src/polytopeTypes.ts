@@ -13,14 +13,10 @@ export interface PolytopeRepresentation {
   boundaryRays: BoundaryRay[];
 }
 
-export function hasPolytopeLines(
-  polytope: PolytopeRepresentation | null | undefined,
-): polytope is PolytopeRepresentation & { lines: NonEmptyLines } {
+export function hasPolytopeLines(polytope: PolytopeRepresentation | null | undefined): polytope is PolytopeRepresentation & { lines: NonEmptyLines } {
   return Boolean(polytope && polytope.lines.length > 0);
 }
 
-export function hasPolytopeVertices(
-  polytope: PolytopeRepresentation | null | undefined,
-): polytope is PolytopeRepresentation & { vertices: NonEmptyVertices } {
+export function hasPolytopeVertices(polytope: PolytopeRepresentation | null | undefined): polytope is PolytopeRepresentation & { vertices: NonEmptyVertices } {
   return Boolean(polytope && polytope.vertices.length > 0);
 }

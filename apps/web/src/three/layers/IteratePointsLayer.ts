@@ -22,13 +22,7 @@ export class IteratePointsLayer extends PointCloudLayer {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.iteratePath,
-      raw.iteratePhases,
-      raw.iterateObjectiveVector,
-      raw.replayActive,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateObjectiveVector, raw.replayActive, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -52,8 +46,7 @@ export class IteratePointsLayer extends PointCloudLayer {
       hasPhases
         ? (col) => {
             for (let i = 0; i < count; i++) {
-              const rgb =
-                PHASE_COLORS_LINEAR[phases[i]! % PHASE_COLORS_LINEAR.length]!;
+              const rgb = PHASE_COLORS_LINEAR[phases[i]! % PHASE_COLORS_LINEAR.length]!;
               col[i * 3] = rgb[0];
               col[i * 3 + 1] = rgb[1];
               col[i * 3 + 2] = rgb[2];

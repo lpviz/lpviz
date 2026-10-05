@@ -38,13 +38,10 @@ const STALL_LINES = [
 const STALL_OBJECTIVE = Float64Array.of(-0.04722023010253906, 0.20946311950683594);
 
 // Every explicit entering/leaving pair, plus {} for the engine defaults.
-const RULE_COMBOS = ENTERING_RULES.flatMap((enteringRule) =>
-  LEAVING_RULES.map((leavingRule) => ({ enteringRule, leavingRule })),
-);
+const RULE_COMBOS = ENTERING_RULES.flatMap((enteringRule) => LEAVING_RULES.map((leavingRule) => ({ enteringRule, leavingRule })));
 const RULE_OPTIONS = [{}, ...RULE_COMBOS];
 
-const lcg = (seed: number) => () =>
-  (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // A random convex polygon (3-7 vertices on a circle, so no three edges are
 // concurrent) as inward-pointing constraint lines, or null when two vertices
@@ -53,14 +50,10 @@ function randomPolygon(rand: () => number) {
   const cnt = 3 + Math.floor(rand() * 5);
   const cx = rand() * 16 - 8;
   const cy = rand() * 16 - 8;
-  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort(
-    (a, b) => a - b,
-  );
+  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
   if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
   const R = 1 + rand() * 8;
-  const hull = angles.map(
-    (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
-  );
+  const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
   const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
   const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
   const lines = hull.map((start, i) => {
@@ -89,12 +82,8 @@ const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
 // random generator produces, and the size at which per-pivot / per-iteration
 // dense factorizations used to cost seconds.
 function largePolygon(rand: () => number, count: number) {
-  const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort(
-    (a, b) => a - b,
-  );
-  const hull = angles.map(
-    (a) => [10 * Math.cos(a), 10 * Math.sin(a)] as [number, number],
-  );
+  const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
+  const hull = angles.map((a) => [10 * Math.cos(a), 10 * Math.sin(a)] as [number, number]);
   const lines = hull.map((start, i) => {
     const end = hull[(i + 1) % hull.length]!;
     let A = end[1] - start[1];
@@ -110,8 +99,7 @@ function largePolygon(rand: () => number, count: number) {
   return { hull, lines };
 }
 
-const lastIterate = (r: { iterations: Float64Array[] }) =>
-  r.iterations[r.iterations.length - 1]!;
+const lastIterate = (r: { iterations: Float64Array[] }) => r.iterations[r.iterations.length - 1]!;
 
 const pdhgDefaults = {
   halpern: false,
@@ -221,9 +209,7 @@ describe("simplex", () => {
       if (!polygon) continue;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
-      const expected = Math.max(
-        ...polygon.hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]),
-      );
+      const expected = Math.max(...polygon.hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       runs++;
       for (const dual of [false, true]) {
         for (const rules of RULE_OPTIONS) {
@@ -394,12 +380,7 @@ describe("ellipsoid", () => {
   test("converges to the square optimum under every cut combination", () => {
     for (const deepCuts of [true, false]) {
       for (const rayShoot of [true, false]) {
-        const r = ellipsoid(
-          SQUARE_VERTICES,
-          SQUARE,
-          Float64Array.of(1, 1),
-          opts({ deepCuts, rayShoot }),
-        );
+        const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ deepCuts, rayShoot }));
         expect(r.footer.startsWith("Converged")).toBe(true);
         const last = r.iterations[r.iterations.length - 1]!;
         expect(last[0]!).toBeCloseTo(-4, 3);
@@ -409,11 +390,7 @@ describe("ellipsoid", () => {
   });
 
   test("the ray shoot reaches the same optimum in fewer iterations", () => {
-    for (const objective of [
-      Float64Array.of(1, 1),
-      Float64Array.of(-1, 2),
-      Float64Array.of(0.3, -1),
-    ]) {
+    for (const objective of [Float64Array.of(1, 1), Float64Array.of(-1, 2), Float64Array.of(0.3, -1)]) {
       const off = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts({ rayShoot: false }));
       const on = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts({ rayShoot: true }));
       expect(on.iterations.length).toBeLessThan(off.iterations.length);
@@ -451,8 +428,7 @@ describe("ellipsoid", () => {
   // method returns, and it is not in general the last point queried. That entry
   // reuses the previous iterate's ellipse, so the per-iterate invariants below
   // hold over everything before it.
-  const queriedCount = (r: ReturnType<typeof ellipsoid>) =>
-    r.iterations.length - 1;
+  const queriedCount = (r: ReturnType<typeof ellipsoid>) => r.iterations.length - 1;
 
   test("iterations, rows, rho and ellipsoids stay in lockstep", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ maxit: 40 }));
@@ -471,9 +447,7 @@ describe("ellipsoid", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts());
     const last = r.iterations[r.iterations.length - 1]!;
     const lastRow = r.rows[r.rows.length - 1]!;
-    const expected = Math.max(
-      ...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]),
-    );
+    const expected = Math.max(...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
     const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
     // the incumbent is feasible, so it can never beat the optimum, and the gap
     // stop certifies it to within the relative tolerance it was asked for
@@ -521,14 +495,10 @@ describe("ellipsoid", () => {
       const cnt = 3 + Math.floor(rand() * 5);
       const cx = rand() * 16 - 8;
       const cy = rand() * 16 - 8;
-      const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort(
-        (a, b) => a - b,
-      );
+      const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
       if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) continue;
       const R = 1 + rand() * 8;
-      const hull = angles.map(
-        (a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number],
-      );
+      const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
       const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
       const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
       const lines = hull.map((start, i) => {
@@ -548,9 +518,7 @@ describe("ellipsoid", () => {
       });
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
-      const expected = Math.max(
-        ...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]),
-      );
+      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       runs++;
       const r = ellipsoid(hull, lines, obj, opts());
       const last = r.iterations[r.iterations.length - 1]!;

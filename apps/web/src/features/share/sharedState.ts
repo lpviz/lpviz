@@ -1,9 +1,4 @@
-import type {
-  CompletionMode,
-  EllipsoidQueryPoint,
-  SolverMode,
-  State,
-} from "@/features/core/store";
+import type { CompletionMode, EllipsoidQueryPoint, SolverMode, State } from "@/features/core/store";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type ShareSettings = {
@@ -79,9 +74,7 @@ const shareKeyMap = {
   objectiveRotationSpeed: "q",
 } as const;
 
-const expandedShareKeyMap = Object.fromEntries(
-  Object.entries(shareKeyMap).map(([key, value]) => [value, key]),
-) as Record<string, string>;
+const expandedShareKeyMap = Object.fromEntries(Object.entries(shareKeyMap).map(([key, value]) => [value, key])) as Record<string, string>;
 
 const FORBIDDEN_SHARE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
@@ -90,15 +83,11 @@ function transformShareObject<T>(value: T, keyMap: Record<string, string>): T {
     return value;
   }
   if (Array.isArray(value)) {
-    return value.map((item) =>
-      transformShareObject(item, keyMap),
-    ) as unknown as T;
+    return value.map((item) => transformShareObject(item, keyMap)) as unknown as T;
   }
 
   const result = Object.create(null) as Record<string, unknown>;
-  for (const [key, nestedValue] of Object.entries(
-    value as Record<string, unknown>,
-  )) {
+  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
     const mappedKey = keyMap[key] || key;
     if (FORBIDDEN_SHARE_KEYS.has(mappedKey)) {
       continue;
@@ -114,58 +103,25 @@ export function expandSharedAppState<T>(value: T): T {
 
 // The shared payload is the only untrusted input path in the app: a crafted
 // link must not be able to push NaN or arbitrary values into the store.
-const COMPLETION_MODES: ReadonlySet<string> = new Set([
-  "draft",
-  "closed",
-  "open",
-]);
-const SOLVER_MODES: ReadonlySet<string> = new Set([
-  "central",
-  "ipm",
-  "simplex",
-  "pdhg",
-  "ellipsoid",
-]);
+const COMPLETION_MODES: ReadonlySet<string> = new Set(["draft", "closed", "open"]);
+const SOLVER_MODES: ReadonlySet<string> = new Set(["central", "ipm", "simplex", "pdhg", "ellipsoid"]);
 
 const isFinitePoint = (value: unknown): value is { x: number; y: number } =>
-  typeof value === "object" &&
-  value !== null &&
-  Number.isFinite((value as { x: unknown }).x) &&
-  Number.isFinite((value as { y: unknown }).y);
+  typeof value === "object" && value !== null && Number.isFinite((value as { x: unknown }).x) && Number.isFinite((value as { y: unknown }).y);
 
-export function buildSharedStatePatch(
-  sharedState: SharedAppState,
-): Partial<State> {
-  const mappedVertices = Array.isArray(sharedState.vertices)
-    ? sharedState.vertices
-        .filter(isFinitePoint)
-        .map((vertex) => ({ x: vertex.x, y: vertex.y }))
-    : [];
-  const completionMode =
-    sharedState.completionMode !== undefined &&
-    COMPLETION_MODES.has(sharedState.completionMode)
-      ? sharedState.completionMode
-      : mappedVertices.length > 2
-        ? "closed"
-        : "draft";
-  const solverMode = SOLVER_MODES.has(sharedState.solverMode)
-    ? sharedState.solverMode
-    : "central";
+export function buildSharedStatePatch(sharedState: SharedAppState): Partial<State> {
+  const mappedVertices = Array.isArray(sharedState.vertices) ? sharedState.vertices.filter(isFinitePoint).map((vertex) => ({ x: vertex.x, y: vertex.y })) : [];
+  const completionMode = sharedState.completionMode !== undefined && COMPLETION_MODES.has(sharedState.completionMode) ? sharedState.completionMode : mappedVertices.length > 2 ? "closed" : "draft";
+  const solverMode = SOLVER_MODES.has(sharedState.solverMode) ? sharedState.solverMode : "central";
 
   return {
     vertices: mappedVertices,
     completionMode,
-    objectiveVector: isFinitePoint(sharedState.objective)
-      ? { x: sharedState.objective.x, y: sharedState.objective.y }
-      : null,
+    objectiveVector: isFinitePoint(sharedState.objective) ? { x: sharedState.objective.x, y: sharedState.objective.y } : null,
     solverMode,
     // always written, so loading a link clears a start point left over from
     // whatever the user was doing before
-    solverStartPoint: isFinitePoint(sharedState.solverStartPoint)
-      ? { x: sharedState.solverStartPoint.x, y: sharedState.solverStartPoint.y }
-      : null,
-    ...(Number.isFinite(sharedState.zScale)
-      ? { zScale: Math.max(0.01, Math.min(100, sharedState.zScale!)) }
-      : {}),
+    solverStartPoint: isFinitePoint(sharedState.solverStartPoint) ? { x: sharedState.solverStartPoint.x, y: sharedState.solverStartPoint.y } : null,
+    ...(Number.isFinite(sharedState.zScale) ? { zScale: Math.max(0.01, Math.min(100, sharedState.zScale!)) } : {}),
   };
 }

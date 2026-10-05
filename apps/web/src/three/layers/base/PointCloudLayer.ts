@@ -1,11 +1,5 @@
 import type { ViewportDirtyFlags } from "@/features/core/store";
-import {
-  BufferAttribute,
-  DynamicDrawUsage,
-  Points,
-  PointsMaterial,
-  type Texture,
-} from "three";
+import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
 import { makePointsGeo } from "../../helpers/makePointsGeo";
 import type { RenderPassName } from "../../Layer";
 import type { SceneContext } from "../../SceneContext";
@@ -48,9 +42,7 @@ export abstract class PointCloudLayer extends LayerBase {
       alphaTest: 0.2,
     };
     this.matPlain = new PointsMaterial({ ...shared, color: config.color });
-    this.matColored = config.vertexColors
-      ? new PointsMaterial({ ...shared, color: "#ffffff", vertexColors: true })
-      : null;
+    this.matColored = config.vertexColors ? new PointsMaterial({ ...shared, color: "#ffffff", vertexColors: true }) : null;
     const points = new Points(makePointsGeo(), this.matPlain);
     points.renderOrder = config.renderOrder;
     points.frustumCulled = false;
@@ -70,11 +62,7 @@ export abstract class PointCloudLayer extends LayerBase {
 
   // Grow-only point render: positions (and optional colors) are written in place
   // into reused DynamicDrawUsage attributes.
-  protected draw(
-    count: number,
-    writePositions: (out: Float32Array) => void,
-    writeColors?: ((out: Float32Array) => void) | null,
-  ): void {
+  protected draw(count: number, writePositions: (out: Float32Array) => void, writeColors?: ((out: Float32Array) => void) | null): void {
     if (count === 0) {
       this.object3D.visible = false;
       return;

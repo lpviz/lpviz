@@ -1,10 +1,7 @@
 export type ViewportBridge = {
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
-  invalidate: (options?: {
-    layers?: boolean;
-    viewportDirty?: ViewportDirtyFlags;
-  }) => void;
+  invalidate: (options?: { layers?: boolean; viewportDirty?: ViewportDirtyFlags }) => void;
 };
 
 export type ViewportDirtyFlags = Partial<{
@@ -49,13 +46,7 @@ export type ViewportPerspectivePose = {
   target: { x: number; y: number; z: number };
 };
 
-export function createDefaultViewportRenderSnapshot({
-  width,
-  height,
-}: {
-  width: number;
-  height: number;
-}): ViewportRenderSnapshot {
+export function createDefaultViewportRenderSnapshot({ width, height }: { width: number; height: number }): ViewportRenderSnapshot {
   const safeWidth = width || 1;
   const safeHeight = height || 1;
   return {
@@ -86,5 +77,4 @@ export function createDefaultViewportRenderSnapshot({
   };
 }
 
-export const DEFAULT_VIEWPORT_RENDER_SNAPSHOT: ViewportRenderSnapshot =
-  createDefaultViewportRenderSnapshot({ width: 1, height: 1 });
+export const DEFAULT_VIEWPORT_RENDER_SNAPSHOT: ViewportRenderSnapshot = createDefaultViewportRenderSnapshot({ width: 1, height: 1 });

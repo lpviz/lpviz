@@ -25,22 +25,13 @@ export class TracePassImpostor implements ImpostorStrategy {
     this.trace3D = new Trace3DCompositor(requestFrame);
   }
 
-  prepare(
-    renderer: WebGLRenderer,
-    camera: Camera,
-    passScene: Scene,
-  ): ImpostorResult {
+  prepare(renderer: WebGLRenderer, camera: Camera, passScene: Scene): ImpostorResult {
     const quad = this.traceCache.prepare(renderer, passScene);
     if (quad) {
       return allHidden(quad) ? "skip" : { scene: quad, camera };
     }
     if (passScene.children.length > 0 && !allHidden(passScene)) {
-      const composited = this.trace3D.prepare(
-        renderer,
-        camera,
-        passScene,
-        this.occluderScenes(),
-      );
+      const composited = this.trace3D.prepare(renderer, camera, passScene, this.occluderScenes());
       if (composited) {
         return { scene: composited, camera: this.trace3D.camera };
       }

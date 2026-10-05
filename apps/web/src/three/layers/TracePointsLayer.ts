@@ -1,15 +1,6 @@
 import type { State } from "@/features/core/store";
-import {
-  computeFlatZ,
-  MAX_TRACE_POINT_SPRITES,
-} from "@/features/core/store";
-import {
-  BufferAttribute,
-  DynamicDrawUsage,
-  Group,
-  Points,
-  PointsMaterial,
-} from "three";
+import { computeFlatZ, MAX_TRACE_POINT_SPRITES } from "@/features/core/store";
+import { BufferAttribute, DynamicDrawUsage, Group, Points, PointsMaterial } from "three";
 import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
@@ -40,11 +31,7 @@ function buildTraceSamplePositions(pathPositions: Float32Array) {
   const step = Math.max(1, Math.ceil(pointCount / MAX_TRACE_POINT_SPRITES));
   const samples: number[] = [];
   for (let i = 0; i < pointCount; i += step) {
-    samples.push(
-      pathPositions[i * 3]!,
-      pathPositions[i * 3 + 1]!,
-      pathPositions[i * 3 + 2]!,
-    );
+    samples.push(pathPositions[i * 3]!, pathPositions[i * 3 + 1]!, pathPositions[i * 3 + 2]!);
   }
   const lastBase = (pointCount - 1) * 3;
   if (
@@ -53,11 +40,7 @@ function buildTraceSamplePositions(pathPositions: Float32Array) {
     samples[samples.length - 2] !== pathPositions[lastBase + 1] ||
     samples[samples.length - 1] !== pathPositions[lastBase + 2]
   ) {
-    samples.push(
-      pathPositions[lastBase]!,
-      pathPositions[lastBase + 1]!,
-      pathPositions[lastBase + 2]!,
-    );
+    samples.push(pathPositions[lastBase]!, pathPositions[lastBase + 1]!, pathPositions[lastBase + 2]!);
   }
   return samples;
 }
@@ -68,10 +51,7 @@ function getCachedTracePointPositions(entry: State["traceBuffer"][number]) {
   let cached = tracePointPositionCache.get(entry);
   if (cached) return cached;
   const pathPos = buildTracePathPositions(entry);
-  const sampled =
-    pathPos.length === 0
-      ? new Float32Array()
-      : new Float32Array(buildTraceSamplePositions(pathPos));
+  const sampled = pathPos.length === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(pathPos));
   tracePointPositionCache.set(entry, sampled);
   return sampled;
 }
@@ -80,15 +60,8 @@ function getCachedTracePointPositions(entry: State["traceBuffer"][number]) {
 // allocating the full concatenation each time churns the GC
 let concatScratch = new Float32Array(0);
 
-function buildAllTracePointPositions(
-  raw: State,
-  mode: "2d" | "3d",
-): { array: Float32Array; length: number } {
-  if (
-    !raw.traceEnabled ||
-    raw.traceBuffer.length === 0 ||
-    !shouldRenderSnapshotMode(mode, raw)
-  ) {
+function buildAllTracePointPositions(raw: State, mode: "2d" | "3d"): { array: Float32Array; length: number } {
+  if (!raw.traceEnabled || raw.traceBuffer.length === 0 || !shouldRenderSnapshotMode(mode, raw)) {
     return { array: concatScratch, length: 0 };
   }
   let total = 0;
@@ -140,13 +113,7 @@ export class TracePointsLayer extends LayerBase {
 
   protected dependencies(ctx: SceneContext): readonly unknown[] {
     const raw = ctx.getState();
-    return [
-      raw.traceEnabled,
-      raw.traceBuffer,
-      raw.is3DMode,
-      raw.isTransitioning3D,
-      ctx.getSnapshot().mode,
-    ];
+    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
   }
 
   protected rebuild(ctx: SceneContext): void {
@@ -157,9 +124,7 @@ export class TracePointsLayer extends LayerBase {
       // grow-only attribute updated in place (see concatScratch)
       const count = positions.length / 3;
       const geometry = this.pts.geometry;
-      let attr = geometry.getAttribute("position") as
-        | BufferAttribute
-        | undefined;
+      let attr = geometry.getAttribute("position") as BufferAttribute | undefined;
       if (!attr || attr.array !== positions.array || attr.count < count) {
         attr = new BufferAttribute(positions.array, 3);
         attr.setUsage(DynamicDrawUsage);

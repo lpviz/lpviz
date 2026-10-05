@@ -95,9 +95,7 @@ const USAGE_TIP_SECTIONS: UsageTipSection[] = [
   },
   {
     title: "Examples",
-    tips: [
-      { label: "Load a preset", desc: "open the gallery up top, pick a problem" },
-    ],
+    tips: [{ label: "Load a preset", desc: "open the gallery up top, pick a problem" }],
   },
 ];
 
@@ -106,14 +104,10 @@ export function usageTipsList(): HTMLDivElement {
   const list = el("div", { className: "usage-tips-list" });
   for (const section of USAGE_TIP_SECTIONS) {
     const group = el("div", { className: "usage-tips-section" });
-    group.append(
-      el("div", { className: "usage-tips-section__title", text: section.title }),
-    );
+    group.append(el("div", { className: "usage-tips-section__title", text: section.title }));
     for (const tip of section.tips) {
       const row = el("div", { className: "usage-tip" });
-      row.append(
-        el("span", { className: "usage-tip__label", text: tip.label }),
-      );
+      row.append(el("span", { className: "usage-tip__label", text: tip.label }));
       const desc = el("span", { className: "usage-tip__desc" });
       desc.innerHTML = tip.desc;
       row.append(desc);
@@ -126,8 +120,7 @@ export function usageTipsList(): HTMLDivElement {
 
 const DRAWING_HINTS: Record<DrawingPhase, string> = {
   empty: "Click the grid to add vertices.",
-  sketching_polytope:
-    "Keep clicking to add vertices — click the first one or press Enter to close.",
+  sketching_polytope: "Keep clicking to add vertices — click the first one or press Enter to close.",
   awaiting_objective: "Click inside the region to set the objective direction.",
   objective_preview: "Click to lock in the objective direction.",
   ready_for_solvers: "Pick a solver above to solve.",

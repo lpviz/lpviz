@@ -1,11 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { State } from "@/features/core/store";
 import type { PointXY } from "@lpviz/math/types";
-import {
-  computeEditorRegionForState,
-  getEditorContext,
-  getEditorTransition,
-} from "./editorSession";
+import { computeEditorRegionForState, getEditorContext, getEditorTransition } from "./editorSession";
 
 // Characterization tests for the pure editor FSM. These pin today's behavior so
 // the Phase 4 interaction rework (routing drags through getEditorTransition) is
@@ -33,15 +29,10 @@ const TRI = [
 describe("getEditorContext.session", () => {
   test("empty/sketching → drafting", () => {
     expect(getEditorContext(st({})).session.kind).toBe("drafting");
-    expect(getEditorContext(st({ vertices: TRI })).session.kind).toBe(
-      "drafting",
-    );
+    expect(getEditorContext(st({ vertices: TRI })).session.kind).toBe("drafting");
   });
   test("finished region, no objective → selecting-objective", () => {
-    expect(
-      getEditorContext(st({ vertices: TRI, completionMode: "closed" })).session
-        .kind,
-    ).toBe("selecting-objective");
+    expect(getEditorContext(st({ vertices: TRI, completionMode: "closed" })).session.kind).toBe("selecting-objective");
   });
   test("closed with objective → editing-closed", () => {
     expect(
@@ -102,15 +93,11 @@ describe("getEditorTransition: click", () => {
     });
     expect(t.kind).toBe("reject-nonconvex");
     // the reason now travels with the transition (callers no longer hardcode it)
-    if (t.kind === "reject-nonconvex")
-      expect(t.reason).toContain("nonconvex");
+    if (t.kind === "reject-nonconvex") expect(t.reason).toContain("nonconvex");
   });
 
   test("click while selecting objective picks the objective", () => {
-    const t = getEditorTransition(
-      st({ vertices: TRI, completionMode: "closed" }),
-      { kind: "click", point: { x: 3, y: 2 } },
-    );
+    const t = getEditorTransition(st({ vertices: TRI, completionMode: "closed" }), { kind: "click", point: { x: 3, y: 2 } });
     expect(t).toEqual({
       kind: "select-objective",
       objectiveVector: { x: 3, y: 2 },
@@ -167,8 +154,7 @@ describe("getEditorTransition: finish-open", () => {
       { kind: "finish-open" },
     );
     expect(t.kind).toBe("reject-nonconvex");
-    if (t.kind === "reject-nonconvex")
-      expect(t.reason).toContain("nonconvex");
+    if (t.kind === "reject-nonconvex") expect(t.reason).toContain("nonconvex");
   });
 });
 
@@ -238,17 +224,12 @@ describe("getEditorTransition: delete-vertex", () => {
     if (inserted.kind !== "edit") throw new Error(inserted.kind);
     expect(inserted.result.vertices).toHaveLength(6);
 
-    const deleted = getEditorTransition(
-      st({ ...inserted.result, objectiveVector }),
-      { kind: "delete-vertex", deleteIndex: 1 },
-    );
+    const deleted = getEditorTransition(st({ ...inserted.result, objectiveVector }), { kind: "delete-vertex", deleteIndex: 1 });
     if (deleted.kind !== "edit") throw new Error(deleted.kind);
     expect(deleted.result.vertices).toEqual(PENT);
     expect(deleted.result.completionMode).toBe("closed");
 
-    const region = computeEditorRegionForState(
-      st({ ...deleted.result, objectiveVector }),
-    );
+    const region = computeEditorRegionForState(st({ ...deleted.result, objectiveVector }));
     expect(region.status).toBe("ready");
     if (region.status !== "ready") throw new Error();
     expect(region.polytope.kind).toBe("bounded");
