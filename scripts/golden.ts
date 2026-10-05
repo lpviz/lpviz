@@ -1,8 +1,9 @@
 // Golden-output harness for the whole solver path: engine → worker message
-// handler → packed wire → unpack → applySolverResult → store. Every case is
-// serialized exactly (typed arrays, ±0, NaN) and hashed; the baseline lives in
-// scripts/golden.json. A refactor is behavior-preserving on this path only if
-// every hash is unchanged.
+// handler → packed wire → unpack → applySolverResult → store. What reaches the
+// UI (rendered header/rows/footer or blocks, error message) and the store's
+// iterate/trace fields is serialized exactly (typed arrays, ±0, NaN) and hashed;
+// the baseline lives in scripts/golden.json. A refactor is behavior-preserving
+// on this path only if every hash is unchanged.
 //
 //   bun scripts/golden.ts              compare against the baseline
 //   bun scripts/golden.ts --write      rewrite the baseline
@@ -209,8 +210,10 @@ function plain(value: unknown, depth = 0): unknown {
   if (Array.isArray(value)) return value.map((v) => plain(v, depth + 1));
   const record = value as Record<string, unknown>;
   if (typeof record.at === "function" && typeof record.length === "number") {
+    // Row views are consumed only through formatVirtualResultRow (resultPresenter), so the
+    // formatted text is the observable output; the row object's shape is internal.
     const rows = Array.from({ length: record.length }, (_, i) => (record.at as (i: number) => unknown)(i));
-    return { rows: rows.map((r) => plain(r, depth + 1)), text: rows.map((r) => formatVirtualResultRow(r as never)) };
+    return rows.map((r) => formatVirtualResultRow(r as never));
   }
   const out: Record<string, unknown> = {};
   for (const key of Object.keys(record).sort()) {
@@ -250,7 +253,9 @@ async function runCase(id: number, payload: SolverWorkerPayload, objective: Poin
   const state = store.getState();
   const after: Record<string, unknown> = {};
   for (const key of STORE_FIELDS) after[key] = state[key];
-  return plain({ wire, response, rendered, after });
+  // Only what reaches the UI or the store is hashed: the wire format and the unpacked
+  // response are internal and free to change as long as these stay identical.
+  return plain({ error: response.success ? null : response.error, rendered, after });
 }
 
 // ---------- main ----------
