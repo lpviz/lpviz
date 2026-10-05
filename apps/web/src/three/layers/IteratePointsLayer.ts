@@ -2,7 +2,7 @@ import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { writeFlatXYZ } from "../helpers/flatPositions";
-import { PHASE_COLORS_LINEAR } from "../helpers/phaseColors";
+import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
 import { PointCloudLayer } from "./base/PointCloudLayer";
@@ -41,19 +41,6 @@ export class IteratePointsLayer extends PointCloudLayer {
     const phases = raw.iteratePhases;
     const hasPhases = phases.length >= count && phases.length > 0;
     const objVec = raw.iterateObjectiveVector;
-    this.draw(
-      count,
-      (pos) => writeFlatXYZ(pos, points, count, stride, objVec),
-      hasPhases
-        ? (col) => {
-            for (let i = 0; i < count; i++) {
-              const rgb = PHASE_COLORS_LINEAR[phases[i]! % PHASE_COLORS_LINEAR.length]!;
-              col[i * 3] = rgb[0];
-              col[i * 3 + 1] = rgb[1];
-              col[i * 3 + 2] = rgb[2];
-            }
-          }
-        : null,
-    );
+    this.draw(count, (pos) => writeFlatXYZ(pos, points, count, stride, objVec), hasPhases ? (col) => writePhaseColors(col, phases, null, count) : null);
   }
 }

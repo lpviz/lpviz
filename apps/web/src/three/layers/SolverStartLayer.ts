@@ -1,10 +1,8 @@
 import { displayedSolverStartPoint, getState } from "@/features/core/store";
-import { BufferAttribute, Points, PointsMaterial } from "three";
 import { flatPointXYZ } from "../helpers/flatPositions";
-import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
-import { LayerBase } from "./base/LayerBase";
+import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
 // a small gray ring at the effective start point (see
@@ -13,34 +11,20 @@ import { LayerBase } from "./base/LayerBase";
 // lift (mu for IPM, scaled eps for PDHG, zero for simplex) — so it stays
 // attached to the start of the path at any zScale; in 2D everything flattens
 // to the floor. Dragging maps through the z = 0 plane like the vertices.
-export class SolverStartLayer extends LayerBase {
-  readonly object3D: Points;
-  override readonly renderPass = "overlay" as const;
-  override readonly invalidationKeys = ["iterate"] as const;
-  private material: PointsMaterial;
-
+// Unlike the other iterate layers it does not hide during the 2D/3D
+// transition.
+export class SolverStartLayer extends PointCloudLayer {
   constructor() {
-    super();
-    this.material = new PointsMaterial({
+    super({
       color: "#8a8a8a",
-      size: 15,
-      sizeAttenuation: false,
-      transparent: true,
       opacity: 0.9,
-      depthTest: false,
-      depthWrite: false,
-      alphaMap: SHARED_RING_TEXTURE,
-      alphaTest: 0.2,
+      pixelSize: 15,
+      texture: SHARED_RING_TEXTURE,
+      renderOrder: RENDER_ORDER.solverStart,
+      renderPass: "overlay",
+      invalidationKeys: ["iterate"],
+      vertexColors: false,
     });
-    const points = new Points(makePointsGeo(), this.material);
-    points.renderOrder = RENDER_ORDER.solverStart;
-    points.frustumCulled = false;
-    points.visible = false;
-    this.object3D = points;
-  }
-
-  protected override everyFrame(): void {
-    this.applyZScale();
   }
 
   protected dependencies(): readonly unknown[] {
@@ -63,17 +47,10 @@ export class SolverStartLayer extends LayerBase {
     const raw = getState();
     const point = displayedSolverStartPoint(raw);
     if (!point) {
-      this.object3D.visible = false;
+      this.hide();
       return;
     }
     const first = flatPointXYZ(raw.iteratePath, 0, raw.iterateObjectiveVector);
-    this.object3D.geometry.dispose();
-    this.object3D.geometry.setAttribute("position", new BufferAttribute(Float32Array.of(point.x, point.y, first?.[2] ?? 0), 3));
-    this.object3D.visible = true;
-  }
-
-  dispose(): void {
-    this.material.dispose();
-    this.object3D.geometry.dispose();
+    this.draw(1, (pos) => pos.set([point.x, point.y, first?.[2] ?? 0]));
   }
 }

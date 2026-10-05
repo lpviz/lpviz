@@ -6,6 +6,7 @@ import { LayerBase } from "./LayerBase";
 
 export type PointCloudConfig = {
   color: string;
+  opacity?: number;
   pixelSize: number;
   texture: Texture;
   renderOrder: number;
@@ -15,11 +16,10 @@ export type PointCloudConfig = {
   vertexColors: boolean;
 };
 
-// Shared base for the iterate point clouds. Owns one correct grow-only
-// DynamicDrawUsage position attribute (and optional color attribute), the
-// plain/colored material pair, and the scale.z transform — all of which used to
-// be hand-rolled, and inconsistently (some layers allocated fresh buffers every
-// frame). Subclasses implement rebuild() by calling draw(count, writePositions,
+// Shared base for the iterate point clouds and single-point markers. Owns one
+// grow-only DynamicDrawUsage position attribute (and optional color
+// attribute), the plain/colored material pair, and the scale.z transform.
+// Subclasses implement rebuild() by calling draw(count, writePositions,
 // writeColors?), writing directly into the grow-only arrays (no intermediate
 // copy on the rotation hot path).
 export abstract class PointCloudLayer extends LayerBase {
@@ -31,10 +31,12 @@ export abstract class PointCloudLayer extends LayerBase {
 
   constructor(config: PointCloudConfig) {
     super();
+    const opacity = config.opacity ?? 1;
     const shared = {
       size: config.pixelSize,
       sizeAttenuation: false,
-      transparent: false,
+      transparent: opacity < 1,
+      opacity,
       depthTest: false,
       depthWrite: false,
       alphaMap: config.texture,

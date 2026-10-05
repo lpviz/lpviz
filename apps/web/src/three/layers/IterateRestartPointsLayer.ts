@@ -1,6 +1,6 @@
 import { computeFlatZ, getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { PHASE_COLORS_LINEAR } from "../helpers/phaseColors";
+import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
@@ -50,16 +50,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
           pos[i * 3 + 2] = computeFlatZ(points, base, stride, objVec);
         }
       },
-      hasPhases
-        ? (col) => {
-            for (let i = 0; i < indices.length; i++) {
-              const rgb = PHASE_COLORS_LINEAR[phases[indices[i]!]! % PHASE_COLORS_LINEAR.length]!;
-              col[i * 3] = rgb[0];
-              col[i * 3 + 1] = rgb[1];
-              col[i * 3 + 2] = rgb[2];
-            }
-          }
-        : null,
+      hasPhases ? (col) => writePhaseColors(col, phases, indices, indices.length) : null,
     );
   }
 }
