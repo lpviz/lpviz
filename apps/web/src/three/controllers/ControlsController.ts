@@ -1,5 +1,6 @@
 import { getViewport2DControlsConfig, isViewport2DPanActive, startViewport2DPan, stopViewport2DPan, updateViewport2DPan, zoomViewport2DAtCanvasPoint } from "@/features/viewport/runtime/controls2d";
 import { getViewport3DControlsConfig, subscribeViewport3DControlsConfig, type ViewportPerspectivePose } from "@/features/viewport/runtime/controls3d";
+import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
 import { xyz } from "./CameraController";
@@ -529,18 +530,8 @@ export class ControlsController {
     }
 
     this.syncToken = this.controlsConfig.syncToken;
-    const { perspective, target } = this.controlsConfig.snapshot;
-    const camera = this.perspectiveCamera;
-    camera.fov = perspective.fov;
-    camera.aspect = perspective.aspect;
-    camera.near = perspective.near;
-    camera.far = perspective.far;
-    camera.position.copy(perspective.position);
-    camera.up.copy(perspective.up);
-    this.controlsTarget.copy(target);
-    camera.lookAt(this.controlsTarget);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld();
+    // updateMatrixWorld and updateProjectionMatrix read disjoint camera state, so the helper's order is interchangeable with the one used here before
+    configurePerspectiveCameraFromSnapshot(this.controlsConfig.snapshot, this.perspectiveCamera, this.controlsTarget);
 
     this.sceneManager.invalidate({ layers: false });
   }

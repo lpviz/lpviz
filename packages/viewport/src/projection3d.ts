@@ -33,17 +33,18 @@ const projectionViewDir = new Vector3();
 
 // The package's one scratch camera, posed from the snapshot; every reader
 // configures it first and nothing relies on its state across calls.
-export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderSnapshot): PerspectiveCamera {
-  projectionCamera.fov = snapshot.perspective.fov;
-  projectionCamera.aspect = snapshot.perspective.aspect;
-  projectionCamera.near = snapshot.perspective.near;
-  projectionCamera.far = snapshot.perspective.far;
-  projectionCamera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
-  projectionCamera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
-  projectionCamera.lookAt(projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
-  projectionCamera.updateMatrixWorld();
-  projectionCamera.updateProjectionMatrix();
-  return projectionCamera;
+// Defaults to the package's scratch camera; callers that own a camera pass it and the Vector3 that should hold the target.
+export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderSnapshot, camera = projectionCamera, target = projectionTarget): PerspectiveCamera {
+  camera.fov = snapshot.perspective.fov;
+  camera.aspect = snapshot.perspective.aspect;
+  camera.near = snapshot.perspective.near;
+  camera.far = snapshot.perspective.far;
+  camera.position.set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z);
+  camera.up.set(snapshot.perspective.up.x, snapshot.perspective.up.y, snapshot.perspective.up.z);
+  camera.lookAt(target.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
+  camera.updateMatrixWorld();
+  camera.updateProjectionMatrix();
+  return camera;
 }
 
 export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {

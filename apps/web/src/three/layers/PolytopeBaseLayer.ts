@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
 import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
@@ -88,29 +88,6 @@ function clipRegionToBoundingBox(lines: Line[], bounds: BoundingBox): PointXY[] 
     if (polygon.length === 0) return [];
   }
   return polygon;
-}
-
-function clipRayToBoundingBox(start: PointXY, direction: PointXY, bounds: BoundingBox): [PointXY, PointXY] | null {
-  const candidates: Array<{ t: number; point: PointXY }> = [];
-  if (Math.abs(direction.x) > EPS) {
-    for (const x of [bounds.minX, bounds.maxX]) {
-      const t = (x - start.x) / direction.x;
-      if (t <= EPS) continue;
-      const y = start.y + t * direction.y;
-      if (y >= bounds.minY - EPS && y <= bounds.maxY + EPS) candidates.push({ t, point: { x, y } });
-    }
-  }
-  if (Math.abs(direction.y) > EPS) {
-    for (const y of [bounds.minY, bounds.maxY]) {
-      const t = (y - start.y) / direction.y;
-      if (t <= EPS) continue;
-      const x = start.x + t * direction.x;
-      if (x >= bounds.minX - EPS && x <= bounds.maxX + EPS) candidates.push({ t, point: { x, y } });
-    }
-  }
-  if (candidates.length === 0) return null;
-  candidates.sort((a, b) => b.t - a.t);
-  return [start, candidates[0].point];
 }
 
 type PolytopeRenderResult = {
