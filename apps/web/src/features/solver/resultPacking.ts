@@ -3,22 +3,12 @@ import type { VecN } from "@lpviz/math/types";
 import type { IterateResult, PackedSolver } from "./solverService";
 import type { SolverEngineSuccessResponse, SolverWorkerResponse } from "./solverWorker";
 
-// Solver results at high maxit are tens of thousands of small Float64Arrays
-// plus as many row objects; structured-cloning that shape costs tens of
-// milliseconds of main-thread time per solve (per rotation step). Instead the
-// worker packs everything numeric into a few large typed arrays and transfers
-// their buffers (zero copy): the client takes the iterations buffer as one
-// flat IteratePath and materializes row objects lazily on access. The display
-// z (objective-dependent) is baked into a third component here, on the worker,
-// so the client never needs the per-iterate mapping pass.
-//
-// The baked z is `objective·point + convergenceLift`: iterates sit at their
-// objective value and are lifted above the optimal surface by how far they are
-// from convergence, so the path visibly descends as it converges. The lift
-// uses each solver's natural convergence measure — PDHG's residual `eps`,
-// IPM's barrier `mu`, the ellipsoid's `rho`. PDHG's residual is numerically
-// tiny, so it is scaled to share IPM's visual range; this factor is display
-// tuning only and never feeds back into the math.
+// The worker packs everything numeric into a few large typed arrays and transfers their buffers
+// (zero copy): structured-cloning tens of thousands of small arrays and row objects costs tens of
+// main-thread milliseconds per solve. The display z is baked here as `objective·point +
+// convergenceLift`, lifting each iterate above the optimal surface by its solver's convergence
+// measure (PDHG's `eps`, IPM's `mu`, the ellipsoid's `rho`); PDHG's residual is numerically tiny,
+// so it is scaled to share IPM's visual range. Display tuning only, never fed back into the math.
 const PDHG_EPS_Z_LIFT = 500;
 
 type PackedRowsColumns = {
@@ -72,9 +62,8 @@ function packRows<R extends { x: number; y: number; objective: number; infeasibi
   return cols;
 }
 
-// Which engine fields feed the shared wire shape: the iterates, the per-iterate
-// convergence measure (lifting the display z and filling the trailing log
-// column), and whatever kind-specific extras ride along.
+// Which engine fields feed the shared wire shape: the iterates, the per-iterate convergence
+// measure (the display-z lift and the trailing log column), and the kind-specific extras.
 function packedFields(response: Exclude<SolverEngineSuccessResponse, { solver: "simplex" | "central" }>): PackedFields {
   switch (response.solver) {
     case "pdhg": {

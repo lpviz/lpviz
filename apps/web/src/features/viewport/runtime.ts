@@ -353,11 +353,9 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     viewportBridge.invalidate({ viewportDirty });
   }, subscriptions.signal);
 
-  // Shared tail of the layout-change handlers (updateDimensions /
-  // setSidebarWidth): once the external-2D case is handled by the caller, a
-  // layout change must re-derive and republish whichever non-2D snapshot is
-  // live — a transition frame, an external-3D rebuild, or the static manager
-  // snapshot fallback.
+  // Shared tail of updateDimensions / setSidebarWidth once the caller has handled the external-2D
+  // case: re-derive and republish whichever non-2D snapshot is live (a transition frame, an
+  // external-3D rebuild, or the static manager snapshot fallback).
   const republishAfterLayoutChange = () => {
     if (transition.isActive()) {
       transition.republishCurrentFrame();

@@ -3,20 +3,16 @@ import { clampReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type ReplayController = {
-  // start a replay, or stop the one already playing — the Animate button is
-  // the same control for both
+  // start a replay, or stop the one already playing (the Animate button is the same control for both)
   toggle: () => void;
   // stop any replay and put the fully solved path back on screen
   cancel: () => void;
 };
 
-// Owns the "Animate" replay: a RAF driver that maps elapsed wall-clock time
-// onto the iterate polyline, so a replay takes the configured duration whether
-// the solve produced 20 iterates or 20,000. A per-step timer cannot do that —
-// at maxit the path holds 100k iterates, and one tick per iterate inside a
-// second is not something the event loop can deliver — so each frame computes
-// the head's fractional position straight from the clock, crossing however many
-// iterates that takes.
+// Owns the "Animate" replay: a RAF driver that maps elapsed wall-clock time onto the iterate
+// polyline, so a replay takes the configured duration whether the solve produced 20 iterates or
+// 100k. Each frame computes the head's fractional position straight from the clock, crossing
+// however many iterates that takes; a per-step timer cannot deliver 100k ticks in a second.
 export function createReplayController(deps: {
   getCanvasManager: () => ViewportApi | null;
   // the user hovering a log row owns the highlight; the replay yields it
@@ -29,11 +25,8 @@ export function createReplayController(deps: {
     rafId = null;
     const state = getState();
     if (!state.replayActive) return;
-    // Stopping mid-sweep must leave exactly the picture a completed replay
-    // leaves: the whole path back on screen (which also releases the scratch
-    // buffer) and the optimum star visible again. Freezing the partial sweep
-    // would strand the user with a truncated path and no way back short of
-    // re-solving.
+    // Stopping mid-sweep must leave exactly the picture a completed replay leaves: the whole path
+    // back on screen (which also releases the scratch buffer) and the optimum star visible again.
     setState({
       iteratePath: state.originalIteratePath,
       iteratePhases: state.originalIteratePhases,
@@ -55,10 +48,8 @@ export function createReplayController(deps: {
     const origPhases = snap.originalIteratePhases;
     const durationMs = clampReplayDurationMs(snap.solverSettings.replaySpeed);
 
-    // One copy of the path per replay, never per frame. The sweep only ever
-    // rewrites the `stride` floats of the moving head, so every point behind it
-    // is still the solver's own data — which is what lets a 100k-iterate path
-    // animate without allocating anything per frame.
+    // One copy of the path per replay, never per frame: the sweep only ever rewrites the `stride`
+    // floats of the moving head, so every point behind it is still the solver's own data.
     const points = orig.points.slice(0, total * stride);
     // which slot currently holds the interpolated head rather than its real
     // iterate, so it can be put back once the head has moved past it

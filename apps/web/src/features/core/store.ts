@@ -1,8 +1,7 @@
 import type { ResultTextBlock } from "@/features/solver/types";
 
-// Result rows materialize (format) lazily on access so a 100k-iteration solve
-// doesn't pay for formatting rows that are never scrolled into view. Plain
-// arrays satisfy this shape, which keeps empty-state assignments simple.
+// Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
+// scrolled into view; plain arrays satisfy this shape.
 type VirtualRowBlocks = {
   length: number;
   at(index: number): ResultTextBlock | undefined;
@@ -20,10 +19,8 @@ export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE };
 // Index order is the share link's wire identity (compactUrl): only ever append.
 export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
 export type SolverMode = (typeof SOLVER_MODES)[number];
-// Which point of the localizing set the ellipsoid mode queries next. "ellipsoid"
-// is the ellipsoid method proper (localize with a covering ellipsoid, query its
-// center); the rest localize with a polyhedron of accumulated cuts and differ
-// only in which interior point they pick. See @lpviz/solver-engine/cuttingPlane.
+// Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
+// method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
 export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
@@ -49,10 +46,8 @@ export type DragTarget =
   | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D }
   | {
       kind: "solver-start";
-      // marker minus pointer-ray point at grab time: the ring can render
-      // lifted off the z = 0 drag plane (it rides the path's convergence
-      // lift in 3D), so dragging moves the marker relative to the ray
-      // point instead of teleporting it there
+      // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
+      // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
       grabOffset?: PointXY;
       viewAnchor3D?: DragViewAnchor3D;
     };
@@ -65,12 +60,10 @@ export type EditorInteractionState =
     }
   | { kind: "dragging"; target: DragTarget };
 
-// Flat, contiguous iterate data: element `i` lives at [i*stride .. i*stride+stride).
-// stride 3 = [x, y, bakedTotalZ] (packed pdhg/ipm), stride 2 = [x, y] (simplex /
-// central path, z renders flat). One array per solve instead of one Float64Array
-// view per iterate keeps the iterate path and trace ring at a few dozen live
-// objects rather than millions — which is what a (SpiderMonkey) major GC must
-// mark, and was the source of the mid-rotation frame drops at high maxit.
+// Flat, contiguous iterate data: element `i` lives at [i*stride .. i*stride+stride). stride 3 =
+// [x, y, bakedTotalZ] (packed pdhg/ipm), stride 2 = [x, y] (simplex / central path, z renders
+// flat). One array per solve, not one Float64Array per iterate: millions of live objects is what
+// a major GC must mark.
 export interface IteratePath {
   points: Float64Array;
   count: number;
@@ -92,10 +85,9 @@ export interface EllipsoidPath {
   stride: number;
 }
 
-// The cutting-plane query points localize with a polyhedron rather than an
-// ellipsoid, so they also emit that polygon per iteration: element `i` spans
-// points[offsets[i] * 2 .. offsets[i + 1] * 2). Null for the ellipsoid method,
-// whose localizing set is the ellipse already in EllipsoidPath.
+// The cutting-plane query points' localizing polygon per iteration: element `i` spans
+// points[offsets[i] * 2 .. offsets[i + 1] * 2). Null for the ellipsoid method, whose localizing
+// set is the ellipse already in EllipsoidPath.
 export interface LocalizingSetPath {
   points: Float64Array;
   offsets: Uint32Array;
@@ -123,12 +115,9 @@ type StateChangeMeta = {
   viewportDirty?: ViewportDirtyFlags;
 };
 
-// Which render layers a change to each store field repaints. patch() derives
-// `viewportDirty` from the changed fields automatically, so callers no longer
-// hand-pick flags (the scattered reverse-index of layer invalidationKeys that
-// was the main source of silent missed-repaint bugs). Derivation is additive —
-// it is unioned with any explicitly-passed flags and can only add, never drop —
-// and fields absent here (pure UI/solver-config state) repaint nothing.
+// Which render layers a change to each store field repaints. setState derives `viewportDirty`
+// from the changed fields; the derivation is additive (unioned with explicitly passed flags, it
+// can only add, never drop) and fields absent here (pure UI/solver-config state) repaint nothing.
 const POLYTOPE_DIRTY: ViewportDirtyFlags = {
   polytope: true,
   constraints: true,
@@ -205,11 +194,9 @@ export type SolverSettings = {
   ellipsoidInitialScale: number;
   objectiveAngleStep: number;
   objectiveRotationSpeed: number;
-  // Total wall-clock length of an "Animate" replay in milliseconds — not a
-  // per-step delay: the replay maps elapsed time onto the whole iterate path,
-  // so it takes just as long at 20 iterates as at 20,000 (see
-  // replayController). Adjusted with the +/- keys; the name is left over from
-  // when it was a per-step delay.
+  // Total wall-clock length of an "Animate" replay in milliseconds, not a per-step delay despite
+  // the name: the replay maps elapsed time onto the whole iterate path (see replayController).
+  // Adjusted with the +/- keys.
   replaySpeed: number;
 };
 
@@ -267,9 +254,8 @@ export type State = {
   iteratePhases: number[];
   highlightIteratePathIndex: number | null;
   rotateObjectiveMode: boolean;
-  // "an Animate replay is playing out" — the replay's RAF handle stays private
-  // to replayController (it changes every frame, and a store field that churned
-  // at 60Hz would invalidate every selector keyed on it)
+  // "an Animate replay is playing out"; the RAF handle stays private to replayController, since a
+  // store field that churned at 60Hz would invalidate every selector keyed on it
   replayActive: boolean;
   originalIteratePath: IteratePath;
   originalIteratePhases: number[];
@@ -301,11 +287,9 @@ export type State = {
   isNavigatingViewport: boolean;
 };
 
-// The fields a reset leaves alone: the 3D view and its transition, which the
-// transition controller owns (a reset in 3D mode asks it to return to 2D rather
-// than flipping these itself), plus the two that mirror something outside the
-// store — whether the viewport is mid-navigation, and the trace capacity the
-// rotation controller derives from the angle step.
+// The fields a reset leaves alone: the 3D view and its transition, which the transition
+// controller owns (a reset in 3D mode asks it to return to 2D), plus the two that mirror
+// something outside the store: viewport navigation and the trace capacity derived from the angle step.
 type ViewAndRuntimeState = Pick<
   State,
   | "is3DMode"
@@ -323,11 +307,9 @@ type ViewAndRuntimeState = Pick<
 export type FreshState = Omit<State, keyof ViewAndRuntimeState>;
 
 /**
- * The starting values of everything else: the problem, its solve and the
- * result panel, the editor, the solver mode and settings, undo history,
- * snapping and the trace. Fresh objects every call, so a reset never shares
- * an array or settings object with the state it replaces. The initial state
- * is built from it, so the two cannot drift apart.
+ * The starting values of everything else. Fresh objects every call, so a reset never shares an
+ * array or settings object with the state it replaces; the initial state is built from it, so the
+ * two cannot drift apart.
  */
 export function freshState(): FreshState {
   return {
@@ -552,9 +534,9 @@ export function nearestPolytopeVertex(state: State, point: PointXY): PointXY | n
 }
 
 /**
- * The marker position to draw: the dragged point (snapped to the nearest
- * region vertex in simplex mode, which is how simplex consumes it), or the
- * solver default when nothing has been dragged yet. Null when hidden.
+ * The marker position to draw: the dragged point (snapped to the nearest region vertex in simplex
+ * mode, which is how simplex consumes it), or the solver default when nothing has been dragged yet.
+ * Null when hidden.
  */
 export function displayedSolverStartPoint(state: State): PointXY | null {
   if (!solverStartPointApplies(state)) return null;
@@ -622,10 +604,8 @@ export function updateIteratePathsWithTrace(
 function snapshotObjectiveVector(objectiveVector: PointXY | null) {
   return objectiveVector ? { ...objectiveVector } : null;
 }
-// Collapse a solver's per-iterate Float64Arrays into one flat IteratePath
-// (simplex / central path, whose iterates live in independent buffers). Packed
-// pdhg/ipm results never come through here — they arrive already flat from the
-// worker (see unpackIteratePath).
+// Collapse a solver's per-iterate Float64Arrays (simplex / central path) into one flat
+// IteratePath; packed pdhg/ipm results arrive already flat from the worker (see unpackIteratePath).
 export function flattenIteratesToPath(iteratesArray: Float64Array[]): IteratePath {
   const count = iteratesArray.length;
   if (count === 0) return EMPTY_ITERATE_PATH;
