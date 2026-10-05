@@ -2,6 +2,7 @@ import { getCurrentMouse, subscribeCurrentMouse } from "@/features/core/currentM
 import { getState, type ViewportDirtyFlags } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Camera, Scene, WebGLRenderer } from "three";
+import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
 import type { ImpostorResult, ImpostorStrategy } from "./ImpostorStrategy";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
 import { LayerHost } from "./LayerHost";
@@ -46,17 +47,6 @@ export class SceneManager {
   private ticks = new Set<(ctx: SceneContext) => void>();
 
   private _size: Size = { width: 0, height: 0, dpr: 1 };
-  private sizeListeners = new Set<(size: Size) => void>();
-
-  readonly sizeSignal = {
-    subscribe: (fn: (size: Size) => void): (() => void) => {
-      this.sizeListeners.add(fn);
-      return () => {
-        this.sizeListeners.delete(fn);
-      };
-    },
-    get: (): Size => this._size,
-  };
 
   private readonly ctx: SceneContext;
 
@@ -80,6 +70,8 @@ export class SceneManager {
       dpr,
     };
     this.renderer.setSize(this._size.width, this._size.height, false);
+    // screen-space line widths need the CSS resolution before the first render
+    tickSharedLineMaterialResolutions(this._size.width, this._size.height);
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -113,7 +105,7 @@ export class SceneManager {
     this._size = { width, height, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
-    this.sizeListeners.forEach((fn) => fn(this._size));
+    tickSharedLineMaterialResolutions(width, height);
     this.invalidate();
   }
 
