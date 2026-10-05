@@ -1,5 +1,5 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { DEFAULT_Z_SCALE, computeDrawingPhase, getState, setState, type DrawingPhase, type EditorInteractionState, type HistoryEntry, type State } from "@/features/core/store";
+import { DEFAULT_Z_SCALE, computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type EditorInteractionState, type HistoryEntry, type State } from "@/features/core/store";
 import type { HandleUndoRedo, SaveHistory } from "@/features/history/historyService";
 import { getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
@@ -19,6 +19,13 @@ import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromLines } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
+
+const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
+  point: "dragged-point",
+  constraint: "dragged-constraint",
+  "solver-start": "dragged-start",
+  objective: "dragged-objective",
+};
 
 export function attachCanvasInteractions({
   canvasManager,
@@ -73,6 +80,11 @@ export function attachCanvasInteractions({
     const listener = handler as EventListener;
     target.addEventListener(eventName, listener, options);
     cleanupHandlers.push(() => target.removeEventListener(eventName, listener, options));
+  };
+
+  const swallow = (event: Event) => {
+    event.preventDefault();
+    event.stopImmediatePropagation();
   };
 
   const captureHistoryEntry = (state: Pick<State, "vertices" | "objectiveVector" | "completionMode">): HistoryEntry => ({
@@ -158,6 +170,7 @@ export function attachCanvasInteractions({
 
   const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: PointXY) => {
     const delta = (logicalCoords.x - target.start.x) * target.normal.x + (logicalCoords.y - target.start.y) * target.normal.y;
+    let operation: ConstraintDragTarget["operation"];
 
     if (target.operation.kind === "closed-line") {
       const line = target.operation.lines[target.operation.lineIndex];
@@ -171,43 +184,23 @@ export function attachCanvasInteractions({
       if (updatedVertices.length < 2) return;
 
       setState({ vertices: updatedVertices.map(([x, y]) => ({ x, y })) });
-
-      setState({
-        editorInteraction: {
-          kind: "dragging",
-          target: {
-            kind: "constraint",
-            operation: {
-              kind: "closed-line",
-              lineIndex: target.operation.lineIndex,
-              lines: updatedLines,
-            },
-            start: logicalCoords,
-            normal: target.normal,
-          },
-        },
-      });
+      operation = { kind: "closed-line", lineIndex: target.operation.lineIndex, lines: updatedLines };
     } else {
-      const operation = target.operation;
+      operation = target.operation;
       const shiftX = target.normal.x * delta;
       const shiftY = target.normal.y * delta;
       const indices = new Set(operation.vertexIndices);
       setState({
         vertices: getState().vertices.map((v, i) => (indices.has(i) ? { x: v.x + shiftX, y: v.y + shiftY } : v)),
       });
-      setState({
-        editorInteraction: {
-          kind: "dragging",
-          target: {
-            kind: "constraint",
-            operation,
-            start: logicalCoords,
-            normal: target.normal,
-          },
-        },
-      });
     }
 
+    setState({
+      editorInteraction: {
+        kind: "dragging",
+        target: { kind: "constraint", operation, start: logicalCoords, normal: target.normal },
+      },
+    });
     sendPolytope();
     canvasManager.draw();
   };
@@ -328,14 +321,7 @@ export function attachCanvasInteractions({
     if (interaction.kind === "dragging") {
       setState({
         editorInteraction: { kind: "idle" },
-        lastCompletedInteraction:
-          interaction.target.kind === "point"
-            ? "dragged-point"
-            : interaction.target.kind === "constraint"
-              ? "dragged-constraint"
-              : interaction.target.kind === "solver-start"
-                ? "dragged-start"
-                : "dragged-objective",
+        lastCompletedInteraction: DRAG_COMPLETION[interaction.target.kind],
       });
       // a moved start marker changes no geometry, and re-sending the polytope
       // would reset any accumulated trace (comparing paths from different
@@ -351,25 +337,16 @@ export function attachCanvasInteractions({
 
     const interactionBeforeEnd = getState();
     handleDragEnd();
-    if (interactionBeforeEnd.editorInteraction.kind !== "idle") {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }
+    if (interactionBeforeEnd.editorInteraction.kind !== "idle") swallow(event);
   };
 
   const stopBlockedPointerEvent = (event: MouseEvent | TouchEvent | PointerEvent) => {
-    if (getState().editorInteraction.kind === "idle") return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (getState().editorInteraction.kind !== "idle") swallow(event);
   };
 
   const handlePointerStart = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
     if (getState().isTransitioning3D) return;
-    const handled = handleDragStart(clientX, clientY);
-    if (handled) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-    }
+    if (handleDragStart(clientX, clientY)) swallow(event);
   };
 
   const handlePointerMove = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
@@ -387,38 +364,21 @@ export function attachCanvasInteractions({
     handlePointerRelease(event);
   };
 
-  const shouldIgnoreEditEvent = () => {
-    const state = getState();
-    return state.isTransitioning3D;
-  };
-
   const finishOpenRegion = () => {
-    const finishResult = getEditorTransition(getState(), {
-      kind: "finish-open",
-    });
-    if (finishResult.kind === "noop") return;
-
-    if (finishResult.kind === "reject-nonconvex") {
-      alert(finishResult.reason);
-      return;
-    }
-
+    // finish-open yields noop, reject-nonconvex or edit; only an edit clears
+    // the sketch cursor and hands the canvas back to panning
+    const finishResult = getEditorTransition(getState(), { kind: "finish-open" });
+    applyEditorTransition(finishResult);
     if (finishResult.kind !== "edit") return;
-
-    commitEdit(finishResult.result, {
-      saveToHistory: finishResult.saveToHistory,
-    });
     setCurrentMouse(null);
     canvasManager.set2DPanEnabled(true);
   };
 
   const handleWheel = (event: WheelEvent) => {
     const { is3DMode, isTransitioning3D, zScale } = getState();
-    const is3D = is3DMode || isTransitioning3D;
-    if (!is3D || !event.shiftKey || isTransitioning3D) return;
+    if (!is3DMode || isTransitioning3D || !event.shiftKey) return;
 
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    swallow(event);
 
     const zoomFactor = 1.05;
     const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
@@ -431,15 +391,14 @@ export function attachCanvasInteractions({
   };
 
   const handleContextMenu = (event: MouseEvent) => {
-    if (shouldIgnoreEditEvent()) return;
-
     const state = getState();
+    if (state.isTransitioning3D) return;
+
     const local = getLocalFromClient(canvasManager, event.clientX, event.clientY);
 
     // right-clicking the start marker resets it to the solver default
     if (state.solverStartPoint && solverStartNearLocalPoint(canvasManager, state, local.x, local.y)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
+      swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
       canvasManager.draw();
@@ -452,9 +411,7 @@ export function attachCanvasInteractions({
     const deleteIndex = findVertexNearLocalPoint(canvasManager, local.x, local.y, displayVertices);
     if (deleteIndex === -1) return;
 
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
+    swallow(event);
     const deletion = getEditorTransition(state, {
       kind: "delete-vertex",
       deleteIndex,
@@ -463,10 +420,10 @@ export function attachCanvasInteractions({
   };
 
   const handleDoubleClickAt = (clientX: number, clientY: number) => {
-    if (shouldIgnoreEditEvent()) return;
+    const state = getState();
+    if (state.isTransitioning3D) return;
 
     const logicalMouse = getLogicalFromClient(canvasManager, clientX, clientY);
-    const state = getState();
     const {
       geometry: { vertices: displayVertices, mode: displayMode },
     } = getEditorContext(state);
@@ -505,10 +462,6 @@ export function attachCanvasInteractions({
     }
   };
 
-  const handleDoubleClick = (event: MouseEvent) => {
-    handleDoubleClickAt(event.clientX, event.clientY);
-  };
-
   const registerTap = (clientX: number, clientY: number) => {
     const now = performance.now();
     if (lastTap && now - lastTap.time <= DOUBLE_TAP_MS && Math.hypot(clientX - lastTap.clientX, clientY - lastTap.clientY) <= DOUBLE_TAP_RADIUS_PX) {
@@ -522,21 +475,30 @@ export function attachCanvasInteractions({
     return false;
   };
 
+  // The shared tail of a pen pointerup and a touchend: release the drag, drop
+  // the gesture record, then (only for a gesture that neither drifted nor
+  // dragged) test for a double tap and swallow the event when it was one.
+  const endTapGesture = (event: PointerEvent | TouchEvent, started: { moved: boolean } | null, forget: () => void, at: { clientX: number; clientY: number } | undefined) => {
+    const interactionBeforeEnd = getState().editorInteraction;
+    handlePointerRelease(event);
+    forget();
+    if (!at || !started || started.moved || interactionBeforeEnd.kind === "dragging") return;
+    if (registerTap(at.clientX, at.clientY)) swallow(event);
+  };
+
   const handleClick = (event: MouseEvent) => {
-    const initialState = getState();
-    if (shouldIgnoreEditEvent()) return;
+    const state = getState();
+    if (state.isTransitioning3D) return;
     if (performance.now() < suppressClickUntil) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
+      swallow(event);
       return;
     }
 
-    if (initialState.lastCompletedInteraction !== "none") {
+    if (state.lastCompletedInteraction !== "none") {
       setState({ lastCompletedInteraction: "none" });
       return;
     }
 
-    const state = getState();
     const { session } = getEditorContext(state);
     const drawingPhase = session.kind === "drafting";
     const objectivePhase = session.kind === "selecting-objective";
@@ -680,15 +642,7 @@ export function attachCanvasInteractions({
       if (event.pointerType !== "pen" || !activePenStart || activePenStart.pointerId !== event.pointerId) {
         return;
       }
-      const started = activePenStart;
-      const interactionBeforeEnd = getState().editorInteraction;
-      handlePointerRelease(event);
-      activePenStart = null;
-      if (started.moved || interactionBeforeEnd.kind === "dragging") return;
-      if (registerTap(event.clientX, event.clientY)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
+      endTapGesture(event, activePenStart, () => (activePenStart = null), event);
     },
     { capture: true },
   );
@@ -737,17 +691,7 @@ export function attachCanvasInteractions({
     canvas,
     "touchend",
     (event: TouchEvent) => {
-      const touch = event.changedTouches[0];
-      const started = activeTouchStart;
-      const interactionBeforeEnd = getState().editorInteraction;
-      handlePointerRelease(event);
-      activeTouchStart = null;
-      if (!touch || !started || started.moved) return;
-      if (interactionBeforeEnd.kind === "dragging") return;
-      if (registerTap(touch.clientX, touch.clientY)) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-      }
+      endTapGesture(event, activeTouchStart, () => (activeTouchStart = null), event.changedTouches[0]);
     },
     { passive: false, capture: true },
   );
@@ -764,7 +708,7 @@ export function attachCanvasInteractions({
   bindEvent(window, "keydown", handleKeyDown, { capture: true });
   bindEvent(canvas, "wheel", handleWheel, { passive: false, capture: true });
   bindEvent(canvas, "contextmenu", handleContextMenu, { capture: true });
-  bindEvent(canvas, "dblclick", handleDoubleClick);
+  bindEvent(canvas, "dblclick", (event: MouseEvent) => handleDoubleClickAt(event.clientX, event.clientY));
   bindEvent(canvas, "click", handleClick);
 
   return () => {
