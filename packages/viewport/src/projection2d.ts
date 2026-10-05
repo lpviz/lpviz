@@ -1,6 +1,6 @@
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
-import { getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
+import { getAvailableViewportSize, getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const ORTHO_MAX_SCALE_FACTOR = 400;
@@ -91,9 +91,7 @@ export function fitViewport2DToBounds(
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
 
-  const viewportSize = getViewportSize(fallbackSnapshot, rect);
-  const availWidth = Math.max(100, viewportSize.width - sidebarWidth - 2 * padding);
-  const availHeight = Math.max(100, viewportSize.height - topInset - 2 * padding);
+  const { availWidth, availHeight } = getAvailableViewportSize(fallbackSnapshot, rect, sidebarWidth, padding, topInset);
   const scaleX = availWidth / (width * state.gridSpacing);
   const scaleY = availHeight / (height * state.gridSpacing);
   const scaleFactor = clampScaleFactor2D(Math.min(scaleX, scaleY));
