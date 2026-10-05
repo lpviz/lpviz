@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { projectWorldPosition3D } from "../src/projection3d";
 import { buildPerspectivePoseFromViewAngle, getViewportVisibleCenterCanvasPoint, projectCanvasPointToWorldPlane } from "../src/transition";
 import { createDefaultViewportRenderSnapshot } from "../src/types";
-import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, isDefault3DView } from "../src/view3d";
+import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds } from "../src/view3d";
 
 const W = 1200;
 const H = 800;
@@ -121,18 +121,6 @@ describe("buildResetViewport3DView", () => {
     expect(worldAtVisibleCenter).not.toBeNull();
     expect(worldAtVisibleCenter!.x).toBeCloseTo(0, 6);
     expect(worldAtVisibleCenter!.y).toBeCloseTo(0, 6);
-  });
-
-  test("isDefault3DView accepts a fresh reset and rejects a panned view", () => {
-    const base = createDefaultViewportRenderSnapshot({ width: W, height: H });
-    const view = buildResetViewport3DView(base, SIDEBAR, rect);
-    const after = buildViewport3DSnapshot(base, view.pose, rect);
-    expect(isDefault3DView(after, SIDEBAR, rect)).toBe(true);
-    const panned = {
-      ...after,
-      target: { ...after.target, x: after.target.x + 5 },
-    };
-    expect(isDefault3DView(panned, SIDEBAR, rect)).toBe(false);
   });
 });
 

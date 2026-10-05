@@ -26,8 +26,6 @@ export function boot(root: HTMLElement) {
   let urlApplied = false;
   let solverHandleProblemChange = () => {};
 
-  const disposers: Array<() => void> = [];
-
   const history = createHistoryService(() => {
     canvasManager?.draw();
     polytope.send();
@@ -163,11 +161,6 @@ export function boot(root: HTMLElement) {
     getSidebarWidth: () => sidebarWidth,
     getViewportSidebarWidth,
     isMobileLayout: () => mobileLayout,
-    setSidebarWidthValue: (w) => {
-      sidebarWidth = w;
-    },
-
-    disposers,
   };
 
   const sidebar = mountSidebar(root, ctx);
@@ -210,7 +203,6 @@ export function boot(root: HTMLElement) {
 
     const applyWidth = (clientX: number) => {
       sidebarWidth = Math.max(260, Math.min(window.innerWidth - 240, clientX));
-      ctx.setSidebarWidthValue(sidebarWidth);
       sidebar.updateWidth(sidebarWidth);
       viewport.setSidebarWidth(getViewportSidebarWidth());
       stage.updateLayout();
@@ -257,7 +249,6 @@ export function boot(root: HTMLElement) {
       stage.destroy();
       sidebar.destroy();
       solver.destroy();
-      for (const d of disposers.splice(0)) d();
       root.replaceChildren();
     },
   };

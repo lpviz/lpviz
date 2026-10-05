@@ -1,7 +1,6 @@
 type ViewportTransitionConfig = {
   active: boolean;
   runId: number;
-  targetMode: boolean;
   startTime: number;
   duration: number;
   onFrame?: (progress: number, easedProgress: number) => void;
@@ -11,7 +10,6 @@ type ViewportTransitionConfig = {
 const DEFAULT_VIEWPORT_TRANSITION_CONFIG: ViewportTransitionConfig = {
   active: false,
   runId: 0,
-  targetMode: false,
   startTime: 0,
   duration: 0,
 };

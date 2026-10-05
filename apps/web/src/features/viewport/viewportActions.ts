@@ -64,7 +64,5 @@ export function createViewportActions(getCanvasManager: () => ViewportApi | null
     setZScale,
     setSidebarWidth,
     syncViewportLayout,
-    getCurrentSidebarWidth: () => currentSidebarWidth,
-    syncSidebarViewport,
   };
 }

@@ -1,10 +1,10 @@
 import { DEFAULT_VIEW_ANGLE, getDisplayedIterateZ, getState, setState, on, onMeta } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
-import { buildViewport2DSnapshot, fitViewport2DToBounds, isDefault2DView, toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
+import { buildViewport2DSnapshot, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
 import { getObjectiveScreenPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/transition";
-import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D, isDefault3DView } from "@lpviz/viewport/view3d";
+import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D } from "@lpviz/viewport/view3d";
 import { getViewportUnboundedClipBounds, isViewport3DState } from "./dirtyFlags";
 import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
 import {
@@ -31,9 +31,6 @@ export type ViewportApi = {
   draw: () => void;
   updateDimensions: () => void;
   setSidebarWidth: (width: number) => void;
-  setNavigationFrameCallback: (callback: (() => void) | null) => void;
-  isDefaultView: () => boolean;
-  setViewState: (scale: number, offsetX: number, offsetY: number) => void;
   zoomToFit: (
     bounds: BoundingBox,
     padding?: number,
@@ -59,7 +56,6 @@ export type ViewportRuntime = ViewportApi & {
 
 export async function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): Promise<ViewportRuntime> {
   let currentSidebarWidth = 0;
-  let navigationFrameCallback: (() => void) | null = null;
   let navigationIdleTimeoutId: number | null = null;
   // Snapshot ownership model. At any instant exactly one source owns the render
   // snapshot: the external 2D viewport controls, the external 3D orbit controls,
@@ -104,7 +100,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     if (getState().isNavigatingViewport === active) {
       return;
     }
-    setState({ isNavigatingViewport: active }, { viewportDirty: {} });
+    setState({ isNavigatingViewport: active });
   };
 
   const clearViewportNavigationTimeout = () => {
@@ -138,7 +134,6 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       return;
     }
     beginViewportNavigation();
-    navigationFrameCallback?.();
     scheduleViewportNavigationEnd();
   };
 
@@ -186,13 +181,10 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
   const syncManagerPlanarState = () => {
     managerSnapshot = getExternal2DSnapshot();
-    setViewport2DControlsConfig(
-      {
-        sidebarWidth: currentSidebarWidth,
-        fallbackSnapshot: managerSnapshot,
-      },
-      { emit: false },
-    );
+    setViewport2DControlsConfig({
+      sidebarWidth: currentSidebarWidth,
+      fallbackSnapshot: managerSnapshot,
+    });
   };
 
   const applyExternalPerspectivePose = (
@@ -236,7 +228,6 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       onChange: (pose) => {
         applyExternalPerspectivePose(pose);
         beginViewportNavigation();
-        navigationFrameCallback?.();
         scheduleViewportNavigationEnd();
       },
       onEnd: () => {
@@ -247,18 +238,15 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
   const syncExternal2DControls = (enabled: boolean, options: { syncStateFromSnapshot?: boolean } = {}) => {
     if (options.syncStateFromSnapshot) {
-      syncViewport2DControlsStateFromSnapshot(managerSnapshot, currentSidebarWidth, { emit: false });
+      syncViewport2DControlsStateFromSnapshot(managerSnapshot, currentSidebarWidth);
     }
 
-    setViewport2DControlsConfig(
-      {
-        enabled,
-        blocked: externalControlsBlocked,
-        sidebarWidth: currentSidebarWidth,
-        fallbackSnapshot: managerSnapshot,
-      },
-      { emit: false },
-    );
+    setViewport2DControlsConfig({
+      enabled,
+      blocked: externalControlsBlocked,
+      sidebarWidth: currentSidebarWidth,
+      fallbackSnapshot: managerSnapshot,
+    });
   };
 
   const syncExternal3DControls = (enabled: boolean, options: { syncFromSnapshot?: boolean } = {}) => {
@@ -294,41 +282,30 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     },
   });
 
-  setViewport2DControlsConfig(
-    {
-      enabled: false,
-      blocked: externalControlsBlocked,
-      panEnabled: true,
-      sidebarWidth: currentSidebarWidth,
-      fallbackSnapshot: managerSnapshot,
-      onStateChange: (state) => {
-        managerSnapshot = buildViewport2DSnapshot(state, currentSidebarWidth, getViewportRect(), managerSnapshot);
-        setViewport2DControlsConfig(
-          {
-            sidebarWidth: currentSidebarWidth,
-            fallbackSnapshot: managerSnapshot,
-          },
-          { emit: false },
-        );
-        publishSnapshot(managerSnapshot);
-      },
-      onNavigationFrame: () => {
-        notifyViewportNavigationFrame();
-      },
+  setViewport2DControlsConfig({
+    enabled: false,
+    blocked: externalControlsBlocked,
+    panEnabled: true,
+    sidebarWidth: currentSidebarWidth,
+    fallbackSnapshot: managerSnapshot,
+    onStateChange: (state) => {
+      managerSnapshot = buildViewport2DSnapshot(state, currentSidebarWidth, getViewportRect(), managerSnapshot);
+      setViewport2DControlsConfig({
+        sidebarWidth: currentSidebarWidth,
+        fallbackSnapshot: managerSnapshot,
+      });
+      publishSnapshot(managerSnapshot);
     },
-    { emit: false },
-  );
-  syncViewport2DControlsStateFromSnapshot(managerSnapshot, currentSidebarWidth, {
-    emit: false,
+    onNavigationFrame: () => {
+      notifyViewportNavigationFrame();
+    },
   });
+  syncViewport2DControlsStateFromSnapshot(managerSnapshot, currentSidebarWidth);
   managerSnapshot = buildInitialSnapshot();
-  setViewport2DControlsConfig(
-    {
-      sidebarWidth: currentSidebarWidth,
-      fallbackSnapshot: managerSnapshot,
-    },
-    { emit: false },
-  );
+  setViewport2DControlsConfig({
+    sidebarWidth: currentSidebarWidth,
+    fallbackSnapshot: managerSnapshot,
+  });
 
   external2DViewportActive = shouldUseExternal2DViewport();
   syncExternal2DControls(external2DViewportActive, {
@@ -370,13 +347,10 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
       if (external2DViewportActive) {
         managerSnapshot = getExternal2DSnapshot();
-        setViewport2DControlsConfig(
-          {
-            sidebarWidth: currentSidebarWidth,
-            fallbackSnapshot: managerSnapshot,
-          },
-          { emit: false },
-        );
+        setViewport2DControlsConfig({
+          sidebarWidth: currentSidebarWidth,
+          fallbackSnapshot: managerSnapshot,
+        });
         syncExternal2DControls(true);
         publishSnapshot(managerSnapshot);
         return;
@@ -423,13 +397,10 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       refreshViewportRect();
       if (shouldUseExternal2DViewport()) {
         managerSnapshot = getExternal2DSnapshot();
-        setViewport2DControlsConfig(
-          {
-            sidebarWidth: currentSidebarWidth,
-            fallbackSnapshot: managerSnapshot,
-          },
-          { emit: false },
-        );
+        setViewport2DControlsConfig({
+          sidebarWidth: currentSidebarWidth,
+          fallbackSnapshot: managerSnapshot,
+        });
         publishSnapshot(managerSnapshot);
         return;
       }
@@ -438,54 +409,13 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     setSidebarWidth: (width) => {
       currentSidebarWidth = width;
       refreshViewportRect();
-      setViewport2DControlsConfig({ sidebarWidth: width }, { emit: false });
+      setViewport2DControlsConfig({ sidebarWidth: width });
       if (shouldUseExternal2DViewport()) {
         syncManagerPlanarState();
         publishSnapshot(getExternal2DSnapshot());
         return;
       }
       republishAfterLayoutChange();
-    },
-    setNavigationFrameCallback: (callback) => {
-      navigationFrameCallback = callback;
-    },
-    isDefaultView: () => {
-      if (shouldUseExternal2DViewport()) {
-        return isDefault2DView(getExternal2DSnapshot(), getViewport2DControlsConfig().sidebarWidth);
-      }
-
-      if (!getState().isTransitioning3D) {
-        return isDefault3DView(managerSnapshot, currentSidebarWidth, getViewportRect());
-      }
-
-      return false;
-    },
-    setViewState: (scale, offsetX, offsetY) => {
-      const { state } = getViewport2DControlsConfig();
-      const nextPlanarState = {
-        gridSpacing: state.gridSpacing,
-        scaleFactor: scale,
-        offsetX,
-        offsetY,
-      };
-
-      if (shouldUseExternal2DViewport()) {
-        setViewport2DControlsState(nextPlanarState);
-        return;
-      }
-
-      setViewport2DControlsState(nextPlanarState, {
-        notify: false,
-        emit: false,
-      });
-      managerSnapshot = buildViewport2DSnapshot(nextPlanarState, currentSidebarWidth, getViewportRect(), managerSnapshot);
-      setViewport2DControlsConfig(
-        {
-          sidebarWidth: currentSidebarWidth,
-          fallbackSnapshot: managerSnapshot,
-        },
-        { emit: false },
-      );
     },
     zoomToFit: (bounds, padding, zBounds, topInset) => {
       if (shouldUseExternal2DViewport()) {
@@ -516,11 +446,9 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
         applyExternalPerspectivePose(nextView.pose, { syncControls: true });
         return;
       }
-
-      return;
     },
     resetView: () => {
-      setState({ viewAngle: { ...DEFAULT_VIEW_ANGLE } }, { viewportDirty: {} });
+      setState({ viewAngle: { ...DEFAULT_VIEW_ANGLE } });
 
       if (shouldUseExternal2DViewport()) {
         const { state } = getViewport2DControlsConfig();
@@ -538,18 +466,16 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
         applyExternalPerspectivePose(nextView.pose, { syncControls: true });
         return;
       }
-
-      return;
     },
     setControlsBlocked: (blocked) => {
       externalControlsBlocked = blocked;
-      setViewport2DControlsConfig({ blocked }, { emit: false });
+      setViewport2DControlsConfig({ blocked });
       if (external3DControlsActive) {
         publish3DControlsConfig();
       }
     },
     set2DPanEnabled: (enabled) => {
-      setViewport2DControlsConfig({ panEnabled: enabled }, { emit: false });
+      setViewport2DControlsConfig({ panEnabled: enabled });
     },
     toLogicalCoords: (x, y) => {
       if (shouldUseExternal2DViewport()) {
