@@ -13,32 +13,16 @@ export function deriveRegionFromPoints(points: Vertices, completionMode: "closed
 
   if (!closed) {
     const allVertices = verticesFromLines(lines);
-    const boundaryRays = buildOpenBoundaryRays(points);
     const feasiblePoint = findFeasiblePoint(lines);
-    const hasClosure = hasOpenBoundaryClosure(points, lines);
+    // a chain that closes on itself with a real polygon is bounded
+    const vertices = hasOpenBoundaryClosure(points, lines) && allVertices.length >= 3 ? allVertices : [];
     // With no constraints the region is the whole plane, not infeasible
     // (findFeasiblePoint returns null for an empty line set by design);
     // mirror classifyRegion's handling of the closed case.
-    const kind: PolytopeRepresentation["kind"] = lines.length === 0 ? "degenerate" : hasClosure && allVertices.length >= 3 ? "bounded" : feasiblePoint ? "unbounded" : "empty";
-    const vertices = hasClosure && allVertices.length >= 3 ? allVertices : [];
-
-    return {
-      kind,
-      inequalities,
-      vertices,
-      lines,
-      boundaryRays: kind === "unbounded" ? boundaryRays : [],
-    };
+    const kind: PolytopeRepresentation["kind"] = lines.length === 0 ? "degenerate" : vertices.length > 0 ? "bounded" : feasiblePoint ? "unbounded" : "empty";
+    return { kind, inequalities, vertices, lines, boundaryRays: kind === "unbounded" ? buildOpenBoundaryRays(points) : [] };
   }
 
   const vertices = verticesFromLines(lines);
-  const kind = classifyRegion(lines, vertices);
-
-  return {
-    kind,
-    inequalities,
-    vertices,
-    lines,
-    boundaryRays: [],
-  };
+  return { kind: classifyRegion(lines, vertices), inequalities, vertices, lines, boundaryRays: [] };
 }

@@ -15,8 +15,6 @@ function formatConstraint(A: number, B: number, C: number): string {
   const normalizedB = formatConstraintNumber(B);
   const normalizedC = formatConstraintNumber(C);
 
-  const inequalitySign = "≤";
-
   let xTerm = "";
   if (normalizedA === 1) xTerm = "x";
   else if (normalizedA === -1) xTerm = "-x";
@@ -35,10 +33,10 @@ function formatConstraint(A: number, B: number, C: number): string {
   }
 
   if (xTerm === "" && yTerm === "") {
-    return `0 ${inequalitySign} ${normalizedC}`;
+    return `0 ≤ ${normalizedC}`;
   }
 
-  return `${xTerm}${yTerm} ${inequalitySign} ${normalizedC}`.trim();
+  return `${xTerm}${yTerm} ≤ ${normalizedC}`.trim();
 }
 
 // Which way an open chain turns, as -1 (right), +1 (left) or 0 (no consistent
@@ -106,17 +104,10 @@ export function buildConstraintRep(points: Vertices, closed: boolean, tol = 1e-6
     let normalizedB = B / normalLength;
     let normalizedC = normalizedA * start[0] + normalizedB * start[1];
 
-    if (turnSign < 0) {
-      // a right-turning chain has its interior on the opposite side to
-      // the one the natural normal selects
-      normalizedA = -normalizedA;
-      normalizedB = -normalizedB;
-      normalizedC = -normalizedC;
-    } else if (turnSign === 0 && interiorPoint && normalizedA * interiorPoint[0] + normalizedB * interiorPoint[1] > normalizedC + tol) {
-      normalizedA = -normalizedA;
-      normalizedB = -normalizedB;
-      normalizedC = -normalizedC;
-    } else if (turnSign === 0 && !interiorPoint) {
+    // a right-turning chain has its interior on the opposite side to the one
+    // the natural normal selects; so does a chain with no consistent turn
+    // when its centroid falls outside, or when it has no centroid at all
+    if (turnSign < 0 || (turnSign === 0 && (!interiorPoint || normalizedA * interiorPoint[0] + normalizedB * interiorPoint[1] > normalizedC + tol))) {
       normalizedA = -normalizedA;
       normalizedB = -normalizedB;
       normalizedC = -normalizedC;

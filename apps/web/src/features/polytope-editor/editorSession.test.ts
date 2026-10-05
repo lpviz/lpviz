@@ -60,7 +60,6 @@ describe("getEditorTransition: click", () => {
         completionMode: "draft",
         interiorPoint: null,
       },
-      saveToHistory: true,
     });
   });
 
@@ -101,7 +100,6 @@ describe("getEditorTransition: click", () => {
     expect(t).toEqual({
       kind: "select-objective",
       objectiveVector: { x: 3, y: 2 },
-      saveToHistory: true,
     });
   });
 

@@ -2,7 +2,7 @@ import { DEFAULT_VIEW_ANGLE, getDisplayedIterateZ, getState, setState, on, onMet
 import type { BoundingBox } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
-import { getObjectiveScreenPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
+import { projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/transition";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/types";
 import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D } from "@lpviz/viewport/view3d";
@@ -465,7 +465,6 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
           ? editorInteraction.target.viewAnchor3D
           : undefined;
       return toLogicalCoords3D(managerSnapshot, getViewportRect(), x, y, {
-        objectiveVector: state.objectiveVector,
         zScale: state.zScale,
         snapToGrid: state.snapToGrid,
         editorInteractionKind: state.editorInteraction.kind,
@@ -489,7 +488,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
         return toCanvasCoords2D(getExternal2DSnapshot(), getViewportRect(), point);
       }
 
-      return getObjectiveScreenPosition3D(managerSnapshot, getViewportRect(), point);
+      return projectWorldPosition3D(managerSnapshot, getViewportRect(), { x: point.x, y: point.y, z: 0 });
     },
     getUnboundedClipBounds: () => ({ minX: -VIEWPORT_UNBOUNDED_EXTENT, maxX: VIEWPORT_UNBOUNDED_EXTENT, minY: -VIEWPORT_UNBOUNDED_EXTENT, maxY: VIEWPORT_UNBOUNDED_EXTENT }),
     start3DTransition: (targetMode) => transition.begin(targetMode),

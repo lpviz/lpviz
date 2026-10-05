@@ -1,115 +1,57 @@
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
 import type { PointXY } from "@lpviz/math/types";
-import type { ViewportRenderSnapshot } from "./types";
+import { getAvailableViewportSize, getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 
 const ORTHO_MIN_SCALE_FACTOR = 0.05;
 const ORTHO_MAX_SCALE_FACTOR = 400;
 
-type ViewportRect = Pick<DOMRect, "width" | "height">;
-
-export type Viewport2DState = {
-  gridSpacing: number;
-  scaleFactor: number;
-  offsetX: number;
-  offsetY: number;
-};
-
-const getViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect) => ({
-  width: rect.width || snapshot.width || 1,
-  height: rect.height || snapshot.height || 1,
-});
-
-const getUnitsPerPixel = (state: Pick<Viewport2DState, "gridSpacing" | "scaleFactor">) => 1 / (state.gridSpacing * state.scaleFactor);
-
-const snapPoint = (point: PointXY, snapToGrid = false) => {
-  if (!snapToGrid) return point;
-  return { x: Math.round(point.x), y: Math.round(point.y) };
-};
+export type Viewport2DState = { gridSpacing: number; scaleFactor: number; offsetX: number; offsetY: number };
 
 export function clampScaleFactor2D(value: number) {
   return Math.max(ORTHO_MIN_SCALE_FACTOR, Math.min(ORTHO_MAX_SCALE_FACTOR, value));
 }
 
+// Every snapshot builder keeps unitsPerPixel = 1 / (gridSpacing * clamped
+// scaleFactor) (pinned in test/pin.test.ts), so the state follows from the
+// target and scale alone.
 export function deriveViewport2DState(snapshot: ViewportRenderSnapshot, sidebarWidth: number): Viewport2DState {
-  const scaleFactor = clampScaleFactor2D(snapshot.scaleFactor || 1);
-  const gridSpacing = snapshot.gridSpacing || 20;
-  const unitsPerPixel = snapshot.unitsPerPixel || 1 / (gridSpacing * scaleFactor);
-
-  return {
-    gridSpacing,
-    scaleFactor,
-    offsetX: -snapshot.target.x - (sidebarWidth / 2) * unitsPerPixel,
-    offsetY: -snapshot.target.y,
-  };
+  return buildViewport2DStateFromTarget(snapshot.target, snapshot.scaleFactor || 1, snapshot.gridSpacing || 20, sidebarWidth);
 }
 
 export function buildViewport2DStateFromTarget(target: PointXY, scaleFactor: number, gridSpacing: number, sidebarWidth: number): Viewport2DState {
   const clampedScaleFactor = clampScaleFactor2D(scaleFactor);
   const unitsPerPixel = 1 / (gridSpacing * clampedScaleFactor);
-  return {
-    gridSpacing,
-    scaleFactor: clampedScaleFactor,
-    offsetX: -target.x - (sidebarWidth / 2) * unitsPerPixel,
-    offsetY: -target.y,
-  };
+  return { gridSpacing, scaleFactor: clampedScaleFactor, offsetX: -target.x - (sidebarWidth / 2) * unitsPerPixel, offsetY: -target.y };
 }
 
 export function buildViewport2DSnapshot(state: Viewport2DState, sidebarWidth: number, rect: ViewportRect, fallbackSnapshot: ViewportRenderSnapshot): ViewportRenderSnapshot {
   const scaleFactor = clampScaleFactor2D(state.scaleFactor);
-  const normalizedState = {
-    ...state,
-    scaleFactor,
-  };
-  const unitsPerPixel = getUnitsPerPixel(normalizedState);
+  const unitsPerPixel = 1 / (state.gridSpacing * scaleFactor);
   const { width, height } = getViewportSize(fallbackSnapshot, rect);
-  const target = {
-    x: -normalizedState.offsetX - (sidebarWidth / 2) * unitsPerPixel,
-    y: -normalizedState.offsetY,
-    z: 0,
-  };
-
+  const target = { x: -state.offsetX - (sidebarWidth / 2) * unitsPerPixel, y: -state.offsetY, z: 0 };
   return {
     ...fallbackSnapshot,
     mode: "2d",
     width,
     height,
     sidebarWidth,
-    gridSpacing: normalizedState.gridSpacing,
+    gridSpacing: state.gridSpacing,
     scaleFactor,
     unitsPerPixel,
     transitionZMultiplier: 1,
     target,
-    orthographic: {
-      left: -(width * unitsPerPixel) / 2,
-      right: (width * unitsPerPixel) / 2,
-      top: (height * unitsPerPixel) / 2,
-      bottom: -(height * unitsPerPixel) / 2,
-      position: {
-        x: target.x,
-        y: target.y,
-        z: 10,
-      },
-    },
+    orthographic: orthographicFor(width, height, unitsPerPixel, target),
   };
 }
 
 export function toLogicalCoords2D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: { snapToGrid?: boolean } = {}): PointXY {
   const { width, height } = getViewportSize(snapshot, rect);
-  return snapPoint(
-    {
-      x: snapshot.target.x + (x - width / 2) * snapshot.unitsPerPixel,
-      y: snapshot.target.y + (height / 2 - y) * snapshot.unitsPerPixel,
-    },
-    options.snapToGrid ?? false,
-  );
+  return snapPoint({ x: snapshot.target.x + (x - width / 2) * snapshot.unitsPerPixel, y: snapshot.target.y + (height / 2 - y) * snapshot.unitsPerPixel }, options.snapToGrid ?? false);
 }
 
 export function toCanvasCoords2D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY): PointXY {
   const { width, height } = getViewportSize(snapshot, rect);
-  return {
-    x: width / 2 + (point.x - snapshot.target.x) / snapshot.unitsPerPixel,
-    y: height / 2 - (point.y - snapshot.target.y) / snapshot.unitsPerPixel,
-  };
+  return { x: width / 2 + (point.x - snapshot.target.x) / snapshot.unitsPerPixel, y: height / 2 - (point.y - snapshot.target.y) / snapshot.unitsPerPixel };
 }
 
 export function zoomViewport2DStateAtCanvasPoint(
@@ -125,11 +67,7 @@ export function zoomViewport2DStateAtCanvasPoint(
   const { width, height } = getViewportSize(snapshot, rect);
   const nextScaleFactor = clampScaleFactor2D(scaleFactor);
   const nextUnitsPerPixel = 1 / (state.gridSpacing * nextScaleFactor);
-  const target = {
-    x: logicalPoint.x - (point.x - width / 2) * nextUnitsPerPixel,
-    y: logicalPoint.y - (height / 2 - point.y) * nextUnitsPerPixel,
-  };
-
+  const target = { x: logicalPoint.x - (point.x - width / 2) * nextUnitsPerPixel, y: logicalPoint.y - (height / 2 - point.y) * nextUnitsPerPixel };
   return buildViewport2DStateFromTarget(target, nextScaleFactor, state.gridSpacing, sidebarWidth);
 }
 
@@ -153,20 +91,12 @@ export function fitViewport2DToBounds(
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
 
-  const viewportSize = getViewportSize(fallbackSnapshot, rect);
-  const availWidth = Math.max(100, viewportSize.width - sidebarWidth - 2 * padding);
-  const availHeight = Math.max(100, viewportSize.height - topInset - 2 * padding);
+  const { availWidth, availHeight } = getAvailableViewportSize(fallbackSnapshot, rect, sidebarWidth, padding, topInset);
   const scaleX = availWidth / (width * state.gridSpacing);
   const scaleY = availHeight / (height * state.gridSpacing);
   const scaleFactor = clampScaleFactor2D(Math.min(scaleX, scaleY));
   // the view center sits half an inset above the content center (world y is
   // up), which puts the content half an inset lower on screen
   const unitsPerPixel = 1 / (state.gridSpacing * scaleFactor);
-
-  return {
-    gridSpacing: state.gridSpacing,
-    scaleFactor,
-    offsetX: -(bounds.minX + bounds.maxX) / 2,
-    offsetY: -((bounds.minY + bounds.maxY) / 2 + (topInset / 2) * unitsPerPixel),
-  };
+  return { gridSpacing: state.gridSpacing, scaleFactor, offsetX: -(bounds.minX + bounds.maxX) / 2, offsetY: -((bounds.minY + bounds.maxY) / 2 + (topInset / 2) * unitsPerPixel) };
 }

@@ -118,19 +118,8 @@ export function attachCanvasInteractions({
     requestAnimationFrame(restoreViewportControls);
   };
 
-  const commitEdit = (
-    result: {
-      vertices: PointXY[];
-      completionMode: "draft" | "open" | "closed";
-      interiorPoint: PointXY | null;
-    },
-    options: {
-      saveToHistory?: boolean;
-    } = {},
-  ) => {
-    if (options.saveToHistory ?? true) {
-      saveHistory();
-    }
+  const commitEdit = (result: { vertices: PointXY[]; completionMode: "draft" | "open" | "closed"; interiorPoint: PointXY | null }) => {
+    saveHistory();
     setState({
       vertices: result.vertices,
       completionMode: result.completionMode,
@@ -151,16 +140,12 @@ export function attachCanvasInteractions({
     }
 
     if (transition.kind === "edit") {
-      commitEdit(transition.result, {
-        saveToHistory: transition.saveToHistory,
-      });
+      commitEdit(transition.result);
       return;
     }
 
     if (transition.kind === "select-objective") {
-      if (transition.saveToHistory) {
-        saveHistory();
-      }
+      saveHistory();
       setState({ objectiveVector: transition.objectiveVector });
       sendPolytope();
       canvasManager.draw();

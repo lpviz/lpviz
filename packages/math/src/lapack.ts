@@ -1,23 +1,28 @@
+// The row at or below `pivot` holding the largest |entry| of column `pivot`.
+// `!(x > 1e-12)` rather than `x <= 1e-12` so a NaN pivot is rejected too.
+function findPivotRow(lu: Float64Array, size: number, pivot: number): number {
+  let pivotRow = pivot;
+  let pivotValue = Math.abs(lu[pivot * size + pivot]!);
+  for (let row = pivot + 1; row < size; row++) {
+    const value = Math.abs(lu[row * size + pivot]!);
+    if (value > pivotValue) {
+      pivotValue = value;
+      pivotRow = row;
+    }
+  }
+  if (!(pivotValue > 1e-12)) {
+    throw new Error("Singular linear system");
+  }
+  return pivotRow;
+}
+
 export function solveDenseSystem(matrix: Float64Array, size: number, rhs: Float64Array, out: Float64Array, luScratch?: Float64Array) {
   const lu = luScratch ?? new Float64Array(size * size);
   lu.set(matrix);
   out.set(rhs);
 
   for (let pivot = 0; pivot < size; pivot++) {
-    let pivotRow = pivot;
-    let pivotValue = Math.abs(lu[pivot * size + pivot]!);
-    for (let row = pivot + 1; row < size; row++) {
-      const value = Math.abs(lu[row * size + pivot]!);
-      if (value > pivotValue) {
-        pivotValue = value;
-        pivotRow = row;
-      }
-    }
-
-    if (!(pivotValue > 1e-12)) {
-      throw new Error("Singular linear system");
-    }
-
+    const pivotRow = findPivotRow(lu, size, pivot);
     if (pivotRow !== pivot) {
       for (let col = 0; col < size; col++) {
         const a = pivot * size + col;
@@ -71,18 +76,7 @@ export function invertDenseMatrix(matrix: Float64Array, size: number, out: Float
   for (let i = 0; i < size; i++) out[i * size + i] = 1;
 
   for (let pivot = 0; pivot < size; pivot++) {
-    let pivotRow = pivot;
-    let pivotValue = Math.abs(work[pivot * size + pivot]!);
-    for (let row = pivot + 1; row < size; row++) {
-      const value = Math.abs(work[row * size + pivot]!);
-      if (value > pivotValue) {
-        pivotValue = value;
-        pivotRow = row;
-      }
-    }
-    if (!(pivotValue > 1e-12)) {
-      throw new Error("Singular linear system");
-    }
+    const pivotRow = findPivotRow(work, size, pivot);
     if (pivotRow !== pivot) {
       for (let col = 0; col < size; col++) {
         const a = pivot * size + col;
