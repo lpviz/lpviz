@@ -10,6 +10,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { visibleBounds2D } from "../helpers/visibleBounds";
 import type { LayerRenderObject } from "../Layer";
 import { LayerBase } from "./base/LayerBase";
 
@@ -17,12 +18,28 @@ const POLYTOPE_FILL_COLOR = "#e6e6e6";
 const POLYTOPE_HIGHLIGHT_COLOR = "#ff0000";
 const POLYTOPE_OUTLINE_COLOR = "#000000";
 const POLY_LINE_THICKNESS = 2;
-const CLIP_MARGIN_PX = 50;
-const CLIP_MARGIN_UNITS = 50;
 const DEFAULT_UNBOUNDED_EXTENT = 5000;
 const EPS = 1e-10;
 
-const getPolytopeEdgeMat = (color: string, is3D: boolean) => lineDepthMaterial(color, POLY_LINE_THICKNESS, is3D);
+const UNBOUNDED_BOUNDS: BoundingBox = {
+  minX: -DEFAULT_UNBOUNDED_EXTENT,
+  maxX: DEFAULT_UNBOUNDED_EXTENT,
+  minY: -DEFAULT_UNBOUNDED_EXTENT,
+  maxY: DEFAULT_UNBOUNDED_EXTENT,
+};
+
+const fillMaterial = (color: string) =>
+  new MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.6,
+    depthTest: false,
+    depthWrite: false,
+    side: DoubleSide,
+    polygonOffset: true,
+    polygonOffsetFactor: 1,
+    polygonOffsetUnits: 1,
+  });
 
 function buildShapeFromVertices(vertices: ReadonlyArray<PointXY>) {
   const shape = new Shape();
@@ -97,26 +114,6 @@ function clipRayToBoundingBox(start: PointXY, direction: PointXY, bounds: Boundi
   return [start, candidates[0].point];
 }
 
-function getVisibleBoundingBox(snap: ViewportRenderSnapshot): BoundingBox {
-  if (snap.mode !== "2d") {
-    return {
-      minX: -DEFAULT_UNBOUNDED_EXTENT,
-      maxX: DEFAULT_UNBOUNDED_EXTENT,
-      minY: -DEFAULT_UNBOUNDED_EXTENT,
-      maxY: DEFAULT_UNBOUNDED_EXTENT,
-    };
-  }
-  const hw = (snap.orthographic.right - snap.orthographic.left) / 2;
-  const hh = (snap.orthographic.top - snap.orthographic.bottom) / 2;
-  const margin = CLIP_MARGIN_PX * snap.unitsPerPixel + CLIP_MARGIN_UNITS;
-  return {
-    minX: snap.target.x - hw - margin,
-    maxX: snap.target.x + hw + margin,
-    minY: snap.target.y - hh - margin,
-    maxY: snap.target.y + hh + margin,
-  };
-}
-
 type PolytopeRenderResult = {
   fillVertices: PointXY[];
   isNonconvex: boolean;
@@ -137,15 +134,9 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   // the validity test computeEditorRegionForState uses (isConvexChain).
   const isNonconvex = isClosedRegion ? !VRep.fromPoints(displayVertices).isConvex() : !isConvexChain(displayVertices);
 
-  const bounds: BoundingBox =
-    completionMode === "open" && !hasDerived && polytope?.kind === "unbounded"
-      ? {
-          minX: -DEFAULT_UNBOUNDED_EXTENT,
-          maxX: DEFAULT_UNBOUNDED_EXTENT,
-          minY: -DEFAULT_UNBOUNDED_EXTENT,
-          maxY: DEFAULT_UNBOUNDED_EXTENT,
-        }
-      : getVisibleBoundingBox(snap);
+  // an unbounded open region is clipped to a fixed extent; in 3D so is
+  // everything (the visible rect is only meaningful under the ortho camera)
+  const bounds = (completionMode === "open" && !hasDerived && polytope?.kind === "unbounded") || snap.mode !== "2d" ? UNBOUNDED_BOUNDS : visibleBounds2D(snap);
 
   const fillVertices: PointXY[] =
     isClosedRegion && displayVertices.length >= 3
@@ -185,12 +176,6 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   };
 }
 
-function applySegmentsGeometry(geo: LineSegmentsGeometry, segments: number[]) {
-  if (segments.length < 6) return false;
-  replaceLinePositions(geo, segments);
-  return true;
-}
-
 export class PolytopeBaseLayer extends LayerBase {
   readonly object3D: Group;
   readonly renderObjects: readonly LayerRenderObject[];
@@ -198,36 +183,13 @@ export class PolytopeBaseLayer extends LayerBase {
   private fillMesh: Mesh;
   private fillMatNormal: MeshBasicMaterial;
   private fillMatHighlight: MeshBasicMaterial;
-  private normalEdgesGeo: LineSegmentsGeometry;
   private normalEdges: LineSegments2;
-  private highlightEdgesGeo: LineSegmentsGeometry;
   private highlightEdges: LineSegments2;
-  private prevFillGeo: ShapeGeometry | null = null;
 
   constructor() {
     super();
-    const fMatN = new MeshBasicMaterial({
-      color: POLYTOPE_FILL_COLOR,
-      transparent: true,
-      opacity: 0.6,
-      depthTest: false,
-      depthWrite: false,
-      side: DoubleSide,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-    });
-    const fMatH = new MeshBasicMaterial({
-      color: POLYTOPE_HIGHLIGHT_COLOR,
-      transparent: true,
-      opacity: 0.6,
-      depthTest: false,
-      depthWrite: false,
-      side: DoubleSide,
-      polygonOffset: true,
-      polygonOffsetFactor: 1,
-      polygonOffsetUnits: 1,
-    });
+    const fMatN = fillMaterial(POLYTOPE_FILL_COLOR);
+    const fMatH = fillMaterial(POLYTOPE_HIGHLIGHT_COLOR);
     const mesh = new Mesh(undefined, fMatN);
     mesh.renderOrder = RENDER_ORDER.polytopeFill;
     mesh.frustumCulled = false;
@@ -235,14 +197,14 @@ export class PolytopeBaseLayer extends LayerBase {
 
     const nGeo = new LineSegmentsGeometry();
     applyHugeBounds(nGeo);
-    const nEdges = new LineSegments2(nGeo, getPolytopeEdgeMat(POLYTOPE_OUTLINE_COLOR, false));
+    const nEdges = new LineSegments2(nGeo, lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false));
     nEdges.frustumCulled = false;
     nEdges.renderOrder = RENDER_ORDER.polyEdges;
     nEdges.visible = false;
 
     const hGeo = new LineSegmentsGeometry();
     applyHugeBounds(hGeo);
-    const hEdges = new LineSegments2(hGeo, getPolytopeEdgeMat(POLYTOPE_HIGHLIGHT_COLOR, false));
+    const hEdges = new LineSegments2(hGeo, lineDepthMaterial(POLYTOPE_HIGHLIGHT_COLOR, POLY_LINE_THICKNESS, false));
     hEdges.frustumCulled = false;
     hEdges.renderOrder = RENDER_ORDER.polyEdges;
     hEdges.visible = false;
@@ -257,9 +219,7 @@ export class PolytopeBaseLayer extends LayerBase {
     this.fillMesh = mesh;
     this.fillMatNormal = fMatN;
     this.fillMatHighlight = fMatH;
-    this.normalEdgesGeo = nGeo;
     this.normalEdges = nEdges;
-    this.highlightEdgesGeo = hGeo;
     this.highlightEdges = hEdges;
   }
 
@@ -300,38 +260,33 @@ export class PolytopeBaseLayer extends LayerBase {
     const result = buildPolytopeGeometry(raw, snap);
 
     if (result.fillVertices.length >= 3) {
-      const newFillGeo = new ShapeGeometry(buildShapeFromVertices(result.fillVertices));
-      if (this.prevFillGeo) this.prevFillGeo.dispose();
-      this.prevFillGeo = newFillGeo;
-      this.fillMesh.geometry = newFillGeo;
+      // free the previous fill's GL buffers before the geometry is replaced
+      this.fillMesh.geometry.dispose();
+      this.fillMesh.geometry = new ShapeGeometry(buildShapeFromVertices(result.fillVertices));
       this.fillMesh.material = result.isNonconvex ? this.fillMatHighlight : this.fillMatNormal;
       this.fillMesh.visible = true;
     } else {
       this.fillMesh.visible = false;
     }
 
-    if (result.normalSegments.length >= 6) {
-      applySegmentsGeometry(this.normalEdgesGeo, result.normalSegments);
-      this.normalEdges.material = getPolytopeEdgeMat(POLYTOPE_OUTLINE_COLOR, is3D);
-      this.normalEdges.visible = true;
-    } else {
-      this.normalEdges.visible = false;
-    }
-
-    if (result.highlightSegments.length >= 6) {
-      applySegmentsGeometry(this.highlightEdgesGeo, result.highlightSegments);
-      this.highlightEdges.material = getPolytopeEdgeMat(POLYTOPE_HIGHLIGHT_COLOR, is3D);
-      this.highlightEdges.visible = true;
-    } else {
-      this.highlightEdges.visible = false;
+    const edges: [LineSegments2, number[], string][] = [
+      [this.normalEdges, result.normalSegments, POLYTOPE_OUTLINE_COLOR],
+      [this.highlightEdges, result.highlightSegments, POLYTOPE_HIGHLIGHT_COLOR],
+    ];
+    for (const [segs, segments, color] of edges) {
+      segs.visible = segments.length >= 6;
+      if (segs.visible) {
+        replaceLinePositions(segs.geometry, segments);
+        segs.material = lineDepthMaterial(color, POLY_LINE_THICKNESS, is3D);
+      }
     }
   }
 
   dispose(): void {
-    this.normalEdgesGeo.dispose();
-    this.highlightEdgesGeo.dispose();
+    this.normalEdges.geometry.dispose();
+    this.highlightEdges.geometry.dispose();
     this.fillMatNormal.dispose();
     this.fillMatHighlight.dispose();
-    this.prevFillGeo?.dispose();
+    this.fillMesh.geometry.dispose();
   }
 }

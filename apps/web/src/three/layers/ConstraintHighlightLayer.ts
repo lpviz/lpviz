@@ -5,35 +5,23 @@ import { type BoundingBox } from "@lpviz/math/geometry";
 import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/transition";
-import { Group } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
+import { CLIP_MARGIN_UNITS, visibleBounds2D } from "../helpers/visibleBounds";
 import { LayerBase } from "./base/LayerBase";
 
 const CONSTRAINT_COLOR = "#ff0000";
 const CONSTRAINT_RENDER_ORDER = RENDER_ORDER.constraintLines;
 const CONSTRAINT_LINE_THICKNESS = 2;
-const CLIP_MARGIN_PX = 50;
-const CLIP_MARGIN_UNITS = 50;
 const DEFAULT_3D_EXTENT = 5000;
 const EPS = 1e-10;
 
-const getConstraintMat = (is3D: boolean) => lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, is3D);
-
 function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
   if (snap.mode === "2d") {
-    const halfWidth = (snap.orthographic.right - snap.orthographic.left) / 2;
-    const halfHeight = (snap.orthographic.top - snap.orthographic.bottom) / 2;
-    const marginUnits = CLIP_MARGIN_PX * snap.unitsPerPixel + CLIP_MARGIN_UNITS;
-    return {
-      minX: snap.target.x - halfWidth - marginUnits,
-      maxX: snap.target.x + halfWidth + marginUnits,
-      minY: snap.target.y - halfHeight - marginUnits,
-      maxY: snap.target.y + halfHeight + marginUnits,
-    };
+    return visibleBounds2D(snap);
   }
   const rect = {
     width: Math.max(1, snap.width),
@@ -82,26 +70,22 @@ function clipLineToBounds(line: Line, b: BoundingBox): [PointXY, PointXY] | null
 }
 
 export class ConstraintHighlightLayer extends LayerBase {
-  readonly object3D: Group;
+  readonly object3D: LineSegments2;
   // "grid" fires on zoom/resize/pan, which move the visible bounds this
   // layer clips against; the dependency check below keeps updates cheap.
   override readonly invalidationKeys = ["constraints", "grid"] as const;
   private cGeo: LineSegmentsGeometry;
-  private cSegs: LineSegments2;
 
   constructor() {
     super();
     const cGeo = new LineSegmentsGeometry();
     applyHugeBounds(cGeo);
-    const cSegs = new LineSegments2(cGeo, getConstraintMat(false));
+    const cSegs = new LineSegments2(cGeo, lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, false));
     cSegs.renderOrder = CONSTRAINT_RENDER_ORDER;
     cSegs.frustumCulled = false;
     cSegs.visible = false;
-    const group = new Group();
-    group.add(cSegs);
-    this.object3D = group;
+    this.object3D = cSegs;
     this.cGeo = cGeo;
-    this.cSegs = cSegs;
   }
 
   protected dependencies(): readonly unknown[] {
@@ -132,27 +116,27 @@ export class ConstraintHighlightLayer extends LayerBase {
     const snap = getViewportRenderSnapshot();
 
     if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasPolytopeLines(raw.polytope) || !shouldRenderSnapshotMode(snap.mode, raw)) {
-      this.cSegs.visible = false;
+      this.object3D.visible = false;
       return;
     }
 
     const line = raw.polytope.lines[raw.highlightIndex];
     if (!line) {
-      this.cSegs.visible = false;
+      this.object3D.visible = false;
       return;
     }
 
     const clipped = clipLineToBounds(line, getVisibleBounds(snap));
     if (!clipped) {
-      this.cSegs.visible = false;
+      this.object3D.visible = false;
       return;
     }
 
     const [start, end] = clipped;
     replaceLinePositions(this.cGeo, [start.x, start.y, 0, end.x, end.y, 0]);
 
-    this.cSegs.material = getConstraintMat(snap.mode === "3d");
-    this.cSegs.visible = true;
+    this.object3D.material = lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, snap.mode === "3d");
+    this.object3D.visible = true;
   }
 
   dispose(): void {
