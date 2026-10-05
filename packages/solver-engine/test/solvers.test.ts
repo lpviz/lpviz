@@ -4,20 +4,7 @@ import { ellipsoid } from "../src/ellipsoid";
 import { ipm } from "../src/ipm";
 import { pdhg } from "../src/pdhg";
 import { ENTERING_RULES, LEAVING_RULES, simplex } from "../src/simplex";
-
-// square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
-const SQUARE = [
-  [1, 0, -4],
-  [-1, 0, 6],
-  [0, 1, -4],
-  [0, -1, 6],
-] as [number, number, number][];
-const SQUARE_VERTICES = [
-  [-6, -6],
-  [-4, -6],
-  [-4, -4],
-  [-6, -4],
-] as [number, number][];
+import { SQUARE, SQUARE_VERTICES, largePolygon, lastIterate, lcg, randomPolygon } from "./fixtures";
 
 // The square plus x + y <= -8, which passes exactly through the optimum
 // (-4, -4) of the objective (2, 1): three lines meet there, so the ratio test
@@ -41,66 +28,10 @@ const STALL_OBJECTIVE = Float64Array.of(-0.04722023010253906, 0.2094631195068359
 const RULE_COMBOS = ENTERING_RULES.flatMap((enteringRule) => LEAVING_RULES.map((leavingRule) => ({ enteringRule, leavingRule })));
 const RULE_OPTIONS = [{}, ...RULE_COMBOS];
 
-const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
-
-// A random convex polygon (3-7 vertices on a circle, so no three edges are
-// concurrent) as inward-pointing constraint lines, or null when two vertices
-// are too close for a well-conditioned edge.
-function randomPolygon(rand: () => number) {
-  const cnt = 3 + Math.floor(rand() * 5);
-  const cx = rand() * 16 - 8;
-  const cy = rand() * 16 - 8;
-  const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
-  if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
-  const R = 1 + rand() * 8;
-  const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
-  const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-  const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-  const lines = hull.map((start, i) => {
-    const end = hull[(i + 1) % hull.length]!;
-    let A = end[1] - start[1];
-    let B = -(end[0] - start[0]);
-    const n = Math.hypot(A, B);
-    A /= n;
-    B /= n;
-    let C = A * start[0] + B * start[1];
-    if (A * centX + B * centY > C) {
-      A = -A;
-      B = -B;
-      C = -C;
-    }
-    return [A, B, C] as [number, number, number];
-  });
-  return { hull, lines };
-}
-
 const flatLogs = (r: { logs: string[][] }) => r.logs.flat().join("");
 // a log row whose iteration number carries the cycling-guard marker, e.g. "  27d"
 const GUARDED_ROW = /^\s*\d+d /m;
 const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
-// A convex polygon with `count` vertices on a wobbly circle — the size PR #69's
-// random generator produces, and the size at which per-pivot / per-iteration
-// dense factorizations used to cost seconds.
-function largePolygon(rand: () => number, count: number) {
-  const angles = Array.from({ length: count }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
-  const hull = angles.map((a) => [10 * Math.cos(a), 10 * Math.sin(a)] as [number, number]);
-  const lines = hull.map((start, i) => {
-    const end = hull[(i + 1) % hull.length]!;
-    let A = end[1] - start[1];
-    let B = -(end[0] - start[0]);
-    const n = Math.hypot(A, B);
-    A /= n;
-    B /= n;
-    const C = A * start[0] + B * start[1];
-    // the polygon is CCW around the origin, so its interior is on the left
-    // of every edge and A x + B y <= C already holds inside
-    return [A, B, C] as [number, number, number];
-  });
-  return { hull, lines };
-}
-
-const lastIterate = (r: { iterations: Float64Array[] }) => r.iterations[r.iterations.length - 1]!;
-
 const pdhgDefaults = {
   halpern: false,
   maxit: 2000,
@@ -114,9 +45,9 @@ describe("pdhg", () => {
   test("eq-mode rows report the recovered (x, y), not the split variable", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...pdhgDefaults, ineq: false });
     const lastRow = r.rows[r.rows.length - 1]!;
-    const lastIterate = r.iterations[r.iterations.length - 1]!;
-    expect(lastRow.x).toBeCloseTo(lastIterate[0]!, 8);
-    expect(lastRow.y).toBeCloseTo(lastIterate[1]!, 8);
+    const last = lastIterate(r);
+    expect(lastRow.x).toBeCloseTo(last[0]!, 8);
+    expect(lastRow.y).toBeCloseTo(last[1]!, 8);
     expect(lastRow.x).toBeCloseTo(-4, 2);
     expect(lastRow.y).toBeCloseTo(-4, 2);
   });
@@ -138,7 +69,7 @@ describe("pdhg", () => {
       tau: 0.75,
     });
     expect(r.footer.startsWith("Did not converge")).toBe(true);
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     expect(Number.isFinite(last[0]!)).toBe(true);
     expect(Number.isFinite(last[1]!)).toBe(true);
     // the path must not silently collapse to the origin
@@ -379,7 +310,7 @@ describe("ellipsoid", () => {
       for (const rayShoot of [true, false]) {
         const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ deepCuts, rayShoot }));
         expect(r.footer.startsWith("Converged")).toBe(true);
-        const last = r.iterations[r.iterations.length - 1]!;
+        const last = lastIterate(r);
         expect(last[0]!).toBeCloseTo(-4, 3);
         expect(last[1]!).toBeCloseTo(-4, 3);
       }
@@ -401,12 +332,11 @@ describe("ellipsoid", () => {
   test("the final iterate is feasible however termination is reached", () => {
     // the gap stop can close while the ellipsoid is still wide, so it must
     // still hold the center inside the region before calling it converged
-    let seed = 5;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(5);
     for (let t = 0; t < 40; t++) {
       const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       const r = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts());
-      const last = r.iterations[r.iterations.length - 1]!;
+      const last = lastIterate(r);
       for (const [a1, a2, rhs] of SQUARE) {
         expect(a1 * last[0]! + a2 * last[1]!).toBeLessThanOrEqual(rhs + 1e-9);
       }
@@ -415,7 +345,7 @@ describe("ellipsoid", () => {
 
   test("the converged iterate is feasible, not just close", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 2), opts());
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     for (const [a1, a2, rhs] of SQUARE) {
       expect(a1 * last[0]! + a2 * last[1]!).toBeLessThanOrEqual(rhs + 1e-9);
     }
@@ -442,7 +372,7 @@ describe("ellipsoid", () => {
   test("the run ends on the incumbent, which is the optimum", () => {
     const objective = Float64Array.of(1, 2);
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts());
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     const lastRow = r.rows[r.rows.length - 1]!;
     const expected = Math.max(...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
     const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
@@ -485,40 +415,18 @@ describe("ellipsoid", () => {
   });
 
   test("random polygons match the brute-force optimum", () => {
-    let seed = 11;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(11);
     let runs = 0;
     for (let t = 0; t < 60 && runs < 15; t++) {
-      const cnt = 3 + Math.floor(rand() * 5);
-      const cx = rand() * 16 - 8;
-      const cy = rand() * 16 - 8;
-      const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
-      if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) continue;
-      const R = 1 + rand() * 8;
-      const hull = angles.map((a) => [cx + R * Math.cos(a), cy + R * Math.sin(a)] as [number, number]);
-      const centX = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-      const centY = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-      const lines = hull.map((start, i) => {
-        const end = hull[(i + 1) % hull.length]!;
-        let A = end[1] - start[1];
-        let B = -(end[0] - start[0]);
-        const n = Math.hypot(A, B);
-        A /= n;
-        B /= n;
-        let C = A * start[0] + B * start[1];
-        if (A * centX + B * centY > C) {
-          A = -A;
-          B = -B;
-          C = -C;
-        }
-        return [A, B, C] as [number, number, number];
-      });
+      const polygon = randomPolygon(rand);
+      if (!polygon) continue;
+      const { hull, lines } = polygon;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
       const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       runs++;
       const r = ellipsoid(hull, lines, obj, opts());
-      const last = r.iterations[r.iterations.length - 1]!;
+      const last = lastIterate(r);
       expect(r.footer.startsWith("Converged")).toBe(true);
       expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 4);
     }
@@ -577,7 +485,7 @@ describe("centralPath", () => {
     });
     expect(r.iterations.length).toBe(10);
     expect(r.logs.length).toBe(11);
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     expect(last[0]!).toBeCloseTo(-4, 2);
     expect(last[1]!).toBeCloseTo(-4, 2);
   });
@@ -615,7 +523,7 @@ describe("centralPath", () => {
       const r = centralPath(hull, lines, obj, { niter: 75 });
       const elapsed = performance.now() - start;
       expect(r.iterations.length).toBe(75);
-      const last = r.iterations[r.iterations.length - 1]!;
+      const last = lastIterate(r);
       // µ ends at 1e-5, so the path ends within ~m·µ of the LP optimum
       expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 1);
       expect(elapsed).toBeLessThan(1000);
@@ -687,7 +595,7 @@ describe("draggable start point", () => {
       expect(r.iterations[0]![0]!).toBeCloseTo(start[0]!, 12);
       expect(r.iterations[0]![1]!).toBeCloseTo(start[1]!, 12);
       expect(r.footer.startsWith("Converged")).toBe(true);
-      const last = r.iterations[r.iterations.length - 1]!;
+      const last = lastIterate(r);
       expect(last[0]!).toBeCloseTo(-4, 2);
       expect(last[1]!).toBeCloseTo(-4, 2);
     }
@@ -702,7 +610,7 @@ describe("draggable start point", () => {
     expect(r.iterations[0]![0]!).toBeCloseTo(-5.5, 12);
     expect(r.iterations[0]![1]!).toBeCloseTo(-4.5, 12);
     expect(r.footer.startsWith("Converged")).toBe(true);
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     expect(last[0]!).toBeCloseTo(-4, 2);
     expect(last[1]!).toBeCloseTo(-4, 2);
   });
@@ -730,7 +638,7 @@ describe("draggable start point", () => {
     const first = r.iterations[0]!;
     expect(first[0]!).toBeCloseTo(-6, 6);
     expect(first[1]!).toBeCloseTo(-6, 6);
-    const last = r.iterations[r.iterations.length - 1]!;
+    const last = lastIterate(r);
     expect(last[0]!).toBeCloseTo(-4, 6);
     expect(last[1]!).toBeCloseTo(-4, 6);
   });
@@ -748,7 +656,7 @@ describe("draggable start point", () => {
       });
       expect(r.status).toBe("optimal");
       expect(r.phase1Iterations!.length).toBeGreaterThan(0);
-      const last = r.iterations[r.iterations.length - 1]!;
+      const last = lastIterate(r);
       expect(last[0]!).toBeCloseTo(-4, 6);
       expect(last[1]!).toBeCloseTo(-4, 6);
     }
