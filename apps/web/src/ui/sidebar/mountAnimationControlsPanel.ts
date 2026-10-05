@@ -26,7 +26,7 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
       step: "0.01",
       autocomplete: "off",
     },
-  }) as HTMLInputElement;
+  });
   angle.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(angle.value)));
   const speed = el("input", {
     attrs: {
@@ -37,11 +37,11 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
       step: "0.1",
       autocomplete: "off",
     },
-  }) as HTMLInputElement;
+  });
   speed.addEventListener("input", () => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(speed.value)));
   const trace = el("input", {
     attrs: { type: "checkbox", id: "traceCheckbox" },
-  }) as HTMLInputElement;
+  });
   trace.addEventListener("change", () => ctx.actions.setTraceEnabled(trace.checked));
   rot.append(
     el("div", { className: "rotation-layout" }, [

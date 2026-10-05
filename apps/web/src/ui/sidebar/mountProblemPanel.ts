@@ -1,6 +1,6 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
-import { clear, el } from "@/ui/dom";
+import { el } from "@/ui/dom";
 import { renderNullStateLogo } from "@/ui/logo";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
@@ -53,7 +53,7 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
     }
     lastItemsKey = itemsKey;
 
-    clear(inequalities);
+    inequalities.replaceChildren();
     if (state.inequalitiesMessage !== null) {
       inequalities.textContent = state.inequalitiesMessage;
       return;

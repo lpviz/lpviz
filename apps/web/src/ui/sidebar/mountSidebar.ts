@@ -15,8 +15,11 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   const sidebar = el("div", { id: "sidebar" });
   sidebar.style.width = `${ctx.getSidebarWidth()}px`;
   const content = el("div", { id: "sidebarContent" });
-  const github = el("a", { className: "github-link", attrs: { href: "https://github.com/lpviz/lpviz", target: "_blank", rel: "noreferrer", "aria-label": "GitHub Repository for lpviz" } });
-  github.innerHTML = GITHUB_ICON;
+  const github = el("a", {
+    className: "github-link",
+    attrs: { href: "https://github.com/lpviz/lpviz", target: "_blank", rel: "noreferrer", "aria-label": "GitHub Repository for lpviz" },
+    html: GITHUB_ICON,
+  });
   const title = el("div", { className: "header controlPanel" }, [el("h1", { text: "lpviz" }), github]);
   const ui = el("div", { id: "uiContainer" });
   content.append(title, ui);

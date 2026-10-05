@@ -80,9 +80,7 @@ export function usageTipsList(): HTMLDivElement {
     for (const [label, desc] of tips) {
       const row = el("div", { className: "usage-tip" });
       row.append(el("span", { className: "usage-tip__label", text: label }));
-      const description = el("span", { className: "usage-tip__desc" });
-      description.innerHTML = desc;
-      row.append(description);
+      row.append(el("span", { className: "usage-tip__desc", html: desc }));
       group.append(row);
     }
     list.append(group);
