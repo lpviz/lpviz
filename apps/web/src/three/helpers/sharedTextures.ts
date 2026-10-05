@@ -1,64 +1,52 @@
 import { CanvasTexture } from "three";
 
-function createCircleTexture() {
+// A white sprite alpha map drawn at twice the device pixel ratio so it stays
+// crisp at any point size; `draw` paints onto a cleared size x size canvas.
+function spriteTexture(baseSize: number, draw: (context: CanvasRenderingContext2D, size: number) => void) {
   const deviceRatio = Math.max(1, Math.round(window.devicePixelRatio || 1));
-  const size = 32 * deviceRatio * 2;
+  const size = baseSize * deviceRatio * 2;
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
   const context = canvas.getContext("2d");
   if (!context) {
-    throw new Error("Failed to create circle texture context");
+    throw new Error("Failed to create sprite texture context");
   }
 
   context.clearRect(0, 0, size, size);
+  draw(context, size);
+
+  const texture = new CanvasTexture(canvas);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+export const SHARED_CIRCLE_TEXTURE = spriteTexture(32, (context, size) => {
   context.fillStyle = "#ffffff";
   context.beginPath();
   context.arc(size / 2, size / 2, size * 0.44, 0, Math.PI * 2);
   context.fill();
+});
 
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
+export const SHARED_RING_TEXTURE = spriteTexture(32, (context, size) => {
+  context.strokeStyle = "#ffffff";
+  context.lineWidth = size * 0.11;
+  context.beginPath();
+  context.arc(size / 2, size / 2, size * 0.34, 0, Math.PI * 2);
+  context.stroke();
+});
 
-function createSquareTexture() {
-  const deviceRatio = Math.max(1, Math.round(window.devicePixelRatio || 1));
-  const size = 32 * deviceRatio * 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("Failed to create square texture context");
-  }
-
-  context.clearRect(0, 0, size, size);
+export const SHARED_SQUARE_TEXTURE = spriteTexture(32, (context, size) => {
   context.fillStyle = "#ffffff";
   const inset = size * 0.06;
   context.fillRect(inset, inset, size - inset * 2, size - inset * 2);
+});
 
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function createStarTexture() {
-  const deviceRatio = Math.max(1, Math.round(window.devicePixelRatio || 1));
-  const size = 48 * deviceRatio * 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("Failed to create star texture context");
-  }
-
+export const SHARED_STAR_TEXTURE = spriteTexture(48, (context, size) => {
   const outerRadius = size * 0.38;
   const innerRadius = outerRadius * 0.47;
   const center = size / 2;
 
-  context.clearRect(0, 0, size, size);
   context.fillStyle = "#ffffff";
   context.beginPath();
   for (let index = 0; index < 10; index += 1) {
@@ -74,36 +62,4 @@ function createStarTexture() {
   }
   context.closePath();
   context.fill();
-
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-function createRingTexture() {
-  const deviceRatio = Math.max(1, Math.round(window.devicePixelRatio || 1));
-  const size = 32 * deviceRatio * 2;
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext("2d");
-  if (!context) {
-    throw new Error("Failed to create ring texture context");
-  }
-
-  context.clearRect(0, 0, size, size);
-  context.strokeStyle = "#ffffff";
-  context.lineWidth = size * 0.11;
-  context.beginPath();
-  context.arc(size / 2, size / 2, size * 0.34, 0, Math.PI * 2);
-  context.stroke();
-
-  const texture = new CanvasTexture(canvas);
-  texture.needsUpdate = true;
-  return texture;
-}
-
-export const SHARED_CIRCLE_TEXTURE = createCircleTexture();
-export const SHARED_RING_TEXTURE = createRingTexture();
-export const SHARED_SQUARE_TEXTURE = createSquareTexture();
-export const SHARED_STAR_TEXTURE = createStarTexture();
+});
