@@ -32,14 +32,6 @@ body {
   display: block !important;
 }
 
-.is-flex {
-  display: flex !important;
-}
-
-.nowrap {
-  white-space: nowrap;
-}
-
 #objectiveDisplay,
 #inequalities {
   font-size: 1.2rem;
@@ -57,10 +49,6 @@ body {
 .canvas-stage__viewport > * {
   position: absolute;
   inset: 0;
-}
-
-.canvas-stage__gl {
-  z-index: 0;
 }
 
 .canvas-stage__gl-canvas {
@@ -131,8 +119,6 @@ body {
 .problem-gallery.is-expanded .problem-gallery__toggle {
   width: 100%;
   height: 18px;
-  opacity: 1;
-  pointer-events: auto;
 }
 
 .problem-gallery__chevron {
@@ -170,7 +156,6 @@ body {
     opacity 150ms ease 80ms,
     transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
   scrollbar-width: none;
-  -ms-overflow-style: none;
 }
 
 .problem-gallery__items::-webkit-scrollbar {
@@ -288,18 +273,6 @@ body {
   font-weight: normal;
 }
 
-#sidebar h2 {
-  margin-bottom: 5px;
-  letter-spacing: -0.5px;
-  font-family: sans-serif;
-  text-align: center;
-}
-
-#sidebar button {
-  margin-top: 10px;
-  padding: 5px 10px;
-}
-
 #sidebarHandle {
   position: fixed;
   top: 0;
@@ -325,10 +298,8 @@ body {
   height: 180px;
   min-height: 180px;
   max-height: 180px;
-  display: block;
   color: #eee;
   margin-top: 15px;
-  padding: 0;
 }
 
 #terminal-container2,
@@ -562,8 +533,7 @@ body {
     0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-#sidebar button:disabled,
-#zoomControls button:disabled {
+#sidebar button:disabled {
   background-color: #fafafa;
   color: #333;
   border-color: #333;
@@ -610,20 +580,13 @@ body {
 }
 
 #zoomControls button:hover:not(:disabled):not(.button-active),
-#zoomControls button:active:not(:disabled):not(.button-active),
-#zoomControls button:disabled {
+#zoomControls button:active:not(:disabled):not(.button-active) {
   background-color: #fafafa;
   transform: none;
   box-shadow: none;
 }
 
-#zoomControls button:disabled {
-  background-color: #444;
-  fill: #eee;
-}
-
 #shareButton {
-  padding: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -636,18 +599,6 @@ body {
 
 #toggle3DButton.button-active:hover {
   background-color: #4caf50;
-  color: white;
-  box-shadow: none;
-  transform: none;
-}
-
-#toggleZOffsetButton.button-active {
-  background-color: #2196f3;
-  color: white;
-}
-
-#toggleZOffsetButton.button-active:hover {
-  background-color: #2196f3;
   color: white;
   box-shadow: none;
   transform: none;
@@ -727,7 +678,6 @@ body {
   color: #333;
   border: 1px solid #333;
   border-radius: 4px;
-  box-shadow: none;
   cursor: pointer;
   pointer-events: auto;
   transition: background-color 0.2s ease;
@@ -1019,11 +969,6 @@ body {
     text-align: center;
   }
 
-  #sidebar h2 {
-    margin: 6px 0 4px;
-    font-size: 1rem;
-  }
-
   #sidebar button,
   #zoomControls button {
     min-height: 36px;
@@ -1140,44 +1085,6 @@ body {
   background: #e0e0e0;
 }
 
-#zScaleSlider::-ms-track {
-  height: 80px;
-  width: 6px;
-  background: transparent;
-  border-color: transparent;
-  color: transparent;
-}
-
-#zScaleSlider::-ms-fill-lower {
-  background: #ddd;
-  border-radius: 4px;
-}
-
-#zScaleSlider::-ms-fill-upper {
-  background: #ddd;
-  border-radius: 4px;
-}
-
-#zScaleSlider::-ms-thumb {
-  width: 20px;
-  height: 10px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-  margin-left: -7px;
-}
-
-#zScaleSlider::-ms-thumb:hover,
-#zScaleSlider::-ms-thumb:focus {
-  background: #f0f0f0;
-}
-
-#zScaleSlider::-ms-thumb:active {
-  background: #e0e0e0;
-}
-
 @supports not (-moz-appearance: none) {
   @media screen and (-webkit-min-device-pixel-ratio: 0) {
     #zScaleSlider {
@@ -1288,44 +1195,6 @@ input[type="range"]:not(#zScaleSlider):active::-moz-range-thumb {
   background: #e0e0e0;
 }
 
-input[type="range"]:not(#zScaleSlider)::-ms-track {
-  width: 100%;
-  height: 6px;
-  background: transparent;
-  border-color: transparent;
-  color: transparent;
-}
-
-input[type="range"]:not(#zScaleSlider)::-ms-fill-lower {
-  background: #ddd;
-  border-radius: 4px;
-}
-
-input[type="range"]:not(#zScaleSlider)::-ms-fill-upper {
-  background: #ddd;
-  border-radius: 4px;
-}
-
-input[type="range"]:not(#zScaleSlider)::-ms-thumb {
-  width: 10px;
-  height: 20px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-  margin-top: 0;
-}
-
-input[type="range"]:not(#zScaleSlider):hover::-ms-thumb,
-input[type="range"]:not(#zScaleSlider):focus::-ms-thumb {
-  background: #f0f0f0;
-}
-
-input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
-  background: #e0e0e0;
-}
-
 /* ================================
     Sidebar Control Panels
     ================================ */
@@ -1374,20 +1243,6 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
   color: #333;
   display: block;
   margin-bottom: 5px;
-}
-
-.controlPanel input[type="number"] {
-  margin-top: 5px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.controlPanel select {
-  margin-top: 5px;
-  margin-bottom: 10px;
-  width: 100%;
-  font: inherit;
-  color: #333;
 }
 
 .controlPanel .settings-select-grid {
@@ -1485,6 +1340,7 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
 }
 
 .controlPanel select {
+  font: inherit;
   font-family: "JuliaMono", monospace;
   font-size: 0.95rem;
   width: 100%;
@@ -1563,26 +1419,5 @@ input[type="range"]:not(#zScaleSlider):active::-ms-thumb {
   100% {
     transform: scale(1.002);
     opacity: 0.14;
-  }
-}
-
-@keyframes vline {
-  0% {
-    transform: translateY(-8px);
-  }
-
-  100% {
-    transform: translateY(800px);
-  }
-}
-
-@keyframes flash {
-  0%,
-  100% {
-    opacity: 1;
-  }
-
-  70% {
-    opacity: 0.8;
   }
 }

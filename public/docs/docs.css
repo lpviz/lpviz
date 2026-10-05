@@ -172,13 +172,6 @@ var {
   text-align: center;
 }
 
-.eq var,
-p var,
-li var,
-td var {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
 code {
   background: var(--code-bg);
   padding: 0.1em 0.35em;
@@ -279,15 +272,6 @@ figcaption {
   border-radius: 2px;
   vertical-align: middle;
   margin-right: 0.35em;
-}
-
-.callout {
-  border-left: 3px solid var(--accent);
-  background: var(--accent-soft);
-  padding: 0.6rem 1rem;
-  margin: 1rem 0;
-  border-radius: 0 6px 6px 0;
-  font-size: 0.95rem;
 }
 
 .pager {
