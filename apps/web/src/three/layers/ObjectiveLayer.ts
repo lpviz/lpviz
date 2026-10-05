@@ -1,3 +1,5 @@
+import { getState } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointXY } from "@lpviz/math/types";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
@@ -7,7 +9,6 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const OBJECTIVE_COLOR = "#008000";
@@ -48,15 +49,15 @@ export class ObjectiveLayer extends LayerBase {
     this.objSegs = objSegs;
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     return [raw.objectiveHidden, raw.objectiveVector, raw.currentObjective, raw.completionMode, raw.polytope, raw.isTransitioning3D, snap.mode, snap.unitsPerPixel];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
 
     if (raw.objectiveHidden || !shouldRenderSnapshotMode(snap.mode, raw)) {
       this.objSegs.visible = false;

@@ -1,7 +1,7 @@
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Color, DoubleSide, GLSL3, Mesh, PlaneGeometry, ShaderMaterial } from "three";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import type { Layer } from "../Layer";
-import type { SceneContext } from "../SceneContext";
 
 const GRID_COLOR = "#e0e0e0";
 const AXIS_COLOR = "#707070";
@@ -76,8 +76,8 @@ export class GridLayer implements Layer {
     this.object3D = mesh;
   }
 
-  update(ctx: SceneContext): void {
-    const target = ctx.getSnapshot().target;
+  update(): void {
+    const target = getViewportRenderSnapshot().target;
     if (Math.abs(target.x - this.centerX) > RECENTER_THRESHOLD || Math.abs(target.y - this.centerY) > RECENTER_THRESHOLD) {
       this.centerX = Math.round(target.x);
       this.centerY = Math.round(target.y);

@@ -1,4 +1,5 @@
-import { type IteratePath } from "@/features/core/store";
+import { getState, type IteratePath } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointXY } from "@lpviz/math/types";
 import { Group } from "three";
 import { writeFlatXYZ } from "../helpers/flatPositions";
@@ -6,7 +7,6 @@ import { PathRibbon } from "../helpers/pathRibbon";
 import { PHASE_COLORS_BYTES } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const ITERATE_LINE_COLOR = "#800080";
@@ -56,18 +56,18 @@ export class IterateLineLayer extends LayerBase {
     this.object3D = new Group();
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.iteratePath, raw.iteratePhases, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateObjectiveVector, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    if (raw.iteratePath.count < 2 || !shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)) {
+  protected rebuild(): void {
+    const raw = getState();
+    if (raw.iteratePath.count < 2 || !shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw)) {
       this.object3D.visible = false;
       return;
     }

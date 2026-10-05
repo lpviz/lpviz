@@ -1,11 +1,12 @@
-import type { State } from "@/features/core/store";
+import { getCurrentMouse } from "@/features/core/currentMouse";
+import { getState, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, getSharedLineMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { Layer } from "../Layer";
-import type { SceneContext } from "../SceneContext";
 
 const POLYTOPE_OUTLINE_COLOR = "#000000";
 
@@ -55,16 +56,16 @@ export class PolytopeRubberBandLayer implements Layer {
     this.geometry = geo;
   }
 
-  update(ctx: SceneContext): void {
-    const state = ctx.getState();
-    const snap = ctx.getSnapshot();
+  update(): void {
+    const state = getState();
+    const snap = getViewportRenderSnapshot();
     const rbState = selectRubberBandState(state);
 
     if (!rbState.lastVertex || !shouldRenderSnapshotMode(snap.mode, rbState)) {
       this.object3D.visible = false;
       return;
     }
-    const mouse = ctx.getCurrentMouse();
+    const mouse = getCurrentMouse();
     if (!mouse) {
       this.object3D.visible = false;
       return;

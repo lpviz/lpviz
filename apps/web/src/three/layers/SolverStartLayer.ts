@@ -1,10 +1,9 @@
-import { displayedSolverStartPoint } from "@/features/core/store";
+import { displayedSolverStartPoint, getState } from "@/features/core/store";
 import { BufferAttribute, Points, PointsMaterial } from "three";
 import { flatPointXYZ } from "../helpers/flatPositions";
 import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
@@ -40,12 +39,12 @@ export class SolverStartLayer extends LayerBase {
     this.object3D = points;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
     return [
       raw.solverStartPoint,
       raw.solverMode,
@@ -60,8 +59,8 @@ export class SolverStartLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
+  protected rebuild(): void {
+    const raw = getState();
     const point = displayedSolverStartPoint(raw);
     if (!point) {
       this.object3D.visible = false;

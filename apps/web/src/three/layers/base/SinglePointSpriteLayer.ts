@@ -1,11 +1,11 @@
-import type { State } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { BufferAttribute, Points, PointsMaterial, type Texture } from "three";
 import { flatPointXYZ } from "../../helpers/flatPositions";
 import { makePointsGeo } from "../../helpers/makePointsGeo";
 import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
 import type { RenderPassName } from "../../Layer";
-import type { SceneContext } from "../../SceneContext";
 import { LayerBase } from "./LayerBase";
 
 export type SinglePointSpriteConfig = {
@@ -51,18 +51,18 @@ export abstract class SinglePointSpriteLayer extends LayerBase {
   /** Extra inputs `selectIndex` reads, beyond iteratePath/objective/mode. */
   protected abstract selectorDeps(raw: State): readonly unknown[];
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [...this.selectorDeps(raw), raw.iteratePath, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [...this.selectorDeps(raw), raw.iteratePath, raw.iterateObjectiveVector, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap: ViewportRenderSnapshot = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap: ViewportRenderSnapshot = getViewportRenderSnapshot();
     const index = shouldRenderSnapshotMode(snap.mode, raw) ? this.selectIndex(raw) : null;
     const xyz = index === null ? null : flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
     if (!xyz) {

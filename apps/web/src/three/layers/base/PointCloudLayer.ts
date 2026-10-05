@@ -2,7 +2,6 @@ import type { ViewportDirtyFlags } from "@/features/core/store";
 import { BufferAttribute, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
 import { makePointsGeo } from "../../helpers/makePointsGeo";
 import type { RenderPassName } from "../../Layer";
-import type { SceneContext } from "../../SceneContext";
 import { LayerBase } from "./LayerBase";
 
 export type PointCloudConfig = {
@@ -52,8 +51,8 @@ export abstract class PointCloudLayer extends LayerBase {
     this.invalidationKeys = config.invalidationKeys;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
   protected hide(): void {

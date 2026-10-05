@@ -1,4 +1,6 @@
-import type { State } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
 import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
@@ -9,7 +11,6 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
 import type { LayerRenderObject } from "../Layer";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const POLYTOPE_FILL_COLOR = "#e6e6e6";
@@ -96,7 +97,7 @@ function clipRayToBoundingBox(start: PointXY, direction: PointXY, bounds: Boundi
   return [start, candidates[0].point];
 }
 
-function getVisibleBoundingBox(snap: ReturnType<SceneContext["getSnapshot"]>): BoundingBox {
+function getVisibleBoundingBox(snap: ViewportRenderSnapshot): BoundingBox {
   if (snap.mode !== "2d") {
     return {
       minX: -DEFAULT_UNBOUNDED_EXTENT,
@@ -123,7 +124,7 @@ type PolytopeRenderResult = {
   highlightSegments: number[];
 };
 
-function buildPolytopeGeometry(state: State, snap: ReturnType<SceneContext["getSnapshot"]>): PolytopeRenderResult {
+function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): PolytopeRenderResult {
   const { vertices, completionMode, highlightIndex, polytope } = state;
   const regionFinished = completionMode !== "draft";
   const hasDerived = completionMode === "open" && polytope?.kind === "bounded" && polytope.vertices.length >= 3;
@@ -262,9 +263,9 @@ export class PolytopeBaseLayer extends LayerBase {
     this.highlightEdges = hEdges;
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     return [
       raw.vertices,
       raw.completionMode,
@@ -284,9 +285,9 @@ export class PolytopeBaseLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
 
     const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
     this.object3D.visible = visible;

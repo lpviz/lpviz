@@ -1,11 +1,11 @@
 import type { State } from "@/features/core/store";
-import { computeFlatZ, MAX_TRACE_POINT_SPRITES } from "@/features/core/store";
+import { computeFlatZ, getState, MAX_TRACE_POINT_SPRITES } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { BufferAttribute, DynamicDrawUsage, Group, Points, PointsMaterial } from "three";
 import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const TRACE_COLOR = "#ffa500";
@@ -107,18 +107,18 @@ export class TracePointsLayer extends LayerBase {
     this.pts = pts;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const positions = buildAllTracePointPositions(raw, ctx.getSnapshot().mode);
+  protected rebuild(): void {
+    const raw = getState();
+    const positions = buildAllTracePointPositions(raw, getViewportRenderSnapshot().mode);
     this.object3D.visible = positions.length > 0;
     if (positions.length > 0) {
       // grow-only attribute updated in place (see concatScratch)

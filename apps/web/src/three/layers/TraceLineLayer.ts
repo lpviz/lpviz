@@ -1,10 +1,10 @@
-import type { State } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Group } from "three";
 import { writeFlatXYZ } from "../helpers/flatPositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const TRACE_COLOR = "#ffa500";
@@ -58,18 +58,18 @@ export class TraceLineLayer extends LayerBase {
     return ribbon;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
-    this.applyZScale(ctx);
+  protected override everyFrame(): void {
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     const modeChanged = this.lastMode !== snap.mode;
     this.lastMode = snap.mode;
 

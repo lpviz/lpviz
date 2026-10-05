@@ -1,9 +1,9 @@
-import { computeFlatZ } from "@/features/core/store";
+import { computeFlatZ, getState } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { PHASE_COLORS_LINEAR } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
-import type { SceneContext } from "../SceneContext";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Square markers on the iterates where PDHG restarted (a subset of the path).
@@ -20,15 +20,15 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
     });
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, raw.iterateObjectiveVector, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, raw.iterateObjectiveVector, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
+  protected rebuild(): void {
+    const raw = getState();
     const { points, count, stride } = raw.iteratePath;
-    if (!shouldRenderSnapshotMode(ctx.getSnapshot().mode, raw)) {
+    if (!shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw)) {
       this.hide();
       return;
     }

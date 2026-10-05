@@ -1,4 +1,5 @@
-import type { EllipsoidPath, LocalizingSetPath } from "@/features/core/store";
+import { getState, type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -6,7 +7,6 @@ import { flatPointXYZ } from "../helpers/flatPositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const ELLIPSOID_COLOR = "#377eb8";
@@ -141,20 +141,29 @@ export class EllipsoidLayer extends LayerBase {
     this.object3D = group;
   }
 
-  protected override everyFrame(ctx: SceneContext): void {
+  protected override everyFrame(): void {
     // raw z is baked into each ellipse's transform; zScale and the 2D/3D
     // transition flatten ride on scale.z, exactly as for the iterate path
-    this.applyZScale(ctx);
+    this.applyZScale();
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.iterateEllipsoids, raw.iterateLocalizingSets, raw.iteratePath, raw.iterateObjectiveVector, raw.highlightIteratePathIndex, raw.is3DMode, raw.isTransitioning3D, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [
+      raw.iterateEllipsoids,
+      raw.iterateLocalizingSets,
+      raw.iteratePath,
+      raw.iterateObjectiveVector,
+      raw.highlightIteratePathIndex,
+      raw.is3DMode,
+      raw.isTransitioning3D,
+      getViewportRenderSnapshot().mode,
+    ];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     const ellipsoids = raw.iterateEllipsoids;
 
     if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, raw)) {
@@ -198,7 +207,7 @@ export class EllipsoidLayer extends LayerBase {
     this.showLocalizingSet(raw, snap.mode === "3d");
   }
 
-  private showLocalizingSet(raw: ReturnType<SceneContext["getState"]>, is3D: boolean): void {
+  private showLocalizingSet(raw: State, is3D: boolean): void {
     const index = raw.highlightIteratePathIndex;
     if (index === null) {
       this.polygon.visible = false;

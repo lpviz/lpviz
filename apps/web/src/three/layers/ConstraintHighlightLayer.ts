@@ -1,3 +1,6 @@
+import { getState } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox } from "@lpviz/math/geometry";
 import type { Line, PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
@@ -8,7 +11,6 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds, lineDepthMaterial, replaceLinePositions } from "../helpers/sharedLineMaterials";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const CONSTRAINT_COLOR = "#ff0000";
@@ -21,7 +23,7 @@ const EPS = 1e-10;
 
 const getConstraintMat = (is3D: boolean) => lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, is3D);
 
-function getVisibleBounds(snap: ReturnType<SceneContext["getSnapshot"]>): BoundingBox {
+function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
   if (snap.mode === "2d") {
     const halfWidth = (snap.orthographic.right - snap.orthographic.left) / 2;
     const halfHeight = (snap.orthographic.top - snap.orthographic.bottom) / 2;
@@ -102,9 +104,9 @@ export class ConstraintHighlightLayer extends LayerBase {
     this.cSegs = cSegs;
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
     return [
       raw.completionMode,
       raw.highlightIndex,
@@ -125,9 +127,9 @@ export class ConstraintHighlightLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
 
     if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasPolytopeLines(raw.polytope) || !shouldRenderSnapshotMode(snap.mode, raw)) {
       this.cSegs.visible = false;

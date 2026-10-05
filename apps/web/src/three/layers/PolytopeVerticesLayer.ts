@@ -1,11 +1,11 @@
-import type { State } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointXY } from "@lpviz/math/types";
 import { BufferAttribute, Group, Points, PointsMaterial } from "three";
 import { makePointsGeo } from "../helpers/makePointsGeo";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE, SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
-import type { SceneContext } from "../SceneContext";
 import { LayerBase } from "./base/LayerBase";
 
 const VERTEX_COLOR = "#ff0000";
@@ -74,14 +74,14 @@ export class PolytopeVerticesLayer extends LayerBase {
     this.squarePoints = sPts;
   }
 
-  protected dependencies(ctx: SceneContext): readonly unknown[] {
-    const raw = ctx.getState();
-    return [raw.vertices, raw.completionMode, raw.polytope, ctx.getSnapshot().mode];
+  protected dependencies(): readonly unknown[] {
+    const raw = getState();
+    return [raw.vertices, raw.completionMode, raw.polytope, getViewportRenderSnapshot().mode];
   }
 
-  protected rebuild(ctx: SceneContext): void {
-    const raw = ctx.getState();
-    const snap = ctx.getSnapshot();
+  protected rebuild(): void {
+    const raw = getState();
+    const snap = getViewportRenderSnapshot();
 
     const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
     this.object3D.visible = visible;

@@ -1,10 +1,8 @@
-import { getCurrentMouse, subscribeCurrentMouse } from "@/features/core/currentMouse";
+import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState, type ViewportDirtyFlags } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Camera, Scene, WebGLRenderer } from "three";
 import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
-import type { SceneContext } from "./SceneContext";
 import { Trace3DCompositor } from "./Trace3DCompositor";
 import { TraceCache } from "./TraceCache";
 
@@ -28,11 +26,9 @@ export class SceneManager {
   private resizeObserver: ResizeObserver | null = null;
   private unsubscribeCurrentMouse: (() => void) | null = null;
   private disposed = false;
-  private ticks = new Set<(ctx: SceneContext) => void>();
+  private ticks = new Set<() => void>();
 
   private _size: Size = { width: 0, height: 0, dpr: 1 };
-
-  private readonly ctx: SceneContext;
 
   constructor(canvas: HTMLCanvasElement, options: { dpr: [number, number] }) {
     const [minDpr, maxDpr] = options.dpr;
@@ -65,12 +61,6 @@ export class SceneManager {
       }
     });
     this.resizeObserver.observe(canvas);
-
-    this.ctx = {
-      getSnapshot: getViewportRenderSnapshot,
-      getState,
-      getCurrentMouse,
-    };
 
     this.unsubscribeCurrentMouse = subscribeCurrentMouse(() => {
       const state = getState();
@@ -116,7 +106,7 @@ export class SceneManager {
     this.dirty = false;
 
     for (const tick of this.ticks) {
-      tick(this.ctx);
+      tick();
     }
 
     if (this.layersDirty) {
@@ -126,7 +116,7 @@ export class SceneManager {
         if (dirty && layer.invalidationKeys.every((key) => !dirty[key])) {
           continue;
         }
-        layer.update(this.ctx);
+        layer.update();
       }
     }
 
@@ -176,11 +166,11 @@ export class SceneManager {
     this.invalidate();
   }
 
-  addTick(fn: (ctx: SceneContext) => void): void {
+  addTick(fn: () => void): void {
     this.ticks.add(fn);
   }
 
-  removeTick(fn: (ctx: SceneContext) => void): void {
+  removeTick(fn: () => void): void {
     this.ticks.delete(fn);
   }
 
