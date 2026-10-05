@@ -150,7 +150,7 @@ scenarios.push({
     await page.mouse.up();
   },
 });
-// the static documentation pages, served verbatim from public/docs
+// the documentation pages, rendered from apps/web/docs by the docs-pages vite plugin
 // A tall viewport instead of fullPage: the software renderer cannot capture the 9,400px ellipsoid page in one shot.
 const DOCS: Viewport = { width: 1280, height: 7000 };
 for (const doc of ["", "simplex", "interior-point", "pdhg", "ellipsoid", "central-path"]) scenarios.push({ name: `docs-${doc || "index"}`, path: `docs/${doc}`, viewport: DOCS, settle: 300 });

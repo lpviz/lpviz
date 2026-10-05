@@ -1,60 +1,3 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>The Ellipsoid Method and Cutting Planes, Visualized — lpviz Docs</title>
-    <meta
-      name="description"
-      content="How the ellipsoid method solves linear programs by shrinking a localizing set around the optimum: deep cuts, the objective ray shoot, the ρ certificate, and the Chebyshev, analytic and volumetric cutting-plane query points — visualized interactively in lpviz."
-    />
-    <link rel="canonical" href="https://lpviz.net/docs/ellipsoid" />
-    <link rel="stylesheet" href="/docs/docs.css" />
-    <meta property="og:type" content="article" />
-    <meta property="og:site_name" content="lpviz" />
-    <meta property="og:title" content="The Ellipsoid Method and Cutting Planes, Visualized" />
-    <meta property="og:description" content="Watch a localizing ellipsoid shrink onto the optimum of a polytope you draw, and compare it with the Chebyshev, analytic and volumetric cutting-plane query points." />
-    <meta property="og:url" content="https://lpviz.net/docs/ellipsoid" />
-    <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="The Ellipsoid Method, Visualized — lpviz" />
-    <meta name="twitter:description" content="Localizing sets, deep cuts, ray shooting, and four choices of query point on LPs you draw." />
-    <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
-          {
-            "@type": "TechArticle",
-            "headline": "The Ellipsoid Method and Cutting Planes, Visualized",
-            "description": "How the ellipsoid method localizes the optimum of a linear program, what each of its options does, and how lpviz's cutting-plane query points differ from it.",
-            "url": "https://lpviz.net/docs/ellipsoid",
-            "isPartOf": { "@type": "CollectionPage", "@id": "https://lpviz.net/docs/" }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "https://lpviz.net/" },
-              { "@type": "ListItem", "position": 2, "name": "Docs", "item": "https://lpviz.net/docs/" },
-              { "@type": "ListItem", "position": 3, "name": "Ellipsoid", "item": "https://lpviz.net/docs/ellipsoid" }
-            ]
-          }
-        ]
-      }
-    </script>
-  </head>
-  <body>
-    <header class="site-header">
-      <nav aria-label="Documentation">
-        <a class="brand" href="/">lpviz</a>
-        <a href="/docs/">Docs</a>
-        <a href="/docs/simplex">Simplex</a>
-        <a href="/docs/interior-point">Interior Point</a>
-        <a href="/docs/pdhg">PDHG</a>
-        <a href="/docs/ellipsoid" class="is-active" aria-current="page">Ellipsoid</a>
-        <a href="/docs/central-path">Central Path</a>
-      </nav>
-    </header>
-    <main>
-      <article>
         <p class="breadcrumbs"><a href="/docs/">Docs</a> / Ellipsoid</p>
         <h1>The ellipsoid method</h1>
         <p class="lede">The ellipsoid method never looks for a good point. It keeps a <em>set</em> that provably still contains the optimum, asks one question about the point in the middle of it, and throws away the half of the set that the answer rules out. In <a href="https://lpviz.net/">lpviz</a> that set is drawn on the canvas, so you can watch the search space itself collapse onto the answer.</p>
@@ -329,17 +272,3 @@
           <li><strong>Turn the options off one at a time.</strong> Deep cuts off, ray shoot off, query point <em>Ellipsoid</em>: that is Khachiyan's algorithm as published, and the ellipse takes the full lazy step every iteration. Switching each one back on is a compact tour of how the method was made practical enough to teach.</li>
           <li><strong>Unbounded regions are a real case.</strong> Leave the region open in the objective direction and the method still terminates — on the initial ellipsoid's boundary, which lpviz reports as unboundedness rather than as an answer. Widening <em>Initial ellipsoid size</em> moves the fence, and the reported point moves with it.</li>
         </ul>
-
-        <nav class="pager" aria-label="Continue reading">
-          <a href="/docs/pdhg"><span class="dir">← Previous</span>PDHG</a>
-          <a class="next" href="/docs/central-path"><span class="dir">Next →</span>The Central Path</a>
-        </nav>
-      </article>
-    </main>
-    <footer class="site-footer">
-      <div>
-        <a href="https://lpviz.net/">lpviz.net</a> · <a href="https://github.com/lpviz/lpviz">GitHub</a> · <a href="https://arxiv.org/abs/2604.27518">Paper (arXiv:2604.27518)</a> · Free &amp; open source, MIT licensed. All solvers run in your browser.
-      </div>
-    </footer>
-  </body>
-</html>
