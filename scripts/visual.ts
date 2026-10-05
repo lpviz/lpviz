@@ -33,7 +33,7 @@ const write = flag("--write");
 const only = opt("--only");
 // 1-2 pixels of GPU anti-aliasing noise show up run to run; a real change is hundreds.
 const tolerance = Number(opt("--tolerance") ?? 4);
-const PORT = 3011;
+const PORT = Number(process.env.VISUAL_PORT ?? 3011);
 const ROOT = join(import.meta.dir, "..");
 const OUT = join(ROOT, ".visual", write ? "baseline" : "current");
 const BASE = join(ROOT, ".visual", "baseline");
