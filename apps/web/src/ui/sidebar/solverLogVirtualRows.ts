@@ -1,0 +1,118 @@
+import type { State } from "@/features/core/store";
+import { el } from "@/ui/dom";
+import { rowEl } from "./solverLogBlocks";
+
+// Sizes the result's font to fit the widest line in its width.
+// The horizontal padding is static CSS; reading computed style per render
+// (interleaved with the DOM writes below) forced a layout pass per solve
+// result and per rotation step.
+export function createResultFit(result: HTMLElement) {
+  let cachedPadding: number | null = null;
+  let lastFitKey = "";
+  return function fit(s: State) {
+    if (s.resultMaxLineChars > 0) {
+      if (cachedPadding === null) {
+        const containerStyle = window.getComputedStyle(result);
+        cachedPadding = (parseFloat(containerStyle.paddingLeft) || 0) + (parseFloat(containerStyle.paddingRight) || 0);
+      }
+      const effectiveWidth = result.clientWidth - cachedPadding;
+      const fitKey = `${s.resultMaxLineChars}|${effectiveWidth}`;
+      if (fitKey === lastFitKey) return;
+      lastFitKey = fitKey;
+      if (effectiveWidth > 0) {
+        const baseSize = 18;
+        const targetWidth = Math.max(1, effectiveWidth - 10);
+        const maxLineWidth = s.resultMaxLineChars * baseSize * 0.55;
+        const scale = Math.min(4, Math.max(0, targetWidth / maxLineWidth));
+        const fontSize = Math.min(24, Math.max(10, baseSize * scale * 0.875));
+        result.style.fontSize = `${fontSize}px`;
+        result.style.setProperty("--virtual-font-size", `${fontSize}px`);
+      }
+    } else {
+      lastFitKey = "";
+      result.style.fontSize = "";
+      result.style.removeProperty("--virtual-font-size");
+    }
+  };
+}
+
+// Windowed rendering: only the rows near the viewport get DOM nodes, with
+// spacer divs holding the scroll height. Materializing every row (100k at
+// max solver settings) costs seconds of main-thread time per render.
+const VIRTUAL_OVERSCAN_ROWS = 20;
+// `setRefill` receives the window refill once the rows are mounted, so a
+// panel that changes height can re-window without a full re-render.
+export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRows"], result: HTMLElement, setRefill: (refill: () => void) => void) {
+  const topSpacer = el("div");
+  const rowsEl = el("div", { className: "iterate-rows" });
+  const bottomSpacer = el("div");
+  sc.append(el("div", { className: "iterate-virtual-wrapper" }, [topSpacer, rowsEl, bottomSpacer]));
+  if (blocks.length === 0) return;
+
+  let rowHeight = 0;
+  let windowStart = -1;
+  let windowEnd = -1;
+  const fillWindow = () => {
+    if (rowHeight <= 0) {
+      const first = blocks.at(0)!;
+      const probe = el("div", {
+        className: first.className,
+        text: first.text,
+      });
+      rowsEl.append(probe);
+      rowHeight = probe.offsetHeight || 18;
+      probe.remove();
+    }
+    const viewHeight = sc.clientHeight || result.clientHeight || 600;
+    const start = Math.max(0, Math.floor(sc.scrollTop / rowHeight) - VIRTUAL_OVERSCAN_ROWS);
+    const end = Math.min(blocks.length, Math.ceil((sc.scrollTop + viewHeight) / rowHeight) + VIRTUAL_OVERSCAN_ROWS);
+    if (start === windowStart && end === windowEnd) return;
+    windowStart = start;
+    windowEnd = end;
+    topSpacer.style.height = `${start * rowHeight}px`;
+    bottomSpacer.style.height = `${(blocks.length - end) * rowHeight}px`;
+    const fragment = document.createDocumentFragment();
+    for (let i = start; i < end; i++) fragment.append(rowEl(blocks.at(i)!));
+    rowsEl.replaceChildren(fragment);
+  };
+
+  setRefill(fillWindow);
+
+  let scrollRafId: number | null = null;
+  sc.addEventListener(
+    "scroll",
+    () => {
+      if (scrollRafId !== null) return;
+      scrollRafId = requestAnimationFrame(() => {
+        scrollRafId = null;
+        fillWindow();
+      });
+    },
+    { passive: true },
+  );
+  fillWindow();
+}
+
+// The panel is resized independently of its contents (sidebar handle, log
+// expansion). A width change needs the full re-render, since fit() sizes the
+// font to the width; a height change only needs the virtual window refilled,
+// which matters because expanding the log emits a stream of height changes.
+export function observeResultSize(result: HTMLElement, { onWidthChange, onHeightChange }: { onWidthChange: () => void; onHeightChange: () => void }) {
+  let fittedWidth = result.clientWidth;
+  let fittedHeight = result.clientHeight;
+  const sizeObserver = new ResizeObserver(() => {
+    const width = result.clientWidth;
+    const height = result.clientHeight;
+    if (width !== fittedWidth) {
+      fittedWidth = width;
+      fittedHeight = height;
+      onWidthChange();
+      return;
+    }
+    if (height === fittedHeight) return;
+    fittedHeight = height;
+    onHeightChange();
+  });
+  sizeObserver.observe(result);
+  return sizeObserver;
+}
