@@ -1,7 +1,6 @@
 import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { VecN } from "@lpviz/math/types";
-import type { IterateResult, PackedSolver } from "./solverService";
-import type { SolverEngineSuccessResponse, SolverWorkerResponse } from "./solverWorker";
+import type { IterateResult, PackedRowsColumns, PackedSolverWire, PackedSolverWorkerResponse, SolverEngineSuccessResponse, SolverWorkerResponse } from "./types";
 
 // The worker packs everything numeric into a few large typed arrays and transfers their buffers
 // (zero copy): structured-cloning tens of thousands of small arrays and row objects costs tens of
@@ -11,34 +10,11 @@ import type { SolverEngineSuccessResponse, SolverWorkerResponse } from "./solver
 // so it is scaled to share IPM's visual range. Display tuning only, never fed back into the math.
 const PDHG_EPS_Z_LIFT = 500;
 
-type PackedRowsColumns = {
-  x: Float64Array;
-  y: Float64Array;
-  objective: Float64Array;
-  infeasibility: Float64Array;
-  // epsilon for pdhg rows, mu for ipm rows, rho for ellipsoid rows
-  extra: Float64Array;
-  restart?: Uint8Array | undefined;
-};
-
-type PackedFields = {
+// the wire's payload fields, with the iterates still per-iterate and the display lift to bake
+type PackedFields = Omit<PackedSolverWire, "id" | "success" | "packed" | "solver" | "iterations" | "stride"> & {
   iterations: Float64Array[];
   lift: (index: number) => number;
-  rows: PackedRowsColumns;
-  header: string;
-  footer?: string | undefined;
-  phases?: number[] | undefined;
-  restartIndices?: number[] | undefined;
-  // flat [cx, cy, p11, p12, p22] per iteration; ellipsoid method only
-  ellipsoids?: Float64Array;
-  // localizing polygons, only for the cutting-plane query points
-  polygonPoints?: Float64Array;
-  polygonOffsets?: Uint32Array;
 };
-
-export type PackedSolverWorkerResponse =
-  | (SolverWorkerResponse & { packed?: undefined })
-  | (Omit<PackedFields, "iterations" | "lift"> & { id: number; success: true; packed: true; solver: PackedSolver; iterations: Float64Array; stride: number });
 
 function packRows<R extends { x: number; y: number; objective: number; infeasibility: number; restart?: boolean }>(rows: R[], extraOf: (row: R) => number, withRestart: boolean): PackedRowsColumns {
   const count = rows.length;

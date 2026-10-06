@@ -1,6 +1,5 @@
-import { flattenIteratesToPath, updateIteratePathsWithTrace, type EllipsoidPath, type IteratePath, type LocalizingSetPath } from "@/features/core/store";
-import type { ResultTextBlock } from "@/features/solver/types";
-import type { SolverWorkerSuccessResponse } from "@/features/solver/solverWorker";
+import { flattenIteratesToPath, updateIteratePathsWithTrace } from "@/features/core/store";
+import type { CentralPathResult, IterateResult, ResultRenderPayload, ResultTextBlock, SimplexResult, SolverWorkerSuccessResponse, VirtualResultRow } from "@/features/solver/types";
 import { fmtE, fmtF, fmtInt, fmtStr } from "@lpviz/solver-engine/fmt";
 
 // Dispatch an unpacked worker result. simplex/central keep their own log
@@ -17,60 +16,6 @@ export function applySolverResult(response: SolverWorkerSuccessResponse, updateR
       return applyIterateResult(response.result, updateResult);
   }
 }
-
-export type PackedSolver = "pdhg" | "ipm" | "ellipsoid";
-
-// One row shape for the three packed solvers; `extra` is each one's convergence
-// measure (pdhg eps, ipm mu, ellipsoid rho), the trailing log column.
-type VirtualResultRow = string | { kind: PackedSolver; iteration: number; restart?: boolean; x: number; y: number; objective: number; infeasibility: number; extra: number };
-
-// Rows materialize lazily through this view so that a 100k-iteration result
-// never pays for building row objects that are not scrolled into view.
-type ResultRowsView = {
-  length: number;
-  at(index: number): VirtualResultRow | undefined;
-};
-
-export interface VirtualResultPayload {
-  type: "virtual";
-  header: string;
-  rows: ResultRowsView;
-  footer?: string | undefined;
-}
-
-interface BlocksResultPayload {
-  type: "blocks";
-  blocks: ResultTextBlock[];
-}
-
-export type ResultRenderPayload = VirtualResultPayload | BlocksResultPayload;
-
-export interface SimplexResult {
-  iterations: Float64Array[];
-  phase1Iterations?: Float64Array[];
-  logs: string[][];
-  mode: "primal" | "dual";
-  status?: "optimal" | "unbounded" | "infeasible";
-}
-
-export interface CentralPathResult {
-  iterations: Float64Array[];
-  logs: string[];
-  tsolve: number;
-}
-
-// What the client receives for pdhg/ipm/ellipsoid once unpacked: the iterates
-// flat with the display z already baked in, plus whatever the solver drew.
-export type IterateResult = {
-  iterations: IteratePath;
-  header: string;
-  rows: ResultRowsView;
-  footer?: string;
-  phases?: number[] | undefined;
-  restartIndices?: number[] | undefined;
-  ellipsoids?: EllipsoidPath;
-  localizingSets?: LocalizingSetPath | null;
-};
 
 function applySimplexResult(result: SimplexResult, updateResult: (payload: ResultRenderPayload) => void) {
   const phase1Iterations = result.phase1Iterations ?? [];

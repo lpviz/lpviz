@@ -35,7 +35,7 @@ const store = await import("@/features/core/store");
 const { deriveRegionFromPoints } = await import("@lpviz/polytope/regionAssembly");
 const { ENTERING_RULES, LEAVING_RULES } = await import("@lpviz/solver-engine/simplex");
 const { GALLERY_PROBLEMS, randomConvexPolygonPreview } = await import("@/features/problem-gallery/problems");
-type SolverWorkerPayload = import("@/features/solver/solverWorker").SolverWorkerPayload;
+type SolverWorkerPayload = import("@/features/solver/types").SolverWorkerPayload;
 type PointXY = { x: number; y: number };
 
 if (!workerListener) throw new Error("worker did not register a message listener");

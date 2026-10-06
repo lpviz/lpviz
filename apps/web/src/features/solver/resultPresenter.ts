@@ -1,6 +1,6 @@
 import { getState, setState } from "@/features/core/store";
-import { formatVirtualResultRow, type ResultRenderPayload, type VirtualResultPayload } from "@/features/solver/solverService";
-import type { ResultTextBlock } from "@/features/solver/types";
+import { formatVirtualResultRow } from "@/features/solver/solverService";
+import type { ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 // While the objective rotates the log is re-rendered on every step, so it shows
@@ -13,7 +13,7 @@ const ROTATE_TAIL_ROWS = 8;
 type RenderOptions = { limitVirtualRows?: boolean };
 
 const getMaxLineChars = (lines: string[]) => lines.reduce((m, line) => Math.max(m, ...line.split("\n").map((l) => l.length)), 0);
-const createVirtualBlock = (row: NonNullable<ReturnType<VirtualResultPayload["rows"]["at"]>>, index: number): ResultTextBlock => ({
+const createVirtualBlock = (row: VirtualResultRow, index: number): ResultTextBlock => ({
   className: "iterate-item",
   text: formatVirtualResultRow(row),
   index,

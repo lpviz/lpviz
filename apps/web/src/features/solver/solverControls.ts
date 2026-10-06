@@ -1,7 +1,6 @@
 import { DEFAULT_SOLVER_SETTINGS, getState, nearestPolytopeVertex, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import type { ShareSettings } from "@/features/share/sharedState";
-import type { ResultRenderPayload } from "@/features/solver/solverService";
-import type { SolverWorkerPayload } from "@/features/solver/solverWorker";
+import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vertices } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
