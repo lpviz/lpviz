@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { cuttingPlane, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
-import { SQUARE, SQUARE_VERTICES, lastIterate, lcg, randomPolygon } from "./fixtures";
+import { SQUARE, SQUARE_VERTICES, footerOf, lastIterate, lcg, randomPolygon, rowsOf } from "./fixtures";
 
 const QUERY_POINTS: QueryPoint[] = ["chebyshev", "analytic", "volumetric"];
 
@@ -71,10 +71,10 @@ describe("cuttingPlane", () => {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       // objective at the query point plus rho upper-bounds the optimum at every
       // iteration, which is what makes the stopping gap a certificate
-      for (let i = 0; i < r.rows.length; i++) {
-        expect(r.rows[i]!.objective + r.rho[i]!).toBeGreaterThanOrEqual(expected - 1e-6);
+      for (let i = 0; i < rowsOf(r).length; i++) {
+        expect(rowsOf(r)[i]!.objective + r.convergence![i]!).toBeGreaterThanOrEqual(expected - 1e-6);
       }
-      expect(r.rho[r.rho.length - 1]!).toBeLessThan(r.rho[0]!);
+      expect(r.convergence![r.convergence!.length - 1]!).toBeLessThan(r.convergence![0]!);
     }
   });
 
@@ -89,9 +89,9 @@ describe("cuttingPlane", () => {
         const angle = (k / 8) * 2 * Math.PI;
         const objective = Float64Array.of(Math.cos(angle), Math.sin(angle));
         const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
-        for (let i = 1; i < r.rows.length - 1; i++) {
-          const previous = r.rows[i - 1]!.objective + r.rho[i - 1]!;
-          const current = r.rows[i]!.objective + r.rho[i]!;
+        for (let i = 1; i < rowsOf(r).length - 1; i++) {
+          const previous = rowsOf(r)[i - 1]!.objective + r.convergence![i - 1]!;
+          const current = rowsOf(r)[i]!.objective + r.convergence![i]!;
           expect(current).toBeLessThanOrEqual(previous + 1e-9);
         }
       }
@@ -106,9 +106,9 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       for (let i = 0; i < r.iterations.length; i++) {
-        const p11 = r.ellipsoids[i * 5 + 2]!;
-        const p12 = r.ellipsoids[i * 5 + 3]!;
-        const p22 = r.ellipsoids[i * 5 + 4]!;
+        const p11 = r.ellipsoids![i * 5 + 2]!;
+        const p12 = r.ellipsoids![i * 5 + 3]!;
+        const p22 = r.ellipsoids![i * 5 + 4]!;
         expect(p11).toBeGreaterThan(0);
         expect(p22).toBeGreaterThan(0);
         expect(p11 * p22 - p12 * p12).toBeGreaterThan(0);
@@ -163,7 +163,7 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(hull, empty, Float64Array.of(1, 1), opts(queryPoint));
       expect(r.iterations.length).toBeLessThan(500);
-      expect(r.footer.startsWith("Converged")).toBe(false);
+      expect(footerOf(r).startsWith("Converged")).toBe(false);
     }
   });
 
@@ -183,8 +183,8 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
         const r = cuttingPlane(hull, strip, Float64Array.of(0, 1), opts(queryPoint, { rayShoot }));
-        expect(r.footer.startsWith("Stopped on the initial box boundary")).toBe(true);
-        expect(r.footer).toContain("unbounded");
+        expect(footerOf(r).startsWith("Stopped on the initial box boundary")).toBe(true);
+        expect(footerOf(r)).toContain("unbounded");
       }
     }
   });
@@ -210,14 +210,14 @@ describe("cuttingPlane", () => {
       for (const queryPoint of QUERY_POINTS) {
         for (const rayShoot of [true, false]) {
           const r = cuttingPlane(WEDGE_CHAIN, WEDGE, objective, opts(queryPoint, { rayShoot }));
-          expect(r.footer).toContain("unbounded");
+          expect(footerOf(r)).toContain("unbounded");
         }
       }
       const reference = ellipsoid(WEDGE_CHAIN, WEDGE, objective, {
         ...opts("chebyshev"),
         deepCuts: true,
       });
-      expect(reference.footer).toContain("unbounded");
+      expect(footerOf(reference)).toContain("unbounded");
     }
   });
 
@@ -226,7 +226,7 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
         const r = cuttingPlane(WEDGE_CHAIN, WEDGE, objective, opts(queryPoint, { rayShoot }));
-        expect(r.footer).not.toContain("unbounded");
+        expect(footerOf(r)).not.toContain("unbounded");
         const last = lastIterate(r);
         expect(last[0]! + last[1]!).toBeCloseTo(3, 4);
       }
@@ -240,7 +240,7 @@ describe("cuttingPlane", () => {
       for (let i = 0; i < 3; i++) {
         const again = run();
         expect(again.iterations.length).toBe(first.iterations.length);
-        expect([...again.ellipsoids]).toEqual([...first.ellipsoids]);
+        expect([...again.ellipsoids!]).toEqual([...first.ellipsoids!]);
       }
     }
   });

@@ -14,9 +14,9 @@ import {
   packPolygons,
   recordIterate,
   regionBoundingBox,
-  type EllipsoidResultData,
   type Termination,
 } from "./ellipsoid";
+import type { SolverResult } from "./result";
 import { assertMaxit } from "./time";
 
 const MAX_NEWTON_STEPS = 80;
@@ -68,7 +68,7 @@ type QueryResult = {
  * function has no closed form, so the upper bound `max c'x over L` behind `rho` and the stopping
  * gap is an actual LP, solved exactly each iteration.
  */
-export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): EllipsoidResultData {
+export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): SolverResult {
   const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
 
   assertMaxit(maxit);
@@ -173,12 +173,10 @@ export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, 
 
   return {
     iterations,
+    convergence: rho,
     ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
     ...packPolygons(polygons),
-    rho,
-    header: ELLIPSOID_HEADER,
-    rows,
-    footer,
+    log: [{ header: ELLIPSOID_HEADER, rows, footer }],
   };
 }
 

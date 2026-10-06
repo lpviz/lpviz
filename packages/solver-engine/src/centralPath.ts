@@ -3,6 +3,7 @@ import { centroid, findStrictFeasiblePoint } from "@lpviz/math/geometry";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, VecN, VecNs, Vertices } from "@lpviz/math/types";
 import { fmtE, fmtF, fmtIntL, fmtStr, fmtStrL } from "./fmt";
+import type { SolverResult } from "./result";
 
 const MIN_STEP_SIZE = 1e-10;
 const LINE_SEARCH_SHRINK_FACTOR = 0.5;
@@ -152,7 +153,7 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
   return null;
 }
 
-export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, opts: CentralPathOptions) {
+export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, opts: CentralPathOptions): SolverResult {
   const { niter } = opts;
 
   if (niter > 2 ** 10) {
@@ -165,9 +166,8 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   const barrierParameters = centralPathMu(niter);
 
   const points: VecNs = [];
-  const logs: string[] = [];
+  const rows: string[] = [];
   const header = `  ${fmtStrL("Iter", 4)} ${fmtStr("x", 8)} ${fmtStr("y", 8)} ${fmtStr("Obj", 10)} ${fmtStr("µ", 10)}  \n`;
-  logs.push(header);
 
   const startPoint = vertices.length >= 3 ? centroid(vertices) : findStrictFeasiblePoint(lines);
   if (!startPoint) {
@@ -190,15 +190,15 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
     points.push(Float64Array.of(optimalPoint[0] ?? 0, optimalPoint[1] ?? 0, totalObjective));
 
     const progressLog = `  ${fmtIntL(points.length, 4)} ${fmtF(optimalPoint[0] ?? 0, 8, 2)} ${fmtF(optimalPoint[1] ?? 0, 8, 2)} ${fmtE(linearObjective, 10, 1)} ${fmtE(mu, 10, 1, false)}  \n`;
-    logs.push(progressLog);
+    rows.push(progressLog);
 
     currentPoint = optimalPoint;
   }
 
+  const tsolve = (Date.now() - startTime) / 1000;
   return {
     iterations: points,
-    logs,
-    tsolve: (Date.now() - startTime) / 1000,
+    log: [{ header, rows, footer: `Traced central path in ${Math.round(tsolve * 1000)}ms` }],
   };
 }
 

@@ -1,5 +1,5 @@
 import { unpackSolverResponse } from "./resultPacking";
-import type { PackedSolverWorkerResponse, SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./types";
+import type { SolverWireResponse, SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./types";
 // oxlint-disable-next-line import/default -- vite's ?worker import provides the default export
 import SolverWorker from "./solverWorker?worker";
 
@@ -20,7 +20,7 @@ const pending = new Map<number, PendingResolver>();
 const requestQueue: QueueEntry[] = [];
 let nextRequestId = 0;
 
-worker.addEventListener("message", (event: MessageEvent<PackedSolverWorkerResponse>) => {
+worker.addEventListener("message", (event: MessageEvent<SolverWireResponse>) => {
   const entry = pending.get(event.data.id);
   if (!entry) return;
   pending.delete(event.data.id);

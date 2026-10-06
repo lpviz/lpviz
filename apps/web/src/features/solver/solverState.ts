@@ -249,19 +249,3 @@ export function computeFlatZ(points: Float64Array, base: number, stride: number,
   const totalValue = stride >= 3 ? points[base + 2]! : objectiveValue;
   return totalValue - objectiveValue;
 }
-
-// Collapse a solver's per-iterate Float64Arrays (simplex / central path) into one flat
-// IteratePath; packed pdhg/ipm results arrive already flat from the worker (see unpackIteratePath).
-export function flattenIteratesToPath(iteratesArray: Float64Array[]): IteratePath {
-  const count = iteratesArray.length;
-  if (count === 0) return EMPTY_ITERATE_PATH;
-  const stride = iteratesArray[0]!.length >= 3 ? 3 : 2;
-  const points = new Float64Array(count * stride);
-  for (let i = 0; i < count; i++) {
-    const it = iteratesArray[i]!;
-    points[i * stride] = it[0] ?? 0;
-    points[i * stride + 1] = it[1] ?? 0;
-    if (stride >= 3) points[i * stride + 2] = it[2] ?? 0;
-  }
-  return { points, count, stride };
-}

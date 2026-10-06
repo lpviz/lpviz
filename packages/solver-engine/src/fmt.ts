@@ -1,6 +1,5 @@
 const sgn = (v: number) => (v >= 0 ? "+" : "");
 
-export const fmtInt = (v: number, w: number) => String(v).padStart(w);
 export const fmtIntL = (v: number, w: number) => String(v).padEnd(w);
 export const fmtStr = (v: string, w: number) => v.padStart(w);
 export const fmtStrL = (v: string, w: number) => v.padEnd(w);

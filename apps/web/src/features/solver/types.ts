@@ -1,8 +1,6 @@
 import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath } from "@/features/core/store";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
-import type { EllipsoidResultData } from "@lpviz/solver-engine/ellipsoid";
-import type { ipm } from "@lpviz/solver-engine/ipm";
-import type { pdhg } from "@lpviz/solver-engine/pdhg";
+import type { NumericRow } from "@lpviz/solver-engine/result";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
@@ -16,101 +14,76 @@ export type SolverWorkerPayload =
 
 export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 
-// ---------- engine results ----------
-
-export interface SimplexResult {
-  iterations: Float64Array[];
-  phase1Iterations?: Float64Array[];
-  logs: string[][];
-  mode: "primal" | "dual";
-  status?: "optimal" | "unbounded" | "infeasible";
-}
-
-export interface CentralPathResult {
-  iterations: Float64Array[];
-  logs: string[];
-  tsolve: number;
-}
-
-type PackedSolver = "pdhg" | "ipm" | "ellipsoid";
-
-type SolverSuccess<S, R> = { id: number; solver: S; success: true; result: R };
-
-// The engines emit one Float64Array per iterate. simplex/central are small and
-// cross the worker boundary unchanged; pdhg/ipm/ellipsoid are packed into flat
-// transferable buffers (resultPacking) and reach the client as one IterateResult.
-export type SolverEngineSuccessResponse =
-  | SolverSuccess<"ipm", ReturnType<typeof ipm>>
-  | SolverSuccess<"simplex", SimplexResult>
-  | SolverSuccess<"pdhg", ReturnType<typeof pdhg>>
-  | SolverSuccess<"central", CentralPathResult>
-  | SolverSuccess<"ellipsoid", EllipsoidResultData>;
-
 // ---------- wire ----------
 
-export type PackedRowsColumns = {
+// What crosses the worker boundary (see resultPacking): the iterates as one flat
+// buffer with the display z baked in, and the log with every numeric section's
+// rows as typed columns. The buffers are transferred, not cloned.
+export type PackedRows = {
   x: Float64Array;
   y: Float64Array;
   objective: Float64Array;
   infeasibility: Float64Array;
-  // epsilon for pdhg rows, mu for ipm rows, rho for ellipsoid rows
-  extra: Float64Array;
-  restart?: Uint8Array | undefined;
+  convergence: Float64Array;
+  restart: Uint8Array;
 };
 
-export type PackedSolverWire = {
+export type PackedLogSection = {
+  header: string;
+  rows: string[] | PackedRows;
+  notes?: string[] | undefined;
+  footer?: string | undefined;
+};
+
+export type SolverWireSuccess = {
   id: number;
   success: true;
-  packed: true;
-  solver: PackedSolver;
-  // flat [x, y, z] per iteration, the display z baked in
   iterations: Float64Array;
   stride: number;
-  rows: PackedRowsColumns;
-  header: string;
-  footer?: string | undefined;
+  log: PackedLogSection[];
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
-  // flat [cx, cy, p11, p12, p22] per iteration; ellipsoid method only
-  ellipsoids?: Float64Array;
-  // localizing polygons, only for the cutting-plane query points
-  polygonPoints?: Float64Array;
-  polygonOffsets?: Uint32Array;
+  ellipsoids?: Float64Array | undefined;
+  polygonPoints?: Float64Array | undefined;
+  polygonOffsets?: Uint32Array | undefined;
 };
 
-export type PackedSolverWorkerResponse = (SolverWorkerResponse & { packed?: undefined }) | PackedSolverWire;
+type SolverWorkerError = { id: number; success: false; error: string };
+
+export type SolverWireResponse = SolverWireSuccess | SolverWorkerError;
 
 // ---------- client ----------
 
-// One row shape for the three packed solvers; `extra` is each one's convergence
-// measure (pdhg eps, ipm mu, ellipsoid rho), the trailing log column.
-export type VirtualResultRow = string | { kind: PackedSolver; iteration: number; restart?: boolean; x: number; y: number; objective: number; infeasibility: number; extra: number };
+export type VirtualResultRow = string | NumericRow;
 
 // Rows materialize lazily through this view so that a 100k-iteration result
 // never pays for building row objects that are not scrolled into view.
-type ResultRowsView = {
+export type ResultRowsView = {
   length: number;
   at(index: number): VirtualResultRow | undefined;
 };
 
-// What the client receives for pdhg/ipm/ellipsoid once unpacked: the iterates
-// flat with the display z already baked in, plus whatever the solver drew.
-export type IterateResult = {
-  iterations: IteratePath;
+export type ResultLogSection = {
   header: string;
   rows: ResultRowsView;
-  footer?: string;
-  phases?: number[] | undefined;
-  restartIndices?: number[] | undefined;
-  ellipsoids?: EllipsoidPath;
-  localizingSets?: LocalizingSetPath | null;
+  notes?: string[] | undefined;
+  footer?: string | undefined;
 };
 
-export type SolverWorkerSuccessResponse = SolverSuccess<"simplex", SimplexResult> | SolverSuccess<"central", CentralPathResult> | SolverSuccess<PackedSolver, IterateResult>;
+// A worker result once unpacked: the iterate path as the store keeps it, plus
+// the log and whatever the solver drew.
+export type SolverResultView = {
+  iterations: IteratePath;
+  log: ResultLogSection[];
+  phases?: number[] | undefined;
+  restartIndices?: number[] | undefined;
+  ellipsoids?: EllipsoidPath | undefined;
+  localizingSets?: LocalizingSetPath | null | undefined;
+};
 
-type SolverWorkerErrorResponse = { id: number; success: false; error: string };
+export type SolverWorkerSuccessResponse = { id: number; success: true; result: SolverResultView };
 
-export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerErrorResponse;
+export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerError;
 
 // ---------- render ----------
 

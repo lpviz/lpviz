@@ -34,7 +34,6 @@ export {
   computeFlatZ,
   DEFAULT_SOLVER_SETTINGS,
   displayedSolverStartPoint,
-  flattenIteratesToPath,
   MAX_TRACE_POINT_SPRITES,
   QUERY_POINTS,
   SOLVER_MODES,

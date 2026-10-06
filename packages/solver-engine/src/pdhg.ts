@@ -1,5 +1,6 @@
 import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import type { Lines, Vec2Ns, VecN } from "@lpviz/math/types";
+import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
 const BASIS_THRESHOLD = 1e-10;
@@ -89,7 +90,7 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
  * differ only in the residuals, the basis hash, the initial dual and which
  * variable takes the projected, extrapolated step.
  */
-function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, options: PDHGOptions) {
+function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, options: PDHGOptions): SolverResult {
   const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = options;
 
   const { rows: m, cols: n } = A;
@@ -128,16 +129,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   let epsilonK = pdhgEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm, ineq);
   const header = " Iter        x        y        Obj     Infeas        eps";
 
-  const rows: Array<{
-    kind: "pdhg";
-    iteration: number;
-    restart?: boolean;
-    x: number;
-    y: number;
-    objective: number;
-    infeasibility: number;
-    epsilon: number;
-  }> = [];
+  const rows: NumericRow[] = [];
   const iterates: Vec2Ns = [];
   const eps: number[] = [];
   const phases: number[] = [];
@@ -157,14 +149,13 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
 
     matVec(A, xk, axScratch);
     rows.push({
-      kind: "pdhg" as const,
       iteration: k,
       restart: false,
       x: ineq ? (xk[0] ?? 0) : (xk[0] ?? 0) - (xk[nOrig] ?? 0),
       y: ineq ? (xk[1] ?? 0) : nOrig >= 2 ? (xk[1] ?? 0) - (xk[nOrig + 1] ?? 0) : 0,
       objective: -dot(c, xk),
       infeasibility: primalResidual(axScratch, b, ineq),
-      epsilon: epsilonK,
+      convergence: epsilonK,
     });
     eps.push(epsilonK);
 
@@ -247,17 +238,15 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const footer = solveFooter(epsilonK <= tol, iterates.length, performance.now() - startTime);
 
   return {
-    header,
     iterations: iterates,
-    rows,
-    footer,
-    eps,
+    convergence: eps,
+    log: [{ header, rows, footer }],
     phases: colorByBasis ? phases : undefined,
     restartIndices: halpern ? restartIndices : undefined,
   };
 }
 
-export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions) {
+export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions): SolverResult {
   const { ineq, maxit, startPoint } = options;
   assertMaxit(maxit);
 
