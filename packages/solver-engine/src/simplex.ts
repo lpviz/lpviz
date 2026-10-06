@@ -2,10 +2,12 @@ import { createDenseMatrix, type DenseMatrix, dot, linesToDenseAb, transposedMat
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, Vec2N, Vec2Ns, VecN } from "@lpviz/math/types";
 import { fmtE, fmtF, fmtStr } from "./fmt";
+import type { LogSection, SolverResult } from "./result";
 
 const MAX_ITERATIONS = 100_000;
 
 type SimplexStatus = "optimal" | "unbounded" | "infeasible";
+type SimplexMode = "primal" | "dual";
 
 /**
  * Pivot-selection rules for the entering variable (the UI labels them
@@ -453,6 +455,30 @@ function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, bas
   return { iterations, logs, finalBasis, objective, status };
 }
 
+type PhaseRun = { iterations: Float64Array[]; logs: string[] };
+
+// A phase's lines as a log section: the header, one row per iterate, then the closing lines. A
+// phase that ended optimal closes with its summary line as the footer; one that ended unbounded
+// or infeasible keeps every closing line as a note and names the outcome in the footer.
+function phaseSection({ iterations, logs }: PhaseRun, outcome?: string): LogSection {
+  const [header = "", ...rest] = logs;
+  const closing = rest.slice(iterations.length);
+  const footer = outcome ?? closing.pop();
+  return { header, rows: rest.slice(0, iterations.length), notes: closing, ...(footer === undefined ? {} : { footer }) };
+}
+
+function simplexResult(phase1: PhaseRun, phase2: PhaseRun, status: SimplexStatus, mode: SimplexMode): SolverResult {
+  const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : undefined;
+  return {
+    iterations: [...phase1.iterations, ...phase2.iterations],
+    // the phase of each iterate, only once there are two phases to tell apart
+    ...(phase1.iterations.length > 0 ? { phases: [...phase1.iterations.map(() => 0), ...phase2.iterations.map(() => 1)] } : {}),
+    log: [phaseSection(phase1), phaseSection(phase2, outcome)],
+    status,
+    mode,
+  };
+}
+
 // Drives any artificial variable still basic after Phase 1 out of the basis by swapping in the
 // lowest-index original column with a nonzero pivot. A basis repair step, deliberately
 // independent of the selected pivot rules.
@@ -550,12 +576,7 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   if (Math.abs(phase1.objective) > tol) {
     // The dual LP is infeasible; the region is non-empty (emptiness is rejected before the
     // solver runs), so by LP duality the primal is unbounded. Still plot the Phase 1 trajectory.
-    return {
-      iterations: [] as Float64Array[],
-      phase1Iterations: phase1.iterations,
-      logs: [phase1.logs, ["The dual LP is infeasible, so the primal LP is unbounded.\n"]],
-      status: "unbounded" as const,
-    };
+    return simplexResult(phase1, { iterations: [], logs: ["The dual LP is infeasible, so the primal LP is unbounded.\n"] }, "unbounded", "dual");
   }
 
   const phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, phase1.finalBasis, aPhase2.cols, tol);
@@ -566,12 +587,7 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   const phase2Logs =
     phase2.status === "unbounded" ? phase2.logs.map((log) => (log === "LP is unbounded. No leaving variable found." ? "Dual LP is unbounded: the LP is infeasible." : log)) : phase2.logs;
 
-  return {
-    iterations: phase2.iterations,
-    phase1Iterations: phase1.iterations,
-    logs: [phase1.logs, phase2Logs],
-    status,
-  };
+  return simplexResult(phase1, { iterations: phase2.iterations, logs: phase2Logs }, status, "dual");
 }
 
 function primalPointFromSplitTableau(tableauX: Vec2N, n: number) {
@@ -626,7 +642,7 @@ function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Floa
   return basis;
 }
 
-export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
+export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions): SolverResult {
   const { tol, dual, startVertex } = opts;
   const pivotRules = resolvePivotRules(opts);
   const { A: aOriginal, b } = linesToDenseAb(lines);
@@ -635,13 +651,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
   const cObjective = Float64Array.from(objective);
 
   if (dual) {
-    return {
-      ...solveDualMode(lines, aOriginal, b, cObjective, {
-        tol,
-        pivotRules,
-      }),
-      mode: "dual" as const,
-    };
+    return solveDualMode(lines, aOriginal, b, cObjective, { tol, pivotRules });
   }
 
   // Phase 1 works on [A⁺, -A⁺, diag(γ)] with the rows flipped nonnegative;
@@ -657,25 +667,17 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions) {
   const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", pointOf: (xTableau) => primalPointFromSplitTableau(xTableau, n) };
 
   const warmBasis = startVertex && startVertex.length === n ? warmStartBasisFromVertex(aOriginal, b, cPhase2, aPhase2, startVertex, tol) : null;
-  let phase1Iterations: Float64Array[] = [];
-  let phase1Logs = ["Skipped — warm start from the dragged start vertex.\n"];
+  let phase1: PhaseRun = { iterations: [], logs: ["Skipped — warm start from the dragged start vertex.\n"] };
   let phase2Basis = warmBasis;
   if (!phase2Basis) {
-    const phase1 = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
+    const run = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
     // The Phase-1 objective equals -(sum of artificial values), so a negative
     // optimum means no feasible point exists.
-    if (phase1.objective < -tol) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
-    phase1Iterations = phase1.iterations;
-    phase1Logs = phase1.logs;
-    phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, phase1.finalBasis, 2 * n + m, tol);
+    if (run.objective < -tol) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
+    phase1 = run;
+    phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, run.finalBasis, 2 * n + m, tol);
   }
 
-  const { iterations, logs, status } = simplexCore(cPhase2, aPhase2, b, phase2Basis, core);
-  return {
-    iterations,
-    phase1Iterations,
-    logs: [phase1Logs, logs],
-    mode: "primal" as const,
-    status,
-  };
+  const phase2 = simplexCore(cPhase2, aPhase2, b, phase2Basis, core);
+  return simplexResult(phase1, phase2, phase2.status, "primal");
 }

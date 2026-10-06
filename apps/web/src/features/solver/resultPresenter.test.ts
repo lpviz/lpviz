@@ -12,13 +12,12 @@ const run = (count: number): VirtualResultPayload => ({
     at: (index) =>
       index < count
         ? {
-            kind: "ellipsoid",
             iteration: index + 1,
             x: index,
             y: 0,
             objective: 0,
             infeasibility: 0,
-            extra: 0,
+            convergence: 0,
           }
         : undefined,
   },

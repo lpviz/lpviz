@@ -11,7 +11,6 @@ export interface PointXYZ {
 
 type Vec2 = [number, number];
 type Vec3 = [number, number, number];
-export type VecM = Float64Array;
 export type VecN = Float64Array;
 export type VecNs = Float64Array[];
 export type Vec2N = Float64Array;

@@ -1,5 +1,6 @@
 import { type DenseMatrix, dot, linesToDenseAb } from "@lpviz/math/blas";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
 // initial half-extent when there are no vertices to bound the region (the app always has some)
@@ -18,16 +19,6 @@ const INCUMBENT_MERGE_TOLERANCE = 1e-9;
 // this is the ellipse itself; for n > 2 it is the (x, y) block of P.
 export const ELLIPSOID_STRIDE = 5;
 
-interface EllipsoidRow {
-  kind: "ellipsoid";
-  iteration: number;
-  x: number;
-  y: number;
-  objective: number;
-  infeasibility: number;
-  rho: number;
-}
-
 interface EllipsoidOptions {
   maxit: number;
   tol: number;
@@ -36,26 +27,12 @@ interface EllipsoidOptions {
   initialScale: number;
 }
 
-export interface EllipsoidResultData {
-  iterations: Float64Array[];
-  ellipsoids: Float64Array;
-  // The localizing set per iteration as a closed polygon: iterate `i`'s [x, y] pairs live at
-  // `polygonPoints[polygonOffsets[i] * 2 ... polygonOffsets[i + 1] * 2)`. Empty for the
-  // ellipsoid method, whose localizing set *is* the drawn ellipsoid.
-  polygonPoints: Float64Array;
-  polygonOffsets: Uint32Array;
-  rho: number[];
-  header: string;
-  rows: EllipsoidRow[];
-  footer: string;
-}
-
 export const ELLIPSOID_HEADER = " Iter        x        y        Obj     Infeas          ρ";
 
 // Everything a run records per iterate, in lockstep; polygons only for the cutting planes.
 type IterateTrace = {
   iterations: Float64Array[];
-  rows: EllipsoidRow[];
+  rows: NumericRow[];
   rho: number[];
   ellipsoids: Float64Array;
   polygons?: number[][] | undefined;
@@ -74,7 +51,7 @@ export function recordIterate(trace: IterateTrace, x: Float64Array, p11: number,
   ellipsoids[base + 2] = p11;
   ellipsoids[base + 3] = p12;
   ellipsoids[base + 4] = p22;
-  trace.rows.push({ kind: "ellipsoid", iteration: iterations.length + 1, x: x[0]!, y: x[1]!, objective, infeasibility, rho: objectiveRadius });
+  trace.rows.push({ iteration: iterations.length + 1, x: x[0]!, y: x[1]!, objective, infeasibility, convergence: objectiveRadius });
   trace.rho.push(objectiveRadius);
   iterations.push(Float64Array.of(x[0]!, x[1]!));
 }
@@ -123,7 +100,7 @@ export class Incumbent {
   }
 }
 
-// Flatten per-iteration polygons into the transferable pair above.
+// Flatten per-iteration polygons into the result's transferable polygonPoints/polygonOffsets pair.
 export function packPolygons(polygons: readonly (readonly number[])[]) {
   const total = polygons.reduce((sum, polygon) => sum + polygon.length, 0);
   const polygonPoints = new Float64Array(total);
@@ -179,7 +156,7 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
  * `objective'c + rho` upper-bounds the optimum while the incumbent lower-bounds it; that gap is
  * the stopping measure and the vertical lift of the 3D iterate path.
  */
-export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): EllipsoidResultData {
+export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): SolverResult {
   const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
 
   assertMaxit(maxit);
@@ -286,6 +263,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
 
   return {
     iterations,
+    convergence: rho,
     // sliced, not a subarray: the packed response transfers this buffer, and a
     // view would drag the whole maxit-sized allocation across with it
     ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
@@ -293,10 +271,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
     // polyhedron to draw; fresh (never shared) buffers, since the main thread
     // detaches what it receives
     ...packPolygons([]),
-    rho,
-    header: ELLIPSOID_HEADER,
-    rows,
-    footer,
+    log: [{ header: ELLIPSOID_HEADER, rows, footer }],
   };
 }
 
@@ -388,13 +363,12 @@ export function appendIncumbent(result: IterateTrace, incumbent: Incumbent, uppe
   const gap = Math.max(0, upperBound - bestObjective);
   result.rho.push(gap);
   result.rows.push({
-    kind: "ellipsoid",
     iteration: count + 1,
     x: best[0]!,
     y: best[1]!,
     objective: bestObjective,
     infeasibility: 0,
-    rho: gap,
+    convergence: gap,
   });
 }
 

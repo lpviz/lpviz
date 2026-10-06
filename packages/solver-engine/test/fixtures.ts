@@ -2,6 +2,8 @@
 // in a fixed order (count, center, angles, radius), so a test's inputs depend
 // only on its seed and options.
 
+import type { NumericRow, SolverResult } from "../src/result";
+
 // square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
 export const SQUARE = [
   [1, 0, -4],
@@ -64,3 +66,11 @@ export function largePolygon(rand: () => number, count: number) {
 }
 
 export const lastIterate = (r: { iterations: Float64Array[] }) => r.iterations[r.iterations.length - 1]!;
+
+// How many of a simplex run's iterates belong to Phase 1 (its `phases` are absent when none do).
+export const phase1Count = (r: SolverResult) => (r.phases ?? []).filter((phase) => phase === 0).length;
+// A single-section result's log: its numeric rows and its footer text.
+export const rowsOf = (r: SolverResult) => r.log[0]!.rows as NumericRow[];
+export const footerOf = (r: SolverResult) => r.log[0]!.footer ?? "";
+// Every line of every section, as the panel prints them.
+export const logText = (r: SolverResult) => r.log.flatMap(({ header, rows, notes = [], footer = "" }) => [header, ...(rows as string[]), ...notes, footer]).join("");

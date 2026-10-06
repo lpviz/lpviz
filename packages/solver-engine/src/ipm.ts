@@ -1,6 +1,7 @@
 import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, VecM, VecN } from "@lpviz/math/types";
+import type { Lines, VecN } from "@lpviz/math/types";
+import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
 const SIGMA_MIN = 1e-8;
@@ -18,25 +19,7 @@ interface IPMOptions {
   startPoint?: number[] | undefined;
 }
 
-interface IPMSolutionData {
-  x: VecN[];
-  s: VecM[];
-  y: VecM[];
-  mu: number[];
-  header: string;
-  rows: Array<{
-    kind: "ipm";
-    iteration: number;
-    x: number;
-    y: number;
-    objective: number;
-    infeasibility: number;
-    mu: number;
-  }>;
-  footer?: string;
-}
-
-export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
+export function ipm(lines: Lines, objective: VecN, opts: IPMOptions): SolverResult {
   const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
   assertMaxit(maxit);
@@ -49,14 +32,10 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
   const m = A.rows;
   const n = A.cols;
 
-  const solution: IPMSolutionData = {
-    x: [],
-    s: [],
-    y: [],
-    mu: [],
-    header: " Iter        x        y        Obj     Infeas          µ",
-    rows: [],
-  };
+  const iterates: VecN[] = [];
+  const convergence: number[] = [];
+  const rows: NumericRow[] = [];
+  const header = " Iter        x        y        Obj     Infeas          µ";
 
   const x = new Float64Array(n);
   const s = new Float64Array(m).fill(1);
@@ -108,11 +87,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
     const gap = Math.abs(pObj - dot(b, y)) / (1 + Math.abs(pObj));
     const pRes = infinityNorm(rP);
 
-    solution.rows.push({ kind: "ipm", iteration: solution.x.length + 1, x: x[0] ?? 0, y: x[1] ?? 0, objective: -pObj, infeasibility: pRes, mu });
-    solution.x.push(x.slice());
-    solution.s.push(s.slice());
-    solution.y.push(y.slice());
-    solution.mu.push(mu);
+    rows.push({ iteration: iterates.length + 1, x: x[0] ?? 0, y: x[1] ?? 0, objective: -pObj, infeasibility: pRes, convergence: mu });
+    iterates.push(x.slice());
+    convergence.push(mu);
 
     if (pRes <= eps_p && infinityNorm(rD) <= eps_d && gap <= eps_opt) {
       converged = true;
@@ -172,9 +149,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
   }
 
   const solveTime = performance.now() - startTime;
-  const count = solution.x.length;
-  solution.footer = failureMessage ? `${failureMessage}\n${solveFooter(false, count, solveTime, "Stopped")}\n` : `${solveFooter(converged, count, solveTime)}\n`;
-  return { iterates: { solution } };
+  const count = iterates.length;
+  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, count, solveTime, "Stopped")}\n` : `${solveFooter(converged, count, solveTime)}\n`;
+  return { iterations: iterates, convergence, log: [{ header, rows, footer }] };
 }
 
 //   [ A  -I   0 ] [dx]   [rP]        (primal residual)
