@@ -342,7 +342,7 @@ try {
   // prepending to the worker chunk as it is served.
   await context.route("**/assets/solverWorker-*.js", async (route) => {
     const response = await route.fetch();
-    route.fulfill({ response, body: PINNED_CLOCKS + (await response.text()), headers: { ...response.headers(), "content-type": "text/javascript" } });
+    await route.fulfill({ response, body: PINNED_CLOCKS + (await response.text()), headers: { ...response.headers(), "content-type": "text/javascript" } });
   });
   const page = await context.newPage();
   // install() alone lets time keep flowing; pauseAt() makes it advance only through tick().

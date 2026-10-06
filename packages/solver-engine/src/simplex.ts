@@ -377,11 +377,11 @@ function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[],
   const j = support[1]!;
   const first = lines[i]!;
   const second = lines[j]!;
-  const determinant = first[0]! * second[1]! - first[1]! * second[0]!;
+  const determinant = first[0] * second[1] - first[1] * second[0];
   if (Math.abs(determinant) <= tol) return new Float64Array(2);
 
-  const x = (first[2]! * second[1]! - first[1]! * second[2]!) / determinant;
-  const y = (first[0]! * second[2]! - first[2]! * second[0]!) / determinant;
+  const x = (first[2] * second[1] - first[1] * second[2]) / determinant;
+  const y = (first[0] * second[2] - first[2] * second[0]) / determinant;
   return Float64Array.of(x, y);
 }
 

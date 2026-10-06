@@ -491,7 +491,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     getUnboundedClipBounds: () => ({ minX: -VIEWPORT_UNBOUNDED_EXTENT, maxX: VIEWPORT_UNBOUNDED_EXTENT, minY: -VIEWPORT_UNBOUNDED_EXTENT, maxY: VIEWPORT_UNBOUNDED_EXTENT }),
     start3DTransition: (targetMode) => transition.begin(targetMode),
     getCanvasElement: () => viewportBridge.getCanvasElement(),
-    getCanvasRect: () => getViewportRect() as DOMRect,
+    getCanvasRect: () => getViewportRect(),
     destroy: () => {
       clearViewportNavigationTimeout();
       setViewportNavigationActive(false);

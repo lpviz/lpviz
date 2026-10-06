@@ -36,7 +36,7 @@ export function solveDenseSystem(matrix: Float64Array, size: number, rhs: Float6
     for (let row = pivot + 1; row < size; row++) {
       const factorIndex = row * size + pivot;
       lu[factorIndex] = lu[factorIndex]! / diagonal;
-      const factor = lu[factorIndex]!;
+      const factor = lu[factorIndex];
       for (let col = pivot + 1; col < size; col++) {
         const index = row * size + col;
         lu[index]! -= factor * lu[pivot * size + col]!;

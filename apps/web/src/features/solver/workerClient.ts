@@ -1,5 +1,6 @@
 import { unpackSolverResponse, type PackedSolverWorkerResponse } from "./resultPacking";
 import type { SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./solverWorker";
+// oxlint-disable-next-line import/default -- vite's ?worker import provides the default export
 import SolverWorker from "./solverWorker?worker";
 
 const MAX_WORKER_QUEUE = 4;

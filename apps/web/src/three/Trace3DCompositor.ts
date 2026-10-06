@@ -1,6 +1,7 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { Camera, Material, Mesh, OrthographicCamera, Scene, ShaderMaterial, WebGLRenderer, WebGLRenderTarget } from "three";
+import type { Camera, Material, Mesh, ShaderMaterial, WebGLRenderer } from "three";
+import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
 import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
 

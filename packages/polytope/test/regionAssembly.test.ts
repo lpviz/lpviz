@@ -123,7 +123,7 @@ describe("open chain half-plane orientation", () => {
       for (let e = 0; e + 2 < n && e < lines.length; e++) {
         const [A, B, C] = lines[e]!;
         const [px, py] = pts[e + 2]!;
-        expect(A * px! + B * py! - C).toBeLessThanOrEqual(1e-6);
+        expect(A * px + B * py - C).toBeLessThanOrEqual(1e-6);
         checked++;
       }
     }

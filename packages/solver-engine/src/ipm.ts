@@ -58,9 +58,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions) {
     rows: [],
   };
 
-  let x = new Float64Array(n);
-  let s = new Float64Array(m).fill(1);
-  let y = new Float64Array(m).fill(1);
+  const x = new Float64Array(n);
+  const s = new Float64Array(m).fill(1);
+  const y = new Float64Array(m).fill(1);
   if (startPoint && startPoint.length === n) {
     // Relocate only the primal point and keep s = y = 1, so a start at the default position
     // reproduces the cold trajectory. x0 need not be feasible (infeasible-start method), but

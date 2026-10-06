@@ -524,10 +524,10 @@ export function nearestPolytopeVertex(state: State, point: PointXY): PointXY | n
   let best: PointXY | null = null;
   let bestDistance = Infinity;
   for (const vertex of state.polytope.vertices) {
-    const distance = Math.hypot(vertex[0]! - point.x, vertex[1]! - point.y);
+    const distance = Math.hypot(vertex[0] - point.x, vertex[1] - point.y);
     if (distance < bestDistance) {
       bestDistance = distance;
-      best = { x: vertex[0]!, y: vertex[1]! };
+      best = { x: vertex[0], y: vertex[1] };
     }
   }
   return best;

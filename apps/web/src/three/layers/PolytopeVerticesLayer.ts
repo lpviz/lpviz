@@ -1,7 +1,8 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointXY } from "@lpviz/math/types";
-import { BufferAttribute, Group, Points, PointsMaterial } from "three";
+import type { Points, PointsMaterial } from "three";
+import { BufferAttribute, Group } from "three";
 import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";

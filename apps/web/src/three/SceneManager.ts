@@ -1,6 +1,7 @@
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState, type ViewportDirtyFlags } from "@/features/core/store";
-import { Camera, Scene, WebGLRenderer } from "three";
+import type { Camera } from "three";
+import { Scene, WebGLRenderer } from "three";
 import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
 import { Trace3DCompositor } from "./Trace3DCompositor";
@@ -134,7 +135,7 @@ export class SceneManager {
       if (options.viewportDirty && Object.keys(options.viewportDirty).length) {
         if (this.layersDirty !== "all") {
           this.layersDirty = {
-            ...(this.layersDirty ?? {}),
+            ...this.layersDirty,
             ...options.viewportDirty,
           };
         }
@@ -197,9 +198,7 @@ export class SceneManager {
     this.traceCache.dispose();
     this.trace3D.dispose();
     for (const scene of Object.values(this.scenes)) {
-      for (const child of [...scene.children]) {
-        scene.remove(child);
-      }
+      scene.clear();
     }
 
     this.renderer.dispose();

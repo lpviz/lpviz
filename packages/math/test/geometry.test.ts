@@ -168,7 +168,7 @@ describe("verticesFromLines", () => {
     const verts = verticesFromLines(sliver);
     expect(verts.length).toBe(4);
     const center = centroid(verts);
-    const strictlyFeasible = sliver.every(([A, B, C]) => A * center[0]! + B * center[1]! < C);
+    const strictlyFeasible = sliver.every(([A, B, C]) => A * center[0] + B * center[1] < C);
     expect(strictlyFeasible).toBe(true);
   });
 });

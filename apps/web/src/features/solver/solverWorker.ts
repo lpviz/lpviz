@@ -84,7 +84,7 @@ function executeSolver({ id, ...data }: SolverWorkerRequest): SolverEngineSucces
 
 const ctx = self as unknown as Worker;
 
-ctx.addEventListener("message", async (event: MessageEvent<SolverWorkerRequest>) => {
+ctx.addEventListener("message", (event: MessageEvent<SolverWorkerRequest>) => {
   const data = event.data;
   if (!data) return;
 

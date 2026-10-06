@@ -11,7 +11,9 @@ export function applySolverResult(response: SolverWorkerSuccessResponse, updateR
       return applySimplexResult(response.result, updateResult);
     case "central":
       return applyCentralPathResult(response.result, updateResult);
-    default:
+    case "ipm":
+    case "pdhg":
+    case "ellipsoid":
       return applyIterateResult(response.result, updateResult);
   }
 }

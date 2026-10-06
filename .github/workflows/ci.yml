@@ -43,6 +43,9 @@ jobs:
       - name: Check formatting
         run: bun run format:check
 
+      - name: Lint
+        run: bun run lint
+
       - name: Check for unused code and dependencies
         # knip is not a devDependency (the `format` script also runs it via bunx).
         # Pin the major so a new release can't break CI without a deliberate bump.

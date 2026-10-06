@@ -124,7 +124,7 @@ export function attachCanvasInteractions({
       vertices: result.vertices,
       completionMode: result.completionMode,
       interiorPoint: result.interiorPoint,
-      polytope: null as null,
+      polytope: null,
       inequalitiesMessage: null,
       highlightIndex: null,
     });

@@ -168,7 +168,7 @@ describe("simplex", () => {
     const r = simplex(lines, obj, opts(false));
     const elapsed = performance.now() - start;
     expect(r.status).toBe("optimal");
-    expect(r.phase1Iterations!.length).toBeGreaterThan(200);
+    expect(r.phase1Iterations.length).toBeGreaterThan(200);
     const last = lastIterate(r);
     expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
     // ~80ms here; the pre-fix code took ~3s, so this trips on a regression
@@ -238,7 +238,7 @@ describe("simplex pivot rules", () => {
     }
     expect(bland.status).toBe("unbounded");
     expect(cycling.status).toBe("unbounded");
-    expect(cycling.phase1Iterations!.length + cycling.iterations.length).toBeLessThan(100);
+    expect(cycling.phase1Iterations.length + cycling.iterations.length).toBeLessThan(100);
   });
 });
 
@@ -403,7 +403,7 @@ describe("ellipsoid", () => {
 
   test("the first ellipsoid contains every vertex of the region", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ maxit: 1 }));
-    const [cx, cy, p11, p12, p22] = [...r.ellipsoids.slice(0, 5)] as number[];
+    const [cx, cy, p11, p12, p22] = Array.from(r.ellipsoids.slice(0, 5));
     const det = p11! * p22! - p12! * p12!;
     for (const [vx, vy] of SQUARE_VERTICES) {
       const dx = vx - cx!;
@@ -633,7 +633,7 @@ describe("draggable start point", () => {
       startVertex: [-6, -6],
     });
     expect(r.status).toBe("optimal");
-    expect(r.phase1Iterations!.length).toBe(0);
+    expect(r.phase1Iterations.length).toBe(0);
     expect(r.logs[0]![0]!).toContain("warm start");
     const first = r.iterations[0]!;
     expect(first[0]!).toBeCloseTo(-6, 6);
@@ -655,7 +655,7 @@ describe("draggable start point", () => {
         startVertex: start,
       });
       expect(r.status).toBe("optimal");
-      expect(r.phase1Iterations!.length).toBeGreaterThan(0);
+      expect(r.phase1Iterations.length).toBeGreaterThan(0);
       const last = lastIterate(r);
       expect(last[0]!).toBeCloseTo(-4, 6);
       expect(last[1]!).toBeCloseTo(-4, 6);
