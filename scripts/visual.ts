@@ -155,6 +155,22 @@ scenarios.push({
 const DOCS: Viewport = { width: 1280, height: 7000 };
 for (const doc of ["", "simplex", "interior-point", "pdhg", "ellipsoid", "central-path"]) scenarios.push({ name: `docs-${doc || "index"}`, path: `docs/${doc}`, viewport: DOCS, settle: 300 });
 scenarios.push({ name: "docs-ellipsoid-tail", path: "docs/ellipsoid", viewport: DOCS, settle: 300, run: (page) => page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)) });
+// a fifth vertex that makes the outline self-overlapping is rejected; the reason shows in the problem panel
+scenarios.push({
+  name: "reject-nonconvex",
+  run: async (page) => {
+    for (const [x, y] of [
+      [650, 250],
+      [950, 230],
+      [1000, 480],
+      [700, 520],
+      [1100, 300],
+    ] as const) {
+      await page.mouse.click(x, y);
+      await tick(page, 120);
+    }
+  },
+});
 scenarios.push({
   name: "interaction",
   settle: 1500,

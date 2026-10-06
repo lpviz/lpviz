@@ -135,7 +135,9 @@ export function attachCanvasInteractions({
 
   const applyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => {
     if (transition.kind === "reject-nonconvex") {
-      alert(transition.reason);
+      // The problem panel's message slot (the same one that shows "Nonconvex");
+      // the next accepted edit clears it. No blocking dialog.
+      setState({ inequalitiesMessage: transition.reason });
       return;
     }
 
