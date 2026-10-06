@@ -1,103 +1,50 @@
-import type { ResultTextBlock } from "@/features/solver/types";
-
-// Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
-// scrolled into view; plain arrays satisfy this shape.
-type VirtualRowBlocks = {
-  length: number;
-  at(index: number): ResultTextBlock | undefined;
-};
-import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
-import type { Line, PointXY, PointXYZ } from "@lpviz/math/types";
-import { hasPolytopeLines, type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
-import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
-import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
+import { freshHistoryState, type HistoryState } from "@/features/history/historyState";
+import { EDITOR_DIRTY, freshEditorState, type EditorState } from "@/features/polytope-editor/editorState";
+import {
+  computeFlatZ,
+  EMPTY_ITERATE_PATH,
+  freshSolverState,
+  initialSolverRuntimeState,
+  SOLVER_DIRTY,
+  type EllipsoidPath,
+  type IteratePath,
+  type LocalizingSetPath,
+  type SolverRuntimeState,
+  type SolverState,
+  type TraceEntry,
+} from "@/features/solver/solverState";
+import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
+import type { PointXY } from "@lpviz/math/types";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
-export const MAX_TRACE_POINT_SPRITES = 1200;
-export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE };
-
-// Index order is the share link's wire identity (compactUrl): only ever append.
-export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
-export type SolverMode = (typeof SOLVER_MODES)[number];
-// Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
-// method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
-export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
-export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
-export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
-export type CompletionMode = (typeof COMPLETION_MODES)[number];
-type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
-export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
-type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; lines: Line[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
-export type HistoryEntry = {
-  vertices: PointXY[];
-  objectiveVector: PointXY | null;
-  completionMode: CompletionMode;
-};
-export type DragViewAnchor3D = { x: number; y: number; z: number };
-
-export type DragTarget =
-  | { kind: "point"; index: number; viewAnchor3D?: DragViewAnchor3D | undefined }
-  | {
-      kind: "constraint";
-      operation: ConstraintDragOperation;
-      start: PointXY;
-      normal: PointXY;
-    }
-  | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D | undefined }
-  | {
-      kind: "solver-start";
-      // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
-      // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
-      grabOffset?: PointXY;
-      viewAnchor3D?: DragViewAnchor3D | undefined;
-    };
-export type EditorInteractionState =
-  | { kind: "idle" }
-  | {
-      kind: "pending-drag";
-      target: Extract<DragTarget, { kind: "point" | "constraint" }>;
-      dragStartPos: { x: number; y: number };
-    }
-  | { kind: "dragging"; target: DragTarget };
-
-// Flat, contiguous iterate data: element `i` lives at [i*stride .. i*stride+stride). stride 3 =
-// [x, y, bakedTotalZ] (packed pdhg/ipm), stride 2 = [x, y] (simplex / central path, z renders
-// flat). One array per solve, not one Float64Array per iterate: millions of live objects is what
-// a major GC must mark.
-export interface IteratePath {
-  points: Float64Array;
-  count: number;
-  stride: number;
-}
-
-const EMPTY_ITERATE_PATH: IteratePath = {
-  points: new Float64Array(0),
-  count: 0,
-  stride: 3,
-};
-
-// The ellipsoid method's per-iteration ellipse, parallel to the iterate path:
-// element `i` is [cx, cy, p11, p12, p22] — the center and the symmetric shape
-// matrix P of { x : (x - c)' P^-1 (x - c) <= 1 }. Null for every other solver.
-export interface EllipsoidPath {
-  data: Float64Array;
-  count: number;
-  stride: number;
-}
-
-// The cutting-plane query points' localizing polygon per iteration: element `i` spans
-// points[offsets[i] * 2 .. offsets[i + 1] * 2). Null for the ellipsoid method, whose localizing
-// set is the ellipse already in EllipsoidPath.
-export interface LocalizingSetPath {
-  points: Float64Array;
-  offsets: Uint32Array;
-  count: number;
-}
-
-interface TraceEntry extends IteratePath {
-  objectiveVector: PointXY | null;
-}
-
+// The slices' public surface, re-exported so importers keep one module to reach for.
+export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
+export type { HistoryEntry } from "@/features/history/historyState";
+export {
+  COMPLETION_MODES,
+  computeDrawingPhase,
+  nearestPolytopeVertex,
+  type CompletionMode,
+  type DragTarget,
+  type DragViewAnchor3D,
+  type DrawingPhase,
+  type EditorInteractionState,
+} from "@/features/polytope-editor/editorState";
+export {
+  computeFlatZ,
+  DEFAULT_SOLVER_SETTINGS,
+  displayedSolverStartPoint,
+  flattenIteratesToPath,
+  MAX_TRACE_POINT_SPRITES,
+  QUERY_POINTS,
+  SOLVER_MODES,
+  type EllipsoidPath,
+  type EllipsoidQueryPoint,
+  type IteratePath,
+  type LocalizingSetPath,
+  type SolverMode,
+  type SolverSettings,
+} from "@/features/solver/solverState";
 export type { ViewportDirtyFlags };
 
 // Repaint everything — for whole-problem swaps (gallery load, shared-state
@@ -115,51 +62,16 @@ type StateChangeMeta = {
   viewportDirty?: ViewportDirtyFlags;
 };
 
-// Which render layers a change to each store field repaints. setState derives `viewportDirty`
-// from the changed fields; the derivation is additive (unioned with explicitly passed flags, it
-// can only add, never drop) and fields absent here (pure UI/solver-config state) repaint nothing.
-const POLYTOPE_DIRTY: ViewportDirtyFlags = {
-  polytope: true,
-  constraints: true,
-  objective: true,
-};
-const ITERATE_DIRTY: ViewportDirtyFlags = { iterate: true };
-const TRACE_DIRTY: ViewportDirtyFlags = { trace: true };
-// the objective marker is occluded by the polytope floor in 3D, so a moved
-// objective repaints the polytope too while in (or transitioning to) 3D
-const objectiveDirty = (s: State): ViewportDirtyFlags => (s.is3DMode || s.isTransitioning3D ? { polytope: true, objective: true } : { objective: true });
+export type State = EditorState & SolverState & HistoryState & ViewportState;
 
+// Which render layers a change to each store field repaints: the slices' tables merged. setState
+// derives `viewportDirty` from the changed fields; the derivation is additive (unioned with
+// explicitly passed flags, it can only add, never drop) and fields absent here (pure UI/solver-config
+// state, history) repaint nothing.
 const FIELD_DIRTY: Partial<Record<keyof State, (s: State) => ViewportDirtyFlags>> = {
-  vertices: () => POLYTOPE_DIRTY,
-  polytope: () => POLYTOPE_DIRTY,
-  // the start marker renders in the iterate overlay pass
-  solverStartPoint: () => ITERATE_DIRTY,
-  solverMode: () => ITERATE_DIRTY,
-  completionMode: () => POLYTOPE_DIRTY,
-  interiorPoint: () => POLYTOPE_DIRTY,
-  objectiveVector: objectiveDirty,
-  currentObjective: objectiveDirty,
-  objectiveHidden: () => ({ objective: true }),
-  highlightIndex: () => ({ constraints: true }),
-  iteratePath: () => ITERATE_DIRTY,
-  iterateEllipsoids: () => ITERATE_DIRTY,
-  iterateLocalizingSets: () => ITERATE_DIRTY,
-  iteratePhases: () => ITERATE_DIRTY,
-  iterateRestartIndices: () => ITERATE_DIRTY,
-  iterateObjectiveVector: () => ITERATE_DIRTY,
-  highlightIteratePathIndex: () => ITERATE_DIRTY,
-  // the optimum star is hidden for the duration of a replay, so starting or
-  // stopping one changes what the iterate pass draws (see IterateStarLayer)
-  replayActive: () => ITERATE_DIRTY,
-  traceBuffer: () => TRACE_DIRTY,
-  traceEnabled: () => TRACE_DIRTY,
-  // zScale rescales every world-anchored layer's height
-  zScale: () => ({
-    polytope: true,
-    objective: true,
-    trace: true,
-    iterate: true,
-  }),
+  ...EDITOR_DIRTY,
+  ...SOLVER_DIRTY,
+  ...VIEWPORT_DIRTY,
 };
 
 export function deriveViewportDirty(state: State, changedKeys: readonly (keyof State)[]): ViewportDirtyFlags | null {
@@ -173,206 +85,78 @@ export function deriveViewportDirty(state: State, changedKeys: readonly (keyof S
   return flags;
 }
 
-export type SolverSettings = {
-  alphaMax: number;
-  correctorThreshold: number;
-  maxitIPM: number;
-  simplexDualMode: boolean;
-  simplexEnteringRule: EnteringRule;
-  simplexLeavingRule: LeavingRule;
-  pdhgEta: number;
-  pdhgTau: number;
-  maxitPDHG: number;
-  pdhgIneqMode: boolean;
-  pdhgHalpernMode: boolean;
-  pdhgColorByBasis: boolean;
-  centralPathIter: number;
-  maxitEllipsoid: number;
-  ellipsoidDeepCuts: boolean;
-  ellipsoidRayShoot: boolean;
-  ellipsoidQueryPoint: EllipsoidQueryPoint;
-  ellipsoidInitialScale: number;
-  objectiveAngleStep: number;
-  objectiveRotationSpeed: number;
-  // Total wall-clock length of an "Animate" replay in milliseconds, not a per-step delay despite
-  // the name: the replay maps elapsed time onto the whole iterate path (see replayController).
-  // Adjusted with the +/- keys.
-  replaySpeed: number;
-};
+// The fields a reset leaves alone; each slice names its own (see the *RuntimeState types).
+type RuntimeState = ViewportRuntimeState & SolverRuntimeState;
 
-// exported so share links can omit any setting still at its default
-export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
-  alphaMax: 0.1,
-  correctorThreshold: 0.9,
-  maxitIPM: 1000,
-  simplexDualMode: false,
-  simplexEnteringRule: "first",
-  simplexLeavingRule: "first",
-  pdhgEta: 0.25,
-  pdhgTau: 0.25,
-  maxitPDHG: 1000,
-  pdhgIneqMode: true,
-  pdhgHalpernMode: false,
-  pdhgColorByBasis: false,
-  centralPathIter: 75,
-  maxitEllipsoid: 500,
-  ellipsoidDeepCuts: true,
-  ellipsoidRayShoot: true,
-  ellipsoidQueryPoint: "ellipsoid",
-  ellipsoidInitialScale: 1.5,
-  objectiveAngleStep: 0.1,
-  objectiveRotationSpeed: 1,
-  replaySpeed: DEFAULT_REPLAY_DURATION_MS,
-};
+export type FreshState = Omit<State, keyof RuntimeState>;
 
-export type State = {
-  vertices: PointXY[];
-  completionMode: CompletionMode;
-  interiorPoint: PointXY | null;
-  polytope: PolytopeRepresentation | null;
-  inequalitiesMessage: string | null;
-  resultDisplayMode: "usage" | "blocks" | "virtual";
-  resultBlocks: ResultTextBlock[] | null;
-  resultVirtualHeader: string | null;
-  resultVirtualFooter: string | null;
-  resultVirtualShowEmpty: boolean;
-  resultVirtualRows: VirtualRowBlocks;
-  resultMaxLineChars: number;
+// A reset applies freshState() as one patch, and a patch's key order is the order its per-key
+// listeners fire in, so the keys keep the order the fields had before they were split into slices
+// (the slices interleave: the result fields sit between the region and the objective, and so on).
+const FRESH_KEY_ORDER: readonly (keyof FreshState)[] = [
+  "vertices",
+  "completionMode",
+  "interiorPoint",
+  "polytope",
+  "inequalitiesMessage",
+  "resultDisplayMode",
+  "resultBlocks",
+  "resultVirtualHeader",
+  "resultVirtualFooter",
+  "resultVirtualShowEmpty",
+  "resultVirtualRows",
+  "resultMaxLineChars",
 
-  objectiveVector: PointXY | null;
-  currentObjective: PointXY | null;
-  objectiveHidden: boolean;
+  "objectiveVector",
+  "currentObjective",
+  "objectiveHidden",
 
-  solverMode: SolverMode;
-  solverSettings: SolverSettings;
-  // Where IPM/PDHG/primal-simplex begin iterating; null = the solver default
-  // (origin). Draggable via the canvas marker.
-  solverStartPoint: PointXY | null;
-  iteratePath: IteratePath;
-  iterateEllipsoids: EllipsoidPath | null;
-  iterateLocalizingSets: LocalizingSetPath | null;
-  iteratePhases: number[];
-  highlightIteratePathIndex: number | null;
-  rotateObjectiveMode: boolean;
-  // "an Animate replay is playing out"; the RAF handle stays private to replayController, since a
-  // store field that churned at 60Hz would invalidate every selector keyed on it
-  replayActive: boolean;
-  originalIteratePath: IteratePath;
-  originalIteratePhases: number[];
-  iterateRestartIndices: number[];
-  iterateObjectiveVector: PointXY | null;
-  originalIterateObjectiveVector: PointXY | null;
+  "solverMode",
+  "solverSettings",
+  "solverStartPoint",
+  "iteratePath",
+  "iterateEllipsoids",
+  "iterateLocalizingSets",
+  "iteratePhases",
+  "highlightIteratePathIndex",
+  "rotateObjectiveMode",
+  "replayActive",
+  "originalIteratePath",
+  "originalIteratePhases",
+  "iterateRestartIndices",
+  "iterateObjectiveVector",
+  "originalIterateObjectiveVector",
 
-  snapToGrid: boolean;
-  highlightIndex: number | null;
-  editorInteraction: EditorInteractionState;
-  lastCompletedInteraction: CompletedInteraction;
+  "snapToGrid",
+  "highlightIndex",
+  "editorInteraction",
+  "lastCompletedInteraction",
 
-  historyStack: HistoryEntry[];
-  redoStack: HistoryEntry[];
+  "historyStack",
+  "redoStack",
 
-  is3DMode: boolean;
-  viewAngle: PointXYZ;
-  zScale: number;
-  isTransitioning3D: boolean;
-  transitionStartTime: number;
-  transition3DStartAngles: PointXYZ;
-  transition3DEndAngles: PointXYZ;
-  transitionDirection: "to3d" | "to2d" | null;
-  transitionProgress: number;
+  "zScale",
 
-  traceEnabled: boolean;
-  traceBuffer: TraceEntry[];
-  maxTraceCount: number;
-  isNavigatingViewport: boolean;
-};
-
-// The fields a reset leaves alone: the 3D view and its transition, which the transition
-// controller owns (a reset in 3D mode asks it to return to 2D), plus the two that mirror
-// something outside the store: viewport navigation and the trace capacity derived from the angle step.
-type ViewAndRuntimeState = Pick<
-  State,
-  | "is3DMode"
-  | "viewAngle"
-  | "isTransitioning3D"
-  | "transitionStartTime"
-  | "transition3DStartAngles"
-  | "transition3DEndAngles"
-  | "transitionDirection"
-  | "transitionProgress"
-  | "isNavigatingViewport"
-  | "maxTraceCount"
->;
-
-export type FreshState = Omit<State, keyof ViewAndRuntimeState>;
+  "traceEnabled",
+  "traceBuffer",
+];
 
 /**
- * The starting values of everything else. Fresh objects every call, so a reset never shares an
- * array or settings object with the state it replaces; the initial state is built from it, so the
- * two cannot drift apart.
+ * The starting values of everything else, composed from the slices. Fresh objects every call, so
+ * a reset never shares an array or settings object with the state it replaces; the initial state
+ * is built from it, so the two cannot drift apart.
  */
 export function freshState(): FreshState {
-  return {
-    vertices: [],
-    completionMode: "draft",
-    interiorPoint: null,
-    polytope: null,
-    inequalitiesMessage: null,
-    resultDisplayMode: "usage",
-    resultBlocks: null,
-    resultVirtualHeader: null,
-    resultVirtualFooter: null,
-    resultVirtualShowEmpty: false,
-    resultVirtualRows: [],
-    resultMaxLineChars: 0,
-
-    objectiveVector: null,
-    currentObjective: null,
-    objectiveHidden: false,
-
-    solverMode: "central",
-    solverSettings: { ...DEFAULT_SOLVER_SETTINGS },
-    solverStartPoint: null,
-    iteratePath: EMPTY_ITERATE_PATH,
-    iterateEllipsoids: null,
-    iterateLocalizingSets: null,
-    iteratePhases: [],
-    highlightIteratePathIndex: null,
-    rotateObjectiveMode: false,
-    replayActive: false,
-    originalIteratePath: EMPTY_ITERATE_PATH,
-    originalIteratePhases: [],
-    iterateRestartIndices: [],
-    iterateObjectiveVector: null,
-    originalIterateObjectiveVector: null,
-
-    snapToGrid: false,
-    highlightIndex: null,
-    editorInteraction: { kind: "idle" },
-    lastCompletedInteraction: "none",
-
-    historyStack: [],
-    redoStack: [],
-
-    zScale: DEFAULT_Z_SCALE,
-
-    traceEnabled: false,
-    traceBuffer: [],
-  };
+  const slices: FreshState = { ...freshEditorState(), ...freshSolverState(), ...freshHistoryState(), ...freshViewportState() };
+  const fresh = {} as FreshState;
+  for (const key of FRESH_KEY_ORDER) (fresh as Record<keyof FreshState, unknown>)[key] = slices[key];
+  return fresh;
 }
 
 const initialState: State = {
   ...freshState(),
-  is3DMode: false,
-  viewAngle: { ...DEFAULT_VIEW_ANGLE },
-  isTransitioning3D: false,
-  transitionStartTime: 0,
-  transition3DStartAngles: { x: 0, y: 0, z: 0 },
-  transition3DEndAngles: { ...DEFAULT_VIEW_ANGLE },
-  transitionDirection: null,
-  transitionProgress: 0,
-  maxTraceCount: 0,
-  isNavigatingViewport: false,
+  ...initialViewportRuntimeState(),
+  ...initialSolverRuntimeState(),
 };
 
 type Listener = () => void;
@@ -485,83 +269,11 @@ export function onMeta(fn: MetaListener, signal: AbortSignal): void {
   );
 }
 
-export function computeDrawingPhase(state: State): DrawingPhase {
-  const verticesCount = state.vertices.length;
-  const regionFinished = state.completionMode !== "draft";
-  const hasObjective = state.objectiveVector !== null;
-
-  if (verticesCount === 0) {
-    return "empty";
-  }
-  if (!regionFinished) {
-    return "sketching_polytope";
-  }
-  if (!hasObjective) {
-    return state.currentObjective !== null ? "objective_preview" : "awaiting_objective";
-  }
-  return "ready_for_solvers";
-}
-
-// Solver default start: IPM/PDHG begin at the origin, and Phase-1 simplex's
-// first displayed iterate is the origin too (all structural variables start
-// nonbasic), so one marker default is truthful for all three.
-const DEFAULT_SOLVER_START: Readonly<PointXY> = { x: 0, y: 0 };
-
-/** Whether the draggable start marker applies to the current solver/problem. */
-function solverStartPointApplies(state: State): boolean {
-  if (computeDrawingPhase(state) !== "ready_for_solvers") return false;
-  if (!hasPolytopeLines(state.polytope)) return false;
-  if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded") return false;
-  if (state.solverMode === "ipm" || state.solverMode === "pdhg") return true;
-  // dual simplex has no safe start-point interpretation: a primal point only
-  // determines a dual-feasible basis when it is already optimal
-  return state.solverMode === "simplex" && !state.solverSettings.simplexDualMode;
-}
-
-/** Nearest vertex of the feasible region, or null if there are none. */
-export function nearestPolytopeVertex(state: State, point: PointXY): PointXY | null {
-  if (!hasPolytopeLines(state.polytope)) return null;
-  let best: PointXY | null = null;
-  let bestDistance = Infinity;
-  for (const vertex of state.polytope.vertices) {
-    const distance = Math.hypot(vertex[0] - point.x, vertex[1] - point.y);
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      best = { x: vertex[0], y: vertex[1] };
-    }
-  }
-  return best;
-}
-
-/**
- * The marker position to draw: the dragged point (snapped to the nearest region vertex in simplex
- * mode, which is how simplex consumes it), or the solver default when nothing has been dragged yet.
- * Null when hidden.
- */
-export function displayedSolverStartPoint(state: State): PointXY | null {
-  if (!solverStartPointApplies(state)) return null;
-  const point = state.solverStartPoint;
-  if (!point) return { ...DEFAULT_SOLVER_START };
-  if (state.solverMode === "simplex") {
-    return nearestPolytopeVertex(state, point) ?? point;
-  }
-  return point;
-}
-
 export function clearIterateState(): void {
   setState({
     ...buildIterateStatePatch(EMPTY_ITERATE_PATH, undefined, undefined, null),
     highlightIteratePathIndex: null,
   });
-}
-
-// Display z for one iterate at points[base..base+stride): the baked total
-// (component [2], present for pdhg/ipm) minus the current objective value, so
-// 2D-projected solves render flat and the 3D height tracks the extra term.
-export function computeFlatZ(points: Float64Array, base: number, stride: number, objectiveVector: PointXY | null): number {
-  const objectiveValue = objectiveVector ? objectiveVector.x * points[base]! + objectiveVector.y * points[base + 1]! : 0;
-  const totalValue = stride >= 3 ? points[base + 2]! : objectiveValue;
-  return totalValue - objectiveValue;
 }
 
 export function getDisplayedIterateZ(entry: Float64Array, objectiveOverride?: PointXY | null): number {
@@ -589,21 +301,6 @@ export function updateIteratePathsWithTrace(
 
 function snapshotObjectiveVector(objectiveVector: PointXY | null) {
   return objectiveVector ? { ...objectiveVector } : null;
-}
-// Collapse a solver's per-iterate Float64Arrays (simplex / central path) into one flat
-// IteratePath; packed pdhg/ipm results arrive already flat from the worker (see unpackIteratePath).
-export function flattenIteratesToPath(iteratesArray: Float64Array[]): IteratePath {
-  const count = iteratesArray.length;
-  if (count === 0) return EMPTY_ITERATE_PATH;
-  const stride = iteratesArray[0]!.length >= 3 ? 3 : 2;
-  const points = new Float64Array(count * stride);
-  for (let i = 0; i < count; i++) {
-    const it = iteratesArray[i]!;
-    points[i * stride] = it[0] ?? 0;
-    points[i * stride + 1] = it[1] ?? 0;
-    if (stride >= 3) points[i * stride + 2] = it[2] ?? 0;
-  }
-  return { points, count, stride };
 }
 
 function appendedTraceBuffer(state: State, path: IteratePath, objectiveSnapshot: PointXY | null): TraceEntry[] {

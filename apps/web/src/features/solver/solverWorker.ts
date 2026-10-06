@@ -1,40 +1,11 @@
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
-import { ellipsoid, type EllipsoidResultData } from "@lpviz/solver-engine/ellipsoid";
+import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
-import { simplex, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
+import { simplex } from "@lpviz/solver-engine/simplex";
 import { packSolverResponse } from "./resultPacking";
-
-import type { EllipsoidQueryPoint } from "@/features/core/store";
-import type { CentralPathResult, IterateResult, PackedSolver, SimplexResult } from "./solverService";
-
-export type SolverWorkerPayload =
-  | { solver: "ipm"; lines: Lines; objective: VecN; startPoint?: number[]; alphaMax: number; correctorThreshold: number; maxit: number }
-  | { solver: "simplex"; lines: Lines; objective: VecN; startVertex?: number[]; dual: boolean; enteringRule: EnteringRule; leavingRule: LeavingRule }
-  | { solver: "pdhg"; lines: Lines; objective: VecN; startPoint?: number[]; ineq: boolean; halpern: boolean; maxit: number; eta: number; tau: number; colorByBasis: boolean }
-  | { solver: "central"; vertices: Vertices; lines: Lines; objective: VecN; niter: number }
-  | { solver: "ellipsoid"; vertices: Vertices; lines: Lines; objective: VecN; maxit: number; deepCuts: boolean; rayShoot: boolean; queryPoint: EllipsoidQueryPoint; initialScale: number };
-
-type SolverWorkerRequest = SolverWorkerPayload & { id: number };
-
-type SolverSuccess<S, R> = { id: number; solver: S; success: true; result: R };
-
-// The engines emit one Float64Array per iterate. simplex/central are small and
-// cross the worker boundary unchanged; pdhg/ipm/ellipsoid are packed into flat
-// transferable buffers (resultPacking) and reach the client as one IterateResult.
-export type SolverEngineSuccessResponse =
-  | SolverSuccess<"ipm", ReturnType<typeof ipm>>
-  | SolverSuccess<"simplex", SimplexResult>
-  | SolverSuccess<"pdhg", ReturnType<typeof pdhg>>
-  | SolverSuccess<"central", CentralPathResult>
-  | SolverSuccess<"ellipsoid", EllipsoidResultData>;
-export type SolverWorkerSuccessResponse = SolverSuccess<"simplex", SimplexResult> | SolverSuccess<"central", CentralPathResult> | SolverSuccess<PackedSolver, IterateResult>;
-
-type SolverWorkerErrorResponse = { id: number; success: false; error: string };
-
-export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerErrorResponse;
+import type { SolverEngineSuccessResponse, SolverWorkerRequest } from "./types";
 
 const DEFAULT_TOLERANCE = 1e-5;
 const SOLVER_NAMES = { ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", central: "Central Path", ellipsoid: "Ellipsoid" };

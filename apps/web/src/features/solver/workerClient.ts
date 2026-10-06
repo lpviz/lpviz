@@ -1,5 +1,5 @@
-import { unpackSolverResponse, type PackedSolverWorkerResponse } from "./resultPacking";
-import type { SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./solverWorker";
+import { unpackSolverResponse } from "./resultPacking";
+import type { PackedSolverWorkerResponse, SolverWorkerPayload, SolverWorkerResponse, SolverWorkerSuccessResponse } from "./types";
 // oxlint-disable-next-line import/default -- vite's ?worker import provides the default export
 import SolverWorker from "./solverWorker?worker";
 

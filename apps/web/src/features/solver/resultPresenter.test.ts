@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { getState } from "@/features/core/store";
 import { createResultPresenter } from "./resultPresenter";
-import type { VirtualResultPayload } from "./solverService";
+import type { VirtualResultPayload } from "./types";
 
 const run = (count: number): VirtualResultPayload => ({
   type: "virtual",
