@@ -21,7 +21,7 @@
 //   bun scripts/visual.ts --only NAME         restrict to scenarios containing NAME
 //   bun scripts/visual.ts --tolerance N       allow N differing pixels per screenshot
 //   bun scripts/visual.ts --no-build          reuse dist/
-//   VISUAL_BASELINE=DIR                       compare against a baseline captured elsewhere (CI)
+//   VISUAL_BASELINE=DIR                       compare against a baseline captured elsewhere
 
 import { chromium, type Page } from "playwright";
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
