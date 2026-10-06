@@ -1,4 +1,4 @@
-import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath } from "@/features/core/store";
+import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath, ResultTextBlock } from "./solverState";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
 import type { NumericRow } from "@lpviz/solver-engine/result";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
@@ -87,13 +87,7 @@ export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerErr
 
 // ---------- render ----------
 
-type ResultTextBlockClassName = "iterate-header" | "iterate-item" | "iterate-item-nohover" | "iterate-footer";
-
-export type ResultTextBlock = {
-  className: ResultTextBlockClassName;
-  text: string;
-  index?: number | undefined;
-};
+export type { ResultTextBlock } from "./solverState";
 
 export interface VirtualResultPayload {
   type: "virtual";

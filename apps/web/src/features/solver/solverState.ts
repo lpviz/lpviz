@@ -1,10 +1,17 @@
 import { computeDrawingPhase, nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
-import type { ResultTextBlock } from "@/features/solver/types";
 import type { PointXY } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
+
+type ResultTextBlockClassName = "iterate-header" | "iterate-item" | "iterate-item-nohover" | "iterate-footer";
+
+export type ResultTextBlock = {
+  className: ResultTextBlockClassName;
+  text: string;
+  index?: number | undefined;
+};
 
 export const MAX_TRACE_POINT_SPRITES = 1200;
 

@@ -1,10 +1,9 @@
-import { clearIterateState, computeDrawingPhase, getState, resetTraceState, setState, setTraceCapacity, on, type SolverMode, type State } from "@/features/core/store";
+import { computeDrawingPhase, getState, resetTraceState, setState, setTraceCapacity, on, type SolverMode, type State } from "@/features/core/store";
 import { createSolverControls, type SolverControl, type SolverSettingUpdater } from "@/features/solver/solverControls";
-import { applySolverResult } from "@/features/solver/solverService";
 import { createReplayController } from "@/features/solver/replayController";
 import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
-import { runSolverWorker } from "@/features/solver/workerClient";
+import { createSolveRunner } from "@/features/solver/solveRunner";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
@@ -27,7 +26,6 @@ export type SolverActions = {
 };
 
 export function createSolverActions(getCanvasManager: () => ViewportApi | null): SolverActions {
-  let requestGeneration = 0;
   let iterateHoverActive = false;
   const present = createResultPresenter({ getCanvasManager });
 
@@ -48,59 +46,13 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
   });
   const getSolverControl = (mode: SolverMode) => solverControls.find((c) => c.mode === mode);
 
-  const clearComputedState = () => {
-    clearIterateState();
-    resetTraceState();
-    present.clearResult();
-  };
-  const invalidatePendingSolveResults = () => {
-    requestGeneration++;
-  };
   const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
 
   const replay = createReplayController({
     getCanvasManager,
     isIterateHoverActive: () => iterateHoverActive,
   });
-
-  const computePath = async () => {
-    const cm = getCanvasManager();
-    if (!cm) return;
-    // Before anything reads or clears the iterate state: a replay running over
-    // a path this call is about to replace (or clear, on the not-ready paths
-    // below) would keep drawing its scratch copy of the old one.
-    replay.cancel();
-    const state = getState();
-    const solverDefinition = getSolverControl(state.solverMode);
-    if (!solverDefinition || !state.objectiveVector || computeDrawingPhase(state) !== "ready_for_solvers" || !hasPolytopeLines(state.polytope)) {
-      invalidatePendingSolveResults();
-      clearComputedState();
-      return;
-    }
-    const runBlock = solverDefinition.getRunBlock(state);
-    if (runBlock) {
-      invalidatePendingSolveResults();
-      present.render(runBlock);
-      return;
-    }
-    const request = solverDefinition.buildRequest(state);
-    if (!request) {
-      invalidatePendingSolveResults();
-      clearComputedState();
-      return;
-    }
-    const gen = ++requestGeneration;
-    replay.cancel();
-    try {
-      const response = await runSolverWorker(request);
-      if (gen !== requestGeneration) return;
-      applySolverResult(response, (payload) => present.render(payload));
-      cm.draw();
-    } catch (error) {
-      if (gen !== requestGeneration) return;
-      present.renderError(error instanceof Error ? error.message : String(error));
-    }
-  };
+  const { computePath, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ getCanvasManager, present, replay, getSolverControl });
 
   const rotation = createRotationController({
     computePath,
