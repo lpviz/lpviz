@@ -118,7 +118,5 @@ dist
 .ralph
 /tmp
 PLAN.md
-# local visual-regression baseline (scripts/visual.ts)
-.visual/
 # Playwright MCP page snapshots
 .playwright-mcp/

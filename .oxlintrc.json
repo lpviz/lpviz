@@ -48,17 +48,6 @@
   "ignorePatterns": [
     "dist/**",
     "node_modules/**",
-    ".visual/**",
     "apps/web/docs/*.html"
-  ],
-  "overrides": [
-    {
-      "files": [
-        "scripts/**"
-      ],
-      "rules": {
-        "no-console": "off"
-      }
-    }
   ]
 }
