@@ -1,4 +1,4 @@
-import { getDisplayedIterateZ, getState } from "@/features/core/store";
+import { getState } from "@/features/core/store";
 import type { PointXY, Vec } from "@lpviz/math/types";
 import { toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
 import { projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
@@ -41,7 +41,7 @@ export function createCoordsApi({
         });
       }
 
-      return toCanvasCoords3D(getManagerSnapshot(), getViewportRect(), { x, y }, z, getState().zScale, getDisplayedIterateZ);
+      return toCanvasCoords3D(getManagerSnapshot(), getViewportRect(), { x, y }, z, getState().zScale);
     },
     getObjectiveScreenPosition: (point: Vec): PointXY => {
       if (shouldUseExternal2DViewport()) {

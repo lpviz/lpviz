@@ -17,8 +17,8 @@ export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 // ---------- wire ----------
 
 // What crosses the worker boundary (see resultPacking): the iterates as one flat
-// buffer with the display z baked in, and the log with every numeric section's
-// rows as typed columns. The buffers are transferred, not cloned.
+// coordinate buffer plus their display lift, and the log with every numeric
+// section's rows as typed columns. The buffers are transferred, not cloned.
 export type PackedRows = {
   x: Float64Array;
   y: Float64Array;
@@ -40,6 +40,7 @@ export type SolverWireSuccess = {
   success: true;
   iterations: Float64Array;
   stride: number;
+  lift?: Float64Array | undefined;
   log: PackedLogSection[];
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;

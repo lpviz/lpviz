@@ -124,16 +124,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
-    return [
-      raw.iterateEllipsoids,
-      raw.iterateLocalizingSets,
-      raw.iteratePath,
-      raw.iterateObjectiveVector,
-      raw.highlightIteratePathIndex,
-      raw.is3DMode,
-      raw.isTransitioning3D,
-      getViewportRenderSnapshot().mode,
-    ];
+    return [raw.iterateEllipsoids, raw.iterateLocalizingSets, raw.iteratePath, raw.highlightIteratePathIndex, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
   }
 
   protected rebuild(): void {
@@ -160,7 +151,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
       const segments = this.slots[used]!;
-      const iterate = flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+      const iterate = flatPointXYZ(raw.iteratePath, index);
       if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)) {
         continue;
       }
@@ -185,7 +176,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
       this.polygon.visible = false;
       return;
     }
-    const iterate = flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+    const iterate = flatPointXYZ(raw.iteratePath, index);
     const written = this.writePolygon(raw.iterateLocalizingSets, index, iterate?.[2] ?? 0);
     if (written === 0) {
       this.polygon.visible = false;

@@ -49,17 +49,17 @@ export function createReplayController(deps: {
     const durationMs = clampReplayDurationMs(snap.solverSettings.replaySpeed);
 
     // One copy of the path per replay, never per frame: the sweep only ever rewrites the `stride`
-    // floats of the moving head, so every point behind it is still the solver's own data.
+    // floats (and the lift) of the moving head, so every point behind it is still the solver's own data.
     const points = orig.points.slice(0, total * stride);
+    const lift = orig.lift ? orig.lift.slice(0, total) : null;
     // which slot currently holds the interpolated head rather than its real
     // iterate, so it can be put back once the head has moved past it
     let headIndex = -1;
     let shownCount = 0;
 
     setState({
-      iteratePath: { points, count: 0, stride },
+      iteratePath: { points, count: 0, stride, lift },
       iteratePhases: [],
-      iterateObjectiveVector: snap.originalIterateObjectiveVector,
       highlightIteratePathIndex: null,
       replayActive: true,
     });
@@ -97,20 +97,25 @@ export function createReplayController(deps: {
         for (let k = 0; k < stride; k++) {
           points[from + k] = orig.points[from + k]!;
         }
+        if (lift && orig.lift) lift[headIndex] = orig.lift[headIndex]!;
       }
       const fromBase = base * stride;
       const headBase = head * stride;
-      // every component interpolates, the baked z included — leaving it at the
+      // every component interpolates, the lift included — leaving it at the
       // segment's end value would drag the head along the floor in 3D while the
       // rest of the path is lifted
       for (let k = 0; k < stride; k++) {
         const a = orig.points[fromBase + k]!;
         points[headBase + k] = a + t * (orig.points[headBase + k]! - a);
       }
+      if (lift && orig.lift) {
+        const a = orig.lift[base]!;
+        lift[head] = a + t * (orig.lift[head]! - a);
+      }
       headIndex = head;
 
       setState({
-        iteratePath: { points, count, stride },
+        iteratePath: { points, count, stride, lift },
         // the phase array has to be exactly `count` long or IterateLineLayer
         // drops phase colouring; it only changes when the head crosses an
         // iterate, so most frames skip the slice

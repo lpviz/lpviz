@@ -1,4 +1,4 @@
-import { computeFlatZ, getState } from "@/features/core/store";
+import { getState, iterateHeight } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -22,12 +22,13 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
-    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, raw.iterateObjectiveVector, getViewportRenderSnapshot().mode];
+    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, getViewportRenderSnapshot().mode];
   }
 
   protected rebuild(): void {
     const raw = getState();
-    const { points, count, stride } = raw.iteratePath;
+    const path = raw.iteratePath;
+    const { points, count, stride } = path;
     if (!shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw)) {
       this.hide();
       return;
@@ -39,15 +40,15 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
     }
     const phases = raw.iteratePhases;
     const hasPhases = phases.length === count && phases.length > 0;
-    const objVec = raw.iterateObjectiveVector;
     this.draw(
       indices.length,
       (pos) => {
         for (let i = 0; i < indices.length; i++) {
-          const base = indices[i]! * stride;
+          const index = indices[i]!;
+          const base = index * stride;
           pos[i * 3] = points[base]!;
           pos[i * 3 + 1] = points[base + 1]!;
-          pos[i * 3 + 2] = computeFlatZ(points, base, stride, objVec);
+          pos[i * 3 + 2] = iterateHeight(path, index);
         }
       },
       hasPhases ? (col) => writePhaseColors(col, phases, indices, indices.length) : null,

@@ -1,5 +1,5 @@
 import type { CompletionMode, DragTarget, DragViewAnchor3D, State } from "@/features/core/store";
-import { displayedSolverStartPoint, getState } from "@/features/core/store";
+import { displayedSolverStartPoint, getState, iterateHeight } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { type BoundingBox, clipRayToBoundingBox, VRep } from "@lpviz/math/geometry";
@@ -204,10 +204,10 @@ export function solverStartNearLocalPoint(canvasManager: ViewportApi, state: Sta
   const startPoint = displayedSolverStartPoint(state);
   if (!startPoint) return null;
   // project at the marker's drawn height: in 3D the ring rides at the first
-  // iterate's z (its baked total, points[2]), matching SolverStartLayer
-  const { points, count, stride } = state.iteratePath;
-  const zTotal = count > 0 && stride >= 3 ? points[2]! : undefined;
-  const screen = canvasManager.toCanvasCoords(startPoint[0], startPoint[1], zTotal);
+  // iterate's height, matching SolverStartLayer
+  const { iteratePath } = state;
+  const z = iteratePath.count > 0 ? iterateHeight(iteratePath, 0) : undefined;
+  const screen = canvasManager.toCanvasCoords(startPoint[0], startPoint[1], z);
   return Math.hypot(localX - screen.x, localY - screen.y) <= SOLVER_START_HIT_RADIUS ? startPoint : null;
 }
 

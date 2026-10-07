@@ -507,10 +507,11 @@ describe("centralPath", () => {
       niter: 20,
     });
     expect(r.iterations.length).toBeGreaterThan(0);
-    for (const p of r.iterations) {
+    expect(r.convergence!.length).toBe(r.iterations.length);
+    for (const [i, p] of r.iterations.entries()) {
       expect(Number.isFinite(p[0]!)).toBe(true);
       expect(Number.isFinite(p[1]!)).toBe(true);
-      expect(Number.isFinite(p[2]!)).toBe(true);
+      expect(Number.isFinite(r.convergence![i]!)).toBe(true);
     }
   });
 

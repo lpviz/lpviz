@@ -39,8 +39,7 @@ const tracePointPositionCache = new WeakMap<object, Float32Array>();
 function getCachedTracePointPositions(entry: TraceEntry) {
   const cached = tracePointPositionCache.get(entry);
   if (cached) return cached;
-  const { points, count, stride, objectiveVector } = entry;
-  const sampled = count === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(flatXYZ(points, count, stride, objectiveVector), count));
+  const sampled = entry.count === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(flatXYZ(entry), entry.count));
   tracePointPositionCache.set(entry, sampled);
   return sampled;
 }

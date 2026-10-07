@@ -31,20 +31,23 @@ type VirtualRowBlocks = {
   at(index: number): ResultTextBlock | undefined;
 };
 
-// Flat, contiguous iterate data: element `i` lives at [i*stride .. i*stride+stride). stride 3 =
-// [x, y, bakedTotalZ] (packed pdhg/ipm), stride 2 = [x, y] (simplex / central path, z renders
-// flat). One array per solve, not one Float64Array per iterate: millions of live objects is what
-// a major GC must mark.
+// Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
+// `stride` the problem's dimension. `lift[i]` is the height the 3D view raises iterate `i` above the
+// floor (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One
+// array per solve, not one Float64Array per iterate: millions of live objects is what a major GC
+// must mark.
 export interface IteratePath {
   points: Float64Array;
   count: number;
   stride: number;
+  lift: Float64Array | null;
 }
 
 export const EMPTY_ITERATE_PATH: IteratePath = {
   points: new Float64Array(0),
   count: 0,
-  stride: 3,
+  stride: 2,
+  lift: null,
 };
 
 // The ellipsoid method's per-iteration ellipse, parallel to the iterate path:
@@ -65,9 +68,8 @@ export interface LocalizingSetPath {
   count: number;
 }
 
-export interface TraceEntry extends IteratePath {
-  objectiveVector: Vec | null;
-}
+// A path kept from an earlier solve while tracing.
+export type TraceEntry = IteratePath;
 
 export type SolverSettings = {
   alphaMax: number;
@@ -148,8 +150,6 @@ export type SolverState = {
   originalIteratePath: IteratePath;
   originalIteratePhases: number[];
   iterateRestartIndices: number[];
-  iterateObjectiveVector: Vec | null;
-  originalIterateObjectiveVector: Vec | null;
 
   traceEnabled: boolean;
   traceBuffer: TraceEntry[];
@@ -182,8 +182,6 @@ export function freshSolverState(): Omit<SolverState, keyof SolverRuntimeState> 
     originalIteratePath: EMPTY_ITERATE_PATH,
     originalIteratePhases: [],
     iterateRestartIndices: [],
-    iterateObjectiveVector: null,
-    originalIterateObjectiveVector: null,
 
     traceEnabled: false,
     traceBuffer: [],
@@ -209,7 +207,6 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
   iterateLocalizingSets: () => ITERATE_DIRTY,
   iteratePhases: () => ITERATE_DIRTY,
   iterateRestartIndices: () => ITERATE_DIRTY,
-  iterateObjectiveVector: () => ITERATE_DIRTY,
   highlightIteratePathIndex: () => ITERATE_DIRTY,
   // the optimum star is hidden for the duration of a replay, so starting or
   // stopping one changes what the iterate pass draws (see IterateStarLayer)
@@ -246,11 +243,8 @@ export function displayedSolverStartPoint(state: EditorState & SolverState): Vec
   return point;
 }
 
-// Display z for one iterate at points[base..base+stride): the baked total
-// (component [2], present for pdhg/ipm) minus the current objective value, so
-// 2D-projected solves render flat and the 3D height tracks the extra term.
-export function computeFlatZ(points: Float64Array, base: number, stride: number, objectiveVector: Vec | null): number {
-  const objectiveValue = objectiveVector ? objectiveVector[0] * points[base]! + objectiveVector[1] * points[base + 1]! : 0;
-  const totalValue = stride >= 3 ? points[base + 2]! : objectiveValue;
-  return totalValue - objectiveValue;
+// The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the
+// solver's lift above the floor (zero for a solver drawn flat).
+export function iterateHeight(path: IteratePath, index: number): number {
+  return path.stride >= 3 ? path.points[index * path.stride + 2]! : (path.lift?.[index] ?? 0);
 }

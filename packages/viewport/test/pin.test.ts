@@ -135,7 +135,7 @@ function buildTranscript() {
               record(`${key} canvas ${x},${y}`, [
                 toCanvasCoords3D(snap, rect, { x, y }, undefined, 0.1),
                 toCanvasCoords3D(snap, rect, { x, y }, 7, 0.1),
-                toCanvasCoords3D(snap, rect, { x, y }, 7, 2.5, (entry) => entry[0]! * 2 + entry[1]!),
+                toCanvasCoords3D(snap, rect, { x, y }, x * 2 + y, 2.5),
                 projectWorldPosition3D(snap, rect, { x, y, z: 0 }),
               ]);
             }

@@ -1,17 +1,11 @@
-import { computeFlatZ, type IteratePath } from "@/features/core/store";
+import { iterateHeight, type IteratePath } from "@/features/core/store";
 import type { Vec } from "@lpviz/math/types";
-
-type TraceEntry = IteratePath & {
-  objectiveVector: Vec | null;
-};
 
 type ZoomFitInputs = {
   vertices: Vec[];
   iteratePath: IteratePath;
   originalIteratePath: IteratePath;
-  iterateObjectiveVector: Vec | null;
-  originalIterateObjectiveVector: Vec | null;
-  traceBuffer: TraceEntry[];
+  traceBuffer: IteratePath[];
   objectiveVector: Vec | null;
   currentObjective: Vec | null;
   objectiveHidden: boolean;
@@ -21,17 +15,7 @@ type ZoomFitInputs = {
 // per-point {x, y} objects plus Math.min(...spread) over every iterate both
 // allocated heavily and, above ~125k z values (V8's argument limit), threw a
 // RangeError that broke zoom-to-fit outright at high solver iteration counts.
-export function collectZoomFitBounds({
-  vertices,
-  iteratePath,
-  originalIteratePath,
-  iterateObjectiveVector,
-  originalIterateObjectiveVector,
-  traceBuffer,
-  objectiveVector,
-  currentObjective,
-  objectiveHidden,
-}: ZoomFitInputs) {
+export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePath, traceBuffer, objectiveVector, currentObjective, objectiveHidden }: ZoomFitInputs) {
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -54,12 +38,12 @@ export function collectZoomFitBounds({
     if (y > maxY) maxY = y;
   };
 
-  const addPath = (path: IteratePath, objectiveOverride: Vec | null) => {
+  const addPath = (path: IteratePath) => {
     const { points, count, stride } = path;
     for (let i = 0; i < count; i++) {
       const base = i * stride;
       addPoint(points[base]!, points[base + 1]!);
-      const z = computeFlatZ(points, base, stride, objectiveOverride);
+      const z = iterateHeight(path, i);
       hasZ = true;
       if (z < minZ) minZ = z;
       if (z > maxZ) maxZ = z;
@@ -73,12 +57,10 @@ export function collectZoomFitBounds({
     }
     addPoint(vertex[0], vertex[1]);
   }
-  // use the objective each path was solved under, as the render layers do —
-  // the current objectiveVector can differ mid-drag or after a solver error
-  addPath(iteratePath, iterateObjectiveVector);
-  addPath(originalIteratePath, originalIterateObjectiveVector);
+  addPath(iteratePath);
+  addPath(originalIteratePath);
   for (const traceEntry of traceBuffer) {
-    addPath(traceEntry, traceEntry.objectiveVector);
+    addPath(traceEntry);
   }
 
   if (!objectiveHidden) {
