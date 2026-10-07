@@ -1,36 +1,36 @@
 import { describe, expect, test } from "bun:test";
 import { VRep, centroid, classifyRegion, expandDegenerateBounds, hasOpenBoundaryClosure, isConvexChain, isConvexPolygon, verticesFromLines } from "../src/geometry";
-import type { Lines, Vertices } from "../src/types";
+import type { Lines, Vec, Vertices } from "../src/types";
 
 describe("VRep.isConvex", () => {
   test("tolerates floating-point noise from a vertex dragged onto an edge", () => {
-    const nearCollinear = [
-      { x: 0, y: 0 },
-      { x: 1, y: 1e-15 },
-      { x: 2, y: 0 },
-      { x: 2, y: 2 },
-      { x: 0, y: 2 },
+    const nearCollinear: Vec[] = [
+      [0, 0],
+      [1, 1e-15],
+      [2, 0],
+      [2, 2],
+      [0, 2],
     ];
     expect(VRep.fromPoints(nearCollinear).isConvex()).toBe(true);
   });
 
   test("rejects a genuinely dented polygon", () => {
-    const dent = [
-      { x: 0, y: 0 },
-      { x: 2, y: 0 },
-      { x: 1, y: 0.5 },
-      { x: 2, y: 2 },
-      { x: 0, y: 2 },
+    const dent: Vec[] = [
+      [0, 0],
+      [2, 0],
+      [1, 0.5],
+      [2, 2],
+      [0, 2],
     ];
     expect(VRep.fromPoints(dent).isConvex()).toBe(false);
   });
 
   test("rejects a 180-degree spike", () => {
-    const spike = [
-      { x: 0, y: 0 },
-      { x: 2, y: 0 },
-      { x: 1, y: 0 },
-      { x: 1, y: 1 },
+    const spike: Vec[] = [
+      [0, 0],
+      [2, 0],
+      [1, 0],
+      [1, 1],
     ];
     expect(VRep.fromPoints(spike).isConvex()).toBe(false);
   });
@@ -51,12 +51,12 @@ describe("VRep.isConvex", () => {
   });
 
   test("accepts a convex polygon with a vertex inserted on an edge", () => {
-    const withInserted = [
-      { x: 0, y: 0 },
-      { x: 2, y: 0 },
-      { x: 4, y: 0 },
-      { x: 4, y: 3 },
-      { x: 0, y: 3 },
+    const withInserted: Vec[] = [
+      [0, 0],
+      [2, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
     ];
     expect(isConvexPolygon(withInserted)).toBe(true);
     expect(isConvexPolygon(starPolygon(9, 1))).toBe(true);
@@ -66,10 +66,10 @@ describe("VRep.isConvex", () => {
 // The vertices of a regular n-gon visited every `step`-th one: a convex
 // polygon for step 1, a star that winds `step` times around the center
 // otherwise (gcd(n, step) = 1 keeps it one closed chain).
-function starPolygon(count: number, step: number) {
+function starPolygon(count: number, step: number): Vec[] {
   return Array.from({ length: count }, (_, i) => {
     const angle = (2 * Math.PI * ((i * step) % count)) / count;
-    return { x: 10 * Math.cos(angle), y: 10 * Math.sin(angle) };
+    return [10 * Math.cos(angle), 10 * Math.sin(angle)];
   });
 }
 
@@ -77,9 +77,9 @@ describe("isConvexChain", () => {
   test("rejects a chain doubling back on itself", () => {
     expect(
       isConvexChain([
-        { x: 0, y: 0 },
-        { x: 2, y: 0 },
-        { x: 1, y: 0 },
+        [0, 0],
+        [2, 0],
+        [1, 0],
       ]),
     ).toBe(false);
   });
@@ -88,13 +88,13 @@ describe("isConvexChain", () => {
     // an inward spiral: every turn a left turn, five of them at 90 degrees
     expect(
       isConvexChain([
-        { x: 0, y: 0 },
-        { x: 10, y: 0 },
-        { x: 10, y: 10 },
-        { x: 0, y: 10 },
-        { x: 0, y: 2 },
-        { x: 8, y: 2 },
-        { x: 8, y: 8 },
+        [0, 0],
+        [10, 0],
+        [10, 10],
+        [0, 10],
+        [0, 2],
+        [8, 2],
+        [8, 8],
       ]),
     ).toBe(false);
   });
@@ -102,17 +102,17 @@ describe("isConvexChain", () => {
   test("accepts straight continuation and duplicate points", () => {
     expect(
       isConvexChain([
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 2, y: 0 },
+        [0, 0],
+        [1, 0],
+        [2, 0],
       ]),
     ).toBe(true);
     expect(
       isConvexChain([
-        { x: 0, y: 0 },
-        { x: 1, y: 0 },
-        { x: 1, y: 0 },
-        { x: 1, y: 1 },
+        [0, 0],
+        [1, 0],
+        [1, 0],
+        [1, 1],
       ]),
     ).toBe(true);
   });
@@ -123,11 +123,11 @@ describe("isConvexChain", () => {
   // closed wrongly flagged this one nonconvex (red fill) when dragging an end
   // ray past the closure point.
   test("a convex open chain with a nonconvex closure is still a valid chain", () => {
-    const openChain = [
-      { x: -6.125, y: 10.1875 },
-      { x: -12.175, y: 8.1875 },
-      { x: -0.925, y: 14.6875 },
-      { x: 10.275, y: 9.8375 },
+    const openChain: Vec[] = [
+      [-6.125, 10.1875],
+      [-12.175, 8.1875],
+      [-0.925, 14.6875],
+      [10.275, 9.8375],
     ];
     expect(isConvexChain(openChain)).toBe(true);
     // ...but as a closed polygon it is not convex, which is why the two tests
@@ -232,55 +232,55 @@ describe("expandDegenerateBounds", () => {
 });
 
 describe("VRep.findEdgeNearPoint", () => {
-  const SMALL_SQUARE = [
-    { x: 0, y: 0 },
-    { x: 0.3, y: 0 },
-    { x: 0.3, y: 0.3 },
-    { x: 0, y: 0.3 },
+  const SMALL_SQUARE: Vec[] = [
+    [0, 0],
+    [0.3, 0],
+    [0.3, 0.3],
+    [0, 0.3],
   ];
 
   test("picks the nearest edge, not the lowest index, when a small polytope puts every edge in tolerance", () => {
     const edge = VRep.fromPoints(SMALL_SQUARE);
     // the default 0.5 tolerance exceeds this square's side length, so all four
     // edges qualify for any interior point
-    expect(edge.findEdgeNearPoint({ x: 0, y: 0.15 })).toBe(3);
-    expect(edge.findEdgeNearPoint({ x: 0.15, y: 0.3 })).toBe(2);
-    expect(edge.findEdgeNearPoint({ x: 0.3, y: 0.15 })).toBe(1);
-    expect(edge.findEdgeNearPoint({ x: 0.15, y: 0 })).toBe(0);
+    expect(edge.findEdgeNearPoint([0, 0.15])).toBe(3);
+    expect(edge.findEdgeNearPoint([0.15, 0.3])).toBe(2);
+    expect(edge.findEdgeNearPoint([0.3, 0.15])).toBe(1);
+    expect(edge.findEdgeNearPoint([0.15, 0])).toBe(0);
   });
 
   test("still returns the right edge for a large polytope", () => {
-    const big = [
-      { x: 0, y: 0 },
-      { x: 20, y: 0 },
-      { x: 20, y: 20 },
-      { x: 0, y: 20 },
+    const big: Vec[] = [
+      [0, 0],
+      [20, 0],
+      [20, 20],
+      [0, 20],
     ];
     const rep = VRep.fromPoints(big);
-    expect(rep.findEdgeNearPoint({ x: 0, y: 10 })).toBe(3);
-    expect(rep.findEdgeNearPoint({ x: 20, y: 10 })).toBe(1);
-    expect(rep.findEdgeNearPoint({ x: 10, y: 20 })).toBe(2);
+    expect(rep.findEdgeNearPoint([0, 10])).toBe(3);
+    expect(rep.findEdgeNearPoint([20, 10])).toBe(1);
+    expect(rep.findEdgeNearPoint([10, 20])).toBe(2);
   });
 
   test("keeps the closing edge of a closed polygon reachable", () => {
     const rep = VRep.fromPoints(SMALL_SQUARE);
-    expect(rep.findEdgeNearPoint({ x: 0.15, y: 0.02 })).toBe(0);
-    expect(rep.findEdgeNearPoint({ x: 0.02, y: 0.15 })).toBe(3);
+    expect(rep.findEdgeNearPoint([0.15, 0.02])).toBe(0);
+    expect(rep.findEdgeNearPoint([0.02, 0.15])).toBe(3);
   });
 
   test("returns null when no edge is within tolerance", () => {
     const rep = VRep.fromPoints([
-      { x: 0, y: 0 },
-      { x: 10, y: 0 },
-      { x: 10, y: 10 },
+      [0, 0],
+      [10, 0],
+      [10, 10],
     ]);
     // incenter: ~2.3 clear of every edge
-    expect(rep.findEdgeNearPoint({ x: 7.3, y: 2.7 })).toBeNull();
+    expect(rep.findEdgeNearPoint([7.3, 2.7])).toBeNull();
   });
 
   test("isPointNearEdge agrees with the nearest-edge choice", () => {
     const rep = VRep.fromPoints(SMALL_SQUARE);
-    const point = { x: 0, y: 0.15 };
+    const point: Vec = [0, 0.15];
     const nearest = rep.findEdgeNearPoint(point);
     expect(nearest).not.toBeNull();
     expect(rep.isPointNearEdge(point, nearest!)).toBe(true);
@@ -288,14 +288,14 @@ describe("VRep.findEdgeNearPoint", () => {
 
   test("breaks exact ties by lowest index", () => {
     const rep = VRep.fromPoints([
-      { x: -1, y: 0 },
-      { x: 0, y: -1 },
-      { x: 1, y: 0 },
-      { x: 0, y: 1 },
+      [-1, 0],
+      [0, -1],
+      [1, 0],
+      [0, 1],
     ]);
     // the centre sits sqrt(2)/2 = 0.7071... from all four edges
-    expect(rep.findEdgeNearPoint({ x: 0, y: 0 }, 0.71)).toBe(0);
-    expect(rep.findEdgeNearPoint({ x: 0, y: 0 }, 0.5)).toBeNull();
+    expect(rep.findEdgeNearPoint([0, 0], 0.71)).toBe(0);
+    expect(rep.findEdgeNearPoint([0, 0], 0.5)).toBeNull();
   });
 });
 

@@ -3,7 +3,7 @@ import { displayedSolverStartPoint, getState } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { type BoundingBox, clipRayToBoundingBox, VRep } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, Vec } from "@lpviz/math/types";
 
 const VERTEX_HIT_RADIUS = 12;
 // tighter than the vertex radius: in simplex mode the marker sits on a
@@ -20,9 +20,10 @@ type Bounds = BoundingBox;
 
 export type ConstraintDragTarget = Extract<DragTarget, { kind: "constraint" }>;
 
-export function getLogicalFromClient(canvasManager: ViewportApi, clientX: number, clientY: number): PointXY {
+export function getLogicalFromClient(canvasManager: ViewportApi, clientX: number, clientY: number): Vec {
   const rect = canvasManager.getCanvasRect();
-  return canvasManager.toLogicalCoords(clientX - rect.left, clientY - rect.top);
+  const { x, y } = canvasManager.toLogicalCoords(clientX - rect.left, clientY - rect.top);
+  return [x, y];
 }
 
 export function getLocalFromClient(canvasManager: ViewportApi, clientX: number, clientY: number): PointXY {
@@ -30,9 +31,9 @@ export function getLocalFromClient(canvasManager: ViewportApi, clientX: number, 
   return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
-export function findVertexNearLocalPoint(canvasManager: ViewportApi, localX: number, localY: number, vertices: PointXY[]): number {
+export function findVertexNearLocalPoint(canvasManager: ViewportApi, localX: number, localY: number, vertices: Vec[]): number {
   return vertices.findIndex((vertex) => {
-    const canvasPoint = canvasManager.toCanvasCoords(vertex.x, vertex.y);
+    const canvasPoint = canvasManager.toCanvasCoords(vertex[0], vertex[1]);
     return Math.hypot(localX - canvasPoint.x, localY - canvasPoint.y) <= VERTEX_HIT_RADIUS;
   });
 }
@@ -44,15 +45,15 @@ export function findVertexNearLocalPoint(canvasManager: ViewportApi, localX: num
  * a fixed world radius is unhittable zoomed out (the usual case on mobile)
  * and covers most of a small region zoomed in.
  */
-export function worldDistanceForPixels(canvasManager: ViewportApi, worldPoint: PointXY, pixels: number): number {
-  const canvasPoint = canvasManager.toCanvasCoords(worldPoint.x, worldPoint.y);
+export function worldDistanceForPixels(canvasManager: ViewportApi, worldPoint: Vec, pixels: number): number {
+  const canvasPoint = canvasManager.toCanvasCoords(worldPoint[0], worldPoint[1]);
   const shifted = canvasManager.toLogicalCoords(canvasPoint.x + pixels, canvasPoint.y);
-  return Math.hypot(shifted.x - worldPoint.x, shifted.y - worldPoint.y);
+  return Math.hypot(shifted.x - worldPoint[0], shifted.y - worldPoint[1]);
 }
 
 // The nearest edge within `tolerance` (world units); a draft or open chain
 // has no closing edge.
-export function findEdgeNearPoint(point: PointXY, vertices: PointXY[], completionMode: CompletionMode, tolerance = 0.5): number | null {
+export function findEdgeNearPoint(point: Vec, vertices: Vec[], completionMode: CompletionMode, tolerance = 0.5): number | null {
   return VRep.fromPoints(vertices).findEdgeNearPoint(point, tolerance, completionMode === "closed");
 }
 
@@ -68,17 +69,17 @@ function getVisibleBounds(canvasManager: ViewportApi): Bounds {
   };
 }
 
-function distanceToSegment(point: PointXY, start: PointXY, end: PointXY): number {
-  const dx = end.x - start.x;
-  const dy = end.y - start.y;
+function distanceToSegment(point: Vec, start: Vec, end: Vec): number {
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
   const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return Math.hypot(point.x - start.x, point.y - start.y);
-  const t = Math.max(0, Math.min(1, ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2));
-  const projection = { x: start.x + t * dx, y: start.y + t * dy };
-  return Math.hypot(point.x - projection.x, point.y - projection.y);
+  if (len2 === 0) return Math.hypot(point[0] - start[0], point[1] - start[1]);
+  const t = Math.max(0, Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / len2));
+  const projection = { x: start[0] + t * dx, y: start[1] + t * dy };
+  return Math.hypot(point[0] - projection.x, point[1] - projection.y);
 }
 
-export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: PointXY): number | null {
+export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Vec): number | null {
   const { completionMode, polytope } = getState();
   if (completionMode !== "open" || !polytope?.boundaryRays?.length) {
     return null;
@@ -87,7 +88,7 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Poin
   const bounds = getVisibleBounds(canvasManager);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
     const ray = polytope.boundaryRays[index]!;
-    const clipped = clipRayToBoundingBox({ x: ray.start[0], y: ray.start[1] }, { x: ray.direction[0], y: ray.direction[1] }, bounds);
+    const clipped = clipRayToBoundingBox(ray.start, ray.direction, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
     if (distanceToSegment(point, start, end) < 0.5) {
@@ -97,8 +98,8 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Poin
   return null;
 }
 
-function getViewAnchor3D(state: State, point: PointXY): DragViewAnchor3D | undefined {
-  return state.is3DMode || state.isTransitioning3D ? { x: point.x, y: point.y, z: 0 } : undefined;
+function getViewAnchor3D(state: State, point: Vec): DragViewAnchor3D | undefined {
+  return state.is3DMode || state.isTransitioning3D ? { x: point[0], y: point[1], z: 0 } : undefined;
 }
 
 export function getDragStartTarget(canvasManager: ViewportApi, state: State, clientX: number, clientY: number): DragTarget | null {
@@ -126,10 +127,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
   if (startPoint) {
     return {
       kind: "solver-start",
-      grabOffset: {
-        x: startPoint.x - logicalCoords.x,
-        y: startPoint.y - logicalCoords.y,
-      },
+      grabOffset: [startPoint[0] - logicalCoords[0], startPoint[1] - logicalCoords[1]],
       viewAnchor3D: getViewAnchor3D(state, startPoint),
     };
   }
@@ -148,7 +146,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
       const nextIndex = (edgeIndex + 1) % state.vertices.length;
       const start = state.vertices[edgeIndex]!;
       const end = state.vertices[nextIndex]!;
-      if (Math.hypot(end.x - start.x, end.y - start.y) > 1e-6) {
+      if (Math.hypot(end[0] - start[0], end[1] - start[1]) > 1e-6) {
         return {
           kind: "constraint",
           operation: {
@@ -157,7 +155,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
             lines: lineContext.map(([A, B, C]) => [A, B, C]),
           },
           start: logicalCoords,
-          normal: { x: line[0], y: line[1] },
+          normal: [line[0], line[1]],
         };
       }
     }
@@ -178,7 +176,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
           vertexIndices: [edgeIndex, edgeIndex + 1],
         },
         start: logicalCoords,
-        normal: { x: line[0], y: line[1] },
+        normal: [line[0], line[1]],
       };
     }
 
@@ -195,21 +193,21 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
         vertexIndices: rayIndex === 0 ? [0, 1] : [state.vertices.length - 2, state.vertices.length - 1],
       },
       start: logicalCoords,
-      normal: { x: line[0], y: line[1] },
+      normal: [line[0], line[1]],
     };
   }
 
   return null;
 }
 
-export function solverStartNearLocalPoint(canvasManager: ViewportApi, state: State, localX: number, localY: number): PointXY | null {
+export function solverStartNearLocalPoint(canvasManager: ViewportApi, state: State, localX: number, localY: number): Vec | null {
   const startPoint = displayedSolverStartPoint(state);
   if (!startPoint) return null;
   // project at the marker's drawn height: in 3D the ring rides at the first
   // iterate's z (its baked total, points[2]), matching SolverStartLayer
   const { points, count, stride } = state.iteratePath;
   const zTotal = count > 0 && stride >= 3 ? points[2]! : undefined;
-  const screen = canvasManager.toCanvasCoords(startPoint.x, startPoint.y, zTotal);
+  const screen = canvasManager.toCanvasCoords(startPoint[0], startPoint[1], zTotal);
   return Math.hypot(localX - screen.x, localY - screen.y) <= SOLVER_START_HIT_RADIUS ? startPoint : null;
 }
 

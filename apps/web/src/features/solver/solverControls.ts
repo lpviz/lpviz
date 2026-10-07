@@ -1,7 +1,7 @@
 import { DEFAULT_SOLVER_SETTINGS, getState, nearestPolytopeVertex, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import type { ShareSettings } from "@/features/share/sharedState";
 import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
-import type { Vertices } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
@@ -40,7 +40,7 @@ function objectiveBase(state: State) {
   if (!state.objectiveVector || !hasPolytopeLines(state.polytope)) return null;
   return {
     lines: state.polytope.lines,
-    objective: Float64Array.of(state.objectiveVector.x, state.objectiveVector.y),
+    objective: Float64Array.from(state.objectiveVector),
   };
 }
 
@@ -50,16 +50,16 @@ function objectiveBase(state: State) {
 // (the end edges continue as rays), so the chain bounds them all. Without it
 // the engine falls back to a fixed box around the origin, which has no relation
 // to the drawing.
-function regionBoundingVertices(state: State): Vertices {
+function regionBoundingVertices(state: State): Vec[] {
   const vertices = state.polytope?.vertices ?? [];
-  return vertices.length > 0 ? vertices : state.vertices.map(({ x, y }) => [x, y] as [number, number]);
+  return vertices.length > 0 ? vertices : state.vertices;
 }
 
 // The dragged start point as a solver payload, or absent when never set (the
 // solvers then keep their exact legacy initialization).
 function startPointPayload(state: State): { startPoint?: number[] } {
   const point = state.solverStartPoint;
-  return point ? { startPoint: [point.x, point.y] } : {};
+  return point ? { startPoint: point } : {};
 }
 
 const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
@@ -144,7 +144,7 @@ export function createSolverControls({
         return {
           solver: "simplex",
           ...base,
-          ...(snapped ? { startVertex: [snapped.x, snapped.y] } : {}),
+          ...(snapped ? { startVertex: snapped } : {}),
           dual: s.solverSettings.simplexDualMode,
           enteringRule: s.solverSettings.simplexEnteringRule,
           leavingRule: s.solverSettings.simplexLeavingRule,

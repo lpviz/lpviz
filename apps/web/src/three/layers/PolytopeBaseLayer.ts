@@ -2,7 +2,7 @@ import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox, clipRayToBoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
-import type { Line, PointXY } from "@lpviz/math/types";
+import type { Line, Vec } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
@@ -40,28 +40,28 @@ const fillMaterial = (color: string) =>
     polygonOffsetUnits: 1,
   });
 
-function buildShapeFromVertices(vertices: ReadonlyArray<PointXY>) {
+function buildShapeFromVertices(vertices: ReadonlyArray<Vec>) {
   const shape = new Shape();
   if (vertices.length === 0) return shape;
-  shape.moveTo(vertices[0]!.x, vertices[0]!.y);
-  for (let i = 1; i < vertices.length; i++) shape.lineTo(vertices[i]!.x, vertices[i]!.y);
+  shape.moveTo(vertices[0]![0], vertices[0]![1]);
+  for (let i = 1; i < vertices.length; i++) shape.lineTo(vertices[i]![0], vertices[i]![1]);
   shape.closePath();
   return shape;
 }
 
-function clipPolygonToHalfPlane(polygon: PointXY[], line: Line): PointXY[] {
+function clipPolygonToHalfPlane(polygon: Vec[], line: Line): Vec[] {
   if (polygon.length === 0) return [];
   const [A, B, C] = line;
-  const inside = (p: PointXY) => A * p.x + B * p.y <= C + EPS;
-  const intersect = (s: PointXY, e: PointXY): PointXY => {
-    const dx = e.x - s.x,
-      dy = e.y - s.y;
+  const inside = (p: Vec) => A * p[0] + B * p[1] <= C + EPS;
+  const intersect = (s: Vec, e: Vec): Vec => {
+    const dx = e[0] - s[0],
+      dy = e[1] - s[1];
     const denom = A * dx + B * dy;
     if (Math.abs(denom) < EPS) return e;
-    const t = (C - A * s.x - B * s.y) / denom;
-    return { x: s.x + t * dx, y: s.y + t * dy };
+    const t = (C - A * s[0] - B * s[1]) / denom;
+    return [s[0] + t * dx, s[1] + t * dy];
   };
-  const result: PointXY[] = [];
+  const result: Vec[] = [];
   let prev = polygon[polygon.length - 1]!,
     prevIn = inside(prev);
   for (const cur of polygon) {
@@ -76,12 +76,12 @@ function clipPolygonToHalfPlane(polygon: PointXY[], line: Line): PointXY[] {
   return result;
 }
 
-function clipRegionToBoundingBox(lines: Line[], bounds: BoundingBox): PointXY[] {
-  let polygon: PointXY[] = [
-    { x: bounds.minX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.minY },
-    { x: bounds.maxX, y: bounds.maxY },
-    { x: bounds.minX, y: bounds.maxY },
+function clipRegionToBoundingBox(lines: Line[], bounds: BoundingBox): Vec[] {
+  let polygon: Vec[] = [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.minY],
+    [bounds.maxX, bounds.maxY],
+    [bounds.minX, bounds.maxY],
   ];
   for (const line of lines) {
     polygon = clipPolygonToHalfPlane(polygon, line);
@@ -91,7 +91,7 @@ function clipRegionToBoundingBox(lines: Line[], bounds: BoundingBox): PointXY[] 
 }
 
 type PolytopeRenderResult = {
-  fillVertices: PointXY[];
+  fillVertices: Vec[];
   isNonconvex: boolean;
   normalSegments: number[];
   highlightSegments: number[];
@@ -101,7 +101,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   const { vertices, completionMode, highlightIndex, polytope } = state;
   const regionFinished = completionMode !== "draft";
   const hasDerived = completionMode === "open" && polytope?.kind === "bounded" && polytope.vertices.length >= 3;
-  const displayVertices: PointXY[] = hasDerived && polytope?.kind === "bounded" ? polytope.vertices.map(([x, y]) => ({ x, y })) : vertices;
+  const displayVertices: Vec[] = hasDerived && polytope?.kind === "bounded" ? polytope.vertices : vertices;
   const isClosedRegion = completionMode === "closed" || hasDerived;
   // A closed region (or an open one promoted to its derived hull) is a cyclic
   // polygon, so closed-polygon convexity applies. An un-promoted open region is
@@ -114,7 +114,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   // everything (the visible rect is only meaningful under the ortho camera)
   const bounds = (completionMode === "open" && !hasDerived && polytope?.kind === "unbounded") || snap.mode !== "2d" ? UNBOUNDED_BOUNDS : visibleBounds2D(snap);
 
-  const fillVertices: PointXY[] =
+  const fillVertices: Vec[] =
     isClosedRegion && displayVertices.length >= 3
       ? displayVertices
       : completionMode === "open" && polytope?.kind === "unbounded" && hasPolytopeLines(polytope)
@@ -132,15 +132,15 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
     const e = displayVertices[ni]!;
     const highlighted = !hasDerived && highlightIndex === i;
     const arr = highlighted ? highlightSegments : normalSegments;
-    arr.push(s.x, s.y, 0, e.x, e.y, 0);
+    arr.push(s[0], s[1], 0, e[0], e[1], 0);
   }
 
   if (completionMode === "open" && !hasDerived && polytope?.boundaryRays) {
     for (const ray of polytope.boundaryRays) {
-      const clipped = clipRayToBoundingBox({ x: ray.start[0], y: ray.start[1] }, { x: ray.direction[0], y: ray.direction[1] }, bounds);
+      const clipped = clipRayToBoundingBox(ray.start, ray.direction, bounds);
       if (!clipped) continue;
       const [s, e] = clipped;
-      normalSegments.push(s.x, s.y, 0, e.x, e.y, 0);
+      normalSegments.push(s[0], s[1], 0, e[0], e[1], 0);
     }
   }
 

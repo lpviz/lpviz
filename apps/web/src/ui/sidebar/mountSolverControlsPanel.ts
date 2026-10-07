@@ -13,7 +13,7 @@ function isSolverSelectable(state: State, mode: SolverMode): boolean {
   if (mode !== "central" || !state.objectiveVector || state.polytope.kind !== "unbounded") {
     return true;
   }
-  return !isObjectiveDirectionUnbounded(state.polytope.lines, [state.objectiveVector.x, state.objectiveVector.y]);
+  return !isObjectiveDirectionUnbounded(state.polytope.lines, state.objectiveVector);
 }
 
 export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {

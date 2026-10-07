@@ -1,5 +1,5 @@
 import { freshHistoryState, type HistoryState } from "@/features/history/historyState";
-import { EDITOR_DIRTY, freshEditorState, type EditorState } from "@/features/polytope-editor/editorState";
+import { EDITOR_DIRTY, freshEditorState, initialEditorRuntimeState, type EditorRuntimeState, type EditorState } from "@/features/polytope-editor/editorState";
 import {
   computeFlatZ,
   EMPTY_ITERATE_PATH,
@@ -14,7 +14,7 @@ import {
   type TraceEntry,
 } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
 // The slices' public surface, re-exported so importers keep one module to reach for.
@@ -25,6 +25,7 @@ export {
   computeDrawingPhase,
   nearestPolytopeVertex,
   type CompletionMode,
+  type Dimension,
   type DragTarget,
   type DragViewAnchor3D,
   type DrawingPhase,
@@ -85,7 +86,7 @@ export function deriveViewportDirty(state: State, changedKeys: readonly (keyof S
 }
 
 // The fields a reset leaves alone; each slice names its own (see the *RuntimeState types).
-type RuntimeState = ViewportRuntimeState & SolverRuntimeState;
+type RuntimeState = EditorRuntimeState & ViewportRuntimeState & SolverRuntimeState;
 
 export type FreshState = Omit<State, keyof RuntimeState>;
 
@@ -154,6 +155,7 @@ export function freshState(): FreshState {
 
 const initialState: State = {
   ...freshState(),
+  ...initialEditorRuntimeState(),
   ...initialViewportRuntimeState(),
   ...initialSolverRuntimeState(),
 };
@@ -275,7 +277,7 @@ export function clearIterateState(): void {
   });
 }
 
-export function getDisplayedIterateZ(entry: Float64Array, objectiveOverride?: PointXY | null): number {
+export function getDisplayedIterateZ(entry: Float64Array, objectiveOverride?: Vec | null): number {
   const { objectiveVector: currentObjective } = getState();
   const objectiveVector = objectiveOverride === undefined ? currentObjective : objectiveOverride;
   return computeFlatZ(entry, 0, entry.length, objectiveVector);
@@ -298,11 +300,11 @@ export function updateIteratePathsWithTrace(
   setState(patch);
 }
 
-function snapshotObjectiveVector(objectiveVector: PointXY | null) {
-  return objectiveVector ? { ...objectiveVector } : null;
+function snapshotObjectiveVector(objectiveVector: Vec | null): Vec | null {
+  return objectiveVector ? [...objectiveVector] : null;
 }
 
-function appendedTraceBuffer(state: State, path: IteratePath, objectiveSnapshot: PointXY | null): TraceEntry[] {
+function appendedTraceBuffer(state: State, path: IteratePath, objectiveSnapshot: Vec | null): TraceEntry[] {
   // The trace chunk shares the iterate path's flat buffer (one object, no copy)
   // and the caller's objective snapshot, which nothing mutates in place.
   const raw: TraceEntry[] = [...state.traceBuffer, { ...path, objectiveVector: objectiveSnapshot }];
@@ -313,7 +315,7 @@ function buildIterateStatePatch(
   path: IteratePath,
   phasesArray: number[] | undefined,
   restartIndicesArray: number[] | undefined,
-  objectiveSnapshot: PointXY | null,
+  objectiveSnapshot: Vec | null,
   ellipsoids: EllipsoidPath | null = null,
   localizingSets: LocalizingSetPath | null = null,
 ): Partial<State> {

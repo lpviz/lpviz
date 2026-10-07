@@ -37,24 +37,24 @@ export class ObjectiveLayer extends LayerBase {
 
     const target = raw.objectiveVector || (raw.completionMode !== "draft" && raw.currentObjective ? raw.currentObjective : null);
 
-    if (!target || Math.hypot(target.x, target.y) < OBJECTIVE_EPSILON) {
+    if (!target || Math.hypot(target[0], target[1]) < OBJECTIVE_EPSILON) {
       this.object3D.visible = false;
       return;
     }
 
     const headLength = OBJECTIVE_HEAD_LENGTH_PX * snap.unitsPerPixel;
-    const angle = Math.atan2(target.y, target.x);
+    const angle = Math.atan2(target[1], target[0]);
 
     // the shaft, then the two arrow-head strokes back from the tip
-    const positions = [0, 0, 0, target.x, target.y, 0];
+    const positions = [0, 0, 0, target[0], target[1], 0];
     for (const offset of [ARROW_HALF_ANGLE, -ARROW_HALF_ANGLE]) {
       const a = angle + offset;
-      positions.push(target.x, target.y, 0, target.x - headLength * Math.cos(a), target.y - headLength * Math.sin(a), 0);
+      positions.push(target[0], target[1], 0, target[0] - headLength * Math.cos(a), target[1] - headLength * Math.sin(a), 0);
     }
 
     replaceLinePositions(this.object3D.geometry, positions);
 
-    const isUnbounded = raw.polytope?.kind === "unbounded" && hasPolytopeLines(raw.polytope) && isObjectiveDirectionUnbounded(raw.polytope.lines, [target.x, target.y]);
+    const isUnbounded = raw.polytope?.kind === "unbounded" && hasPolytopeLines(raw.polytope) && isObjectiveDirectionUnbounded(raw.polytope.lines, target);
 
     this.object3D.material = lineDepthMaterial(isUnbounded ? OBJECTIVE_UNBOUNDED_COLOR : OBJECTIVE_COLOR, OBJECTIVE_LINE_THICKNESS, snap.mode === "3d");
     this.object3D.visible = true;

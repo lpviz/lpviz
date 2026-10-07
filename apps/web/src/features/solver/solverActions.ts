@@ -34,12 +34,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
       solverSettings: { ...getState().solverSettings, [key]: value },
     });
   const hasUnboundedObjectiveDirection = (state: State) =>
-    !!(
-      hasPolytopeLines(state.polytope) &&
-      state.objectiveVector &&
-      state.polytope.kind === "unbounded" &&
-      isObjectiveDirectionUnbounded(state.polytope.lines, [state.objectiveVector.x, state.objectiveVector.y])
-    );
+    !!(hasPolytopeLines(state.polytope) && state.objectiveVector && state.polytope.kind === "unbounded" && isObjectiveDirectionUnbounded(state.polytope.lines, state.objectiveVector));
   const solverControls = createSolverControls({
     updateSolverSetting,
     hasUnboundedObjectiveDirection,
@@ -104,7 +99,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
     } else syncTraceCapacity();
   };
   const startRotation = () => {
-    if (!getState().objectiveVector) setState({ objectiveVector: { x: 1, y: 0 } });
+    if (!getState().objectiveVector) setState({ objectiveVector: [1, 0] });
     if (getState().traceEnabled) {
       syncTraceCapacity();
       resetTraceState();

@@ -60,7 +60,7 @@ export function createRotationController(deps: { computePath: () => Promise<void
     inFlight = true;
     const mySession = session;
     const rotationStep = computeObjectiveRotationStep({
-      objectiveVector: state.objectiveVector ?? { x: 1, y: 0 },
+      objectiveVector: state.objectiveVector ?? [1, 0],
       angleStep: objectiveAngleStep(state.solverSettings),
       rotationDirection: direction,
       polytope: state.polytope,

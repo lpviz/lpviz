@@ -1,6 +1,7 @@
 import { computeDrawingPhase, nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
+import { zeroVec } from "@lpviz/math/vec";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
@@ -65,7 +66,7 @@ export interface LocalizingSetPath {
 }
 
 export interface TraceEntry extends IteratePath {
-  objectiveVector: PointXY | null;
+  objectiveVector: Vec | null;
 }
 
 export type SolverSettings = {
@@ -134,7 +135,7 @@ export type SolverState = {
   solverSettings: SolverSettings;
   // Where IPM/PDHG/primal-simplex begin iterating; null = the solver default
   // (origin). Draggable via the canvas marker.
-  solverStartPoint: PointXY | null;
+  solverStartPoint: Vec | null;
   iteratePath: IteratePath;
   iterateEllipsoids: EllipsoidPath | null;
   iterateLocalizingSets: LocalizingSetPath | null;
@@ -147,8 +148,8 @@ export type SolverState = {
   originalIteratePath: IteratePath;
   originalIteratePhases: number[];
   iterateRestartIndices: number[];
-  iterateObjectiveVector: PointXY | null;
-  originalIterateObjectiveVector: PointXY | null;
+  iterateObjectiveVector: Vec | null;
+  originalIterateObjectiveVector: Vec | null;
 
   traceEnabled: boolean;
   traceBuffer: TraceEntry[];
@@ -220,7 +221,6 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
 // Solver default start: IPM/PDHG begin at the origin, and Phase-1 simplex's
 // first displayed iterate is the origin too (all structural variables start
 // nonbasic), so one marker default is truthful for all three.
-const DEFAULT_SOLVER_START: Readonly<PointXY> = { x: 0, y: 0 };
 
 /** Whether the draggable start marker applies to the current solver/problem. */
 function solverStartPointApplies(state: EditorState & SolverState): boolean {
@@ -238,10 +238,10 @@ function solverStartPointApplies(state: EditorState & SolverState): boolean {
  * mode, which is how simplex consumes it), or the solver default when nothing has been dragged yet.
  * Null when hidden.
  */
-export function displayedSolverStartPoint(state: EditorState & SolverState): PointXY | null {
+export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
   if (!solverStartPointApplies(state)) return null;
   const point = state.solverStartPoint;
-  if (!point) return { ...DEFAULT_SOLVER_START };
+  if (!point) return zeroVec(state.dimension);
   if (state.solverMode === "simplex") {
     return nearestPolytopeVertex(state, point) ?? point;
   }
@@ -251,8 +251,8 @@ export function displayedSolverStartPoint(state: EditorState & SolverState): Poi
 // Display z for one iterate at points[base..base+stride): the baked total
 // (component [2], present for pdhg/ipm) minus the current objective value, so
 // 2D-projected solves render flat and the 3D height tracks the extra term.
-export function computeFlatZ(points: Float64Array, base: number, stride: number, objectiveVector: PointXY | null): number {
-  const objectiveValue = objectiveVector ? objectiveVector.x * points[base]! + objectiveVector.y * points[base + 1]! : 0;
+export function computeFlatZ(points: Float64Array, base: number, stride: number, objectiveVector: Vec | null): number {
+  const objectiveValue = objectiveVector ? objectiveVector[0] * points[base]! + objectiveVector[1] * points[base + 1]! : 0;
   const totalValue = stride >= 3 ? points[base + 2]! : objectiveValue;
   return totalValue - objectiveValue;
 }

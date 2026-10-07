@@ -1,11 +1,11 @@
 import { isObjectiveDirectionUnbounded } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { hasPolytopeLines, type PolytopeRepresentation } from "./polytopeTypes";
 
 export { isObjectiveDirectionUnbounded } from "@lpviz/math/geometry";
 
 export interface ObjectiveRotationStep {
-  nextObjective: PointXY;
+  nextObjective: Vec;
   nextDirection: 1 | -1;
 }
 
@@ -15,13 +15,13 @@ export function computeObjectiveRotationStep({
   rotationDirection,
   polytope,
 }: {
-  objectiveVector: PointXY;
+  objectiveVector: Vec;
   angleStep: number;
   rotationDirection: 1 | -1;
   polytope: PolytopeRepresentation | null;
 }): ObjectiveRotationStep {
-  const angle = Math.atan2(objectiveVector.y, objectiveVector.x);
-  const magnitude = Math.hypot(objectiveVector.x, objectiveVector.y);
+  const angle = Math.atan2(objectiveVector[1], objectiveVector[0]);
+  const magnitude = Math.hypot(objectiveVector[0], objectiveVector[1]);
 
   let nextDirection: 1 | -1 = rotationDirection;
   let nextAngle = angle + angleStep * nextDirection;
@@ -30,7 +30,7 @@ export function computeObjectiveRotationStep({
     const candidateDirections: Array<1 | -1> = [rotationDirection, rotationDirection === 1 ? -1 : 1];
     const allowedDirection = candidateDirections.find((direction) => {
       const candidateAngle = angle + angleStep * direction;
-      const candidateObjective: [number, number] = [magnitude * Math.cos(candidateAngle), magnitude * Math.sin(candidateAngle)];
+      const candidateObjective: Vec = [magnitude * Math.cos(candidateAngle), magnitude * Math.sin(candidateAngle)];
       return !isObjectiveDirectionUnbounded(polytope.lines, candidateObjective);
     });
 
@@ -44,10 +44,7 @@ export function computeObjectiveRotationStep({
   }
 
   return {
-    nextObjective: {
-      x: magnitude * Math.cos(nextAngle),
-      y: magnitude * Math.sin(nextAngle),
-    },
+    nextObjective: [magnitude * Math.cos(nextAngle), magnitude * Math.sin(nextAngle)],
     nextDirection,
   };
 }

@@ -51,6 +51,6 @@ export class SolverStartLayer extends PointCloudLayer {
       return;
     }
     const first = flatPointXYZ(raw.iteratePath, 0, raw.iterateObjectiveVector);
-    this.draw(1, (pos) => pos.set([point.x, point.y, first?.[2] ?? 0]));
+    this.draw(1, (pos) => pos.set([point[0], point[1], first?.[2] ?? 0]));
   }
 }

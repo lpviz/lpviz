@@ -1,4 +1,4 @@
-import type { Line, Lines, PointXY, Vertices } from "./types";
+import type { Line, Lines, Vec, Vertices } from "./types";
 
 export interface BoundingBox {
   minX: number;
@@ -25,7 +25,7 @@ export function expandDegenerateBounds(bounds: BoundingBox, minExtent = 1): Boun
 const FULL_TURN = 2 * Math.PI;
 const TURNING_TOLERANCE = 1e-6;
 
-function isConvexSequence(points: ReadonlyArray<PointXY>, closed: boolean, tol: number): boolean {
+function isConvexSequence(points: ReadonlyArray<Vec>, closed: boolean, tol: number): boolean {
   const n = points.length;
   if (n < 3) return true;
   const turnCount = closed ? n : n - 2;
@@ -36,10 +36,10 @@ function isConvexSequence(points: ReadonlyArray<PointXY>, closed: boolean, tol: 
     const p0 = points[i]!;
     const p1 = points[(i + 1) % n]!;
     const p2 = points[(i + 2) % n]!;
-    const ax = p1.x - p0.x;
-    const ay = p1.y - p0.y;
-    const bx = p2.x - p1.x;
-    const by = p2.y - p1.y;
+    const ax = p1[0] - p0[0];
+    const ay = p1[1] - p0[1];
+    const bx = p2[0] - p1[0];
+    const by = p2[1] - p1[1];
     const cross = ax * by - ay * bx;
     const dot = ax * bx + ay * by;
     if (Math.abs(cross) <= tol) {
@@ -61,16 +61,16 @@ function isConvexSequence(points: ReadonlyArray<PointXY>, closed: boolean, tol: 
 }
 
 /** A polyline that is part of the boundary of some convex polygon. */
-export function isConvexChain(points: ReadonlyArray<PointXY>, tol = 1e-9): boolean {
+export function isConvexChain(points: ReadonlyArray<Vec>, tol = 1e-9): boolean {
   return isConvexSequence(points, false, tol);
 }
 
 /** A closed polygon that is convex (and therefore simple). */
-export function isConvexPolygon(points: ReadonlyArray<PointXY>, tol = 1e-9): boolean {
+export function isConvexPolygon(points: ReadonlyArray<Vec>, tol = 1e-9): boolean {
   return isConvexSequence(points, true, tol);
 }
 
-export function centroid(vertices: Vertices, emptyMessage = "No intersections found"): [number, number] {
+export function centroid(vertices: ReadonlyArray<Vec>, emptyMessage = "No intersections found"): [number, number] {
   if (vertices.length === 0) throw new Error(emptyMessage);
   let sumX = 0;
   let sumY = 0;
@@ -81,14 +81,14 @@ export function centroid(vertices: Vertices, emptyMessage = "No intersections fo
   return [sumX / vertices.length, sumY / vertices.length];
 }
 
-export function signedArea(points: ReadonlyArray<PointXY>, tol = 1e-12): number {
+export function signedArea(points: ReadonlyArray<Vec>, tol = 1e-12): number {
   if (points.length < 3) return 0;
 
   let area = 0;
   for (let i = 0; i < points.length; i++) {
     const current = points[i]!;
     const next = points[(i + 1) % points.length]!;
-    area += current.x * next.y - next.x * current.y;
+    area += current[0] * next[1] - next[0] * current[1];
   }
 
   const normalizedArea = area / 2;
@@ -96,42 +96,29 @@ export function signedArea(points: ReadonlyArray<PointXY>, tol = 1e-12): number 
 }
 
 export class VRep {
-  private constructor(private readonly points: ReadonlyArray<PointXY>) {}
+  private constructor(private readonly points: ReadonlyArray<Vec>) {}
 
-  static fromPoints(points: ReadonlyArray<PointXY>): VRep {
+  static fromPoints(points: ReadonlyArray<Vec>): VRep {
     return new VRep(points);
   }
 
-  static distance(p1: PointXY, p2: PointXY): number {
-    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
-  }
-
-  static isValid(points: ReadonlyArray<PointXY>): boolean {
-    return points.length > 0 && points.every((pt) => pt != null && Number.isFinite(pt.x) && Number.isFinite(pt.y));
-  }
-
-  get vertexCount(): number {
-    return this.points.length;
-  }
-
-  centroidPoint(): PointXY {
-    const [x, y] = centroid(this.toVertices(), "Cannot compute centroid of empty polytope");
-    return { x, y };
+  static distance(p1: Vec, p2: Vec): number {
+    return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
   }
 
   isConvex(tol = 1e-9): boolean {
     return isConvexPolygon(this.points, tol);
   }
 
-  contains(point: PointXY): boolean {
+  contains(point: Vec): boolean {
     if (this.points.length < 3) return false;
     let inside = false;
     for (let i = 0, j = this.points.length - 1; i < this.points.length; j = i++) {
-      const xi = this.points[i]!.x;
-      const yi = this.points[i]!.y;
-      const xj = this.points[j]!.x;
-      const yj = this.points[j]!.y;
-      if (yi > point.y !== yj > point.y && point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi) {
+      const xi = this.points[i]![0];
+      const yi = this.points[i]![1];
+      const xj = this.points[j]![0];
+      const yj = this.points[j]![1];
+      if (yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) {
         inside = !inside;
       }
     }
@@ -143,23 +130,23 @@ export class VRep {
    * projection falls outside the segment, the edge is degenerate, or the edge
    * does not exist (the closing edge of a polyline, with `closed` false).
    */
-  distanceToEdge(point: PointXY, edgeIndex: number, closed = true): number {
+  distanceToEdge(point: Vec, edgeIndex: number, closed = true): number {
     const start = this.points[edgeIndex];
     const end = closed ? this.points[(edgeIndex + 1) % this.points.length] : this.points[edgeIndex + 1];
     if (!start || !end) return Number.POSITIVE_INFINITY;
 
-    const dx = end.x - start.x;
-    const dy = end.y - start.y;
+    const dx = end[0] - start[0];
+    const dy = end[1] - start[1];
     const len2 = dx * dx + dy * dy;
     if (len2 === 0) return Number.POSITIVE_INFINITY;
 
-    const t = ((point.x - start.x) * dx + (point.y - start.y) * dy) / len2;
+    const t = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / len2;
     if (t < 0 || t > 1) return Number.POSITIVE_INFINITY;
 
-    return VRep.distance(point, { x: start.x + t * dx, y: start.y + t * dy });
+    return VRep.distance(point, [start[0] + t * dx, start[1] + t * dy]);
   }
 
-  isPointNearEdge(point: PointXY, edgeIndex: number, tolerance = 0.5): boolean {
+  isPointNearEdge(point: Vec, edgeIndex: number, tolerance = 0.5): boolean {
     return this.distanceToEdge(point, edgeIndex) < tolerance;
   }
 
@@ -169,7 +156,7 @@ export class VRep {
    * first in index order is the wrong one as often as not. `closed` false
    * treats the points as a polyline and never tests the last→first chord.
    */
-  findEdgeNearPoint(point: PointXY, tolerance = 0.5, closed = true): number | null {
+  findEdgeNearPoint(point: Vec, tolerance = 0.5, closed = true): number | null {
     let nearestIndex: number | null = null;
     let nearestDistance = Number.POSITIVE_INFINITY;
     const edgeCount = closed ? this.points.length : Math.max(0, this.points.length - 1);
@@ -183,52 +170,48 @@ export class VRep {
     return nearestIndex;
   }
 
-  computeConvexHull(): PointXY[] {
+  computeConvexHull(): Vec[] {
     if (this.points.length <= 1) {
-      return this.points.map((pt) => ({ x: pt.x, y: pt.y }));
+      return this.points.map((pt) => [pt[0], pt[1]]);
     }
 
-    const sorted = [...this.points].sort((a, b) => (a.x === b.x ? a.y - b.y : a.x - b.x));
+    const sorted = [...this.points].sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]));
 
-    const uniqueSorted: PointXY[] = [];
+    const uniqueSorted: Vec[] = [];
     for (const pt of sorted) {
       const last = uniqueSorted[uniqueSorted.length - 1];
-      if (!last || last.x !== pt.x || last.y !== pt.y) {
-        uniqueSorted.push({ x: pt.x, y: pt.y });
+      if (!last || last[0] !== pt[0] || last[1] !== pt[1]) {
+        uniqueSorted.push([pt[0], pt[1]]);
       }
     }
 
     if (uniqueSorted.length <= 2) {
-      return uniqueSorted.map((pt) => ({ x: pt.x, y: pt.y }));
+      return uniqueSorted.map((pt) => [pt[0], pt[1]]);
     }
 
-    const cross = (o: PointXY, a: PointXY, b: PointXY) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const cross = (o: Vec, a: Vec, b: Vec) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
 
-    const lower: PointXY[] = [];
+    const lower: Vec[] = [];
     for (const pt of uniqueSorted) {
       while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, pt) <= 0) {
         lower.pop();
       }
-      lower.push({ x: pt.x, y: pt.y });
+      lower.push([pt[0], pt[1]]);
     }
 
-    const upper: PointXY[] = [];
+    const upper: Vec[] = [];
     for (let i = uniqueSorted.length - 1; i >= 0; i--) {
       const pt = uniqueSorted[i]!;
       while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, pt) <= 0) {
         upper.pop();
       }
-      upper.push({ x: pt.x, y: pt.y });
+      upper.push([pt[0], pt[1]]);
     }
 
     lower.pop();
     upper.pop();
 
     return lower.concat(upper);
-  }
-
-  toVertices(): Vertices {
-    return this.points.map((pt) => [pt.x, pt.y]);
   }
 }
 
@@ -375,27 +358,27 @@ export interface BoundaryRay {
 
 // Clip the ray start + t*direction (t > 0) to the box: the farthest boundary hit, or null when the ray never enters it.
 const RAY_CLIP_EPS = 1e-10;
-export function clipRayToBoundingBox(start: PointXY, direction: PointXY, bounds: BoundingBox): [PointXY, PointXY] | null {
-  const candidates: Array<{ t: number; point: PointXY }> = [];
+export function clipRayToBoundingBox(start: Vec, direction: Vec, bounds: BoundingBox): [Vec, Vec] | null {
+  const candidates: Array<{ t: number; point: Vec }> = [];
 
-  if (Math.abs(direction.x) > RAY_CLIP_EPS) {
+  if (Math.abs(direction[0]) > RAY_CLIP_EPS) {
     for (const x of [bounds.minX, bounds.maxX]) {
-      const t = (x - start.x) / direction.x;
+      const t = (x - start[0]) / direction[0];
       if (t <= RAY_CLIP_EPS) continue;
-      const y = start.y + t * direction.y;
+      const y = start[1] + t * direction[1];
       if (y >= bounds.minY - RAY_CLIP_EPS && y <= bounds.maxY + RAY_CLIP_EPS) {
-        candidates.push({ t, point: { x, y } });
+        candidates.push({ t, point: [x, y] });
       }
     }
   }
 
-  if (Math.abs(direction.y) > RAY_CLIP_EPS) {
+  if (Math.abs(direction[1]) > RAY_CLIP_EPS) {
     for (const y of [bounds.minY, bounds.maxY]) {
-      const t = (y - start.y) / direction.y;
+      const t = (y - start[1]) / direction[1];
       if (t <= RAY_CLIP_EPS) continue;
-      const x = start.x + t * direction.x;
+      const x = start[0] + t * direction[0];
       if (x >= bounds.minX - RAY_CLIP_EPS && x <= bounds.maxX + RAY_CLIP_EPS) {
-        candidates.push({ t, point: { x, y } });
+        candidates.push({ t, point: [x, y] });
       }
     }
   }
@@ -423,7 +406,7 @@ export function buildOpenBoundaryRays(points: Vertices): BoundaryRay[] {
 
 // Parameters along each ray of the point where their lines cross, or null
 // when they are parallel within tol.
-function rayParams([x1, y1]: [number, number], [dx1, dy1]: [number, number], [x2, y2]: [number, number], [dx2, dy2]: [number, number], tol: number): [number, number] | null {
+function rayParams([x1, y1]: Vec, [dx1, dy1]: Vec, [x2, y2]: Vec, [dx2, dy2]: Vec, tol: number): [number, number] | null {
   const det = dx1 * dy2 - dy1 * dx2;
   if (Math.abs(det) < tol) return null;
   const tx = x2 - x1;
@@ -505,7 +488,7 @@ export function hasOpenBoundaryClosure(points: Vertices, lines: Lines, tol = 1e-
   return [0, points.length - 2].some((index) => terminalSegmentClosesAgainstNonAdjacentConstraint(points, index, lines, tol));
 }
 
-export function isObjectiveDirectionUnbounded(lines: Lines, objective: [number, number], tol = 1e-6): boolean {
+export function isObjectiveDirectionUnbounded(lines: Lines, objective: Vec, tol = 1e-6): boolean {
   if (lines.length === 0) {
     return false;
   }

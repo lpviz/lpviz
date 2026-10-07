@@ -4,7 +4,7 @@ import type { SaveHistory } from "@/features/history/historyService";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/interactionState";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromLines } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 
 const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
   point: "dragged-point",
@@ -26,13 +26,13 @@ export const updatePanControls = (canvasManager: ViewportApi) => {
 };
 
 const captureHistoryEntry = (state: Pick<State, "vertices" | "objectiveVector" | "completionMode">): HistoryEntry => ({
-  vertices: state.vertices.map((v) => ({ x: v.x, y: v.y })),
-  objectiveVector: state.objectiveVector ? { ...state.objectiveVector } : null,
+  vertices: state.vertices.map((v) => [...v]),
+  objectiveVector: state.objectiveVector ? [...state.objectiveVector] : null,
   completionMode: state.completionMode,
 });
 
-const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: PointXY, canvasManager: ViewportApi, sendPolytope: () => void) => {
-  const delta = (logicalCoords.x - target.start.x) * target.normal.x + (logicalCoords.y - target.start.y) * target.normal.y;
+const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, canvasManager: ViewportApi, sendPolytope: () => void) => {
+  const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
   let operation: ConstraintDragTarget["operation"];
 
   if (target.operation.kind === "closed-line") {
@@ -46,15 +46,15 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: PointX
     const updatedVertices = verticesFromLines(updatedLines);
     if (updatedVertices.length < 2) return;
 
-    setState({ vertices: updatedVertices.map(([x, y]) => ({ x, y })) });
+    setState({ vertices: updatedVertices });
     operation = { kind: "closed-line", lineIndex: target.operation.lineIndex, lines: updatedLines };
   } else {
     operation = target.operation;
-    const shiftX = target.normal.x * delta;
-    const shiftY = target.normal.y * delta;
+    const shiftX = target.normal[0] * delta;
+    const shiftY = target.normal[1] * delta;
     const indices = new Set(operation.vertexIndices);
     setState({
-      vertices: getState().vertices.map((v, i) => (indices.has(i) ? { x: v.x + shiftX, y: v.y + shiftY } : v)),
+      vertices: getState().vertices.map((v, i): Vec => (indices.has(i) ? [v[0] + shiftX, v[1] + shiftY] : v)),
     });
   }
 
@@ -70,7 +70,7 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: PointX
 
 // moves whatever the drag holds (a vertex, a constraint, the start marker or
 // the objective) to the pointer's logical position
-const applyDragTarget = (dragTarget: DragTarget, logicalCoords: PointXY, { canvasManager, sendPolytope, onSolverStartMoved }: Omit<DragActionDeps, "saveHistory">) => {
+const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { canvasManager, sendPolytope, onSolverStartMoved }: Omit<DragActionDeps, "saveHistory">) => {
   if (dragTarget.kind === "point") {
     const pointIndex = dragTarget.index;
     setState({
@@ -91,7 +91,7 @@ const applyDragTarget = (dragTarget: DragTarget, logicalCoords: PointXY, { canva
     // derive the effective start (simplex snaps it to the nearest vertex)
     const off = dragTarget.grabOffset;
     setState({
-      solverStartPoint: off ? { x: logicalCoords.x + off.x, y: logicalCoords.y + off.y } : logicalCoords,
+      solverStartPoint: off ? [logicalCoords[0] + off[0], logicalCoords[1] + off[1]] : logicalCoords,
     });
     onSolverStartMoved();
     canvasManager.draw();
@@ -103,7 +103,7 @@ const applyDragTarget = (dragTarget: DragTarget, logicalCoords: PointXY, { canva
   canvasManager.draw();
 };
 
-const updatePointerPreview = (phase: DrawingPhase, logicalCoords: PointXY, canvasManager: ViewportApi) => {
+const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec, canvasManager: ViewportApi) => {
   if (phase === "empty" || phase === "sketching_polytope") {
     setCurrentMouse(logicalCoords);
     canvasManager.draw();
@@ -144,7 +144,7 @@ export function createDragActions(deps: DragActionDeps) {
     requestAnimationFrame(restoreViewportControls);
   };
 
-  const applyDraggingInteraction = (interaction: Extract<EditorInteractionState, { kind: "dragging" }>, logicalCoords: PointXY) => {
+  const applyDraggingInteraction = (interaction: Extract<EditorInteractionState, { kind: "dragging" }>, logicalCoords: Vec) => {
     persistPendingDragHistory();
     applyDragTarget(interaction.target, logicalCoords, deps);
   };

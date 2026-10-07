@@ -1,19 +1,19 @@
 import { computeFlatZ, type IteratePath } from "@/features/core/store";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 
 type TraceEntry = IteratePath & {
-  objectiveVector: PointXY | null;
+  objectiveVector: Vec | null;
 };
 
 type ZoomFitInputs = {
-  vertices: PointXY[];
+  vertices: Vec[];
   iteratePath: IteratePath;
   originalIteratePath: IteratePath;
-  iterateObjectiveVector: PointXY | null;
-  originalIterateObjectiveVector: PointXY | null;
+  iterateObjectiveVector: Vec | null;
+  originalIterateObjectiveVector: Vec | null;
   traceBuffer: TraceEntry[];
-  objectiveVector: PointXY | null;
-  currentObjective: PointXY | null;
+  objectiveVector: Vec | null;
+  currentObjective: Vec | null;
   objectiveHidden: boolean;
 };
 
@@ -54,7 +54,7 @@ export function collectZoomFitBounds({
     if (y > maxY) maxY = y;
   };
 
-  const addPath = (path: IteratePath, objectiveOverride: PointXY | null) => {
+  const addPath = (path: IteratePath, objectiveOverride: Vec | null) => {
     const { points, count, stride } = path;
     for (let i = 0; i < count; i++) {
       const base = i * stride;
@@ -71,7 +71,7 @@ export function collectZoomFitBounds({
       valid = false;
       break;
     }
-    addPoint(vertex.x, vertex.y);
+    addPoint(vertex[0], vertex[1]);
   }
   // use the objective each path was solved under, as the render layers do —
   // the current objectiveVector can differ mid-drag or after a solver error
@@ -82,8 +82,8 @@ export function collectZoomFitBounds({
   }
 
   if (!objectiveHidden) {
-    if (objectiveVector) addPoint(objectiveVector.x, objectiveVector.y);
-    if (currentObjective) addPoint(currentObjective.x, currentObjective.y);
+    if (objectiveVector) addPoint(objectiveVector[0], objectiveVector[1]);
+    if (currentObjective) addPoint(currentObjective[0], currentObjective[1]);
   }
 
   if (!valid || count === 0) {

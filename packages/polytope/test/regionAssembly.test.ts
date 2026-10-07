@@ -117,8 +117,7 @@ describe("open chain half-plane orientation", () => {
       const n = 3 + Math.floor(rnd() * 6);
       const pts: Vertices = Array.from({ length: n }, () => [(rnd() * 2 - 1) * 100, (rnd() * 2 - 1) * 100]);
       if (new Set(pts.map(([x, y]) => `${x},${y}`)).size !== n) continue;
-      const asPoints = pts.map(([x, y]) => ({ x, y }));
-      if (!isConvexChain(asPoints)) continue;
+      if (!isConvexChain(pts)) continue;
       const { lines } = buildConstraintRep(pts, false);
       for (let e = 0; e + 2 < n && e < lines.length; e++) {
         const [A, B, C] = lines[e]!;

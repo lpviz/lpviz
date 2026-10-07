@@ -7,8 +7,8 @@ import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): string {
   if (!objectiveVector) return "";
   const round = (value: number) => Math.round(value * 1000) / 1000;
-  const a = round(objectiveVector.x);
-  const b = round(objectiveVector.y);
+  const a = round(objectiveVector[0]);
+  const b = round(objectiveVector[1]);
   const bTerm = b >= 0 ? `+ ${b}y` : `- ${-b}y`;
   return `${a}x ${bTerm}`;
 }

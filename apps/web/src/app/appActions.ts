@@ -77,12 +77,12 @@ export function createAppActions({
       solver.stopRotation();
       setState(
         {
-          vertices: problem.vertices.map((v) => ({ ...v })),
+          vertices: problem.vertices.map((v) => [...v]),
           completionMode: "closed",
-          interiorPoint: { ...problem.interiorPoint },
+          interiorPoint: [...problem.interiorPoint],
           polytope: null,
           inequalitiesMessage: null,
-          objectiveVector: { ...problem.objectiveVector },
+          objectiveVector: [...problem.objectiveVector],
           currentObjective: null,
           highlightIndex: null,
           highlightIteratePathIndex: null,

@@ -14,7 +14,7 @@ import {
 } from "@/features/polytope-editor/interactionState";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 
@@ -33,7 +33,7 @@ type EditActionDeps = {
 type ApplyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => void;
 
 function createEditorTransitionApplier({ canvasManager, saveHistory, sendPolytope }: Pick<EditActionDeps, "canvasManager" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
-  const commitEdit = (result: { vertices: PointXY[]; completionMode: "draft" | "open" | "closed"; interiorPoint: PointXY | null }) => {
+  const commitEdit = (result: { vertices: Vec[]; completionMode: "draft" | "open" | "closed"; interiorPoint: Vec | null }) => {
     saveHistory();
     setState({
       vertices: result.vertices,
@@ -145,7 +145,7 @@ function createPointerEditActions(
       const insertion = getEditorTransition(state, {
         kind: "insert-boundary-ray-point",
         rayIndex,
-        point: { x: logicalMouse.x, y: logicalMouse.y },
+        point: logicalMouse,
       });
       if (insertion.kind !== "noop") {
         applyEditorTransition(insertion);

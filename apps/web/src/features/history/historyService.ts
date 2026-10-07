@@ -11,7 +11,7 @@ export type HistoryService = {
 export function createHistoryService(onRestore: () => void): HistoryService {
   const captureEntry = (state: HistorySnapshotSource): HistoryEntry => ({
     vertices: structuredClone(state.vertices),
-    objectiveVector: state.objectiveVector ? { ...state.objectiveVector } : null,
+    objectiveVector: state.objectiveVector ? [...state.objectiveVector] : null,
     completionMode: state.completionMode,
   });
   const save: SaveHistory = (snapshotSource = getState(), options = {}) => {

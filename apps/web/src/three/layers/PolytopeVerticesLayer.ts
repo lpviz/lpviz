@@ -1,6 +1,6 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import type { Points, PointsMaterial } from "three";
 import { BufferAttribute, Group } from "three";
 import { makePoints, pointsMaterial } from "../helpers/points";
@@ -14,14 +14,14 @@ const OPEN_ANCHOR_COLOR = "#ff0000";
 const VERTEX_PIXEL_SIZE = 10;
 const VERTEX_RENDER_ORDER = RENDER_ORDER.polytopeVertices;
 
-function buildVertexPositions(displayVertices: PointXY[], shapeFilter: "circle" | "square", completionMode: State["completionMode"], hasDerivedClosedRegion: boolean): Float32Array {
+function buildVertexPositions(displayVertices: Vec[], shapeFilter: "circle" | "square", completionMode: State["completionMode"], hasDerivedClosedRegion: boolean): Float32Array {
   const out: number[] = [];
   for (let index = 0; index < displayVertices.length; index++) {
     const v = displayVertices[index]!;
     const isAnchor = completionMode === "open" && !hasDerivedClosedRegion && (index === 0 || index === displayVertices.length - 1);
     const isSquare = isAnchor;
     if (shapeFilter === "square" ? !isSquare : isSquare) continue;
-    out.push(v.x, v.y, 0);
+    out.push(v[0], v[1], 0);
   }
   return new Float32Array(out);
 }
@@ -65,7 +65,7 @@ export class PolytopeVerticesLayer extends LayerBase {
     if (!visible) return;
 
     const hasDerived = raw.completionMode === "open" && raw.polytope?.kind === "bounded" && (raw.polytope.vertices?.length ?? 0) >= 3;
-    const displayVertices: PointXY[] = hasDerived && raw.polytope?.kind === "bounded" ? raw.polytope.vertices.map(([x, y]) => ({ x, y })) : raw.vertices;
+    const displayVertices: Vec[] = hasDerived && raw.polytope?.kind === "bounded" ? raw.polytope.vertices : raw.vertices;
     applyPositions(this.circlePoints, buildVertexPositions(displayVertices, "circle", raw.completionMode, hasDerived));
     applyPositions(this.squarePoints, buildVertexPositions(displayVertices, "square", raw.completionMode, hasDerived));
   }

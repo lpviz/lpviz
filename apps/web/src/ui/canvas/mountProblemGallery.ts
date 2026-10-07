@@ -15,15 +15,15 @@ const IDLE = 3000,
 const RESHUFFLE_MS = 1000;
 type Shape = Pick<GalleryProblem, "vertices" | "objectiveVector">;
 function pointsAttribute(problem: Pick<GalleryProblem, "vertices">) {
-  const minX = Math.min(...problem.vertices.map((v) => v.x));
-  const maxX = Math.max(...problem.vertices.map((v) => v.x));
-  const minY = Math.min(...problem.vertices.map((v) => v.y));
-  const maxY = Math.max(...problem.vertices.map((v) => v.y));
+  const minX = Math.min(...problem.vertices.map((v) => v[0]));
+  const maxX = Math.max(...problem.vertices.map((v) => v[0]));
+  const minY = Math.min(...problem.vertices.map((v) => v[1]));
+  const maxY = Math.max(...problem.vertices.map((v) => v[1]));
   const width = Math.max(maxX - minX, 1);
   const height = Math.max(maxY - minY, 1);
-  return problem.vertices.map((v) => `${(8 + ((v.x - minX) / width) * 44).toFixed(1)},${(36 - ((v.y - minY) / height) * 28).toFixed(1)}`).join(" ");
+  return problem.vertices.map((v) => `${(8 + ((v[0] - minX) / width) * 44).toFixed(1)},${(36 - ((v[1] - minY) / height) * 28).toFixed(1)}`).join(" ");
 }
-const shapeMarkup = (shape: Shape) => `<polygon points="${pointsAttribute(shape)}"/><line x1="30" y1="22" x2="${30 + shape.objectiveVector.x}" y2="${22 - shape.objectiveVector.y}"/>`;
+const shapeMarkup = (shape: Shape) => `<polygon points="${pointsAttribute(shape)}"/><line x1="30" y1="22" x2="${30 + shape.objectiveVector[0]}" y2="${22 - shape.objectiveVector[1]}"/>`;
 
 // The random item's thumbnail keeps reshuffling — a fresh region every
 // RESHUFFLE_MS, crossfaded between two shape layers since SVG point lists
