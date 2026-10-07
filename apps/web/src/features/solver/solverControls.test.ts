@@ -14,7 +14,6 @@ function controls() {
     updateSolverSetting: (key, value) => {
       applied[key] = value;
     },
-    hasUnboundedObjectiveDirection: () => false,
   });
   const byMode = (mode: string) => list.find((c) => c.mode === mode)!;
   return { applied, simplex: byMode("simplex"), ipm: byMode("ipm") };
@@ -58,11 +57,7 @@ describe("shared solver settings", () => {
 });
 
 describe("ellipsoid request", () => {
-  const ellipsoid = () =>
-    createSolverControls({
-      updateSolverSetting: () => {},
-      hasUnboundedObjectiveDirection: () => false,
-    }).find((c) => c.mode === "ellipsoid")!;
+  const ellipsoid = () => createSolverControls({ updateSolverSetting: () => {} }).find((c) => c.mode === "ellipsoid")!;
   const CHAIN: Vec[] = [
     [0, 0],
     [2, 1],

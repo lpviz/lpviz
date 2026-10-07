@@ -1,7 +1,6 @@
 import { getState } from "@/features/core/store";
+import { isUnboundedDirection } from "@/features/problem/selectors";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
@@ -54,7 +53,7 @@ export class ObjectiveLayer extends LayerBase {
 
     replaceLinePositions(this.object3D.geometry, positions);
 
-    const isUnbounded = raw.polytope?.kind === "unbounded" && hasPolytopeLines(raw.polytope) && isObjectiveDirectionUnbounded(raw.polytope.lines, target);
+    const isUnbounded = isUnboundedDirection(raw, target);
 
     this.object3D.material = lineDepthMaterial(isUnbounded ? OBJECTIVE_UNBOUNDED_COLOR : OBJECTIVE_COLOR, OBJECTIVE_LINE_THICKNESS, snap.mode === "3d");
     this.object3D.visible = true;

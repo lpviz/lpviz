@@ -1,20 +1,8 @@
 import type { AppContext } from "@/app/appContext";
-import { computeDrawingPhase, getState, on, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import { getState, on, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
 import { el } from "@/ui/dom";
-import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
-
-function isSolverSelectable(state: State, mode: SolverMode): boolean {
-  if (!hasPolytopeLines(state.polytope)) return false;
-  if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded") {
-    return false;
-  }
-  if (mode !== "central" || !state.objectiveVector || state.polytope.kind !== "unbounded") {
-    return true;
-  }
-  return !isObjectiveDirectionUnbounded(state.polytope.lines, state.objectiveVector);
-}
 
 export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const root = el("div", { className: "controlPanel" });
@@ -57,7 +45,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   }
 
   function render(s: State) {
-    const readyForSolvers = computeDrawingPhase(s) === "ready_for_solvers" && hasPolytopeLines(s.polytope) && s.objectiveVector !== null;
+    const readyForSolvers = isReadyForSolvers(s);
     for (const [mode, b] of buttons) {
       b.className = s.solverMode === mode ? "button-active" : "";
       b.disabled = !readyForSolvers || !isSolverSelectable(s, mode);

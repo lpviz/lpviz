@@ -1,12 +1,11 @@
-import { computeDrawingPhase, getState, resetTraceState, setState, setTraceCapacity, on, type SolverMode, type State } from "@/features/core/store";
+import { getState, resetTraceState, setState, setTraceCapacity, on, type SolverMode } from "@/features/core/store";
+import { isReadyForSolvers } from "@/features/problem/selectors";
 import { createSolverControls, type SolverControl, type SolverSettingUpdater } from "@/features/solver/solverControls";
 import { createReplayController } from "@/features/solver/replayController";
 import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { createSolveRunner } from "@/features/solver/solveRunner";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/objectiveDirection";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
 export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;
@@ -33,12 +32,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
     setState({
       solverSettings: { ...getState().solverSettings, [key]: value },
     });
-  const hasUnboundedObjectiveDirection = (state: State) =>
-    !!(hasPolytopeLines(state.polytope) && state.objectiveVector && state.polytope.kind === "unbounded" && isObjectiveDirectionUnbounded(state.polytope.lines, state.objectiveVector));
-  const solverControls = createSolverControls({
-    updateSolverSetting,
-    hasUnboundedObjectiveDirection,
-  });
+  const solverControls = createSolverControls({ updateSolverSetting });
   const getSolverControl = (mode: SolverMode) => solverControls.find((c) => c.mode === mode);
 
   const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
@@ -76,8 +70,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
   };
   const handleProblemChange = () => {
     const s = getState();
-    const ready = computeDrawingPhase(s) === "ready_for_solvers" && hasPolytopeLines(s.polytope) && s.objectiveVector !== null;
-    if (!ready) {
+    if (!isReadyForSolvers(s)) {
       invalidatePendingSolveResults();
       stopActiveMotion();
       clearComputedState();

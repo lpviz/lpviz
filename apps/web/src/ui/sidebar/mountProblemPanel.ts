@@ -2,7 +2,7 @@ import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderNullStateLogo } from "@/ui/logo";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import { hasObjective, hasRegion } from "@/features/problem/selectors";
 
 function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): string {
   if (!objectiveVector) return "";
@@ -38,12 +38,12 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
   frame.append(topResult, el("div", { id: "terminal-window" }));
   parent.append(frame);
   function render(state: State) {
-    const objectiveActive = state.objectiveVector !== null;
+    const objectiveActive = hasObjective(state);
     nullState.style.display = state.vertices.length === 0 && state.objectiveVector === null && state.currentObjective === null ? "" : "none";
     maximize.className = state.completionMode !== "draft" && objectiveActive ? "is-block" : "is-hidden";
     objective.className = objectiveActive ? "objective-item objective-active" : "";
     objective.textContent = formatObjectiveDisplay(state.objectiveVector);
-    subjectTo.className = hasPolytopeLines(state.polytope) && state.polytope.lines.length > 0 ? "is-block" : "is-hidden";
+    subjectTo.className = hasRegion(state) ? "is-block" : "is-hidden";
 
     // objective-only updates (every rotation step) must not rebuild the
     // constraint rows; rebuild only when their source actually changed

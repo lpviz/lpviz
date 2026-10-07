@@ -1,8 +1,8 @@
-import { computeDrawingPhase, nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
+import { nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
+import { hasFeasibleRegion, isReadyForSolvers } from "@/features/problem/selectors";
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
 import type { Vec } from "@lpviz/math/types";
 import { zeroVec } from "@lpviz/math/vec";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
@@ -224,9 +224,7 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
 
 /** Whether the draggable start marker applies to the current solver/problem. */
 function solverStartPointApplies(state: EditorState & SolverState): boolean {
-  if (computeDrawingPhase(state) !== "ready_for_solvers") return false;
-  if (!hasPolytopeLines(state.polytope)) return false;
-  if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded") return false;
+  if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return false;
   if (state.solverMode === "ipm" || state.solverMode === "pdhg") return true;
   // dual simplex has no safe start-point interpretation: a primal point only
   // determines a dual-feasible basis when it is already optimal

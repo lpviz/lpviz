@@ -1,5 +1,6 @@
 import { DEFAULT_SOLVER_SETTINGS, getState, nearestPolytopeVertex, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import type { ShareSettings } from "@/features/share/sharedState";
+import { hasUnboundedObjectiveDirection, isEmptyRegion, isSolverSelectable } from "@/features/problem/selectors";
 import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
@@ -30,10 +31,6 @@ function isValidSharedSetting<K extends SharedKey>(key: K, value: unknown): valu
   const fallback: unknown = DEFAULT_SOLVER_SETTINGS[key];
   return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
-
-const hasFeasibleRegion = (state: State): boolean => hasPolytopeLines(state.polytope) && (state.polytope.kind === "bounded" || state.polytope.kind === "unbounded");
-
-const isEmptyRegion = (state: State): boolean => hasPolytopeLines(state.polytope) && state.polytope.kind === "empty";
 
 // the objective vector + constraint lines guard common to every buildRequest
 function objectiveBase(state: State) {
@@ -78,17 +75,11 @@ const emptyRegionBlock =
 // A control declares which settings it shares; collect/apply derive from that.
 type SolverControlSpec = Omit<SolverControl, "collectShareSettings" | "applySharedSettings"> & { shareKeys: readonly SharedKey[] };
 
-export function createSolverControls({
-  updateSolverSetting,
-  hasUnboundedObjectiveDirection,
-}: {
-  updateSolverSetting: SolverSettingUpdater;
-  hasUnboundedObjectiveDirection: (state: State) => boolean;
-}): SolverControl[] {
+export function createSolverControls({ updateSolverSetting }: { updateSolverSetting: SolverSettingUpdater }): SolverControl[] {
   const specs: SolverControlSpec[] = [
     {
       mode: "central",
-      isSelectable: (s) => hasFeasibleRegion(s) && !hasUnboundedObjectiveDirection(s),
+      isSelectable: (s) => isSolverSelectable(s, "central"),
       getRunBlock: (s) => {
         if (!hasPolytopeLines(s.polytope)) return null;
         if (s.polytope.kind === "empty") return messageBlocks("No valid region", "Central Path requires a feasible region.");
@@ -113,7 +104,7 @@ export function createSolverControls({
     },
     {
       mode: "ipm",
-      isSelectable: hasFeasibleRegion,
+      isSelectable: (s) => isSolverSelectable(s, "ipm"),
       getRunBlock: emptyRegionBlock("IPM requires a feasible region."),
       shareKeys: ["alphaMax", "correctorThreshold", "maxitIPM"],
       buildRequest: (s) => {
@@ -132,7 +123,7 @@ export function createSolverControls({
     },
     {
       mode: "simplex",
-      isSelectable: hasFeasibleRegion,
+      isSelectable: (s) => isSolverSelectable(s, "simplex"),
       getRunBlock: emptyRegionBlock("Simplex requires a valid feasible region."),
       shareKeys: ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"],
       buildRequest: (s) => {
@@ -153,7 +144,7 @@ export function createSolverControls({
     },
     {
       mode: "ellipsoid",
-      isSelectable: hasFeasibleRegion,
+      isSelectable: (s) => isSolverSelectable(s, "ellipsoid"),
       getRunBlock: emptyRegionBlock("The ellipsoid method requires a feasible region."),
       shareKeys: ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"],
       buildRequest: (s) => {
@@ -175,7 +166,7 @@ export function createSolverControls({
     },
     {
       mode: "pdhg",
-      isSelectable: hasFeasibleRegion,
+      isSelectable: (s) => isSolverSelectable(s, "pdhg"),
       getRunBlock: () => null,
       shareKeys: ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"],
       buildRequest: (s) => {

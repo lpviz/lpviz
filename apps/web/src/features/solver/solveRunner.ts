@@ -1,11 +1,11 @@
-import { clearIterateState, computeDrawingPhase, getState, resetTraceState, type SolverMode } from "@/features/core/store";
+import { clearIterateState, getState, resetTraceState, type SolverMode } from "@/features/core/store";
+import { isReadyForSolvers } from "@/features/problem/selectors";
 import type { ReplayController } from "@/features/solver/replayController";
 import type { ResultPresenter } from "@/features/solver/resultPresenter";
 import type { SolverControl } from "@/features/solver/solverControls";
 import { applySolverResult } from "@/features/solver/solverService";
 import { runSolverWorker } from "@/features/solver/workerClient";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
 // One solve at a time reaches the store: every request carries a generation
 // and a reply from an invalidated generation is dropped.
@@ -40,7 +40,7 @@ export function createSolveRunner({
     replay.cancel();
     const state = getState();
     const solverDefinition = getSolverControl(state.solverMode);
-    if (!solverDefinition || !state.objectiveVector || computeDrawingPhase(state) !== "ready_for_solvers" || !hasPolytopeLines(state.polytope)) {
+    if (!solverDefinition || !isReadyForSolvers(state)) {
       invalidatePending();
       clearComputedState();
       return;
