@@ -29,18 +29,7 @@ export class SolverStartLayer extends PointCloudLayer {
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
-    return [
-      raw.solverStartPoint,
-      raw.solverMode,
-      raw.solverSettings.simplexDualMode,
-      raw.vertices,
-      raw.completionMode,
-      raw.objectiveVector,
-      raw.currentObjective,
-      raw.polytope,
-      raw.iteratePath,
-      raw.iterateObjectiveVector,
-    ];
+    return [raw.solverStartPoint, raw.solverMode, raw.solverSettings.simplexDualMode, raw.vertices, raw.completionMode, raw.objectiveVector, raw.currentObjective, raw.polytope, raw.iteratePath];
   }
 
   protected rebuild(): void {
@@ -50,7 +39,7 @@ export class SolverStartLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    const first = flatPointXYZ(raw.iteratePath, 0, raw.iterateObjectiveVector);
-    this.draw(1, (pos) => pos.set([point.x, point.y, first?.[2] ?? 0]));
+    const first = flatPointXYZ(raw.iteratePath, 0);
+    this.draw(1, (pos) => pos.set([point[0], point[1], first?.[2] ?? 0]));
   }
 }

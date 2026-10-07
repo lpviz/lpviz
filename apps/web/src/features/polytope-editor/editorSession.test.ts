@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { State } from "@/features/core/store";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { computeEditorRegionForState, getEditorContext, getEditorTransition } from "./editorSession";
 
 // Characterization tests for the pure editor FSM. These pin today's behavior so
@@ -20,10 +20,10 @@ function st(o: Partial<State>): State {
   } as unknown as State;
 }
 
-const TRI = [
-  { x: 0, y: 0 },
-  { x: 4, y: 0 },
-  { x: 2, y: 3 },
+const TRI: Vec[] = [
+  [0, 0],
+  [4, 0],
+  [2, 3],
 ];
 
 describe("getEditorContext.session", () => {
@@ -40,7 +40,7 @@ describe("getEditorContext.session", () => {
         st({
           vertices: TRI,
           completionMode: "closed",
-          objectiveVector: { x: 1, y: 0 },
+          objectiveVector: [1, 0],
         }),
       ).session.kind,
     ).toBe("editing-closed");
@@ -51,12 +51,12 @@ describe("getEditorTransition: click", () => {
   test("first click adds a draft vertex", () => {
     const t = getEditorTransition(st({}), {
       kind: "click",
-      point: { x: 1, y: 2 },
+      point: [1, 2],
     });
     expect(t).toEqual({
       kind: "edit",
       result: {
-        vertices: [{ x: 1, y: 2 }],
+        vertices: [[1, 2]],
         completionMode: "draft",
         interiorPoint: null,
       },
@@ -66,29 +66,29 @@ describe("getEditorTransition: click", () => {
   test("click near first vertex of a triangle closes it (centroid interior)", () => {
     const t = getEditorTransition(st({ vertices: TRI }), {
       kind: "click",
-      point: { x: 0.2, y: 0.1 },
+      point: [0.2, 0.1],
     });
     expect(t.kind).toBe("edit");
     if (t.kind !== "edit") throw new Error();
     expect(t.result.completionMode).toBe("closed");
-    expect(t.result.interiorPoint).toEqual({ x: 2, y: 1 });
+    expect(t.result.interiorPoint).toEqual([2, 1]);
   });
 
   test("click strictly inside a triangle closes with the clicked interior point", () => {
     const t = getEditorTransition(st({ vertices: TRI }), {
       kind: "click",
-      point: { x: 2.5, y: 1 },
+      point: [2.5, 1],
     });
     expect(t.kind).toBe("edit");
     if (t.kind !== "edit") throw new Error();
     expect(t.result.completionMode).toBe("closed");
-    expect(t.result.interiorPoint).toEqual({ x: 2.5, y: 1 });
+    expect(t.result.interiorPoint).toEqual([2.5, 1]);
   });
 
   test("click that would make a non-convex polygon is rejected", () => {
     const t = getEditorTransition(st({ vertices: [...TRI] }), {
       kind: "click",
-      point: { x: -1, y: -1 },
+      point: [-1, -1],
     });
     expect(t.kind).toBe("reject-nonconvex");
     // the reason now travels with the transition (callers no longer hardcode it)
@@ -96,10 +96,10 @@ describe("getEditorTransition: click", () => {
   });
 
   test("click while selecting objective picks the objective", () => {
-    const t = getEditorTransition(st({ vertices: TRI, completionMode: "closed" }), { kind: "click", point: { x: 3, y: 2 } });
+    const t = getEditorTransition(st({ vertices: TRI, completionMode: "closed" }), { kind: "click", point: [3, 2] });
     expect(t).toEqual({
       kind: "select-objective",
-      objectiveVector: { x: 3, y: 2 },
+      objectiveVector: [3, 2],
     });
   });
 
@@ -108,9 +108,9 @@ describe("getEditorTransition: click", () => {
       st({
         vertices: TRI,
         completionMode: "closed",
-        objectiveVector: { x: 1, y: 0 },
+        objectiveVector: [1, 0],
       }),
-      { kind: "click", point: { x: 9, y: 9 } },
+      { kind: "click", point: [9, 9] },
     );
     expect(t.kind).toBe("noop");
   });
@@ -119,7 +119,7 @@ describe("getEditorTransition: click", () => {
 describe("getEditorTransition: finish-open", () => {
   test("fewer than 2 vertices is a noop", () => {
     expect(
-      getEditorTransition(st({ vertices: [{ x: 0, y: 0 }] }), {
+      getEditorTransition(st({ vertices: [[0, 0]] }), {
         kind: "finish-open",
       }).kind,
     ).toBe("noop");
@@ -128,9 +128,9 @@ describe("getEditorTransition: finish-open", () => {
     const t = getEditorTransition(
       st({
         vertices: [
-          { x: 0, y: 0 },
-          { x: 4, y: 0 },
-          { x: 6, y: 3 },
+          [0, 0],
+          [4, 0],
+          [6, 3],
         ],
       }),
       { kind: "finish-open" },
@@ -143,10 +143,10 @@ describe("getEditorTransition: finish-open", () => {
     const t = getEditorTransition(
       st({
         vertices: [
-          { x: 0, y: 0 },
-          { x: 4, y: 0 },
-          { x: 2, y: 1 },
-          { x: 6, y: 0 },
+          [0, 0],
+          [4, 0],
+          [2, 1],
+          [6, 0],
         ],
       }),
       { kind: "finish-open" },
@@ -161,9 +161,9 @@ describe("getEditorTransition: delete-vertex", () => {
     const t = getEditorTransition(
       st({
         vertices: [
-          { x: 0, y: 0 },
-          { x: 4, y: 0 },
-          { x: 2, y: 3 },
+          [0, 0],
+          [4, 0],
+          [2, 3],
         ],
       }),
       { kind: "delete-vertex", deleteIndex: 1 },
@@ -171,26 +171,23 @@ describe("getEditorTransition: delete-vertex", () => {
     expect(t.kind).toBe("edit");
     if (t.kind !== "edit") throw new Error();
     expect(t.result.vertices).toEqual([
-      { x: 0, y: 0 },
-      { x: 2, y: 3 },
+      [0, 0],
+      [2, 3],
     ]);
     expect(t.result.completionMode).toBe("draft");
   });
 
-  const PENT = [0, 1, 2, 3, 4].map((i) => ({
-    x: +(10 * Math.cos((2 * Math.PI * i) / 5)).toFixed(3),
-    y: +(10 * Math.sin((2 * Math.PI * i) / 5)).toFixed(3),
-  }));
-  const closedPentagon = (objectiveVector: PointXY | null) =>
+  const PENT = [0, 1, 2, 3, 4].map((i): Vec => [+(10 * Math.cos((2 * Math.PI * i) / 5)).toFixed(3), +(10 * Math.sin((2 * Math.PI * i) / 5)).toFixed(3)]);
+  const closedPentagon = (objectiveVector: Vec | null) =>
     st({
       vertices: PENT,
       completionMode: "closed",
-      interiorPoint: { x: 0, y: 0 },
+      interiorPoint: [0, 0],
       objectiveVector,
     });
 
   test("a closed polygon loses just that vertex and stays closed", () => {
-    for (const objective of [{ x: 1, y: 0 }, null]) {
+    for (const objective of [[1, 0], null] as (Vec | null)[]) {
       const t = getEditorTransition(closedPentagon(objective), {
         kind: "delete-vertex",
         deleteIndex: 1,
@@ -210,14 +207,11 @@ describe("getEditorTransition: delete-vertex", () => {
   // replaced by the crossing of their edges, so one right-click took three
   // vertices and bulged the polygon out.
   test("inserting a vertex on an edge and deleting it is a round trip", () => {
-    const objectiveVector = { x: 1, y: 0 };
+    const objectiveVector: Vec = [1, 0];
     const inserted = getEditorTransition(closedPentagon(objectiveVector), {
       kind: "insert-edge-point",
       edgeIndex: 0,
-      point: {
-        x: (PENT[0]!.x + PENT[1]!.x) / 2,
-        y: (PENT[0]!.y + PENT[1]!.y) / 2,
-      },
+      point: [(PENT[0]![0] + PENT[1]![0]) / 2, (PENT[0]![1] + PENT[1]![1]) / 2],
     });
     if (inserted.kind !== "edit") throw new Error(inserted.kind);
     expect(inserted.result.vertices).toHaveLength(6);
@@ -240,8 +234,8 @@ describe("getEditorTransition: delete-vertex", () => {
       st({
         vertices: TRI,
         completionMode: "closed",
-        interiorPoint: { x: 2, y: 1 },
-        objectiveVector: { x: 1, y: 0 },
+        interiorPoint: [2, 1],
+        objectiveVector: [1, 0],
       }),
       { kind: "delete-vertex", deleteIndex: 2 },
     );
@@ -252,17 +246,17 @@ describe("getEditorTransition: delete-vertex", () => {
   });
 
   test("an open chain loses the vertex and stays open", () => {
-    const chain = [
-      { x: 0, y: 0 },
-      { x: 4, y: 0 },
-      { x: 6, y: 3 },
-      { x: 6, y: 8 },
+    const chain: Vec[] = [
+      [0, 0],
+      [4, 0],
+      [6, 3],
+      [6, 8],
     ];
     const t = getEditorTransition(
       st({
         vertices: chain,
         completionMode: "open",
-        objectiveVector: { x: 1, y: 0 },
+        objectiveVector: [1, 0],
       }),
       { kind: "delete-vertex", deleteIndex: 1 },
     );
@@ -275,18 +269,15 @@ describe("getEditorTransition: delete-vertex", () => {
 describe("computeEditorRegionForState", () => {
   // the vertices of a regular pentagon visited every second one: every turn
   // agrees, the boundary winds twice around the center
-  const PENTAGRAM = [0, 2, 4, 1, 3].map((i) => ({
-    x: 10 * Math.cos((2 * Math.PI * i) / 5),
-    y: 10 * Math.sin((2 * Math.PI * i) / 5),
-  }));
+  const PENTAGRAM = [0, 2, 4, 1, 3].map((i): Vec => [10 * Math.cos((2 * Math.PI * i) / 5), 10 * Math.sin((2 * Math.PI * i) / 5)]);
 
   test("a self-overlapping closed polygon is nonconvex, not a region", () => {
     const result = computeEditorRegionForState(
       st({
         vertices: PENTAGRAM,
         completionMode: "closed",
-        interiorPoint: { x: 0, y: 0 },
-        objectiveVector: { x: 1, y: 0 },
+        interiorPoint: [0, 0],
+        objectiveVector: [1, 0],
       }),
     );
     expect(result.status).toBe("nonconvex");
@@ -299,13 +290,13 @@ describe("computeEditorRegionForState", () => {
     const result = computeEditorRegionForState(
       st({
         vertices: [
-          { x: -6.125, y: 10.1875 },
-          { x: -12.175, y: 8.1875 },
-          { x: -0.925, y: 14.6875 },
-          { x: 10.275, y: 9.8375 },
+          [-6.125, 10.1875],
+          [-12.175, 8.1875],
+          [-0.925, 14.6875],
+          [10.275, 9.8375],
         ],
         completionMode: "open",
-        objectiveVector: { x: 1, y: 0 },
+        objectiveVector: [1, 0],
       }),
     );
     expect(result.status).toBe("ready");
@@ -316,8 +307,8 @@ describe("computeEditorRegionForState", () => {
       st({
         vertices: TRI,
         completionMode: "closed",
-        interiorPoint: { x: 2, y: 1 },
-        objectiveVector: { x: 1, y: 0 },
+        interiorPoint: [2, 1],
+        objectiveVector: [1, 0],
       }),
     );
     expect(result.status).toBe("ready");

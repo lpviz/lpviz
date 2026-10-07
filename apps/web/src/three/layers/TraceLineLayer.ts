@@ -75,7 +75,7 @@ export class TraceLineLayer extends ZScaledGroupLayer {
       if (this.assigned.has(entry)) continue;
       if (entry.count < 2) continue;
       const ribbon = freed.pop() ?? this.makeRibbon();
-      ribbon.setPath(flatXYZ(entry.points, entry.count, entry.stride, entry.objectiveVector), entry.count);
+      ribbon.setPath(flatXYZ(entry), entry.count);
       ribbon.setDepth(is3D);
       ribbon.mesh.userData.traceSeq = this.nextSeq++;
       ribbon.mesh.visible = true;

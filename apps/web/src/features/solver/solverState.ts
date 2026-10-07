@@ -1,7 +1,8 @@
-import { computeDrawingPhase, nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
+import { nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
+import { hasFeasibleRegion, isReadyForSolvers } from "@/features/problem/selectors";
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
-import type { PointXY } from "@lpviz/math/types";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import type { Vec } from "@lpviz/math/types";
+import { zeroVec } from "@lpviz/math/vec";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
@@ -30,20 +31,23 @@ type VirtualRowBlocks = {
   at(index: number): ResultTextBlock | undefined;
 };
 
-// Flat, contiguous iterate data: element `i` lives at [i*stride .. i*stride+stride). stride 3 =
-// [x, y, bakedTotalZ] (packed pdhg/ipm), stride 2 = [x, y] (simplex / central path, z renders
-// flat). One array per solve, not one Float64Array per iterate: millions of live objects is what
-// a major GC must mark.
+// Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
+// `stride` the problem's dimension. `lift[i]` is the height the 3D view raises iterate `i` above the
+// floor (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One
+// array per solve, not one Float64Array per iterate: millions of live objects is what a major GC
+// must mark.
 export interface IteratePath {
   points: Float64Array;
   count: number;
   stride: number;
+  lift: Float64Array | null;
 }
 
 export const EMPTY_ITERATE_PATH: IteratePath = {
   points: new Float64Array(0),
   count: 0,
-  stride: 3,
+  stride: 2,
+  lift: null,
 };
 
 // The ellipsoid method's per-iteration ellipse, parallel to the iterate path:
@@ -64,9 +68,8 @@ export interface LocalizingSetPath {
   count: number;
 }
 
-export interface TraceEntry extends IteratePath {
-  objectiveVector: PointXY | null;
-}
+// A path kept from an earlier solve while tracing.
+export type TraceEntry = IteratePath;
 
 export type SolverSettings = {
   alphaMax: number;
@@ -134,7 +137,7 @@ export type SolverState = {
   solverSettings: SolverSettings;
   // Where IPM/PDHG/primal-simplex begin iterating; null = the solver default
   // (origin). Draggable via the canvas marker.
-  solverStartPoint: PointXY | null;
+  solverStartPoint: Vec | null;
   iteratePath: IteratePath;
   iterateEllipsoids: EllipsoidPath | null;
   iterateLocalizingSets: LocalizingSetPath | null;
@@ -147,8 +150,6 @@ export type SolverState = {
   originalIteratePath: IteratePath;
   originalIteratePhases: number[];
   iterateRestartIndices: number[];
-  iterateObjectiveVector: PointXY | null;
-  originalIterateObjectiveVector: PointXY | null;
 
   traceEnabled: boolean;
   traceBuffer: TraceEntry[];
@@ -181,8 +182,6 @@ export function freshSolverState(): Omit<SolverState, keyof SolverRuntimeState> 
     originalIteratePath: EMPTY_ITERATE_PATH,
     originalIteratePhases: [],
     iterateRestartIndices: [],
-    iterateObjectiveVector: null,
-    originalIterateObjectiveVector: null,
 
     traceEnabled: false,
     traceBuffer: [],
@@ -208,7 +207,6 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
   iterateLocalizingSets: () => ITERATE_DIRTY,
   iteratePhases: () => ITERATE_DIRTY,
   iterateRestartIndices: () => ITERATE_DIRTY,
-  iterateObjectiveVector: () => ITERATE_DIRTY,
   highlightIteratePathIndex: () => ITERATE_DIRTY,
   // the optimum star is hidden for the duration of a replay, so starting or
   // stopping one changes what the iterate pass draws (see IterateStarLayer)
@@ -220,13 +218,10 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
 // Solver default start: IPM/PDHG begin at the origin, and Phase-1 simplex's
 // first displayed iterate is the origin too (all structural variables start
 // nonbasic), so one marker default is truthful for all three.
-const DEFAULT_SOLVER_START: Readonly<PointXY> = { x: 0, y: 0 };
 
 /** Whether the draggable start marker applies to the current solver/problem. */
 function solverStartPointApplies(state: EditorState & SolverState): boolean {
-  if (computeDrawingPhase(state) !== "ready_for_solvers") return false;
-  if (!hasPolytopeLines(state.polytope)) return false;
-  if (state.polytope.kind !== "bounded" && state.polytope.kind !== "unbounded") return false;
+  if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return false;
   if (state.solverMode === "ipm" || state.solverMode === "pdhg") return true;
   // dual simplex has no safe start-point interpretation: a primal point only
   // determines a dual-feasible basis when it is already optimal
@@ -238,21 +233,18 @@ function solverStartPointApplies(state: EditorState & SolverState): boolean {
  * mode, which is how simplex consumes it), or the solver default when nothing has been dragged yet.
  * Null when hidden.
  */
-export function displayedSolverStartPoint(state: EditorState & SolverState): PointXY | null {
+export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
   if (!solverStartPointApplies(state)) return null;
   const point = state.solverStartPoint;
-  if (!point) return { ...DEFAULT_SOLVER_START };
+  if (!point) return zeroVec(state.dimension);
   if (state.solverMode === "simplex") {
     return nearestPolytopeVertex(state, point) ?? point;
   }
   return point;
 }
 
-// Display z for one iterate at points[base..base+stride): the baked total
-// (component [2], present for pdhg/ipm) minus the current objective value, so
-// 2D-projected solves render flat and the 3D height tracks the extra term.
-export function computeFlatZ(points: Float64Array, base: number, stride: number, objectiveVector: PointXY | null): number {
-  const objectiveValue = objectiveVector ? objectiveVector.x * points[base]! + objectiveVector.y * points[base + 1]! : 0;
-  const totalValue = stride >= 3 ? points[base + 2]! : objectiveValue;
-  return totalValue - objectiveValue;
+// The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the
+// solver's lift above the floor (zero for a solver drawn flat).
+export function iterateHeight(path: IteratePath, index: number): number {
+  return path.stride >= 3 ? path.points[index * path.stride + 2]! : (path.lift?.[index] ?? 0);
 }

@@ -166,6 +166,7 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   const barrierParameters = centralPathMu(niter);
 
   const points: VecNs = [];
+  const barrierTerms: number[] = [];
   const rows: string[] = [];
   const header = `  ${fmtStrL("Iter", 4)} ${fmtStr("x", 8)} ${fmtStr("y", 8)} ${fmtStr("Obj", 10)} ${fmtStr("µ", 10)}  \n`;
 
@@ -187,7 +188,9 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
 
     const totalObjective = computeObjective(A, b, c, mu, optimalPoint, axScratch, slackScratch);
     const linearObjective = dot(c, optimalPoint);
-    points.push(Float64Array.of(optimalPoint[0] ?? 0, optimalPoint[1] ?? 0, totalObjective));
+    points.push(optimalPoint.slice());
+    // the barrier's share of the objective: what the 3D view lifts this iterate by
+    barrierTerms.push(totalObjective - linearObjective);
 
     const progressLog = `  ${fmtIntL(points.length, 4)} ${fmtF(optimalPoint[0] ?? 0, 8, 2)} ${fmtF(optimalPoint[1] ?? 0, 8, 2)} ${fmtE(linearObjective, 10, 1)} ${fmtE(mu, 10, 1, false)}  \n`;
     rows.push(progressLog);
@@ -198,6 +201,7 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   const tsolve = (Date.now() - startTime) / 1000;
   return {
     iterations: points,
+    convergence: barrierTerms,
     log: [{ header, rows, footer: `Traced central path in ${Math.round(tsolve * 1000)}ms` }],
   };
 }

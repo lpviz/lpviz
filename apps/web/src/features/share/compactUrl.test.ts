@@ -4,14 +4,14 @@ import type { SharedAppState } from "./sharedState";
 
 const BASE: SharedAppState = {
   vertices: [
-    { x: -4, y: -3 },
-    { x: 4, y: -4 },
-    { x: 6, y: 2 },
-    { x: 0, y: 6 },
-    { x: -5, y: 3 },
+    [-4, -3],
+    [4, -4],
+    [6, 2],
+    [0, 6],
+    [-5, 3],
   ],
   completionMode: "closed",
-  objective: { x: 0.8, y: 0.6 },
+  objective: [0.8, 0.6],
   solverMode: "ellipsoid",
   settings: {},
 };
@@ -24,7 +24,7 @@ describe("compact share links", () => {
       ...BASE,
       zScale: 0.1,
       is3DMode: true,
-      solverStartPoint: { x: -1.75, y: 0.5 },
+      solverStartPoint: [-1.75, 0.5],
       settings: {
         maxitEllipsoid: 12345,
         ellipsoidQueryPoint: "volumetric",
@@ -40,11 +40,11 @@ describe("compact share links", () => {
     expect(decoded).not.toBeNull();
     expect(decoded!.vertices.length).toBe(BASE.vertices.length);
     decoded!.vertices.forEach((vertex, i) => {
-      expect(vertex.x).toBeCloseTo(BASE.vertices[i]!.x, 4);
-      expect(vertex.y).toBeCloseTo(BASE.vertices[i]!.y, 4);
+      expect(vertex[0]).toBeCloseTo(BASE.vertices[i]![0], 4);
+      expect(vertex[1]).toBeCloseTo(BASE.vertices[i]![1], 4);
     });
-    expect(decoded!.objective!.x).toBeCloseTo(0.8, 4);
-    expect(decoded!.objective!.y).toBeCloseTo(0.6, 4);
+    expect(decoded!.objective![0]).toBeCloseTo(0.8, 4);
+    expect(decoded!.objective![1]).toBeCloseTo(0.6, 4);
     expect(decoded!.solverMode).toBe("ellipsoid");
     expect(decoded!.completionMode).toBe("closed");
   });
@@ -53,21 +53,21 @@ describe("compact share links", () => {
     const state: SharedAppState = {
       ...BASE,
       vertices: [
-        { x: -123.4567, y: 987.6543 },
-        { x: 0, y: 0 },
-        { x: 0.0001, y: -0.0001 },
-        { x: -1000.5, y: 1000.5 },
+        [-123.4567, 987.6543],
+        [0, 0],
+        [0.0001, -0.0001],
+        [-1000.5, 1000.5],
       ],
-      objective: { x: -0.739752, y: 1.907456 },
+      objective: [-0.739752, 1.907456],
     };
     const decoded = roundTrip(state)!;
     expect(decoded.vertices.length).toBe(state.vertices.length);
     decoded.vertices.forEach((vertex, i) => {
-      expect(vertex.x).toBeCloseTo(state.vertices[i]!.x, 4);
-      expect(vertex.y).toBeCloseTo(state.vertices[i]!.y, 4);
+      expect(vertex[0]).toBeCloseTo(state.vertices[i]![0], 4);
+      expect(vertex[1]).toBeCloseTo(state.vertices[i]![1], 4);
     });
-    expect(decoded.objective!.x).toBeCloseTo(-0.739752, 4);
-    expect(decoded.objective!.y).toBeCloseTo(1.907456, 4);
+    expect(decoded.objective![0]).toBeCloseTo(-0.739752, 4);
+    expect(decoded.objective![1]).toBeCloseTo(1.907456, 4);
   });
 
   test("round-trips every solver mode and completion mode", () => {
@@ -125,10 +125,10 @@ describe("compact share links", () => {
     const decoded = roundTrip({
       ...BASE,
       solverMode: "simplex",
-      solverStartPoint: { x: -3.5017, y: 2.25 },
+      solverStartPoint: [-3.5017, 2.25],
     })!;
-    expect(decoded.solverStartPoint!.x).toBeCloseTo(-3.5017, 4);
-    expect(decoded.solverStartPoint!.y).toBeCloseTo(2.25, 4);
+    expect(decoded.solverStartPoint![0]).toBeCloseTo(-3.5017, 4);
+    expect(decoded.solverStartPoint![1]).toBeCloseTo(2.25, 4);
   });
 
   test("an untouched start point costs nothing and stays null", () => {
@@ -148,8 +148,8 @@ describe("compact share links", () => {
     expect(decoded.solverMode).toBe("simplex");
     expect(decoded.settings.maxitIPM).toBe(321);
     expect(decoded.vertices.length).toBe(5);
-    expect(decoded.vertices[0]!.x).toBeCloseTo(-4, 4);
-    expect(decoded.objective!.x).toBeCloseTo(0.8, 4);
+    expect(decoded.vertices[0]![0]).toBeCloseTo(-4, 4);
+    expect(decoded.objective![0]).toBeCloseTo(0.8, 4);
     expect(decoded.solverStartPoint).toBeNull();
   });
 
@@ -170,7 +170,7 @@ describe("compact share links", () => {
     const legacy = encodeURIComponent(
       JSONCrush.crush(
         JSON.stringify({
-          v: BASE.vertices.map((p) => ({ x: p.x, y: p.y })),
+          v: BASE.vertices.map((p) => [p[0], p[1]]),
           k: "closed",
           o: BASE.objective,
           s: "ellipsoid",

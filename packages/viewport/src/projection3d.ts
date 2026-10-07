@@ -95,22 +95,13 @@ export function projectWorldPosition3D(snapshot: ViewportRenderSnapshot, rect: V
   };
 }
 
-export function toCanvasCoords3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  point: PointXY,
-  z: number | undefined,
-  zScale: number,
-  zValueForPoint?: (entry: Float64Array) => number,
-): PointXY {
-  const entry = z === undefined ? Float64Array.of(point.x, point.y) : Float64Array.of(point.x, point.y, z);
-  const zValue = zValueForPoint ? zValueForPoint(entry) : (z ?? 0);
+export function toCanvasCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, z: number | undefined, zScale: number): PointXY {
   // Render layers flatten z by transitionZMultiplier during the 2D/3D
   // transition; match them so screen positions agree with drawn geometry.
   return projectWorldPosition3D(snapshot, rect, {
     x: point.x,
     y: point.y,
-    z: ((zValue * zScale) / 100) * snapshot.transitionZMultiplier,
+    z: (((z ?? 0) * zScale) / 100) * snapshot.transitionZMultiplier,
   });
 }
 

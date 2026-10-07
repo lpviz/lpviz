@@ -1,6 +1,6 @@
 import { getState, on, onMeta } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, Vec } from "@lpviz/math/types";
 import type { ViewportRuntimeContext } from "./runtime/context";
 import { resetViewport2DControlsConfig, setViewport2DControlsConfig } from "./runtime/controls2d";
 import { resetViewport3DControlsConfig } from "./runtime/controls3d";
@@ -31,7 +31,7 @@ export type ViewportApi = {
   set2DPanEnabled: (enabled: boolean) => void;
   toLogicalCoords: (x: number, y: number) => PointXY;
   toCanvasCoords: (x: number, y: number, z?: number) => PointXY;
-  getObjectiveScreenPosition: (point: PointXY) => PointXY;
+  getObjectiveScreenPosition: (point: Vec) => PointXY;
   getUnboundedClipBounds: () => BoundingBox;
   start3DTransition: (targetMode: boolean) => void;
   getCanvasElement: () => HTMLCanvasElement;

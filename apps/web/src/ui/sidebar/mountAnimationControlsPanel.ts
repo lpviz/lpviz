@@ -1,7 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
+import { hasObjective, hasRegion } from "@/features/problem/selectors";
 import { el, range } from "@/ui/dom";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 
 export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
@@ -53,17 +53,16 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
   );
   root.append(rot);
   function render(s: State) {
-    const hasComputedLines = hasPolytopeLines(s.polytope);
+    const regionDerived = hasRegion(s);
     const hasSolution = (s.originalIteratePath?.count ?? 0) > 0;
-    const hasObjective = s.objectiveVector !== null;
     const isRotating = s.rotateObjectiveMode;
     const isAnimating = s.replayActive && !isRotating;
 
     // the same button stops the replay it started, so it stays enabled while
     // one is playing; its label carries the mode, matching "Stop Rotation"
     animate.textContent = isAnimating ? "Stop Animation" : "Animate";
-    animate.disabled = !hasComputedLines || !hasSolution || isRotating;
-    start.disabled = !hasComputedLines || !hasObjective || isAnimating || isRotating;
+    animate.disabled = !regionDerived || !hasSolution || isRotating;
+    start.disabled = !regionDerived || !hasObjective(s) || isAnimating || isRotating;
     stop.disabled = !isRotating;
     rot.className = isRotating ? "objective-rotation is-block" : "objective-rotation is-hidden";
     trace.checked = s.traceEnabled;

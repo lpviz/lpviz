@@ -38,11 +38,11 @@ export class PolytopeRubberBandLayer implements Layer {
       return;
     }
 
-    RUBBER_BAND_BUF[0] = last.x;
-    RUBBER_BAND_BUF[1] = last.y;
+    RUBBER_BAND_BUF[0] = last[0];
+    RUBBER_BAND_BUF[1] = last[1];
     RUBBER_BAND_BUF[2] = 0;
-    RUBBER_BAND_BUF[3] = mouse.x;
-    RUBBER_BAND_BUF[4] = mouse.y;
+    RUBBER_BAND_BUF[3] = mouse[0];
+    RUBBER_BAND_BUF[4] = mouse[1];
     RUBBER_BAND_BUF[5] = 0;
     replaceLinePositions(this.object3D.geometry, RUBBER_BAND_BUF);
     this.object3D.visible = true;

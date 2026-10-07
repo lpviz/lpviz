@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { encodeSharedState, decodeSharedState } from "./compactUrl";
 import type { SharedAppState } from "./sharedState";
+import type { Vec } from "@lpviz/math/types";
 import { buildConstraintRep } from "@lpviz/polytope/constraintRep";
 import { simplex } from "@lpviz/solver-engine/simplex";
 import { VRep } from "@lpviz/math/geometry";
@@ -20,16 +21,13 @@ function randomConvexPolygon(rand: () => number) {
   const angles = Array.from({ length: cnt }, () => rand() * 2 * Math.PI).sort((a, b) => a - b);
   if (angles.some((a, i) => i > 0 && a - angles[i - 1]! < 0.2)) return null;
   const R = 1 + rand() * 8;
-  return angles.map((a) => ({
-    x: cx + R * Math.cos(a),
-    y: cy + R * Math.sin(a),
-  }));
+  return angles.map((a): Vec => [cx + R * Math.cos(a), cy + R * Math.sin(a)]);
 }
 
 // Valtr's algorithm (the gallery's) for a random convex polygon with an exact vertex count.
 const MAX_TRIES = 40;
 
-function exactVertexPolygon(vertexCount: number, rand: () => number): { x: number; y: number }[] {
+function exactVertexPolygon(vertexCount: number, rand: () => number): Vec[] {
   for (let attempt = 0; attempt < MAX_TRIES; attempt++) {
     const pts = valtrPolygon(vertexCount, rand);
     if (isWellProportioned(pts)) return pts;
@@ -37,20 +35,17 @@ function exactVertexPolygon(vertexCount: number, rand: () => number): { x: numbe
   return valtrPolygon(vertexCount, rand);
 }
 
-function bruteForceOptimum(vertices: { x: number; y: number }[], objective: { x: number; y: number }): number {
-  return Math.max(...vertices.map((v) => objective.x * v.x + objective.y * v.y));
+function bruteForceOptimum(vertices: Vec[], objective: Vec): number {
+  return Math.max(...vertices.map((v) => objective[0] * v[0] + objective[1] * v[1]));
 }
 
-function solveForOptimum(vertices: { x: number; y: number }[], objective: { x: number; y: number }): { value: number; x: number; y: number } | null {
-  const { lines } = buildConstraintRep(
-    vertices.map((v) => [v.x, v.y]),
-    true,
-  );
+function solveForOptimum(vertices: Vec[], objective: Vec): { value: number; x: number; y: number } | null {
+  const { lines } = buildConstraintRep(vertices, true);
   if (lines.length === 0) return null;
-  const result = simplex(lines, Float64Array.of(objective.x, objective.y), { tol: 1e-9, dual: false });
+  const result = simplex(lines, Float64Array.of(objective[0], objective[1]), { tol: 1e-9, dual: false });
   if (result.status !== "optimal") return null;
   const last = result.iterations[result.iterations.length - 1]!;
-  return { value: objective.x * last[0]! + objective.y * last[1]!, x: last[0]!, y: last[1]! };
+  return { value: objective[0] * last[0]! + objective[1] * last[1]!, x: last[0]!, y: last[1]! };
 }
 
 function roundTripN(state: SharedAppState, n: number): SharedAppState {
@@ -67,78 +62,78 @@ function roundTripN(state: SharedAppState, n: number): SharedAppState {
 const GALLERY_PROBLEMS: SharedAppState[] = [
   {
     vertices: [
-      { x: -8, y: -5 },
-      { x: -9, y: 4 },
-      { x: -2, y: 9 },
-      { x: 7, y: 5 },
-      { x: 8, y: -4 },
+      [-8, -5],
+      [-9, 4],
+      [-2, 9],
+      [7, 5],
+      [8, -4],
     ],
     completionMode: "closed",
-    objective: { x: 7, y: 3 },
+    objective: [7, 3],
     solverMode: "simplex",
     settings: {},
   },
   {
     vertices: [
-      { x: 0, y: -9 },
-      { x: -10, y: 0 },
-      { x: 0, y: 9 },
-      { x: 10, y: 0 },
+      [0, -9],
+      [-10, 0],
+      [0, 9],
+      [10, 0],
     ],
     completionMode: "closed",
-    objective: { x: 4, y: 8 },
+    objective: [4, 8],
     solverMode: "simplex",
     settings: {},
   },
   {
     vertices: [
-      { x: -12, y: -3 },
-      { x: -8, y: 5 },
-      { x: 4, y: 6 },
-      { x: 12, y: 1 },
-      { x: 9, y: -5 },
-      { x: -4, y: -6 },
+      [-12, -3],
+      [-8, 5],
+      [4, 6],
+      [12, 1],
+      [9, -5],
+      [-4, -6],
     ],
     completionMode: "closed",
-    objective: { x: 9, y: 2 },
+    objective: [9, 2],
     solverMode: "simplex",
     settings: {},
   },
   {
     vertices: [
-      { x: -10, y: -6 },
-      { x: -10, y: 6 },
-      { x: 2, y: 6 },
-      { x: 9, y: 0.25 },
-      { x: 9.25, y: -0.25 },
-      { x: 2, y: -6 },
+      [-10, -6],
+      [-10, 6],
+      [2, 6],
+      [9, 0.25],
+      [9.25, -0.25],
+      [2, -6],
     ],
     completionMode: "closed",
-    objective: { x: 10, y: 0.2 },
+    objective: [10, 0.2],
     solverMode: "simplex",
     settings: {},
   },
   {
     vertices: [
-      { x: -14, y: -4 },
-      { x: -14, y: 4 },
-      { x: 14, y: 4 },
-      { x: 14, y: -4 },
+      [-14, -4],
+      [-14, 4],
+      [14, 4],
+      [14, -4],
     ],
     completionMode: "closed",
-    objective: { x: 3, y: 7 },
+    objective: [3, 7],
     solverMode: "simplex",
     settings: {},
   },
   {
     vertices: [
-      { x: -30, y: -0.35 },
-      { x: -30, y: 0.35 },
-      { x: 30, y: 0.35 },
-      { x: 30, y: -0.35 },
+      [-30, -0.35],
+      [-30, 0.35],
+      [30, 0.35],
+      [30, -0.35],
     ],
     completionMode: "closed",
-    objective: { x: 10, y: 0.1 },
+    objective: [10, 0.1],
     solverMode: "simplex",
     settings: {},
   },
@@ -170,8 +165,8 @@ describe("share link round-trip stability", () => {
     for (let t = 0; t < 60 && runs < 15; t++) {
       const vertices = randomConvexPolygon(rand);
       if (!vertices || vertices.length < 3) continue;
-      const objective = { x: rand() * 4 - 2, y: rand() * 4 - 2 };
-      if (Math.abs(objective.x) + Math.abs(objective.y) < 0.1) continue;
+      const objective: Vec = [rand() * 4 - 2, rand() * 4 - 2];
+      if (Math.abs(objective[0]) + Math.abs(objective[1]) < 0.1) continue;
       runs++;
 
       const original: SharedAppState = {
@@ -201,14 +196,14 @@ describe("share link round-trip stability", () => {
   test("each intermediate round-trip stays convex and within tolerance", () => {
     const original: SharedAppState = {
       vertices: [
-        { x: -8, y: -5 },
-        { x: -9, y: 4 },
-        { x: -2, y: 9 },
-        { x: 7, y: 5 },
-        { x: 8, y: -4 },
+        [-8, -5],
+        [-9, 4],
+        [-2, 9],
+        [7, 5],
+        [8, -4],
       ],
       completionMode: "closed",
-      objective: { x: 7, y: 3 },
+      objective: [7, 3],
       solverMode: "simplex",
       settings: {},
     };
@@ -242,8 +237,8 @@ describe("share link round-trip stability", () => {
         const rand = lcg(baseSeed + t);
         const vertices = exactVertexPolygon(vertexCount, rand);
         if (vertices.length !== vertexCount) continue;
-        const objective = { x: rand() * 4 - 2, y: rand() * 4 - 2 };
-        if (Math.abs(objective.x) + Math.abs(objective.y) < 0.1) continue;
+        const objective: Vec = [rand() * 4 - 2, rand() * 4 - 2];
+        if (Math.abs(objective[0]) + Math.abs(objective[1]) < 0.1) continue;
         runs++;
 
         const original: SharedAppState = {
@@ -274,14 +269,14 @@ describe("share link round-trip stability", () => {
   test("first round-trip locks the vertices (subsequent trips are no-ops)", () => {
     const original: SharedAppState = {
       vertices: [
-        { x: -8, y: -5 },
-        { x: -9, y: 4 },
-        { x: -2, y: 9 },
-        { x: 7, y: 5 },
-        { x: 8, y: -4 },
+        [-8, -5],
+        [-9, 4],
+        [-2, 9],
+        [7, 5],
+        [8, -4],
       ],
       completionMode: "closed",
-      objective: { x: 7, y: 3 },
+      objective: [7, 3],
       solverMode: "simplex",
       settings: {},
     };
@@ -293,10 +288,10 @@ describe("share link round-trip stability", () => {
     expect(tenth.vertices.length).toBe(original.vertices.length);
     expect(tenth.vertices.length).toBe(first.vertices.length);
     tenth.vertices.forEach((v, i) => {
-      expect(v.x).toBeCloseTo(first.vertices[i]!.x, 10);
-      expect(v.y).toBeCloseTo(first.vertices[i]!.y, 10);
+      expect(v[0]).toBeCloseTo(first.vertices[i]![0], 10);
+      expect(v[1]).toBeCloseTo(first.vertices[i]![1], 10);
     });
-    expect(tenth.objective!.x).toBeCloseTo(first.objective!.x, 10);
-    expect(tenth.objective!.y).toBeCloseTo(first.objective!.y, 10);
+    expect(tenth.objective![0]).toBeCloseTo(first.objective![0], 10);
+    expect(tenth.objective![1]).toBeCloseTo(first.objective![1], 10);
   });
 });

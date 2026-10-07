@@ -1,7 +1,7 @@
 import type { CompletionMode, State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/core/store";
 import { centroid, isConvexChain, isConvexPolygon, VRep } from "@lpviz/math/geometry";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import { deriveRegionFromPoints } from "@lpviz/polytope/regionAssembly";
 
@@ -11,16 +11,16 @@ type EditorRegionResult =
       status: "ready";
       polytope: PolytopeRepresentation;
       promotion: {
-        vertices: PointXY[];
-        interiorPoint: PointXY;
+        vertices: Vec[];
+        interiorPoint: Vec;
         completionMode: CompletionMode;
       } | null;
     };
 
 type EditorEditResult = {
-  vertices: PointXY[];
+  vertices: Vec[];
   completionMode: CompletionMode;
-  interiorPoint: PointXY | null;
+  interiorPoint: Vec | null;
 };
 
 type EditorTransition =
@@ -34,7 +34,7 @@ type EditorTransition =
     }
   | {
       kind: "select-objective";
-      objectiveVector: PointXY;
+      objectiveVector: Vec;
     };
 
 export function getEditorContext(state: State) {
@@ -55,7 +55,7 @@ export function getEditorContext(state: State) {
     session.kind === "editing-open"
       ? !isDraggingGeometry && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3
         ? {
-            vertices: state.polytope.vertices.map(([x, y]) => ({ x, y })),
+            vertices: state.polytope.vertices,
             mode: "closed" as const,
             isDerivedClosed: true,
           }
@@ -93,14 +93,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     return { status: "nonconvex" };
   }
 
-  const vertexRep = VRep.fromPoints(sourceVertices);
-  const region =
-    sourceMode === "draft"
-      ? deriveRegionFromPoints(vertexRep.toVertices(), "closed")
-      : deriveRegionFromPoints(
-          sourceVertices.map((vertex) => [vertex.x, vertex.y] as [number, number]),
-          sourceMode,
-        );
+  const region = deriveRegionFromPoints(sourceVertices, sourceMode === "open" ? "open" : "closed");
 
   if (geometry.isDerivedClosed) {
     return {
@@ -108,7 +101,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
       polytope: region,
       promotion: {
         vertices: geometry.vertices,
-        interiorPoint: VRep.fromPoints(geometry.vertices).centroidPoint(),
+        interiorPoint: centroid(geometry.vertices),
         completionMode: "closed",
       },
     };
@@ -124,17 +117,12 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     };
   }
 
-  const promotedVertices = region.vertices.map(([x, y]) => ({ x, y }));
-  const [cx, cy] = centroid(region.vertices);
   return {
     status: "ready",
-    polytope: deriveRegionFromPoints(
-      promotedVertices.map(({ x, y }) => [x, y] as [number, number]),
-      "closed",
-    ),
+    polytope: deriveRegionFromPoints(region.vertices, "closed"),
     promotion: {
-      vertices: promotedVertices,
-      interiorPoint: { x: cx, y: cy },
+      vertices: region.vertices,
+      interiorPoint: centroid(region.vertices),
       completionMode: "closed",
     },
   };
@@ -142,7 +130,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
 
 // Every edit is its own undoable step (closing included; otherwise undo jumps
 // back past the close AND the last-placed vertex).
-const edit = (vertices: PointXY[], completionMode: CompletionMode, interiorPoint: PointXY | null): EditorTransition => ({
+const edit = (vertices: Vec[], completionMode: CompletionMode, interiorPoint: Vec | null): EditorTransition => ({
   kind: "edit",
   result: { vertices, completionMode, interiorPoint },
 });
@@ -150,12 +138,12 @@ const edit = (vertices: PointXY[], completionMode: CompletionMode, interiorPoint
 export function getEditorTransition(
   state: State,
   action:
-    | { kind: "click"; point: PointXY; closeThreshold?: number }
+    | { kind: "click"; point: Vec; closeThreshold?: number }
     | { kind: "finish-open" }
     | { kind: "delete-vertex"; deleteIndex: number }
-    | { kind: "insert-edge-point"; edgeIndex: number; point: PointXY }
-    | { kind: "insert-boundary-ray-point"; rayIndex: number; point: PointXY }
-    | { kind: "repair-displayed-hull"; point: PointXY },
+    | { kind: "insert-edge-point"; edgeIndex: number; point: Vec }
+    | { kind: "insert-boundary-ray-point"; rayIndex: number; point: Vec }
+    | { kind: "repair-displayed-hull"; point: Vec },
 ): EditorTransition {
   const context = getEditorContext(state);
   switch (action.kind) {
@@ -179,11 +167,11 @@ export function getEditorTransition(
         // when zoomed out, e.g. on mobile). Defaults to a world distance.
         const closeThreshold = action.closeThreshold ?? 0.5;
         if (VRep.distance(action.point, state.vertices[0]!) < closeThreshold) {
-          return edit(state.vertices, "closed", polytope.centroidPoint());
+          return edit(state.vertices, "closed", centroid(state.vertices));
         }
 
         if (polytope.contains(action.point)) {
-          return edit(state.vertices, "closed", { x: action.point.x, y: action.point.y });
+          return edit(state.vertices, "closed", action.point);
         }
       }
 
@@ -222,7 +210,7 @@ export function getEditorTransition(
       // convex polygon keeps it convex, so there is nothing to reject. A
       // triangle has nothing left to close and goes back to drafting.
       if (closed && nextVertices.length >= 3) {
-        return edit(nextVertices, "closed", VRep.fromPoints(nextVertices).centroidPoint());
+        return edit(nextVertices, "closed", centroid(nextVertices));
       }
 
       return edit(nextVertices, closed || session.kind === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
@@ -237,21 +225,18 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      const dx = end.x - start.x;
-      const dy = end.y - start.y;
+      const dx = end[0] - start[0];
+      const dy = end[1] - start[1];
       const len2 = dx * dx + dy * dy;
       if (len2 === 0) {
         return { kind: "noop" };
       }
 
-      const t = Math.max(0, Math.min(1, ((action.point.x - start.x) * dx + (action.point.y - start.y) * dy) / len2));
+      const t = Math.max(0, Math.min(1, ((action.point[0] - start[0]) * dx + (action.point[1] - start[1]) * dy) / len2));
       const nextVertices = displayVertices.slice();
-      nextVertices.splice(action.edgeIndex + 1, 0, {
-        x: start.x + t * dx,
-        y: start.y + t * dy,
-      });
+      nextVertices.splice(action.edgeIndex + 1, 0, [start[0] + t * dx, start[1] + t * dy]);
 
-      return isDerivedClosed ? edit(nextVertices, "closed", VRep.fromPoints(nextVertices).centroidPoint()) : edit(nextVertices, state.completionMode, state.interiorPoint);
+      return isDerivedClosed ? edit(nextVertices, "closed", centroid(nextVertices)) : edit(nextVertices, state.completionMode, state.interiorPoint);
     }
     case "insert-boundary-ray-point": {
       if (context.session.kind !== "editing-open") {
@@ -285,7 +270,7 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      return edit(hull, "closed", VRep.fromPoints(hull).centroidPoint());
+      return edit(hull, "closed", centroid(hull));
     }
   }
 }

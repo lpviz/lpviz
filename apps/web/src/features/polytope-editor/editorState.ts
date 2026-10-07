@@ -1,10 +1,12 @@
 import type { ViewportState } from "@/features/viewport/viewportState";
-import type { Line, PointXY } from "@lpviz/math/types";
+import type { Line, Vec } from "@lpviz/math/types";
 import { hasPolytopeLines, type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
+// How many decision variables the problem has: the length of every Vec the editor holds.
+export type Dimension = 2 | 3;
 type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; lines: Line[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
@@ -15,15 +17,15 @@ export type DragTarget =
   | {
       kind: "constraint";
       operation: ConstraintDragOperation;
-      start: PointXY;
-      normal: PointXY;
+      start: Vec;
+      normal: Vec;
     }
   | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D | undefined }
   | {
       kind: "solver-start";
       // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
       // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
-      grabOffset?: PointXY;
+      grabOffset?: Vec;
       viewAnchor3D?: DragViewAnchor3D | undefined;
     };
 export type EditorInteractionState =
@@ -37,14 +39,15 @@ export type EditorInteractionState =
 
 // The polytope editor's slice of the store: the drawn region, the objective and the pointer interaction.
 export type EditorState = {
-  vertices: PointXY[];
+  dimension: Dimension;
+  vertices: Vec[];
   completionMode: CompletionMode;
-  interiorPoint: PointXY | null;
+  interiorPoint: Vec | null;
   polytope: PolytopeRepresentation | null;
   inequalitiesMessage: string | null;
 
-  objectiveVector: PointXY | null;
-  currentObjective: PointXY | null;
+  objectiveVector: Vec | null;
+  currentObjective: Vec | null;
   objectiveHidden: boolean;
 
   snapToGrid: boolean;
@@ -53,7 +56,10 @@ export type EditorState = {
   lastCompletedInteraction: CompletedInteraction;
 };
 
-export function freshEditorState(): EditorState {
+// The field a reset leaves alone: the dimension is fixed for the session when the app boots.
+export type EditorRuntimeState = Pick<EditorState, "dimension">;
+
+export function freshEditorState(): Omit<EditorState, keyof EditorRuntimeState> {
   return {
     vertices: [],
     completionMode: "draft",
@@ -70,6 +76,10 @@ export function freshEditorState(): EditorState {
     editorInteraction: { kind: "idle" },
     lastCompletedInteraction: "none",
   };
+}
+
+export function initialEditorRuntimeState(): EditorRuntimeState {
+  return { dimension: 2 };
 }
 
 const POLYTOPE_DIRTY: ViewportDirtyFlags = {
@@ -112,15 +122,15 @@ export function computeDrawingPhase(state: EditorState): DrawingPhase {
 }
 
 /** Nearest vertex of the feasible region, or null if there are none. */
-export function nearestPolytopeVertex(state: EditorState, point: PointXY): PointXY | null {
+export function nearestPolytopeVertex(state: EditorState, point: Vec): Vec | null {
   if (!hasPolytopeLines(state.polytope)) return null;
-  let best: PointXY | null = null;
+  let best: Vec | null = null;
   let bestDistance = Infinity;
   for (const vertex of state.polytope.vertices) {
-    const distance = Math.hypot(vertex[0] - point.x, vertex[1] - point.y);
+    const distance = Math.hypot(vertex[0] - point[0], vertex[1] - point[1]);
     if (distance < bestDistance) {
       bestDistance = distance;
-      best = { x: vertex[0], y: vertex[1] };
+      best = [vertex[0], vertex[1]];
     }
   }
   return best;

@@ -32,7 +32,7 @@ export function applyUrlParamsOnce({
     invalidatePendingSolveResults();
     setState(
       {
-        ...buildSharedStatePatch(sharedState),
+        ...buildSharedStatePatch(sharedState, getState().dimension),
         inequalitiesMessage: null,
         highlightIndex: null,
       },

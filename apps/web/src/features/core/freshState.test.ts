@@ -10,6 +10,7 @@ describe("freshState", () => {
     const leftOut = all.filter((key) => !fresh.includes(key));
     expect(leftOut.sort()).toEqual(
       [
+        "dimension",
         "is3DMode",
         "isNavigatingViewport",
         "isTransitioning3D",
@@ -27,12 +28,12 @@ describe("freshState", () => {
   test("restores a worked-on store to its starting values", () => {
     setState({
       vertices: [
-        { x: 0, y: 0 },
-        { x: 2, y: 1 },
-        { x: 1, y: 2 },
+        [0, 0],
+        [2, 1],
+        [1, 2],
       ],
       completionMode: "closed",
-      objectiveVector: { x: 1, y: 0 },
+      objectiveVector: [1, 0],
       solverMode: "ipm",
       solverSettings: { ...DEFAULT_SOLVER_SETTINGS, maxitIPM: 7 },
       historyStack: [{ vertices: [], objectiveVector: null, completionMode: "draft" }],

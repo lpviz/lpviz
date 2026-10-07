@@ -20,7 +20,7 @@ describe("deriveViewportDirty (field -> layers)", () => {
   });
 
   test("iterate fields repaint only the iterate pass", () => {
-    for (const key of ["iteratePath", "iterateEllipsoids", "iteratePhases", "iterateRestartIndices", "iterateObjectiveVector", "highlightIteratePathIndex", "replayActive"] as const) {
+    for (const key of ["iteratePath", "iterateEllipsoids", "iteratePhases", "iterateRestartIndices", "highlightIteratePathIndex", "replayActive"] as const) {
       expect(deriveViewportDirty(st({}), [key])).toEqual({ iterate: true });
     }
   });

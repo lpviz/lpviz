@@ -30,7 +30,10 @@ export type SolverLog = LogSection[];
 export interface SolverResult {
   iterations: Float64Array[];
   log: SolverLog;
-  /** the stopping measure per iterate; present for the solvers whose 3D path is lifted by it */
+  /**
+   * The height the 3D view lifts each iterate above the floor: the solver's stopping measure (pdhg
+   * eps, ipm mu, ellipsoid rho) or the central path's barrier term. Absent for simplex, drawn flat.
+   */
   convergence?: number[] | undefined;
   /** a phase label per iterate: simplex's phase, pdhg's basis hash */
   phases?: number[] | undefined;

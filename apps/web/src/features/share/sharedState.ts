@@ -1,4 +1,5 @@
-import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type Dimension, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import type { Vec } from "@lpviz/math/types";
 
 export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 
@@ -6,13 +7,13 @@ export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 export const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
 
 export type SharedAppState = {
-  vertices: { x: number; y: number }[];
+  vertices: Vec[];
   completionMode?: CompletionMode;
-  objective: { x: number; y: number } | null;
+  objective: Vec | null;
   solverMode: SolverMode;
   settings: ShareSettings;
   /** Null means the solver's own default start, not "no start point". */
-  solverStartPoint?: { x: number; y: number } | null;
+  solverStartPoint?: Vec | null;
   zScale?: number;
   is3DMode?: boolean;
 };
@@ -81,12 +82,17 @@ export function expandSharedAppState<T>(value: T): T {
 }
 
 // The shared payload is the only untrusted input path in the app: a crafted
-// link must not be able to push NaN or arbitrary values into the store.
-const isFinitePoint = (value: unknown): value is { x: number; y: number } =>
-  typeof value === "object" && value !== null && Number.isFinite((value as { x: unknown }).x) && Number.isFinite((value as { y: unknown }).y);
+// link must not be able to push NaN or arbitrary values into the store. A point
+// is kept only when it has the problem's dimension and finite coordinates,
+// whether it arrived as the compact codec's tuple or a legacy link's {x, y}.
+function finiteVec(value: unknown, dimension: Dimension): Vec | null {
+  const coords: unknown[] | null = Array.isArray(value) ? value : typeof value === "object" && value !== null ? [(value as { x: unknown }).x, (value as { y: unknown }).y] : null;
+  if (!coords || coords.length !== dimension || !coords.every((coordinate) => Number.isFinite(coordinate))) return null;
+  return [...(coords as number[])] as Vec;
+}
 
-export function buildSharedStatePatch(sharedState: SharedAppState): Partial<State> {
-  const mappedVertices = Array.isArray(sharedState.vertices) ? sharedState.vertices.filter(isFinitePoint).map((vertex) => ({ x: vertex.x, y: vertex.y })) : [];
+export function buildSharedStatePatch(sharedState: SharedAppState, dimension: Dimension): Partial<State> {
+  const mappedVertices = Array.isArray(sharedState.vertices) ? sharedState.vertices.map((vertex) => finiteVec(vertex, dimension)).filter((vertex): vertex is Vec => vertex !== null) : [];
   const completionMode =
     sharedState.completionMode !== undefined && COMPLETION_MODES.includes(sharedState.completionMode) ? sharedState.completionMode : mappedVertices.length > 2 ? "closed" : "draft";
   const solverMode = SOLVER_MODES.includes(sharedState.solverMode) ? sharedState.solverMode : "central";
@@ -94,11 +100,11 @@ export function buildSharedStatePatch(sharedState: SharedAppState): Partial<Stat
   return {
     vertices: mappedVertices,
     completionMode,
-    objectiveVector: isFinitePoint(sharedState.objective) ? { x: sharedState.objective.x, y: sharedState.objective.y } : null,
+    objectiveVector: finiteVec(sharedState.objective, dimension),
     solverMode,
     // always written, so loading a link clears a start point left over from
     // whatever the user was doing before
-    solverStartPoint: isFinitePoint(sharedState.solverStartPoint) ? { x: sharedState.solverStartPoint.x, y: sharedState.solverStartPoint.y } : null,
+    solverStartPoint: finiteVec(sharedState.solverStartPoint, dimension),
     ...(Number.isFinite(sharedState.zScale) ? { zScale: Math.max(0.01, Math.min(100, sharedState.zScale!)) } : {}),
   };
 }

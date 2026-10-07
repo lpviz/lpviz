@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { SolverSettings, State } from "../core/store";
 import type { ShareSettings } from "../share/sharedState";
 import { createSolverControls } from "./solverControls";
+import type { Vec } from "@lpviz/math/types";
 
 // Share links are the app's only untrusted input. Each control's
 // applySharedSettings must forward valid values and drop everything else so a
@@ -13,7 +14,6 @@ function controls() {
     updateSolverSetting: (key, value) => {
       applied[key] = value;
     },
-    hasUnboundedObjectiveDirection: () => false,
   });
   const byMode = (mode: string) => list.find((c) => c.mode === mode)!;
   return { applied, simplex: byMode("simplex"), ipm: byMode("ipm") };
@@ -57,20 +57,16 @@ describe("shared solver settings", () => {
 });
 
 describe("ellipsoid request", () => {
-  const ellipsoid = () =>
-    createSolverControls({
-      updateSolverSetting: () => {},
-      hasUnboundedObjectiveDirection: () => false,
-    }).find((c) => c.mode === "ellipsoid")!;
-  const CHAIN = [
-    { x: 0, y: 0 },
-    { x: 2, y: 1 },
-    { x: 1, y: 2 },
+  const ellipsoid = () => createSolverControls({ updateSolverSetting: () => {} }).find((c) => c.mode === "ellipsoid")!;
+  const CHAIN: Vec[] = [
+    [0, 0],
+    [2, 1],
+    [1, 2],
   ];
   const stateWith = (polytope: Partial<State["polytope"]>) =>
     ({
       vertices: CHAIN,
-      objectiveVector: { x: -1, y: 0 },
+      objectiveVector: [-1, 0],
       polytope: {
         kind: "unbounded",
         lines: [

@@ -1,5 +1,6 @@
 import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
+import type { Vec } from "@lpviz/math/types";
 
 // A share link gets pasted into chat, email and papers, so the payload is restricted to the
 // base64url alphabet (A-Z a-z 0-9 - _), which every auto-linker treats as part of the URL. The
@@ -143,7 +144,7 @@ export function encodeSharedState(state: SharedAppState): string {
   // null is the meaningful value here: it says "wherever this solver starts by
   // default", so an untouched marker costs no bytes and stays correct even if
   // that default later moves. Only a point the user actually dragged is pinned.
-  const hasSolverStart = start != null && Number.isFinite(start.x) && Number.isFinite(start.y);
+  const hasSolverStart = start != null && Number.isFinite(start[0]) && Number.isFinite(start[1]);
   bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (hasObjective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
   bytes.push(hasSolverStart ? HAS_SOLVER_START : 0);
 
@@ -152,8 +153,8 @@ export function encodeSharedState(state: SharedAppState): string {
   let previousX = 0;
   let previousY = 0;
   for (const vertex of vertices) {
-    const x = quantize(vertex.x, COORDINATE_SCALE);
-    const y = quantize(vertex.y, COORDINATE_SCALE);
+    const x = quantize(vertex[0], COORDINATE_SCALE);
+    const y = quantize(vertex[1], COORDINATE_SCALE);
     writeZigZag(bytes, x - previousX);
     writeZigZag(bytes, y - previousY);
     previousX = x;
@@ -161,14 +162,14 @@ export function encodeSharedState(state: SharedAppState): string {
   }
 
   if (hasObjective) {
-    writeZigZag(bytes, quantize(state.objective!.x, OBJECTIVE_SCALE));
-    writeZigZag(bytes, quantize(state.objective!.y, OBJECTIVE_SCALE));
+    writeZigZag(bytes, quantize(state.objective![0], OBJECTIVE_SCALE));
+    writeZigZag(bytes, quantize(state.objective![1], OBJECTIVE_SCALE));
   }
   if (hasZScale) writeVarint(bytes, quantize(state.zScale!, Z_SCALE_SCALE));
   if (hasSolverStart) {
     // a world coordinate the user placed by hand, so vertex precision applies
-    writeZigZag(bytes, quantize(start.x, COORDINATE_SCALE));
-    writeZigZag(bytes, quantize(start.y, COORDINATE_SCALE));
+    writeZigZag(bytes, quantize(start[0], COORDINATE_SCALE));
+    writeZigZag(bytes, quantize(start[1], COORDINATE_SCALE));
   }
 
   const settings = state.settings ?? {};
@@ -211,33 +212,19 @@ export function decodeSharedState(text: string): SharedAppState | null {
 
     const vertexCount = readVarint(bytes, cursor);
     if (vertexCount > 100_000) return null;
-    const vertices: { x: number; y: number }[] = [];
+    const vertices: Vec[] = [];
     let x = 0;
     let y = 0;
     for (let i = 0; i < vertexCount; i++) {
       x += readZigZag(bytes, cursor);
       y += readZigZag(bytes, cursor);
-      vertices.push({
-        x: dequantize(x, COORDINATE_SCALE),
-        y: dequantize(y, COORDINATE_SCALE),
-      });
+      vertices.push([dequantize(x, COORDINATE_SCALE), dequantize(y, COORDINATE_SCALE)]);
     }
 
-    const objective =
-      (flags & 0x40) !== 0
-        ? {
-            x: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
-            y: dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE),
-          }
-        : null;
+    const objective: Vec | null = (flags & 0x40) !== 0 ? [dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE), dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE)] : null;
     const zScale = (flags & 0x80) !== 0 ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE) : undefined;
-    const solverStartPoint =
-      (extended & HAS_SOLVER_START) !== 0
-        ? {
-            x: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
-            y: dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE),
-          }
-        : null;
+    const solverStartPoint: Vec | null =
+      (extended & HAS_SOLVER_START) !== 0 ? [dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE), dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE)] : null;
 
     const settingCount = readVarint(bytes, cursor);
     if (settingCount > SETTINGS.length) return null;

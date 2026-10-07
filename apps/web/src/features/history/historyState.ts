@@ -1,9 +1,9 @@
 import type { CompletionMode } from "@/features/polytope-editor/editorState";
-import type { PointXY } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 
 export type HistoryEntry = {
-  vertices: PointXY[];
-  objectiveVector: PointXY | null;
+  vertices: Vec[];
+  objectiveVector: Vec | null;
   completionMode: CompletionMode;
 };
 

@@ -1,34 +1,31 @@
-import type { VecN } from "@lpviz/math/types";
 import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
 import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
 import type { PackedLogSection, PackedRows, ResultLogSection, ResultRowsView, SolverResultView, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse } from "./types";
 
 // The worker packs everything numeric into a few large typed arrays and transfers their buffers
 // (zero copy): structured-cloning tens of thousands of small arrays and row objects costs tens of
-// main-thread milliseconds per solve. The display z is baked here as `objective·point +
-// lift`, lifting each iterate above the optimal surface by its solver's convergence measure
-// (PDHG's `eps`, IPM's `mu`, the ellipsoid's `rho`); PDHG's residual is numerically tiny, so it
-// is scaled to share IPM's visual range. Display tuning only, never fed back into the math.
+// main-thread milliseconds per solve. The iterate buffer holds coordinates only; the height the 3D
+// view lifts each iterate by (the solver's convergence measure: PDHG's `eps`, IPM's `mu`, the
+// ellipsoid's `rho`, the central path's barrier term) travels as its own column. PDHG's residual is
+// numerically tiny, so it is scaled to share IPM's visual range. Display tuning only, never fed
+// back into the math.
 const PDHG_EPS_Z_LIFT = 500;
 
 function liftOf(solver: SolverWorkerPayload["solver"], convergence: number[]): (index: number) => number {
   return solver === "pdhg" ? (index) => PDHG_EPS_Z_LIFT * (convergence[index] ?? 0) : (index) => convergence[index] ?? 0;
 }
 
-// One flat buffer. A lifted solver's path is stride 3 with the display z baked in; the others
-// keep the engine's own stride (simplex plots flat at stride 2, the central path carries its
-// barrier objective at stride 3).
-function packIterations(entries: Float64Array[], objective: VecN, lift: ((index: number) => number) | null): { points: Float64Array; stride: number } {
-  const stride = lift || entries.length === 0 || entries[0]!.length >= 3 ? 3 : 2;
+// One flat buffer of coordinates, `stride` (the problem's dimension) per iterate, and the lift per
+// iterate for the solvers that have one.
+function packIterations(entries: Float64Array[], stride: number, lift: ((index: number) => number) | null): { points: Float64Array; lift: Float64Array | null } {
   const points = new Float64Array(entries.length * stride);
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
-    points[i * stride] = entry[0] ?? 0;
-    points[i * stride + 1] = entry[1] ?? 0;
-    if (lift) points[i * stride + 2] = objective[0]! * entry[0]! + objective[1]! * entry[1]! + lift(i);
-    else if (stride >= 3) points[i * stride + 2] = entry[2] ?? 0;
+    for (let k = 0; k < stride; k++) points[i * stride + k] = entry[k] ?? 0;
   }
-  return { points, stride };
+  const lifts = lift ? new Float64Array(entries.length) : null;
+  if (lifts && lift) for (let i = 0; i < entries.length; i++) lifts[i] = lift(i);
+  return { points, lift: lifts };
 }
 
 // Row i of a numeric section is iterate i + 1 in every engine, so the iteration
@@ -64,9 +61,11 @@ function packLog(log: SolverLog): PackedLogSection[] {
 
 export function packSolverResponse(id: number, request: SolverWorkerPayload, result: SolverResult): { wire: SolverWireSuccess; transfer: ArrayBuffer[] } {
   const { convergence, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets } = result;
-  const { points, stride } = packIterations(result.iterations, request.objective, convergence ? liftOf(request.solver, convergence) : null);
+  const stride = request.objective.length;
+  const { points, lift } = packIterations(result.iterations, stride, convergence ? liftOf(request.solver, convergence) : null);
   const log = packLog(result.log);
   const transfer: ArrayBufferLike[] = [points.buffer];
+  if (lift) transfer.push(lift.buffer);
   for (const { rows } of log) {
     if (!Array.isArray(rows)) transfer.push(rows.x.buffer, rows.y.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.convergence.buffer, rows.restart.buffer);
   }
@@ -76,7 +75,10 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   if (polygonPoints?.length) transfer.push(polygonPoints.buffer);
   if (polygonOffsets?.length) transfer.push(polygonOffsets.buffer);
   // none of these arrays is ever backed by a SharedArrayBuffer
-  return { wire: { id, success: true, iterations: points, stride, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets }, transfer: transfer as ArrayBuffer[] };
+  return {
+    wire: { id, success: true, iterations: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets },
+    transfer: transfer as ArrayBuffer[],
+  };
 }
 
 // Row objects materialize lazily from the packed columns: only rows that
@@ -98,12 +100,12 @@ function unpackSection({ header, rows, notes, footer }: PackedLogSection): Resul
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
-  const { id, iterations, stride, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets } = wire;
+  const { id, iterations, stride, lift, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets } = wire;
   const result: SolverResultView = {
     // The packed iterations are already a flat block in one transferred buffer, so the iterate
     // path is that buffer verbatim — no per-iterate views are materialized (their allocation,
     // ~100k objects per solve at high maxit, was the dominant main-thread GC cost during rotation).
-    iterations: { points: iterations, count: Math.floor(iterations.length / stride), stride },
+    iterations: { points: iterations, count: Math.floor(iterations.length / stride), stride, lift: lift ?? null },
     log: log.map(unpackSection),
     phases,
     restartIndices,

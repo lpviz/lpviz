@@ -24,18 +24,18 @@ export abstract class SinglePointSpriteLayer extends PointCloudLayer {
 
   /** The iterate index to show, or null to hide. */
   protected abstract selectIndex(raw: State): number | null;
-  /** Extra inputs `selectIndex` reads, beyond iteratePath/objective/mode. */
+  /** Extra inputs `selectIndex` reads, beyond iteratePath/mode. */
   protected abstract selectorDeps(raw: State): readonly unknown[];
 
   protected dependencies(): readonly unknown[] {
     const raw = getState();
-    return [...this.selectorDeps(raw), raw.iteratePath, raw.iterateObjectiveVector, getViewportRenderSnapshot().mode];
+    return [...this.selectorDeps(raw), raw.iteratePath, getViewportRenderSnapshot().mode];
   }
 
   protected rebuild(): void {
     const raw = getState();
     const index = shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw) ? this.selectIndex(raw) : null;
-    const xyz = index === null ? null : flatPointXYZ(raw.iteratePath, index, raw.iterateObjectiveVector);
+    const xyz = index === null ? null : flatPointXYZ(raw.iteratePath, index);
     if (!xyz) {
       this.hide();
       return;

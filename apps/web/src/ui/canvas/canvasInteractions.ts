@@ -1,39 +1,23 @@
-import type { HandleUndoRedo, SaveHistory } from "@/features/history/historyService";
-import type { ViewportApi } from "@/features/viewport/runtime";
-import { createDragActions, updatePanControls } from "./canvasDragActions";
-import { createEditActions } from "./canvasEditActions";
+import { getState } from "@/features/core/store";
 import { createCanvasGestures } from "./canvasGestures";
+import type { EditorTools, EditorToolsDeps } from "./editorTools";
+import { createEditorTools2D } from "./editorTools2d";
 
-export function attachCanvasInteractions(deps: {
-  canvasManager: ViewportApi;
-  saveHistory: SaveHistory;
-  sendPolytope: () => void;
-  handleUndoRedo: HandleUndoRedo;
-  /** Re-solve the active solver after the start marker moved or reset. */
-  onSolverStartMoved: () => void;
-  showReplayDuration: (durationMs: number) => void;
-}): () => void {
-  const { canvasManager } = deps;
-  const canvas = canvasManager.getCanvasElement();
+// The editor tools for the problem's dimension. A 3-variable editor plugs in here.
+function createEditorTools(deps: EditorToolsDeps): EditorTools {
+  const { dimension } = getState();
+  if (dimension !== 2) throw new Error(`No editor for ${dimension}-variable problems yet.`);
+  return createEditorTools2D(deps);
+}
+
+export function attachCanvasInteractions(deps: Omit<EditorToolsDeps, "isClickSuppressed">): () => void {
+  const canvas = deps.canvasManager.getCanvasElement();
   const gestures = createCanvasGestures(canvas);
-  const drag = createDragActions(deps);
-  const edit = createEditActions({ ...deps, isClickSuppressed: gestures.isClickSuppressed });
-
-  updatePanControls(canvasManager);
-
-  const detachGestures = gestures.attach({
-    handleDragStart: drag.handleDragStart,
-    handleDragMove: drag.handleDragMove,
-    handleDragEnd: drag.handleDragEnd,
-    handleClick: edit.handleClick,
-    handleDoubleClickAt: edit.handleDoubleClickAt,
-    handleContextMenu: edit.handleContextMenu,
-    handleWheel: edit.handleWheel,
-    handleKeyDown: edit.handleKeyDown,
-  });
+  const tools = createEditorTools({ ...deps, isClickSuppressed: gestures.isClickSuppressed });
+  const detachGestures = gestures.attach(tools);
 
   return () => {
-    drag.cleanupDragState();
+    tools.cleanup();
     detachGestures();
   };
 }
