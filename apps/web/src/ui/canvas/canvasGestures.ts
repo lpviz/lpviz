@@ -1,4 +1,5 @@
 import { getState } from "@/features/core/store";
+import type { EditorTools } from "./editorTools";
 
 const DOUBLE_TAP_MS = 350;
 const DOUBLE_TAP_RADIUS_PX = 28;
@@ -9,17 +10,8 @@ export const swallow = (event: Event) => {
 };
 
 // what the gesture layer drives: the editor's drag lifecycle and its click,
-// double-click, context-menu, wheel and keyboard actions
-type CanvasGestureHandlers = {
-  handleDragStart: (clientX: number, clientY: number) => boolean;
-  handleDragMove: (clientX: number, clientY: number) => void;
-  handleDragEnd: () => void;
-  handleClick: (event: MouseEvent) => void;
-  handleDoubleClickAt: (clientX: number, clientY: number) => void;
-  handleContextMenu: (event: MouseEvent) => void;
-  handleWheel: (event: WheelEvent) => void;
-  handleKeyDown: (event: KeyboardEvent) => void;
-};
+// double-click, context-menu, wheel and keyboard actions (see editorTools.ts)
+type CanvasGestureHandlers = Omit<EditorTools, "cleanup">;
 
 type TapState = {
   lastTap: {
