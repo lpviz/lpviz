@@ -1,6 +1,7 @@
 import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Lines, VecN } from "@lpviz/math/types";
+import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
@@ -35,7 +36,7 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions): SolverResu
   const iterates: VecN[] = [];
   const convergence: number[] = [];
   const rows: NumericRow[] = [];
-  const header = " Iter        x        y        Obj     Infeas          µ";
+  const header = numericLogHeader(n, "µ");
 
   const x = new Float64Array(n);
   const s = new Float64Array(m).fill(1);
@@ -87,8 +88,9 @@ export function ipm(lines: Lines, objective: VecN, opts: IPMOptions): SolverResu
     const gap = Math.abs(pObj - dot(b, y)) / (1 + Math.abs(pObj));
     const pRes = infinityNorm(rP);
 
-    rows.push({ iteration: iterates.length + 1, x: x[0] ?? 0, y: x[1] ?? 0, objective: -pObj, infeasibility: pRes, convergence: mu });
-    iterates.push(x.slice());
+    const point = x.slice();
+    rows.push({ iteration: iterates.length + 1, point, objective: -pObj, infeasibility: pRes, convergence: mu });
+    iterates.push(point);
     convergence.push(mu);
 
     if (pRes <= eps_p && infinityNorm(rD) <= eps_d && gap <= eps_opt) {

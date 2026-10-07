@@ -4,7 +4,7 @@ import type { SharedAppState } from "./sharedState";
 import type { Vec } from "@lpviz/math/types";
 import { buildConstraintRep } from "@lpviz/polytope/constraintRep";
 import { simplex } from "@lpviz/solver-engine/simplex";
-import { VRep } from "@lpviz/math/geometry";
+import { isConvexPolygon } from "@lpviz/math/geometry";
 import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/problems";
 
 const MAX_OPTIMUM_ERROR = 0.001;
@@ -149,8 +149,7 @@ describe("share link round-trip stability", () => {
     expect(final.vertices.length).toBe(original.vertices.length);
 
     // convexity
-    const vrep = VRep.fromPoints(final.vertices);
-    expect(vrep.isConvex()).toBe(true);
+    expect(isConvexPolygon(final.vertices)).toBe(true);
 
     // optimum within tolerance
     const solved = solveForOptimum(final.vertices, final.objective!);
@@ -182,8 +181,7 @@ describe("share link round-trip stability", () => {
 
       expect(final.vertices.length).toBe(original.vertices.length);
 
-      const vrep = VRep.fromPoints(final.vertices);
-      expect(vrep.isConvex()).toBe(true);
+      expect(isConvexPolygon(final.vertices)).toBe(true);
 
       const solved = solveForOptimum(final.vertices, final.objective!);
       expect(solved).not.toBeNull();
@@ -218,8 +216,7 @@ describe("share link round-trip stability", () => {
 
       expect(current.vertices.length).toBe(original.vertices.length);
 
-      const vrep = VRep.fromPoints(current.vertices);
-      expect(vrep.isConvex()).toBe(true);
+      expect(isConvexPolygon(current.vertices)).toBe(true);
 
       const solved = solveForOptimum(current.vertices, current.objective!);
       expect(solved).not.toBeNull();
@@ -254,8 +251,7 @@ describe("share link round-trip stability", () => {
 
         expect(final.vertices.length).toBe(original.vertices.length);
 
-        const vrep = VRep.fromPoints(final.vertices);
-        expect(vrep.isConvex()).toBe(true);
+        expect(isConvexPolygon(final.vertices)).toBe(true);
 
         const solved = solveForOptimum(final.vertices, final.objective!);
         expect(solved).not.toBeNull();

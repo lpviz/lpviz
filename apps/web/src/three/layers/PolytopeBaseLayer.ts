@@ -1,13 +1,13 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox, clipRayToBoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox, isConvexChain, isConvexPolygon } from "@lpviz/math/geometry";
 import type { Line, Vec } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { visibleBounds2D } from "../helpers/visibleBounds";
 import type { LayerRenderObject } from "../Layer";
@@ -108,7 +108,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   // a polyline — testing it as a closed polygon spuriously flags it nonconvex
   // when the wrap-around edge v[n-1]->v[0] turns the other way, which is exactly
   // the validity test computeEditorRegionForState uses (isConvexChain).
-  const isNonconvex = isClosedRegion ? !VRep.fromPoints(displayVertices).isConvex() : !isConvexChain(displayVertices);
+  const isNonconvex = isClosedRegion ? !isConvexPolygon(displayVertices) : !isConvexChain(displayVertices);
 
   // an unbounded open region is clipped to a fixed extent; in 3D so is
   // everything (the visible rect is only meaningful under the ortho camera)
@@ -214,7 +214,7 @@ export class PolytopeBaseLayer extends LayerBase {
     const raw = getState();
     const snap = getViewportRenderSnapshot();
 
-    const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
+    const visible = raw.vertices.length > 0 && rendersPlanarDrawing(snap.mode, raw);
     this.object3D.visible = visible;
     if (!visible) {
       this.fillMesh.visible = false;

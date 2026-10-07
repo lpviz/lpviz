@@ -10,10 +10,11 @@ export function createShareService(getSolverControls: () => SolverControl[]) {
     return { ...Object.fromEntries(GLOBAL_SHARE_KEYS.map((key) => [key, settings[key]])), ...solverControl?.collectShareSettings() };
   };
   const share = () => {
-    const { vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getState();
+    const { dimension, vertices, completionMode, objectiveVector, solverMode, zScale, is3DMode, solverStartPoint } = getState();
     // base64url only, so the whole link survives being pasted into chat,
     // email or a paper without a linkifier clipping its tail
     const encoded = encodeSharedState({
+      dimension,
       vertices,
       completionMode,
       objective: objectiveVector,

@@ -1,5 +1,6 @@
 import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
-import type { Lines, Vec2Ns, VecN } from "@lpviz/math/types";
+import type { Lines, VecN, VecNs } from "@lpviz/math/types";
+import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
@@ -97,6 +98,14 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
   const slackOffset = n - m;
   const nOrig = slackOffset / 2;
+  // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
+  const dimension = ineq ? n : nOrig;
+  const pointOf = (xk: Float64Array): Float64Array => {
+    if (ineq) return xk.slice();
+    const point = new Float64Array(nOrig);
+    for (let j = 0; j < nOrig; j++) point[j] = (xk[j] ?? 0) - (xk[nOrig + j] ?? 0);
+    return point;
+  };
   const bNorm = infinityNorm(b);
   const cNorm = infinityNorm(c);
 
@@ -127,10 +136,10 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
 
   let epsilonK = pdhgEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm, ineq);
-  const header = " Iter        x        y        Obj     Infeas        eps";
+  const header = numericLogHeader(dimension, "eps");
 
   const rows: NumericRow[] = [];
-  const iterates: Vec2Ns = [];
+  const iterates: VecNs = [];
   const eps: number[] = [];
   const phases: number[] = [];
   const restartIndices: number[] = [];
@@ -151,8 +160,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     rows.push({
       iteration: k,
       restart: false,
-      x: ineq ? (xk[0] ?? 0) : (xk[0] ?? 0) - (xk[nOrig] ?? 0),
-      y: ineq ? (xk[1] ?? 0) : nOrig >= 2 ? (xk[1] ?? 0) - (xk[nOrig + 1] ?? 0) : 0,
+      point: pointOf(xk),
       objective: -dot(c, xk),
       infeasibility: primalResidual(axScratch, b, ineq),
       convergence: epsilonK,

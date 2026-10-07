@@ -1,12 +1,15 @@
 import type { ViewportState } from "@/features/viewport/viewportState";
 import type { Line, Vec } from "@lpviz/math/types";
+import { vecDistance } from "@lpviz/math/vec";
 import { hasPolytopeLines, type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
 // How many decision variables the problem has: the length of every Vec the editor holds.
-export type Dimension = 2 | 3;
+const DIMENSIONS = [2, 3] as const;
+export type Dimension = (typeof DIMENSIONS)[number];
+export const isDimension = (value: unknown): value is Dimension => (DIMENSIONS as readonly unknown[]).includes(value);
 type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; lines: Line[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
@@ -127,10 +130,10 @@ export function nearestPolytopeVertex(state: EditorState, point: Vec): Vec | nul
   let best: Vec | null = null;
   let bestDistance = Infinity;
   for (const vertex of state.polytope.vertices) {
-    const distance = Math.hypot(vertex[0] - point[0], vertex[1] - point[1]);
+    const distance = vecDistance(vertex, point);
     if (distance < bestDistance) {
       bestDistance = distance;
-      best = [vertex[0], vertex[1]];
+      best = [...vertex];
     }
   }
   return best;

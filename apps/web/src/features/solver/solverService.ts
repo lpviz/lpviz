@@ -1,6 +1,6 @@
 import { updateIteratePathsWithTrace } from "@/features/core/store";
 import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, SolverWorkerSuccessResponse, VirtualResultRow } from "@/features/solver/types";
-import { fmtE, fmtF, fmtStr } from "@lpviz/solver-engine/fmt";
+import { fmtCoordinates, fmtE, fmtStr, logColumnWidths } from "@lpviz/solver-engine/fmt";
 
 // Push an unpacked worker result into the store's iterate fields and hand its
 // log to the result panel.
@@ -13,7 +13,8 @@ export function applySolverResult({ result }: SolverWorkerSuccessResponse, updat
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
   const iteration = fmtStr(row.restart ? `${row.iteration}r` : `${row.iteration}`, 5);
-  return `${iteration} ${fmtF(row.x, 8, 2)} ${fmtF(row.y, 8, 2)} ${fmtE(row.objective, 10, 1)} ${fmtE(row.infeasibility, 10, 1)} ${fmtE(row.convergence, 10, 1, false)}`;
+  const { coordinate, measure } = logColumnWidths(row.point.length);
+  return `${iteration} ${fmtCoordinates(row.point, coordinate)} ${fmtE(row.objective, measure, 1)} ${fmtE(row.infeasibility, measure, 1)} ${fmtE(row.convergence, measure, 1, false)}`;
 }
 
 // A one-section log is a single run and scrolls as a virtual list; a log with

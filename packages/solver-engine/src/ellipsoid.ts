@@ -1,5 +1,6 @@
 import { type DenseMatrix, dot, linesToDenseAb } from "@lpviz/math/blas";
 import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
 
@@ -14,10 +15,27 @@ export const FEASIBILITY_TOLERANCE = 1e-9;
 const RAY_BLOCKING_TOLERANCE = 1e-12;
 // closer than this to the last iterate, the incumbent is that iterate
 const INCUMBENT_MERGE_TOLERANCE = 1e-9;
-// [cx, cy, p11, p12, p22] per iteration: the center and the symmetric shape
-// matrix P of E = { x : (x - c)' P^-1 (x - c) <= 1 }. lpviz LPs have n = 2, so
-// this is the ellipse itself; for n > 2 it is the (x, y) block of P.
-export const ELLIPSOID_STRIDE = 5;
+// Per iteration: the center c (n values) followed by the upper triangle of the symmetric shape
+// matrix P of E = { x : (x - c)' P^-1 (x - c) <= 1 }, row by row — [cx, cy, p11, p12, p22] for two
+// variables (stride 5) and [cx, cy, cz, p11, p12, p13, p22, p23, p33] for three (stride 9).
+export function ellipsoidStride(n: number): number {
+  return n + (n * (n + 1)) / 2;
+}
+
+// The cutting planes' localizing set per iteration: a closed polygon's [x, y] vertices for two
+// variables, the half-spaces [a1..an, b] of the polyhedron otherwise.
+export function localizingSetStride(n: number): number {
+  return n === 2 ? 2 : n + 1;
+}
+
+// Write one packed ellipsoid at `base` (see ellipsoidStride for the layout).
+function writeEllipsoid(out: Float64Array, base: number, center: Float64Array, P: Float64Array, n: number): void {
+  for (let j = 0; j < n; j++) out[base + j] = center[j]!;
+  let at = base + n;
+  for (let j = 0; j < n; j++) {
+    for (let k = j; k < n; k++) out[at++] = P[j * n + k]!;
+  }
+}
 
 interface EllipsoidOptions {
   maxit: number;
@@ -27,10 +45,12 @@ interface EllipsoidOptions {
   initialScale: number;
 }
 
-export const ELLIPSOID_HEADER = " Iter        x        y        Obj     Infeas          ρ";
+export const ellipsoidLogHeader = (n: number) => numericLogHeader(n, "ρ");
 
 // Everything a run records per iterate, in lockstep; polygons only for the cutting planes.
 type IterateTrace = {
+  n: number;
+  stride: number;
   iterations: Float64Array[];
   rows: NumericRow[];
   rho: number[];
@@ -38,22 +58,20 @@ type IterateTrace = {
   polygons?: number[][] | undefined;
 };
 
-export function newTrace(maxit: number, polygons?: number[][]): IterateTrace {
+export function newTrace(maxit: number, n: number, polygons?: number[][]): IterateTrace {
+  const stride = ellipsoidStride(n);
   // one ellipse slot spare for the incumbent appended at the end
-  return { iterations: [], rows: [], rho: [], ellipsoids: new Float64Array((maxit + 1) * ELLIPSOID_STRIDE), polygons };
+  return { n, stride, iterations: [], rows: [], rho: [], ellipsoids: new Float64Array((maxit + 1) * stride), polygons };
 }
 
-export function recordIterate(trace: IterateTrace, x: Float64Array, p11: number, p12: number, p22: number, objective: number, infeasibility: number, objectiveRadius: number): void {
-  const { iterations, ellipsoids } = trace;
-  const base = iterations.length * ELLIPSOID_STRIDE;
-  ellipsoids[base] = x[0]!;
-  ellipsoids[base + 1] = x[1]!;
-  ellipsoids[base + 2] = p11;
-  ellipsoids[base + 3] = p12;
-  ellipsoids[base + 4] = p22;
-  trace.rows.push({ iteration: iterations.length + 1, x: x[0]!, y: x[1]!, objective, infeasibility, convergence: objectiveRadius });
+/** Record the point `x` with the n x n shape matrix `P` drawn around it. */
+export function recordIterate(trace: IterateTrace, x: Float64Array, P: Float64Array, objective: number, infeasibility: number, objectiveRadius: number): void {
+  const { iterations, ellipsoids, n, stride } = trace;
+  writeEllipsoid(ellipsoids, iterations.length * stride, x, P, n);
+  const point = x.slice();
+  trace.rows.push({ iteration: iterations.length + 1, point, objective, infeasibility, convergence: objectiveRadius });
   trace.rho.push(objectiveRadius);
-  iterations.push(Float64Array.of(x[0]!, x[1]!));
+  iterations.push(point);
 }
 
 /**
@@ -100,18 +118,19 @@ export class Incumbent {
   }
 }
 
-// Flatten per-iteration polygons into the result's transferable polygonPoints/polygonOffsets pair.
-export function packPolygons(polygons: readonly (readonly number[])[]) {
+// Flatten per-iteration localizing sets (each a flat list of `stride`-wide entries) into the
+// result's transferable polygonPoints/polygonOffsets pair.
+export function packPolygons(polygons: readonly (readonly number[])[], stride: number) {
   const total = polygons.reduce((sum, polygon) => sum + polygon.length, 0);
   const polygonPoints = new Float64Array(total);
   const polygonOffsets = new Uint32Array(polygons.length + 1);
   let at = 0;
   polygons.forEach((polygon, index) => {
-    polygonOffsets[index] = at / 2;
+    polygonOffsets[index] = at / stride;
     polygonPoints.set(polygon, at);
     at += polygon.length;
   });
-  polygonOffsets[polygons.length] = at / 2;
+  polygonOffsets[polygons.length] = at / stride;
   return { polygonPoints, polygonOffsets };
 }
 
@@ -172,8 +191,8 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
   const initialCenter = center.slice();
   const initialSemiAxes = Float64Array.from({ length: n }, (_, j) => Math.sqrt(P[j * n + j]!));
 
-  const trace = newTrace(maxit);
-  const { iterations, rows, rho, ellipsoids } = trace;
+  const trace = newTrace(maxit, n);
+  const { iterations, rows, rho, ellipsoids, stride } = trace;
   const g = new Float64Array(n);
   const Pg = new Float64Array(n);
   const nextP = new Float64Array(n * n);
@@ -191,7 +210,7 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
 
     const objectiveRadius = Math.sqrt(Math.max(0, quadraticForm(P, c, n)));
     upperBound = objectiveValue + objectiveRadius;
-    recordIterate(trace, center, P[0]!, P[1]!, P[n + 1]!, objectiveValue, Math.max(0, violation), objectiveRadius);
+    recordIterate(trace, center, P, objectiveValue, Math.max(0, violation), objectiveRadius);
 
     // Feasibility of the center is still required so that the last iterate the
     // viewport marks as the answer is a point of the region.
@@ -266,12 +285,12 @@ export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opt
     convergence: rho,
     // sliced, not a subarray: the packed response transfers this buffer, and a
     // view would drag the whole maxit-sized allocation across with it
-    ellipsoids: ellipsoids.slice(0, iterations.length * ELLIPSOID_STRIDE),
+    ellipsoids: ellipsoids.slice(0, iterations.length * stride),
     // the ellipsoid *is* this method's localizing set, so there is no separate
     // polyhedron to draw; fresh (never shared) buffers, since the main thread
     // detaches what it receives
-    ...packPolygons([]),
-    log: [{ header: ELLIPSOID_HEADER, rows, footer }],
+    ...packPolygons([], localizingSetStride(n)),
+    log: [{ header: ellipsoidLogHeader(n), rows, footer }],
   };
 }
 
@@ -295,7 +314,9 @@ export function regionBoundingBox(vertices: Vertices, n: number, scale: number) 
   const inflation = Math.max(MIN_INITIAL_SCALE, scale);
 
   if (vertices.length > 0) {
-    const planar = Math.min(n, 2);
+    // axes the vertices actually span; any further axis (a 3-variable LP fed
+    // planar vertices) gets the largest spanned extent instead
+    const planar = Math.min(n, vertices[0]!.length);
     for (let axis = 0; axis < planar; axis++) {
       let lo = Infinity;
       let hi = -Infinity;
@@ -345,31 +366,26 @@ function initialEllipsoid(vertices: Vertices, n: number, scale: number) {
 export function appendIncumbent(result: IterateTrace, incumbent: Incumbent, upperBound: number): void {
   const { point: best, objective: bestObjective } = incumbent;
   if (bestObjective === -Infinity) return;
+  const { stride } = result;
   const count = result.iterations.length;
   const previous = count > 0 ? result.iterations[count - 1]! : null;
-  if (previous && Math.abs(previous[0]! - best[0]!) < INCUMBENT_MERGE_TOLERANCE && Math.abs(previous[1]! - best[1]!) < INCUMBENT_MERGE_TOLERANCE) {
+  if (previous && best.every((value, j) => Math.abs(previous[j]! - value) < INCUMBENT_MERGE_TOLERANCE)) {
     return;
   }
 
-  const base = count * ELLIPSOID_STRIDE;
-  if (base + ELLIPSOID_STRIDE > result.ellipsoids.length) return;
+  const base = count * stride;
+  if (base + stride > result.ellipsoids.length) return;
   if (count > 0) {
-    result.ellipsoids.copyWithin(base, base - ELLIPSOID_STRIDE, base);
+    result.ellipsoids.copyWithin(base, base - stride, base);
     if (result.polygons && result.polygons.length === count) {
       result.polygons.push([...result.polygons[count - 1]!]);
     }
   }
-  result.iterations.push(Float64Array.of(best[0]!, best[1]!));
+  const point = best.slice();
+  result.iterations.push(point);
   const gap = Math.max(0, upperBound - bestObjective);
   result.rho.push(gap);
-  result.rows.push({
-    iteration: count + 1,
-    x: best[0]!,
-    y: best[1]!,
-    objective: bestObjective,
-    infeasibility: 0,
-    convergence: gap,
-  });
+  result.rows.push({ iteration: count + 1, point, objective: bestObjective, infeasibility: 0, convergence: gap });
 }
 
 // The separation oracle every method in this family shares: the constraint

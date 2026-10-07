@@ -2,7 +2,7 @@ import type { CompletionMode, DragTarget, DragViewAnchor3D, State } from "@/feat
 import { displayedSolverStartPoint, getState, iterateHeight } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { type BoundingBox, clipRayToBoundingBox, VRep } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox, nearestEdge } from "@lpviz/math/geometry";
 import type { PointXY, Vec } from "@lpviz/math/types";
 
 const VERTEX_HIT_RADIUS = 12;
@@ -54,7 +54,7 @@ export function worldDistanceForPixels(canvasManager: ViewportApi, worldPoint: V
 // The nearest edge within `tolerance` (world units); a draft or open chain
 // has no closing edge.
 export function findEdgeNearPoint(point: Vec, vertices: Vec[], completionMode: CompletionMode, tolerance = 0.5): number | null {
-  return VRep.fromPoints(vertices).findEdgeNearPoint(point, tolerance, completionMode === "closed");
+  return nearestEdge(vertices, point, tolerance, completionMode === "closed");
 }
 
 function getVisibleBounds(canvasManager: ViewportApi): Bounds {
@@ -136,8 +136,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
   if (vertex) return vertex;
 
   if (session.kind === "editing-closed" && state.vertices.length >= 3) {
-    const polytope = VRep.fromPoints(state.vertices);
-    const edgeIndex = polytope.findEdgeNearPoint(logicalCoords, edgeTolerance);
+    const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance);
     if (edgeIndex !== null) {
       const lineContext = state.polytope?.lines;
       if (!lineContext || lineContext.length === 0) return null;

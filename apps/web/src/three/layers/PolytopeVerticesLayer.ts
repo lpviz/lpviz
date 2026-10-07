@@ -5,7 +5,7 @@ import type { Points, PointsMaterial } from "three";
 import { BufferAttribute, Group } from "three";
 import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE, SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
 import { LayerBase } from "./base/LayerBase";
 
@@ -60,7 +60,7 @@ export class PolytopeVerticesLayer extends LayerBase {
     const raw = getState();
     const snap = getViewportRenderSnapshot();
 
-    const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
+    const visible = raw.vertices.length > 0 && rendersPlanarDrawing(snap.mode, raw);
     this.object3D.visible = visible;
     if (!visible) return;
 

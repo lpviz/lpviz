@@ -1,7 +1,7 @@
 import { createDenseMatrix, type DenseMatrix, dot, linesToDenseAb, transposedMatVec } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, Vec2N, Vec2Ns, VecN } from "@lpviz/math/types";
-import { fmtE, fmtF, fmtStr } from "./fmt";
+import type { Lines, VecN, VecNs } from "@lpviz/math/types";
+import { coordinateHeaders, fmtCoordinates, fmtE, fmtStr, logColumnWidths } from "./fmt";
 import type { LogSection, SolverResult } from "./result";
 
 const MAX_ITERATIONS = 100_000;
@@ -368,41 +368,60 @@ function createCyclingGuard(initial: PivotRules, tol: number) {
   };
 }
 
-// The primal vertex a dual basis identifies: the intersection of the two
-// lowest-index constraint lines whose dual variables are basic.
-function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[], tol: number): Float64Array {
+// The primal vertex a dual basis identifies: the intersection of the n lowest-index constraint
+// planes whose dual variables are basic. Two variables keep their closed form; more go through a
+// dense solve, and a singular support yields the origin either way.
+function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[], n: number, tol: number): Float64Array {
   const sorted = [...basisIndices].sort((a, b) => a - b);
-  const support = sorted.filter((index) => index < lines.length).slice(0, 2);
-  if (support.length < 2) return new Float64Array(2);
+  const support = sorted.filter((index) => index < lines.length).slice(0, n);
+  if (support.length < n) return new Float64Array(n);
 
-  const i = support[0]!;
-  const j = support[1]!;
-  const first = lines[i]!;
-  const second = lines[j]!;
-  const determinant = first[0] * second[1] - first[1] * second[0];
-  if (Math.abs(determinant) <= tol) return new Float64Array(2);
+  if (n === 2) {
+    const first = lines[support[0]!]!;
+    const second = lines[support[1]!]!;
+    const determinant = first[0] * second[1] - first[1] * second[0];
+    if (Math.abs(determinant) <= tol) return new Float64Array(2);
 
-  const x = (first[2] * second[1] - first[1] * second[2]) / determinant;
-  const y = (first[0] * second[2] - first[2] * second[0]) / determinant;
-  return Float64Array.of(x, y);
+    const x = (first[2] * second[1] - first[1] * second[2]) / determinant;
+    const y = (first[0] * second[2] - first[2] * second[0]) / determinant;
+    return Float64Array.of(x, y);
+  }
+
+  const matrix = new Float64Array(n * n);
+  const rhs = new Float64Array(n);
+  for (let row = 0; row < n; row++) {
+    const line = lines[support[row]!]!;
+    for (let j = 0; j < n; j++) matrix[row * n + j] = line[j]!;
+    rhs[row] = line[n]!;
+  }
+  const point = new Float64Array(n);
+  try {
+    solveDenseSystem(matrix, n, rhs, point);
+  } catch {
+    return new Float64Array(n);
+  }
+  return point.every(Number.isFinite) ? point : new Float64Array(n);
 }
 
 type SimplexCoreConfig = {
   tol: number;
   pivotRules: PivotRules;
   completionLabel: string;
+  /** the problem's variable count, which sizes the log's coordinate columns */
+  dimension: number;
   /** The point an iteration plots and logs, from the tableau and the basis columns. */
   pointOf: (xTableau: Float64Array, basisIndices: readonly number[]) => Float64Array;
 };
 
 function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, basisInit: boolean[], cfg: SimplexCoreConfig) {
-  const { tol, pivotRules, completionLabel, pointOf } = cfg;
+  const { tol, pivotRules, completionLabel, dimension, pointOf } = cfg;
   const mRows = A.rows;
   const nCols = A.cols;
   const basis = basisInit.slice();
-  const iterations: Vec2Ns = [];
+  const iterations: VecNs = [];
   const logs: string[] = [];
-  const header = `${"Iter".padStart(5)} ${"x".padStart(8)} ${"y".padStart(8)} ${"Obj".padStart(10)} ${"basis".padEnd(nCols, " ")}\n`;
+  const widths = logColumnWidths(dimension);
+  const header = `${fmtStr("Iter", 5)} ${coordinateHeaders(dimension)} ${fmtStr("Obj", widths.measure)} ${"basis".padEnd(nCols, " ")}\n`;
 
   logs.push(header);
   const guard = createCyclingGuard(pivotRules, tol);
@@ -428,7 +447,7 @@ function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, bas
     objective = state.objective;
     const point = pointOf(state.xTableau, factor.basisIndices);
     iterations.push(point);
-    logs.push(`${iterationLabel(iteration, guard.active)} ${fmtF(point[0] ?? 0, 8, 2)} ${fmtF(point[1] ?? 0, 8, 2)} ${fmtE(objective, 10, 1)} ${basisString(basis)}\n`);
+    logs.push(`${iterationLabel(iteration, guard.active)} ${fmtCoordinates(point, widths.coordinate)} ${fmtE(objective, widths.measure, 1)} ${basisString(basis)}\n`);
 
     if (enterIndex === -1) break;
 
@@ -569,7 +588,8 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
 
   const cDual = Float64Array.from(primalB, (value) => -value);
   const { columns: aPhase2, bPhase1, aPhase1, cPhase1, phase1Basis } = phase1Problem(bDual, (gamma) => scaleRows(dualA, gamma));
-  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", pointOf: (_, basisIndices) => primalPointFromDualBasis(lines, basisIndices, tol) };
+  const n = primalA.cols;
+  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (_, basisIndices) => primalPointFromDualBasis(lines, basisIndices, n, tol) };
 
   const phase1 = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
 
@@ -590,7 +610,7 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   return simplexResult(phase1, { iterations: phase2.iterations, logs: phase2Logs }, status, "dual");
 }
 
-function primalPointFromSplitTableau(tableauX: Vec2N, n: number) {
+function primalPointFromSplitTableau(tableauX: VecN, n: number) {
   const point = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     point[i] = (tableauX[i] ?? 0) - (tableauX[n + i] ?? 0);
@@ -664,7 +684,7 @@ export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions): So
   cPhase2.set(cObjective);
   for (let j = 0; j < n; j++) cPhase2[n + j] = -cObjective[j]!;
   const aPhase2 = hstackMatrices(aOriginal, negateMatrix(aOriginal), identityMatrix(m));
-  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", pointOf: (xTableau) => primalPointFromSplitTableau(xTableau, n) };
+  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (xTableau) => primalPointFromSplitTableau(xTableau, n) };
 
   const warmBasis = startVertex && startVertex.length === n ? warmStartBasisFromVertex(aOriginal, b, cPhase2, aPhase2, startVertex, tol) : null;
   let phase1: PhaseRun = { iterations: [], logs: ["Skipped — warm start from the dragged start vertex.\n"] };

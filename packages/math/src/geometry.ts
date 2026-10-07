@@ -95,124 +95,104 @@ export function signedArea(points: ReadonlyArray<Vec>, tol = 1e-12): number {
   return Math.abs(normalizedArea) <= tol ? 0 : normalizedArea;
 }
 
-export class VRep {
-  private constructor(private readonly points: ReadonlyArray<Vec>) {}
-
-  static fromPoints(points: ReadonlyArray<Vec>): VRep {
-    return new VRep(points);
-  }
-
-  static distance(p1: Vec, p2: Vec): number {
-    return Math.hypot(p1[0] - p2[0], p1[1] - p2[1]);
-  }
-
-  isConvex(tol = 1e-9): boolean {
-    return isConvexPolygon(this.points, tol);
-  }
-
-  contains(point: Vec): boolean {
-    if (this.points.length < 3) return false;
-    let inside = false;
-    for (let i = 0, j = this.points.length - 1; i < this.points.length; j = i++) {
-      const xi = this.points[i]![0];
-      const yi = this.points[i]![1];
-      const xj = this.points[j]![0];
-      const yj = this.points[j]![1];
-      if (yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) {
-        inside = !inside;
-      }
+/** Whether `point` lies inside the polygon `points` (false for fewer than three points). */
+export function polygonContains(points: ReadonlyArray<Vec>, point: Vec): boolean {
+  if (points.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const xi = points[i]![0];
+    const yi = points[i]![1];
+    const xj = points[j]![0];
+    const yj = points[j]![1];
+    if (yi > point[1] !== yj > point[1] && point[0] < ((xj - xi) * (point[1] - yi)) / (yj - yi) + xi) {
+      inside = !inside;
     }
-    return inside;
+  }
+  return inside;
+}
+
+// Distance from `point` to edge `edgeIndex`, or +Infinity when the point's projection falls
+// outside the segment, the edge is degenerate, or the edge does not exist (the closing edge of a
+// polyline, with `closed` false).
+function distanceToEdge(points: ReadonlyArray<Vec>, point: Vec, edgeIndex: number, closed: boolean): number {
+  const start = points[edgeIndex];
+  const end = closed ? points[(edgeIndex + 1) % points.length] : points[edgeIndex + 1];
+  if (!start || !end) return Number.POSITIVE_INFINITY;
+
+  const dx = end[0] - start[0];
+  const dy = end[1] - start[1];
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Number.POSITIVE_INFINITY;
+
+  const t = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / len2;
+  if (t < 0 || t > 1) return Number.POSITIVE_INFINITY;
+
+  return Math.hypot(point[0] - (start[0] + t * dx), point[1] - (start[1] + t * dy));
+}
+
+/**
+ * The edge of `points` within `tolerance` of `point`, nearest first: a small polytope seen up
+ * close puts several edges inside the tolerance at once, and the first in index order is the wrong
+ * one as often as not. `closed` false treats the points as a polyline and never tests the
+ * last→first chord.
+ */
+export function nearestEdge(points: ReadonlyArray<Vec>, point: Vec, tolerance = 0.5, closed = true): number | null {
+  let nearestIndex: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  const edgeCount = closed ? points.length : Math.max(0, points.length - 1);
+  for (let i = 0; i < edgeCount; i++) {
+    const distance = distanceToEdge(points, point, i, closed);
+    if (distance < tolerance && distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestIndex = i;
+    }
+  }
+  return nearestIndex;
+}
+
+/** The convex hull of `points` as a counterclockwise polygon (Andrew's monotone chain). */
+export function convexHull(points: ReadonlyArray<Vec>): Vec[] {
+  if (points.length <= 1) {
+    return points.map((pt) => [pt[0], pt[1]]);
   }
 
-  /**
-   * Distance from `point` to edge `edgeIndex`, or +Infinity when the point's
-   * projection falls outside the segment, the edge is degenerate, or the edge
-   * does not exist (the closing edge of a polyline, with `closed` false).
-   */
-  distanceToEdge(point: Vec, edgeIndex: number, closed = true): number {
-    const start = this.points[edgeIndex];
-    const end = closed ? this.points[(edgeIndex + 1) % this.points.length] : this.points[edgeIndex + 1];
-    if (!start || !end) return Number.POSITIVE_INFINITY;
+  const sorted = [...points].sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]));
 
-    const dx = end[0] - start[0];
-    const dy = end[1] - start[1];
-    const len2 = dx * dx + dy * dy;
-    if (len2 === 0) return Number.POSITIVE_INFINITY;
-
-    const t = ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / len2;
-    if (t < 0 || t > 1) return Number.POSITIVE_INFINITY;
-
-    return VRep.distance(point, [start[0] + t * dx, start[1] + t * dy]);
+  const uniqueSorted: Vec[] = [];
+  for (const pt of sorted) {
+    const last = uniqueSorted[uniqueSorted.length - 1];
+    if (!last || last[0] !== pt[0] || last[1] !== pt[1]) {
+      uniqueSorted.push([pt[0], pt[1]]);
+    }
   }
 
-  isPointNearEdge(point: Vec, edgeIndex: number, tolerance = 0.5): boolean {
-    return this.distanceToEdge(point, edgeIndex) < tolerance;
+  if (uniqueSorted.length <= 2) {
+    return uniqueSorted.map((pt) => [pt[0], pt[1]]);
   }
 
-  /**
-   * The edge within `tolerance` of `point`, nearest first: a small polytope
-   * seen up close puts several edges inside the tolerance at once, and the
-   * first in index order is the wrong one as often as not. `closed` false
-   * treats the points as a polyline and never tests the last→first chord.
-   */
-  findEdgeNearPoint(point: Vec, tolerance = 0.5, closed = true): number | null {
-    let nearestIndex: number | null = null;
-    let nearestDistance = Number.POSITIVE_INFINITY;
-    const edgeCount = closed ? this.points.length : Math.max(0, this.points.length - 1);
-    for (let i = 0; i < edgeCount; i++) {
-      const distance = this.distanceToEdge(point, i, closed);
-      if (distance < tolerance && distance < nearestDistance) {
-        nearestDistance = distance;
-        nearestIndex = i;
-      }
+  const cross = (o: Vec, a: Vec, b: Vec) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+  const lower: Vec[] = [];
+  for (const pt of uniqueSorted) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, pt) <= 0) {
+      lower.pop();
     }
-    return nearestIndex;
+    lower.push([pt[0], pt[1]]);
   }
 
-  computeConvexHull(): Vec[] {
-    if (this.points.length <= 1) {
-      return this.points.map((pt) => [pt[0], pt[1]]);
+  const upper: Vec[] = [];
+  for (let i = uniqueSorted.length - 1; i >= 0; i--) {
+    const pt = uniqueSorted[i]!;
+    while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, pt) <= 0) {
+      upper.pop();
     }
-
-    const sorted = [...this.points].sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]));
-
-    const uniqueSorted: Vec[] = [];
-    for (const pt of sorted) {
-      const last = uniqueSorted[uniqueSorted.length - 1];
-      if (!last || last[0] !== pt[0] || last[1] !== pt[1]) {
-        uniqueSorted.push([pt[0], pt[1]]);
-      }
-    }
-
-    if (uniqueSorted.length <= 2) {
-      return uniqueSorted.map((pt) => [pt[0], pt[1]]);
-    }
-
-    const cross = (o: Vec, a: Vec, b: Vec) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-
-    const lower: Vec[] = [];
-    for (const pt of uniqueSorted) {
-      while (lower.length >= 2 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, pt) <= 0) {
-        lower.pop();
-      }
-      lower.push([pt[0], pt[1]]);
-    }
-
-    const upper: Vec[] = [];
-    for (let i = uniqueSorted.length - 1; i >= 0; i--) {
-      const pt = uniqueSorted[i]!;
-      while (upper.length >= 2 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, pt) <= 0) {
-        upper.pop();
-      }
-      upper.push([pt[0], pt[1]]);
-    }
-
-    lower.pop();
-    upper.pop();
-
-    return lower.concat(upper);
+    upper.push([pt[0], pt[1]]);
   }
+
+  lower.pop();
+  upper.pop();
+
+  return lower.concat(upper);
 }
 
 export type RegionKind = "bounded" | "unbounded" | "empty" | "degenerate";

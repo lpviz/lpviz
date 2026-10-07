@@ -9,7 +9,7 @@ export type SolverWorkerPayload =
   | { solver: "ipm"; lines: Lines; objective: VecN; startPoint?: number[]; alphaMax: number; correctorThreshold: number; maxit: number }
   | { solver: "simplex"; lines: Lines; objective: VecN; startVertex?: number[]; dual: boolean; enteringRule: EnteringRule; leavingRule: LeavingRule }
   | { solver: "pdhg"; lines: Lines; objective: VecN; startPoint?: number[]; ineq: boolean; halpern: boolean; maxit: number; eta: number; tau: number; colorByBasis: boolean }
-  | { solver: "central"; vertices: Vertices; lines: Lines; objective: VecN; niter: number }
+  | { solver: "central"; vertices: Vertices; lines: Lines; objective: VecN; niter: number; interiorPoint?: number[] }
   | { solver: "ellipsoid"; vertices: Vertices; lines: Lines; objective: VecN; maxit: number; deepCuts: boolean; rayShoot: boolean; queryPoint: EllipsoidQueryPoint; initialScale: number };
 
 export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
@@ -20,8 +20,9 @@ export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 // coordinate buffer plus their display lift, and the log with every numeric
 // section's rows as typed columns. The buffers are transferred, not cloned.
 export type PackedRows = {
-  x: Float64Array;
-  y: Float64Array;
+  /** every row's coordinates, `stride` per row */
+  coords: Float64Array;
+  stride: number;
   objective: Float64Array;
   infeasibility: Float64Array;
   convergence: Float64Array;
