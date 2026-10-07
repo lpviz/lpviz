@@ -63,8 +63,12 @@ function sampleIndices(active: number, out: number[]): void {
 // The lower-triangular Cholesky factor of the 2x2 shape matrix, written into `matrix` with the
 // center and the matching iterate's height `z` (so in 3D each ellipse sits at its own iterate).
 // Returns false when P is not numerically positive definite: the ellipse is then skipped rather
-// than drawn with a NaN transform.
+// than drawn with a NaN transform. A 3-variable ellipsoid (stride 9) needs its own geometry and is
+// not drawn yet.
+const PLANAR_ELLIPSE_STRIDE = 5;
+
 function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: number, z: number): boolean {
+  if (ellipsoids.stride !== PLANAR_ELLIPSE_STRIDE) return false;
   const base = index * ellipsoids.stride;
   const cx = ellipsoids.data[base]!;
   const cy = ellipsoids.data[base + 1]!;
@@ -187,9 +191,10 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     this.polygon.visible = true;
   }
 
-  // The localizing polygon as segment endpoint pairs, closed back to the start.
+  // The localizing polygon as segment endpoint pairs, closed back to the start. A 3-variable
+  // localizing set arrives as half-spaces (stride 4) and is not drawn yet.
   private writePolygon(sets: LocalizingSetPath | null, index: number, z: number): number {
-    if (!sets || index >= sets.count) return 0;
+    if (!sets || sets.stride !== 2 || index >= sets.count) return 0;
     const start = sets.offsets[index]!;
     const end = sets.offsets[index + 1]!;
     const count = end - start;

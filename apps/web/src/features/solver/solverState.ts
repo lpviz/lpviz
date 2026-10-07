@@ -50,22 +50,25 @@ export const EMPTY_ITERATE_PATH: IteratePath = {
   lift: null,
 };
 
-// The ellipsoid method's per-iteration ellipse, parallel to the iterate path:
-// element `i` is [cx, cy, p11, p12, p22] — the center and the symmetric shape
-// matrix P of { x : (x - c)' P^-1 (x - c) <= 1 }. Null for every other solver.
+// The ellipsoid family's per-iteration shape, parallel to the iterate path: element `i` is the
+// center followed by the upper triangle of the symmetric shape matrix P of
+// { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
+// for two variables). Null for every other solver.
 export interface EllipsoidPath {
   data: Float64Array;
   count: number;
   stride: number;
 }
 
-// The cutting-plane query points' localizing polygon per iteration: element `i` spans
-// points[offsets[i] * 2 .. offsets[i + 1] * 2). Null for the ellipsoid method, whose localizing
-// set is the ellipse already in EllipsoidPath.
+// The cutting-plane query points' localizing set per iteration: element `i` spans
+// points[offsets[i] * stride .. offsets[i + 1] * stride), a closed polygon's [x, y] vertices for two
+// variables (stride 2) and the half-spaces [a1..an, b] of the polyhedron otherwise (stride n + 1).
+// Null for the ellipsoid method, whose localizing set is the ellipse already in EllipsoidPath.
 export interface LocalizingSetPath {
   points: Float64Array;
   offsets: Uint32Array;
   count: number;
+  stride: number;
 }
 
 // A path kept from an earlier solve while tracing.

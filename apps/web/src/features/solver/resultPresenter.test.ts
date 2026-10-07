@@ -13,8 +13,7 @@ const run = (count: number): VirtualResultPayload => ({
       index < count
         ? {
             iteration: index + 1,
-            x: index,
-            y: 0,
+            point: Float64Array.of(index, 0),
             objective: 0,
             infeasibility: 0,
             convergence: 0,

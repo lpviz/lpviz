@@ -1,4 +1,4 @@
-import { ELLIPSOID_STRIDE } from "@lpviz/solver-engine/ellipsoid";
+import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/ellipsoid";
 import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
 import type { PackedLogSection, PackedRows, ResultLogSection, ResultRowsView, SolverResultView, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse } from "./types";
 
@@ -32,9 +32,10 @@ function packIterations(entries: Float64Array[], stride: number, lift: ((index: 
 // column is regenerated on the client instead of transferred.
 function packRows(rows: NumericRow[]): PackedRows {
   const count = rows.length;
+  const stride = rows[0]!.point.length;
   const cols: PackedRows = {
-    x: new Float64Array(count),
-    y: new Float64Array(count),
+    coords: new Float64Array(count * stride),
+    stride,
     objective: new Float64Array(count),
     infeasibility: new Float64Array(count),
     convergence: new Float64Array(count),
@@ -42,8 +43,7 @@ function packRows(rows: NumericRow[]): PackedRows {
   };
   for (let i = 0; i < count; i++) {
     const row = rows[i]!;
-    cols.x[i] = row.x;
-    cols.y[i] = row.y;
+    cols.coords.set(row.point, i * stride);
     cols.objective[i] = row.objective;
     cols.infeasibility[i] = row.infeasibility;
     cols.convergence[i] = row.convergence;
@@ -67,7 +67,7 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   const transfer: ArrayBufferLike[] = [points.buffer];
   if (lift) transfer.push(lift.buffer);
   for (const { rows } of log) {
-    if (!Array.isArray(rows)) transfer.push(rows.x.buffer, rows.y.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.convergence.buffer, rows.restart.buffer);
+    if (!Array.isArray(rows)) transfer.push(rows.coords.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.convergence.buffer, rows.restart.buffer);
   }
   if (ellipsoids) transfer.push(ellipsoids.buffer);
   // empty buffers are not worth a transfer, and skipping them keeps a
@@ -84,12 +84,20 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
 // Row objects materialize lazily from the packed columns: only rows that
 // actually render (a screenful) are ever built, instead of one object per
 // iteration per solve.
-function rowsView({ x, y, objective, infeasibility, convergence, restart }: PackedRows): ResultRowsView {
+function rowsView({ coords, stride, objective, infeasibility, convergence, restart }: PackedRows): ResultRowsView {
+  const length = objective.length;
   return {
-    length: x.length,
+    length,
     at: (index) =>
-      index >= 0 && index < x.length
-        ? { iteration: index + 1, restart: restart[index] === 1, x: x[index]!, y: y[index]!, objective: objective[index]!, infeasibility: infeasibility[index]!, convergence: convergence[index]! }
+      index >= 0 && index < length
+        ? {
+            iteration: index + 1,
+            restart: restart[index] === 1,
+            point: coords.subarray(index * stride, (index + 1) * stride),
+            objective: objective[index]!,
+            infeasibility: infeasibility[index]!,
+            convergence: convergence[index]!,
+          }
         : undefined,
   };
 }
@@ -110,7 +118,13 @@ export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResp
     phases,
     restartIndices,
   };
-  if (ellipsoids) result.ellipsoids = { data: ellipsoids, count: Math.floor(ellipsoids.length / ELLIPSOID_STRIDE), stride: ELLIPSOID_STRIDE };
-  if (polygonOffsets) result.localizingSets = polygonOffsets.length > 1 ? { points: polygonPoints ?? new Float64Array(0), offsets: polygonOffsets, count: polygonOffsets.length - 1 } : null;
+  if (ellipsoids) {
+    const shapeStride = ellipsoidStride(stride);
+    result.ellipsoids = { data: ellipsoids, count: Math.floor(ellipsoids.length / shapeStride), stride: shapeStride };
+  }
+  if (polygonOffsets) {
+    result.localizingSets =
+      polygonOffsets.length > 1 ? { points: polygonPoints ?? new Float64Array(0), offsets: polygonOffsets, count: polygonOffsets.length - 1, stride: localizingSetStride(stride) } : null;
+  }
   return { id, success: true, result };
 }

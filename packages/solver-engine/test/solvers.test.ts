@@ -45,10 +45,10 @@ describe("pdhg", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...pdhgDefaults, ineq: false });
     const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
     const last = lastIterate(r);
-    expect(lastRow.x).toBeCloseTo(last[0]!, 8);
-    expect(lastRow.y).toBeCloseTo(last[1]!, 8);
-    expect(lastRow.x).toBeCloseTo(-4, 2);
-    expect(lastRow.y).toBeCloseTo(-4, 2);
+    expect(lastRow.point[0]).toBeCloseTo(last[0]!, 8);
+    expect(lastRow.point[1]).toBeCloseTo(last[1]!, 8);
+    expect(lastRow.point[0]).toBeCloseTo(-4, 2);
+    expect(lastRow.point[1]).toBeCloseTo(-4, 2);
   });
 
   test("ineq mode records the converged iterate", () => {
@@ -265,8 +265,8 @@ describe("ipm", () => {
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       const r = ipm(SQUARE, obj, opts(1));
       for (const row of rowsOf(r)) {
-        expect(Number.isFinite(row.x)).toBe(true);
-        expect(Number.isFinite(row.y)).toBe(true);
+        expect(Number.isFinite(row.point[0]!)).toBe(true);
+        expect(Number.isFinite(row.point[1]!)).toBe(true);
         expect(Number.isFinite(row.convergence)).toBe(true);
         expect(Number.isFinite(row.objective)).toBe(true);
       }
@@ -378,8 +378,8 @@ describe("ellipsoid", () => {
     expect(got).toBeLessThanOrEqual(expected + 1e-9);
     expect(expected - got).toBeLessThanOrEqual(1e-6 * (1 + Math.abs(expected)));
     expect(lastRow.infeasibility).toBe(0);
-    expect(lastRow.x).toBe(last[0]!);
-    expect(lastRow.y).toBe(last[1]!);
+    expect(lastRow.point[0]).toBe(last[0]!);
+    expect(lastRow.point[1]).toBe(last[1]!);
   });
 
   test("every ellipsoid is positive definite and shrinks", () => {

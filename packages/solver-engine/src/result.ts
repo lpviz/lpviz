@@ -6,8 +6,8 @@ export interface NumericRow {
   iteration: number;
   /** pdhg: a Halpern restart happened at this iterate */
   restart?: boolean;
-  x: number;
-  y: number;
+  /** the iterate's coordinates, one per variable */
+  point: Float64Array;
   objective: number;
   infeasibility: number;
   convergence: number;
@@ -38,9 +38,9 @@ export interface SolverResult {
   /** a phase label per iterate: simplex's phase, pdhg's basis hash */
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
-  /** [cx, cy, p11, p12, p22] per iterate (ellipsoid family) */
+  /** the ellipsoid family's shape per iterate, packed as ellipsoidStride(n) values (see ellipsoid.ts) */
   ellipsoids?: Float64Array | undefined;
-  /** the localizing polygon per iterate (cutting planes): [x, y] pairs at polygonOffsets[i] * 2 .. polygonOffsets[i + 1] * 2 */
+  /** the cutting planes' localizing set per iterate, localizingSetStride(n) values per entry between polygonOffsets[i] and [i + 1] */
   polygonPoints?: Float64Array | undefined;
   polygonOffsets?: Uint32Array | undefined;
   status?: "optimal" | "unbounded" | "infeasible" | undefined;
