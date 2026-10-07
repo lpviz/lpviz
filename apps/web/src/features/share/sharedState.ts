@@ -7,6 +7,8 @@ export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 export const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
 
 export type SharedAppState = {
+  /** how many coordinates every point carries; absent in links from before the 3-variable editor (two) */
+  dimension?: Dimension;
   vertices: Vec[];
   completionMode?: CompletionMode;
   objective: Vec | null;
@@ -31,6 +33,7 @@ const shareKeyMap = {
   settings: "g",
   zScale: "l",
   is3DMode: "b",
+  dimension: "D",
   alphaMax: "a",
   correctorThreshold: "f",
   maxitIPM: "i",

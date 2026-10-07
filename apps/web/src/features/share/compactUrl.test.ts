@@ -140,6 +140,59 @@ describe("compact share links", () => {
     expect(decodeSharedState(withNull)!.solverStartPoint).toBeNull();
   });
 
+  test("round-trips a 3-variable problem", () => {
+    const decoded = roundTrip({
+      ...BASE,
+      dimension: 3,
+      vertices: [
+        [1, 2, 3],
+        [-4, 5, -6],
+        [7, -8, 9],
+        [0, 0, 0],
+      ],
+      objective: [0.1, -0.2, 0.3],
+      solverStartPoint: [1, -1, 0.5],
+    })!;
+    expect(decoded.dimension).toBe(3);
+    expect(decoded.vertices).toHaveLength(4);
+    decoded.vertices.forEach((vertex, i) => {
+      expect(vertex).toHaveLength(3);
+      for (let j = 0; j < 3; j++)
+        expect(vertex[j]).toBeCloseTo(
+          [
+            [1, 2, 3],
+            [-4, 5, -6],
+            [7, -8, 9],
+            [0, 0, 0],
+          ][i]![j]!,
+          4,
+        );
+    });
+    expect(decoded.objective).toHaveLength(3);
+    expect(decoded.objective![2]).toBeCloseTo(0.3, 4);
+    expect(decoded.solverStartPoint).toHaveLength(3);
+    expect(decoded.solverStartPoint![2]).toBeCloseTo(0.5, 4);
+    expect(roundTrip(BASE)!.dimension).toBe(2);
+  });
+
+  test("still reads v2 links, which carry two coordinates and no dimension byte", () => {
+    // frozen payloads from the v2 encoder: BASE, then BASE as a simplex link with a
+    // dragged start point, a z scale, the 3D flag and one non-default setting
+    const plain = decodeSharedState("AlEABf_wBN_UA4DiCZ-cAcC4AsCpB7-pB4DxBJ-NBt_UA4DUYYCfSQA")!;
+    expect(plain.dimension).toBe(2);
+    expect(plain.vertices).toHaveLength(5);
+    expect(plain.vertices[2]![0]).toBeCloseTo(6, 4);
+    expect(plain.objective![1]).toBeCloseTo(0.6, 4);
+    expect(plain.solverMode).toBe("ellipsoid");
+    const withStart = decodeSharedState("AukBBf_wBN_UA4DiCZ-cAcC4AsCpB7-pB4DxBJ-NBt_UA4DUYYCfSdYNkaMEyN8CAQLBAg")!;
+    expect(withStart.solverMode).toBe("simplex");
+    expect(withStart.solverStartPoint![0]).toBeCloseTo(-3.5017, 4);
+    expect(withStart.solverStartPoint![1]).toBeCloseTo(2.25, 4);
+    expect(withStart.zScale).toBeCloseTo(1.75, 3);
+    expect(withStart.is3DMode).toBe(true);
+    expect(withStart.settings.maxitIPM).toBe(321);
+  });
+
   test("still reads v1 links, which predate the start point", () => {
     // frozen payload from the v1 encoder: two header bytes instead of three
     const v1 = "AUkF__AE39QDgOIJn5wBwLgCwKkHv6kHgPEEn40G39QDgNRhgJ9JAQLBAg";

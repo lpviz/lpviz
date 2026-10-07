@@ -7,7 +7,7 @@ import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { visibleBounds2D } from "../helpers/visibleBounds";
 import type { LayerRenderObject } from "../Layer";
@@ -214,7 +214,7 @@ export class PolytopeBaseLayer extends LayerBase {
     const raw = getState();
     const snap = getViewportRenderSnapshot();
 
-    const visible = raw.vertices.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
+    const visible = raw.vertices.length > 0 && rendersPlanarDrawing(snap.mode, raw);
     this.object3D.visible = visible;
     if (!visible) {
       this.fillMesh.visible = false;

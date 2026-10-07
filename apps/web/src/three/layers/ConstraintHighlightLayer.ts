@@ -7,7 +7,7 @@ import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/transition";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { CLIP_MARGIN_UNITS, visibleBounds2D } from "../helpers/visibleBounds";
 import { LayerBase } from "./base/LayerBase";
@@ -101,7 +101,7 @@ export class ConstraintHighlightLayer extends LayerBase {
     const raw = getState();
     const snap = getViewportRenderSnapshot();
 
-    if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasPolytopeLines(raw.polytope) || !shouldRenderSnapshotMode(snap.mode, raw)) {
+    if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasPolytopeLines(raw.polytope) || !rendersPlanarDrawing(snap.mode, raw)) {
       this.object3D.visible = false;
       return;
     }

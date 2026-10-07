@@ -1,4 +1,4 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES, type Dimension } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 import type { Vec } from "@lpviz/math/types";
 
@@ -7,14 +7,16 @@ import type { Vec } from "@lpviz/math/types";
 // encoding is a small binary format: fixed field order (keys cost nothing), delta-coded varint
 // coordinates, and settings left at their default omitted entirely.
 
-// v2 added the extended-flags byte (and with it the solver start point). v1 is
-// still read: its header is one byte shorter and it can carry no start point.
-// Bumping rather than redefining v1 matters even though v1 barely escaped —
-// a stale link decoded against the wrong header layout would not fail, it would
-// silently load a *different* problem, which is the exact failure this format
-// was written to eliminate.
-const VERSION = 2;
+// v2 added the extended-flags byte (and with it the solver start point); v3 a
+// dimension byte after it, with that many coordinates per vertex, objective and
+// start point. v1 and v2 are still read: their headers are shorter and carry
+// two coordinates. Bumping rather than redefining a version matters even when
+// it barely escaped — a stale link decoded against the wrong header layout
+// would not fail, it would silently load a *different* problem, which is the
+// exact failure this format was written to eliminate.
+const VERSION = 3;
 const MIN_VERSION = 1;
+const DIMENSIONS = [2, 3];
 // 1e-4 of a world unit is far below one screen pixel at any usable zoom, and vertices are where the
 // bytes go; the objective is printed to three decimals, so it gets enough precision that a
 // round-tripped link renders identically rather than one ulp off.
@@ -135,42 +137,41 @@ const SETTINGS: readonly SettingCodec[] = [
 
 export function encodeSharedState(state: SharedAppState): string {
   const bytes: number[] = [VERSION];
+  const dimension = state.dimension ?? 2;
+  // the first `dimension` coordinates of a point, or null when any is missing or not finite
+  const coordinates = (point: Vec | null | undefined): number[] | null => {
+    if (point == null) return null;
+    const values = Array.from({ length: dimension }, (_, j) => point[j] ?? NaN);
+    return values.every(Number.isFinite) ? values : null;
+  };
 
   const completion = Math.max(0, COMPLETION_MODES.indexOf(state.completionMode ?? "draft"));
   const solver = Math.max(0, SOLVER_MODES.indexOf(state.solverMode));
-  const hasObjective = state.objective !== null && state.objective !== undefined;
+  const objective = coordinates(state.objective);
   const hasZScale = state.zScale !== undefined && Number.isFinite(state.zScale);
-  const start = state.solverStartPoint;
   // null is the meaningful value here: it says "wherever this solver starts by
   // default", so an untouched marker costs no bytes and stays correct even if
   // that default later moves. Only a point the user actually dragged is pinned.
-  const hasSolverStart = start != null && Number.isFinite(start[0]) && Number.isFinite(start[1]);
-  bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (hasObjective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
-  bytes.push(hasSolverStart ? HAS_SOLVER_START : 0);
+  const start = coordinates(state.solverStartPoint);
+  bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (objective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
+  bytes.push(start ? HAS_SOLVER_START : 0);
+  bytes.push(dimension);
 
   const vertices = state.vertices ?? [];
   writeVarint(bytes, vertices.length);
-  let previousX = 0;
-  let previousY = 0;
+  const previous = new Array<number>(dimension).fill(0);
   for (const vertex of vertices) {
-    const x = quantize(vertex[0], COORDINATE_SCALE);
-    const y = quantize(vertex[1], COORDINATE_SCALE);
-    writeZigZag(bytes, x - previousX);
-    writeZigZag(bytes, y - previousY);
-    previousX = x;
-    previousY = y;
+    for (let j = 0; j < dimension; j++) {
+      const quantized = quantize(vertex[j] ?? 0, COORDINATE_SCALE);
+      writeZigZag(bytes, quantized - previous[j]!);
+      previous[j] = quantized;
+    }
   }
 
-  if (hasObjective) {
-    writeZigZag(bytes, quantize(state.objective![0], OBJECTIVE_SCALE));
-    writeZigZag(bytes, quantize(state.objective![1], OBJECTIVE_SCALE));
-  }
+  if (objective) for (const value of objective) writeZigZag(bytes, quantize(value, OBJECTIVE_SCALE));
   if (hasZScale) writeVarint(bytes, quantize(state.zScale!, Z_SCALE_SCALE));
-  if (hasSolverStart) {
-    // a world coordinate the user placed by hand, so vertex precision applies
-    writeZigZag(bytes, quantize(start[0], COORDINATE_SCALE));
-    writeZigZag(bytes, quantize(start[1], COORDINATE_SCALE));
-  }
+  // a world coordinate the user placed by hand, so vertex precision applies
+  if (start) for (const value of start) writeZigZag(bytes, quantize(value, COORDINATE_SCALE));
 
   const settings = state.settings ?? {};
   const written: number[] = [];
@@ -198,33 +199,35 @@ export function decodeSharedState(text: string): SharedAppState | null {
   try {
     const bytes = fromBase64Url(text);
     const version = bytes[0]!;
-    if (bytes.length < 3 || version < MIN_VERSION || version > VERSION) {
+    // the header: version, flags, then (v2+) the extended flags and (v3+) the dimension
+    const headerLength = version >= 3 ? 4 : version >= 2 ? 3 : 2;
+    if (bytes.length < headerLength || version < MIN_VERSION || version > VERSION) {
       return null;
     }
-    // v1 has no extended-flags byte, so its body starts one byte earlier
     const extended = version >= 2 ? bytes[2]! : 0;
-    const cursor: Cursor = { at: version >= 2 ? 3 : 2 };
+    const dimension = version >= 3 ? bytes[3]! : 2;
+    if (!DIMENSIONS.includes(dimension)) return null;
+    const cursor: Cursor = { at: headerLength };
 
     const flags = bytes[1]!;
     const completionMode = COMPLETION_MODES[flags & 0x03];
     const solverMode = SOLVER_MODES[(flags >> 2) & 0x07];
     if (!completionMode || !solverMode) return null;
 
+    const readPoint = (scale: number): Vec => Array.from({ length: dimension }, () => dequantize(readZigZag(bytes, cursor), scale)) as Vec;
+
     const vertexCount = readVarint(bytes, cursor);
     if (vertexCount > 100_000) return null;
     const vertices: Vec[] = [];
-    let x = 0;
-    let y = 0;
+    const running = new Array<number>(dimension).fill(0);
     for (let i = 0; i < vertexCount; i++) {
-      x += readZigZag(bytes, cursor);
-      y += readZigZag(bytes, cursor);
-      vertices.push([dequantize(x, COORDINATE_SCALE), dequantize(y, COORDINATE_SCALE)]);
+      for (let j = 0; j < dimension; j++) running[j] = running[j]! + readZigZag(bytes, cursor);
+      vertices.push(running.map((value) => dequantize(value, COORDINATE_SCALE)) as Vec);
     }
 
-    const objective: Vec | null = (flags & 0x40) !== 0 ? [dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE), dequantize(readZigZag(bytes, cursor), OBJECTIVE_SCALE)] : null;
+    const objective: Vec | null = (flags & 0x40) !== 0 ? readPoint(OBJECTIVE_SCALE) : null;
     const zScale = (flags & 0x80) !== 0 ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE) : undefined;
-    const solverStartPoint: Vec | null =
-      (extended & HAS_SOLVER_START) !== 0 ? [dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE), dequantize(readZigZag(bytes, cursor), COORDINATE_SCALE)] : null;
+    const solverStartPoint: Vec | null = (extended & HAS_SOLVER_START) !== 0 ? readPoint(COORDINATE_SCALE) : null;
 
     const settingCount = readVarint(bytes, cursor);
     if (settingCount > SETTINGS.length) return null;
@@ -244,6 +247,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
     }
 
     return {
+      dimension: dimension as Dimension,
       vertices,
       completionMode,
       objective,
