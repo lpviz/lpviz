@@ -1,4 +1,4 @@
-import type { ViewportDirtyFlags } from "@/features/core/store";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import type { Points, PointsMaterial } from "three";
 import { BufferAttribute, DynamicDrawUsage, type Texture } from "three";
 import { makePoints, pointsMaterial } from "../../helpers/points";

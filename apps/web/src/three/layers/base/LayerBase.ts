@@ -1,4 +1,5 @@
-import { getState, type ViewportDirtyFlags } from "@/features/core/store";
+import { getState } from "@/features/core/store";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Group, type Object3D } from "three";
 import type { Layer, RenderPassName } from "../../Layer";

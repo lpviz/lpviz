@@ -1,6 +1,7 @@
 import { getState, setState } from "@/features/core/store";
 import { collectZoomFitBounds } from "@/features/viewport/bounds";
 import type { ViewportApi } from "@/features/viewport/runtime";
+import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
 export type ViewportActions = ReturnType<typeof createViewportActions>;
 
@@ -28,7 +29,7 @@ export function createViewportActions(getCanvasManager: () => ViewportApi | null
     const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
-    cm.zoomToFit(isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds, 50, zoomFit?.zBounds, topInset);
+    cm.zoomToFit(isOpenUnbounded ? cm.getUnboundedClipBounds() : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
     cm.setSidebarWidth(currentSidebarWidth);
   };
   const toggle3D = () => {

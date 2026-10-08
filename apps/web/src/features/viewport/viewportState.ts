@@ -1,6 +1,7 @@
 import type { PointXYZ } from "@lpviz/math/types";
+import type { ViewportTransitionDirection } from "@lpviz/viewport/transition";
 import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
-import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
+import { WORLD_ANCHORED_DIRTY, type ViewportDirtyFlags } from "./dirtyFlags";
 
 // The viewport's slice of the store: the 2D/3D view and its transition.
 export type ViewportState = {
@@ -11,7 +12,7 @@ export type ViewportState = {
   transitionStartTime: number;
   transition3DStartAngles: PointXYZ;
   transition3DEndAngles: PointXYZ;
-  transitionDirection: "to3d" | "to2d" | null;
+  transitionDirection: ViewportTransitionDirection | null;
   transitionProgress: number;
   isNavigatingViewport: boolean;
 };
@@ -44,10 +45,5 @@ export function initialViewportRuntimeState(): ViewportRuntimeState {
 // Which render layers a change to each viewport field repaints (merged into the store's FIELD_DIRTY).
 export const VIEWPORT_DIRTY: Partial<Record<keyof ViewportState, () => ViewportDirtyFlags>> = {
   // zScale rescales every world-anchored layer's height
-  zScale: () => ({
-    polytope: true,
-    objective: true,
-    trace: true,
-    iterate: true,
-  }),
+  zScale: () => WORLD_ANCHORED_DIRTY,
 };

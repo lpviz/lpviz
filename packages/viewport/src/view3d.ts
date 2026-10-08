@@ -1,33 +1,38 @@
-import { ORTHO_MIN_SCALE_FACTOR } from "./projection2d";
-import { Euler, Vector3 } from "three";
+// The 3D view as a whole: the snapshot of a camera pose, and the poses that reset the view or fit
+// the drawn content into what the sidebar and overlays leave visible.
+
+import { Vector3 } from "three";
 
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/bounds";
 import type { PointXYZ } from "@lpviz/math/types";
-import { DEFAULT_VIEW_ANGLE } from "./defaults";
-import { configurePerspectiveCameraFromSnapshot, getPerspectiveDistanceFromSnapshot3D, projectCanvasPointToWorldPlane } from "./projection3d";
-import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getScaleFactorFromPerspectiveDistance, getViewportVisibleCenterCanvasPoint } from "./transition";
-import { getAvailableViewportSize, getViewportSize, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
-
-type ViewportZBounds = { minZ: number; maxZ: number };
+import { DEFAULT_FIT_PADDING, DEFAULT_VIEW_ANGLE, MIN_PERSPECTIVE_DISTANCE, MIN_SCALE_FACTOR } from "./defaults";
+import {
+  buildPerspectivePoseFromViewAngle,
+  getPerspectiveDistanceForUnitsPerPixel,
+  getPerspectiveDistanceFromSnapshot3D,
+  getScaleFactorFromPerspectiveDistance,
+  tanHalfVerticalFov,
+  unitsPerPixelAtDistance,
+  viewAngleBasis,
+} from "./perspective";
+import { configurePerspectiveCameraFromSnapshot, projectCanvasPointToWorldPlane } from "./projection3d";
+import {
+  getAvailableViewportSize,
+  getViewportSize,
+  getViewportVisibleCenterCanvasPoint,
+  orthographicFor,
+  type ViewportPerspectivePose,
+  type ViewportRect,
+  type ViewportRenderSnapshot,
+  type ViewportZBounds,
+} from "./snapshot";
 
 export type Viewport3DViewState = { viewAngle: PointXYZ; target: PointXYZ; distance: number; pose: ViewportPerspectivePose };
 
 const DEFAULT_TARGET: PointXYZ = { x: 0, y: 0, z: 0 };
-const MIN_PERSPECTIVE_DISTANCE = 10;
 const EPS = 1e-6;
 
-const fitEuler = new Euler();
-const fitForward = new Vector3();
-const fitUp = new Vector3();
-const fitRight = new Vector3();
 const fitRelative = new Vector3();
-
-const configureFitBasisFromViewAngle = (viewAngle: PointXYZ) => {
-  fitEuler.set(-viewAngle.x, -viewAngle.y, -viewAngle.z, "XYZ");
-  fitForward.set(0, 0, 1).applyEuler(fitEuler).normalize();
-  fitUp.set(0, 1, 0).applyEuler(fitEuler).normalize();
-  fitRight.crossVectors(fitUp, fitForward).normalize();
-};
 
 const clampPerspectiveDistance3D = (snapshot: ViewportRenderSnapshot, distance: number, rect?: ViewportRect) =>
   Math.min(getMaxPerspectiveDistance3D(snapshot, rect), Math.max(MIN_PERSPECTIVE_DISTANCE, distance));
@@ -42,7 +47,7 @@ const getPerspectiveDistanceToFitBounds3D = (snapshot: ViewportRenderSnapshot, r
   // the target plane and derive the distance from the full-viewport FOV.
   const viewport = getAvailableViewportSize(snapshot, rect, sidebarWidth, padding, topInset);
   const unitsPerPixel = Math.max(width / viewport.availWidth, height / viewport.availHeight);
-  return Math.max(MIN_PERSPECTIVE_DISTANCE, getPerspectiveDistanceForUnitsPerPixel(snapshot, unitsPerPixel, viewport.height));
+  return getPerspectiveDistanceForUnitsPerPixel(snapshot, unitsPerPixel, viewport.height);
 };
 
 const getPerspectiveDistanceToFitBox3D = (
@@ -56,19 +61,18 @@ const getPerspectiveDistanceToFitBox3D = (
   topInset: number,
 ) => {
   const viewport = getAvailableViewportSize(snapshot, rect, sidebarWidth, padding, topInset);
-  const verticalFov = snapshot.perspective.fov * (Math.PI / 180);
-  const tanHalfFull = Math.max(EPS, Math.tan(verticalFov / 2));
+  const tanHalfFull = Math.max(EPS, tanHalfVerticalFov(snapshot));
   // Pixels per unit of (offset / depth): px = offset / depth * K
   const K = viewport.height / 2 / tanHalfFull;
 
-  configureFitBasisFromViewAngle(viewAngle);
+  const basis = viewAngleBasis(viewAngle);
 
   const corners: Array<{ forward: number; right: number; up: number }> = [];
   for (const x of [bounds.minX, bounds.maxX]) {
     for (const y of [bounds.minY, bounds.maxY]) {
       for (const z of [bounds.minZ, bounds.maxZ]) {
         fitRelative.set(x - target.x, y - target.y, z - target.z);
-        corners.push({ forward: fitRelative.dot(fitForward), right: fitRelative.dot(fitRight), up: Math.abs(fitRelative.dot(fitUp)) });
+        corners.push({ forward: fitRelative.dot(basis.forward), right: fitRelative.dot(basis.right), up: Math.abs(fitRelative.dot(basis.up)) });
       }
     }
   }
@@ -133,13 +137,11 @@ const offsetTargetForVisibleViewport3D = (
     return target;
   }
 
-  const viewport = getViewportSize(snapshot, rect);
-  const verticalFov = snapshot.perspective.fov * (Math.PI / 180);
-  const unitsPerPixelAtTarget = (2 * Math.tan(verticalFov / 2) * Math.max(MIN_PERSPECTIVE_DISTANCE, distance)) / Math.max(1, viewport.height);
+  const unitsPerPixelAtTarget = unitsPerPixelAtDistance(snapshot, distance, getViewportSize(snapshot, rect).height);
   const rightOffset = (sidebarWidth / 2) * unitsPerPixelAtTarget;
   const upOffset = (topInset / 2) * unitsPerPixelAtTarget;
-  configureFitBasisFromViewAngle(viewAngle);
-  return { x: target.x - fitRight.x * rightOffset + fitUp.x * upOffset, y: target.y - fitRight.y * rightOffset + fitUp.y * upOffset, z: target.z - fitRight.z * rightOffset + fitUp.z * upOffset };
+  const { right, up } = viewAngleBasis(viewAngle);
+  return { x: target.x - right.x * rightOffset + up.x * upOffset, y: target.y - right.y * rightOffset + up.y * upOffset, z: target.z - right.z * rightOffset + up.z * upOffset };
 };
 
 export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): PointXYZ {
@@ -147,12 +149,14 @@ export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): Po
   return { x: -rotation.x, y: -rotation.y, z: -rotation.z };
 }
 
+/** The distance at which the target plane shows the 2D view's zoom at scale factor 1. */
 export function getDefaultPerspectiveDistance3D(snapshot: ViewportRenderSnapshot, rect?: ViewportRect) {
   return getPerspectiveDistanceForUnitsPerPixel(snapshot, 1 / Math.max(EPS, snapshot.gridSpacing), getViewportSize(snapshot, rect).height);
 }
 
+/** The distance matching the 2D view's furthest zoom. */
 export function getMaxPerspectiveDistance3D(snapshot: ViewportRenderSnapshot, rect?: ViewportRect) {
-  return getPerspectiveDistanceForUnitsPerPixel(snapshot, 1 / Math.max(EPS, snapshot.gridSpacing * ORTHO_MIN_SCALE_FACTOR), getViewportSize(snapshot, rect).height);
+  return getPerspectiveDistanceForUnitsPerPixel(snapshot, 1 / Math.max(EPS, snapshot.gridSpacing * MIN_SCALE_FACTOR), getViewportSize(snapshot, rect).height);
 }
 
 export function buildResetViewport3DView(snapshot: ViewportRenderSnapshot, sidebarWidth: number, rect: ViewportRect): Viewport3DViewState {
@@ -172,7 +176,7 @@ export function fitViewport3DToBounds(
   rect: ViewportRect,
   sidebarWidth: number,
   rawBounds: BoundingBox,
-  padding = 50,
+  padding = DEFAULT_FIT_PADDING,
   zBounds?: ViewportZBounds,
   topInset = 0,
 ): Viewport3DViewState {
@@ -188,6 +192,7 @@ export function fitViewport3DToBounds(
   return { viewAngle, target, distance, pose: buildPerspectivePoseFromViewAngle(viewAngle, distance, target) };
 }
 
+/** The 3D snapshot of a camera pose, keeping the 2D zoom fields in step with the camera's distance. */
 export function buildViewport3DSnapshot(snapshot: ViewportRenderSnapshot, pose: ViewportPerspectivePose, rect?: ViewportRect): ViewportRenderSnapshot {
   const { width, height } = getViewportSize(snapshot, rect);
   const distance = Math.hypot(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z);

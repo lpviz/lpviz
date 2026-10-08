@@ -1,6 +1,7 @@
 import { getState, on, onMeta } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY, Vec } from "@lpviz/math/types";
+import type { ViewportZBounds } from "@lpviz/viewport/snapshot";
 import type { ViewportRuntimeContext } from "./runtime/context";
 import { resetViewport2DControlsConfig, setViewport2DControlsConfig } from "./runtime/controls2d";
 import { resetViewport3DControlsConfig } from "./runtime/controls3d";
@@ -10,7 +11,7 @@ import { createLayoutApi } from "./runtime/layout";
 import { createNavigationIdleTracker } from "./runtime/navigationIdle";
 import { resetViewportRenderSnapshot } from "./runtime/snapshot";
 import { createTransitionController } from "./runtime/transitionController";
-import { createViewFitApi, type ViewportZBounds } from "./runtime/viewFit";
+import { createViewFitApi } from "./runtime/viewFit";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportBridge, type ViewportRenderSnapshot } from "./types";
 
 const VIEWPORT_UNBOUNDED_EXTENT = 5000;

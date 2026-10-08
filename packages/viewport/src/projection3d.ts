@@ -1,15 +1,18 @@
+// Projection through the perspective camera: world to canvas, and canvas rays back to the plane.
+
 import { PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
-import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
+import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
-export type Viewport3DInteractionOptions = {
+/** How a canvas point reads as a world point while the editor is driven in 3D. */
+export type Viewport3DPointerOptions = {
   zScale: number;
   snapToGrid: boolean;
-  editorInteractionKind: string;
-  is3DMode: boolean;
-  isTransitioning3D: boolean;
-  viewAnchor3D?: { x: number; y: number; z: number } | undefined;
+  /** an editor gesture is in progress, so the point is clamped to a sane span around the target */
+  interacting: boolean;
+  /** the gesture's anchor, whose view-aligned plane catches rays that miss the floor */
+  viewAnchor3D?: PointXYZ | undefined;
 };
 
 const MAX_3D_DRAG_BOUND = 5000;
@@ -19,6 +22,9 @@ const MAX_3D_PLANE_SLOPE = 2;
 // parallel to the plane and the intersection point is too far away to be useful.
 const PLANE_PARALLEL_THRESHOLD = 0.08;
 const Z_PLANE_NORMAL: PointXYZ = { x: 0, y: 0, z: 1 };
+// Far-offscreen sentinel for points that have no on-screen position; finite
+// so distance-based hit tests against it are well-defined and never match.
+const OFFSCREEN_CANVAS_COORD = -1e9;
 
 const projectionCamera = new PerspectiveCamera();
 const projectionTarget = new Vector3();
@@ -47,14 +53,8 @@ export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderS
   return camera;
 }
 
-export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
-  return projectedPosition
-    .set(snapshot.perspective.position.x, snapshot.perspective.position.y, snapshot.perspective.position.z)
-    .distanceTo(projectionTarget.set(snapshot.target.x, snapshot.target.y, snapshot.target.z));
-}
-
-const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DInteractionOptions): PointXY => {
-  if (!(options.editorInteractionKind !== "idle" && (options.is3DMode || options.isTransitioning3D))) {
+const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DPointerOptions): PointXY => {
+  if (!options.interacting) {
     return point;
   }
 
@@ -74,11 +74,7 @@ const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapsho
   };
 };
 
-// Far-offscreen sentinel for points that have no on-screen position; finite
-// so distance-based hit tests against it are well-defined and never match.
-const OFFSCREEN_CANVAS_COORD = -1e9;
-
-export function projectWorldPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, position: { x: number; y: number; z: number }): PointXY {
+export function projectWorldPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, position: PointXYZ): PointXY {
   configurePerspectiveCameraFromSnapshot(snapshot);
   const { width, height } = getViewportSize(snapshot, rect);
   projectedPosition.set(position.x, position.y, position.z).applyMatrix4(projectionCamera.matrixWorldInverse);
@@ -122,16 +118,16 @@ export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot,
   return intersectCanvasRayWithPlane(snapshot, rect, point, Z_PLANE_NORMAL, { x: 0, y: 0, z });
 }
 
-export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, x: number, y: number, options: Viewport3DInteractionOptions): PointXY {
-  let point = projectCanvasPointToWorldPlane(snapshot, rect, { x, y });
-  if (!point && options.viewAnchor3D) {
+export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, options: Viewport3DPointerOptions): PointXY {
+  let hit = projectCanvasPointToWorldPlane(snapshot, rect, point);
+  if (!hit && options.viewAnchor3D) {
     // Fallback: the view-aligned plane through the drag anchor. It is always
     // well-conditioned because its normal points toward the camera, so the
     // ray can never be parallel to it for reasonable FOVs.
     const viewDir = projectionViewDir
       .set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z)
       .normalize();
-    point = intersectCanvasRayWithPlane(snapshot, rect, { x, y }, viewDir, options.viewAnchor3D);
+    hit = intersectCanvasRayWithPlane(snapshot, rect, point, viewDir, options.viewAnchor3D);
   }
-  return snapPoint(clamp3DInteractionPoint(point ?? { x: snapshot.target.x, y: snapshot.target.y }, snapshot, rect, options), options.snapToGrid);
+  return snapPoint(clamp3DInteractionPoint(hit ?? { x: snapshot.target.x, y: snapshot.target.y }, snapshot, rect, options), options.snapToGrid);
 }

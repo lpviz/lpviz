@@ -32,7 +32,7 @@ function isValidSharedSetting<K extends SharedKey>(key: K, value: unknown): valu
   return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
 
-// the objective vector + constraint constraints guard common to every buildRequest
+// the objective vector + constraints guard common to every buildRequest
 function objectiveBase(state: State) {
   if (!state.objectiveVector || !hasConstraints(state.polytope)) return null;
   return {

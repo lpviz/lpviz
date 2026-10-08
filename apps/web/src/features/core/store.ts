@@ -12,7 +12,7 @@ import {
   type SolverState,
 } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
-import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
 // The slices' public surface, re-exported so importers keep one module to reach for.
 export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
@@ -42,18 +42,6 @@ export {
   type SolverSettings,
 } from "@/features/solver/solverState";
 export type { Dimension } from "@lpviz/math/vec";
-export type { ViewportDirtyFlags };
-
-// Repaint everything — for whole-problem swaps (gallery load, shared-state
-// import) and mode switches where deriving per-field flags would be noise.
-export const ALL_VIEWPORT_DIRTY: ViewportDirtyFlags = {
-  grid: true,
-  polytope: true,
-  constraints: true,
-  objective: true,
-  trace: true,
-  iterate: true,
-};
 
 type StateChangeMeta = {
   viewportDirty?: ViewportDirtyFlags;

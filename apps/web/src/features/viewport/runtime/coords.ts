@@ -14,8 +14,9 @@ export function createCoordsApi({
 }: Pick<ViewportRuntimeContext, "shouldUseExternal2DViewport" | "getManagerSnapshot" | "getViewportRect"> & Pick<ExternalControlsSync, "getExternal2DSnapshot">) {
   return {
     toLogicalCoords: (x: number, y: number): PointXY => {
+      const point = { x, y };
       if (shouldUseExternal2DViewport()) {
-        return toLogicalCoords2D(getExternal2DSnapshot(), getViewportRect(), x, y, { snapToGrid: getState().snapToGrid });
+        return toLogicalCoords2D(getExternal2DSnapshot(), getViewportRect(), point, { snapToGrid: getState().snapToGrid });
       }
 
       const state = getState();
@@ -24,12 +25,10 @@ export function createCoordsApi({
         editorInteraction.kind === "dragging" && (editorInteraction.target.kind === "point" || editorInteraction.target.kind === "objective" || editorInteraction.target.kind === "solver-start")
           ? editorInteraction.target.viewAnchor3D
           : undefined;
-      return toLogicalCoords3D(getManagerSnapshot(), getViewportRect(), x, y, {
+      return toLogicalCoords3D(getManagerSnapshot(), getViewportRect(), point, {
         zScale: state.zScale,
         snapToGrid: state.snapToGrid,
-        editorInteractionKind: state.editorInteraction.kind,
-        is3DMode: state.is3DMode,
-        isTransitioning3D: state.isTransitioning3D,
+        interacting: editorInteraction.kind !== "idle",
         viewAnchor3D,
       });
     },

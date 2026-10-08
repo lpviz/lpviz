@@ -1,5 +1,5 @@
 import { createSignal } from "@/features/core/signal";
-import type { ViewportPerspectivePose } from "@lpviz/viewport/types";
+import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
 export type { ViewportPerspectivePose };

@@ -1,15 +1,11 @@
 import { DEFAULT_VIEW_ANGLE, getState, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import { fitViewport2DToBounds } from "@lpviz/viewport/projection2d";
+import type { ViewportZBounds } from "@lpviz/viewport/snapshot";
 import { buildResetViewport3DView, fitViewport3DToBounds } from "@lpviz/viewport/view3d";
 import type { ViewportRuntimeContext } from "./context";
 import { getViewport2DControlsConfig, setViewport2DControlsState } from "./controls2d";
 import type { ExternalControlsSync } from "./externalControlsSync";
-
-export type ViewportZBounds = {
-  minZ: number;
-  maxZ: number;
-};
 
 // The ViewportApi methods that move the view as a whole: zoomToFit and resetView.
 export function createViewFitApi({

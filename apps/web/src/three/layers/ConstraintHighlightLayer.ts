@@ -4,7 +4,7 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox } from "@lpviz/math/bounds";
 import type { Constraint, PointXY } from "@lpviz/math/types";
 import { hasConstraints } from "@lpviz/polytope/polytope";
-import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/transition";
+import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/projection3d";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";

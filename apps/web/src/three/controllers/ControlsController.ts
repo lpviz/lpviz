@@ -1,5 +1,6 @@
 import { getViewport2DControlsConfig, isViewport2DPanActive, startViewport2DPan, stopViewport2DPan, updateViewport2DPan, zoomViewport2DAtCanvasPoint } from "@/features/viewport/runtime/controls2d";
 import { getViewport3DControlsConfig, subscribeViewport3DControlsConfig, type ViewportPerspectivePose } from "@/features/viewport/runtime/controls3d";
+import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
@@ -9,7 +10,6 @@ const WHEEL_ZOOM_FACTOR = 1.05;
 const ROTATE_RADIANS_PER_PIXEL = 0.008;
 const MIN_ELEVATION = 0.08;
 const MAX_ELEVATION = Math.PI / 2 - 0.05;
-const MIN_DISTANCE = 10;
 const WORLD_UP = new Vector3(0, 0, 1);
 const FALLBACK_RIGHT = new Vector3(1, 0, 0);
 
@@ -271,11 +271,11 @@ export class ControlsController {
     let active3DPointerId: number | null = null;
     let activeTwoFingerOrbit = false;
     let activeTwoFingerStartDistance = 0;
-    let activeTwoFingerStartCameraDistance = MIN_DISTANCE;
+    let activeTwoFingerStartCameraDistance = MIN_PERSPECTIVE_DISTANCE;
 
     const getOrbitState = () => {
       const offset = orbitOffset.subVectors(perspectiveCamera.position, this.controlsTarget);
-      const distance = Math.max(MIN_DISTANCE, offset.length());
+      const distance = Math.max(MIN_PERSPECTIVE_DISTANCE, offset.length());
       return {
         distance,
         yaw: Math.atan2(offset.y, offset.x),
@@ -293,7 +293,7 @@ export class ControlsController {
       }
       const up = panBasisUp.crossVectors(right, forward).normalize();
       const fov = (perspectiveCamera.fov * Math.PI) / 180;
-      const unitsPerPixel = (2 * Math.tan(fov / 2) * Math.max(MIN_DISTANCE, distance)) / Math.max(1, canvas.clientHeight);
+      const unitsPerPixel = (2 * Math.tan(fov / 2) * Math.max(MIN_PERSPECTIVE_DISTANCE, distance)) / Math.max(1, canvas.clientHeight);
       return { right: right.clone(), up: up.clone(), unitsPerPixel };
     };
 
@@ -350,7 +350,7 @@ export class ControlsController {
       if (!this.controlsEnabled) return;
       const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
       if (offset.lengthSq() <= 1e-8) return;
-      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(Math.min(this.controlsConfig.maxDistance, Math.max(MIN_DISTANCE, nextDistance))));
+      perspectiveCamera.position.copy(this.controlsTarget).add(offset.normalize().multiplyScalar(Math.min(this.controlsConfig.maxDistance, Math.max(MIN_PERSPECTIVE_DISTANCE, nextDistance))));
       emitPose();
     };
 
@@ -460,9 +460,9 @@ export class ControlsController {
       if (dominantDelta === 0) return;
 
       const offset = new Vector3().subVectors(perspectiveCamera.position, this.controlsTarget);
-      const distance = Math.max(MIN_DISTANCE, offset.length());
+      const distance = Math.max(MIN_PERSPECTIVE_DISTANCE, offset.length());
       const zoomFactor = Math.pow(1.0015, dominantDelta);
-      const nextDistance = Math.min(this.controlsConfig.maxDistance, Math.max(MIN_DISTANCE, distance * zoomFactor));
+      const nextDistance = Math.min(this.controlsConfig.maxDistance, Math.max(MIN_PERSPECTIVE_DISTANCE, distance * zoomFactor));
       if (!Number.isFinite(nextDistance)) return;
 
       const rect = canvas.getBoundingClientRect();
