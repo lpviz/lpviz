@@ -3,7 +3,7 @@ import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingP
 import type { SaveHistory } from "@/features/history/historyService";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/interactionState";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { verticesFromLines } from "@lpviz/math/geometry";
+import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 import type { Vec } from "@lpviz/math/types";
 
 const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
@@ -36,18 +36,18 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, c
   let operation: ConstraintDragTarget["operation"];
 
   if (target.operation.kind === "closed-line") {
-    const line = target.operation.lines[target.operation.lineIndex]!;
+    const line = target.operation.constraints[target.operation.lineIndex]!;
     const length = Math.hypot(line[0], line[1]);
     if (length <= 0) return;
 
     const shift = delta * length;
-    const updatedLines = target.operation.lines.slice();
+    const updatedLines = target.operation.constraints.slice();
     updatedLines[target.operation.lineIndex] = [line[0], line[1], line[2] + shift];
-    const updatedVertices = verticesFromLines(updatedLines);
+    const updatedVertices = verticesFromConstraints(updatedLines);
     if (updatedVertices.length < 2) return;
 
     setState({ vertices: updatedVertices });
-    operation = { kind: "closed-line", lineIndex: target.operation.lineIndex, lines: updatedLines };
+    operation = { kind: "closed-line", lineIndex: target.operation.lineIndex, constraints: updatedLines };
   } else {
     operation = target.operation;
     const shiftX = target.normal[0] * delta;

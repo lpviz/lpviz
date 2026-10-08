@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox } from "@lpviz/math/geometry";
-import type { Line, PointXY } from "@lpviz/math/types";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import { type BoundingBox } from "@lpviz/math/bounds";
+import type { Constraint, PointXY } from "@lpviz/math/types";
+import { hasConstraints } from "@lpviz/polytope/polytope";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/transition";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -53,7 +53,7 @@ function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
   };
 }
 
-function clipLineToBounds(line: Line, b: BoundingBox): [PointXY, PointXY] | null {
+function clipLineToBounds(line: Constraint, b: BoundingBox): [PointXY, PointXY] | null {
   const [A, B, C] = line;
   if (Math.abs(A) < EPS && Math.abs(B) < EPS) return null;
   if (Math.abs(B) > Math.abs(A)) {
@@ -101,12 +101,12 @@ export class ConstraintHighlightLayer extends LayerBase {
     const raw = getState();
     const snap = getViewportRenderSnapshot();
 
-    if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasPolytopeLines(raw.polytope) || !rendersPlanarDrawing(snap.mode, raw)) {
+    if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasConstraints(raw.polytope) || !rendersPlanarDrawing(snap.mode, raw)) {
       this.object3D.visible = false;
       return;
     }
 
-    const line = raw.polytope.lines[raw.highlightIndex];
+    const line = raw.polytope.constraints[raw.highlightIndex];
     if (!line) {
       this.object3D.visible = false;
       return;

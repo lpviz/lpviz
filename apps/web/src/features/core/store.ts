@@ -21,9 +21,7 @@ export {
   COMPLETION_MODES,
   computeDrawingPhase,
   nearestPolytopeVertex,
-  isDimension,
   type CompletionMode,
-  type Dimension,
   type DragTarget,
   type DragViewAnchor3D,
   type DrawingPhase,
@@ -43,6 +41,7 @@ export {
   type SolverMode,
   type SolverSettings,
 } from "@/features/solver/solverState";
+export type { Dimension } from "@lpviz/math/vec";
 export type { ViewportDirtyFlags };
 
 // Repaint everything — for whole-problem swaps (gallery load, shared-state

@@ -20,17 +20,16 @@ export function createPolytopeService(handleProblemChange: () => void): Polytope
           interiorPoint: promotion.interiorPoint,
         });
       const result = regionResult.polytope;
-      if (!result.inequalities) return fail("No inequalities returned.");
       const { highlightIndex } = getState();
       setState({
         polytope: result,
         inequalitiesMessage: null,
-        ...(highlightIndex !== null && highlightIndex >= result.inequalities.length ? { highlightIndex: null } : {}),
+        ...(highlightIndex !== null && highlightIndex >= result.constraints.length ? { highlightIndex: null } : {}),
       });
       handleProblemChange();
     } catch (error) {
       console.error("Error:", error);
-      fail("Error computing inequalities.");
+      fail("Error computing the constraints.");
     }
   };
   return { send };

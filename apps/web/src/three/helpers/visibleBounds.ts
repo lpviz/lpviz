@@ -1,5 +1,5 @@
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import type { BoundingBox } from "@lpviz/math/geometry";
+import type { BoundingBox } from "@lpviz/math/bounds";
 
 const CLIP_MARGIN_PX = 50;
 export const CLIP_MARGIN_UNITS = 50;

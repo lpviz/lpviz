@@ -5,7 +5,6 @@ import { getEditorContext, getEditorTransition } from "@/features/polytope-edito
 import {
   EDGE_HIT_RADIUS_PX,
   findBoundaryRayNearPoint,
-  findEdgeNearPoint,
   findVertexNearLocalPoint,
   getLocalFromClient,
   getLogicalFromClient,
@@ -14,6 +13,7 @@ import {
 } from "@/features/polytope-editor/interactionState";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
+import { nearestEdge } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
@@ -127,7 +127,7 @@ function createPointerEditActions(
       return;
     }
 
-    const edgeIndex = findEdgeNearPoint(logicalMouse, displayVertices, displayMode, worldDistanceForPixels(canvasManager, logicalMouse, EDGE_HIT_RADIUS_PX));
+    const edgeIndex = nearestEdge(displayVertices, logicalMouse, worldDistanceForPixels(canvasManager, logicalMouse, EDGE_HIT_RADIUS_PX), displayMode === "closed");
     if (edgeIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-edge-point",

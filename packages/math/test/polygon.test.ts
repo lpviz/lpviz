@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test";
-import { centroid, classifyRegion, convexHull, expandDegenerateBounds, hasOpenBoundaryClosure, isConvexChain, isConvexPolygon, nearestEdge, polygonContains, verticesFromLines } from "../src/geometry";
-import type { Lines, Vec, Vertices } from "../src/types";
+import { centroid, convexHull, isConvexChain, isConvexPolygon, nearestEdge, polygonContains } from "../src/polygon";
+import type { Vec } from "../src/types";
+
+// The vertices of a regular n-gon visited every `step`-th one: a convex
+// polygon for step 1, a star that winds `step` times around the center
+// otherwise (gcd(n, step) = 1 keeps it one closed chain).
+function starPolygon(count: number, step: number): Vec[] {
+  return Array.from({ length: count }, (_, i) => {
+    const angle = (2 * Math.PI * ((i * step) % count)) / count;
+    return [10 * Math.cos(angle), 10 * Math.sin(angle)];
+  });
+}
 
 describe("isConvexPolygon", () => {
   test("tolerates floating-point noise from a vertex dragged onto an edge", () => {
@@ -40,8 +50,7 @@ describe("isConvexPolygon", () => {
   // (allowed, flagged) nonconvex states can land on such a shape, and it then
   // reached the constraint builder as a valid region.
   test("rejects a self-overlapping polygon whose turns all agree", () => {
-    const pentagram = starPolygon(5, 2);
-    expect(isConvexPolygon(pentagram)).toBe(false);
+    expect(isConvexPolygon(starPolygon(5, 2))).toBe(false);
     expect(isConvexPolygon(starPolygon(7, 3))).toBe(false);
     expect(isConvexPolygon(starPolygon(7, 2))).toBe(false);
     // a triangle traversed twice: the turns agree and every vertex lies on
@@ -62,16 +71,6 @@ describe("isConvexPolygon", () => {
     expect(isConvexPolygon(starPolygon(9, 1))).toBe(true);
   });
 });
-
-// The vertices of a regular n-gon visited every `step`-th one: a convex
-// polygon for step 1, a star that winds `step` times around the center
-// otherwise (gcd(n, step) = 1 keeps it one closed chain).
-function starPolygon(count: number, step: number): Vec[] {
-  return Array.from({ length: count }, (_, i) => {
-    const angle = (2 * Math.PI * ((i * step) % count)) / count;
-    return [10 * Math.cos(angle), 10 * Math.sin(angle)];
-  });
-}
 
 describe("isConvexChain", () => {
   test("rejects a chain doubling back on itself", () => {
@@ -136,102 +135,29 @@ describe("isConvexChain", () => {
   });
 });
 
-// unit-normalized lines for the square [0,4] x [0,4]
-const SQUARE_LINES: Lines = [
-  [0, -1, 0],
-  [1, 0, 4],
-  [0, 1, 4],
-  [-1, 0, 0],
-];
-
-describe("verticesFromLines", () => {
-  test("returns full-precision vertices", () => {
-    const third: Lines = [
-      [0, -1, 0],
-      [Math.SQRT1_2, Math.SQRT1_2, Math.SQRT1_2],
-      [-1, 0, 0],
-    ];
-    const verts = verticesFromLines(third);
-    expect(verts.length).toBe(3);
-    const hasExact = verts.some(([x, y]) => Math.abs(x - 0) < 1e-9 && Math.abs(y - 1) < 1e-9);
-    expect(hasExact).toBe(true);
-  });
-
-  test("does not collapse a sliver thinner than 0.005 into duplicates", () => {
-    // x in [0, 0.004], y in [0, 1]
-    const sliver: Lines = [
-      [0, -1, 0],
-      [1, 0, 0.004],
-      [0, 1, 1],
-      [-1, 0, 0],
-    ];
-    const verts = verticesFromLines(sliver);
-    expect(verts.length).toBe(4);
-    const center = centroid(verts);
-    const strictlyFeasible = sliver.every(([A, B, C]) => A * center[0] + B * center[1] < C);
-    expect(strictlyFeasible).toBe(true);
-  });
-});
-
-describe("classifyRegion", () => {
-  test("classifies a closed square as bounded", () => {
-    expect(classifyRegion(SQUARE_LINES, verticesFromLines(SQUARE_LINES))).toBe("bounded");
-  });
-
-  test("does not call a receding region with 3 vertices bounded", () => {
-    // x >= 0, y >= 0, x + y >= 1, y <= 2: three vertices, recedes along +x
-    const s = Math.SQRT1_2;
-    const open: Lines = [
-      [-1, 0, 0],
-      [0, -1, 0],
-      [-s, -s, -s],
-      [0, 1, 2],
-    ];
-    expect(classifyRegion(open, verticesFromLines(open))).toBe("unbounded");
-  });
-});
-
-describe("hasOpenBoundaryClosure", () => {
-  test("detects the start ray crossing the terminal segment", () => {
-    // pure ray-vs-segment geometry; empty lines disable the constraint fallback
-    const chain: Vertices = [
-      [0, 0],
-      [1, 0],
-      [1, 1],
-      [-3, 1],
-      [-3, -1],
-    ];
-    expect(hasOpenBoundaryClosure(chain, [])).toBe(true);
-    expect(hasOpenBoundaryClosure([...chain].reverse(), [])).toBe(true);
-  });
-
-  test("an open L stays open", () => {
-    const chain: Vertices = [
-      [0, 0],
-      [2, 0],
-      [2, 2],
-    ];
-    expect(hasOpenBoundaryClosure(chain, [])).toBe(false);
-  });
-});
-
-describe("expandDegenerateBounds", () => {
-  test("expands a point and a segment, keeps real bounds", () => {
-    const pt = expandDegenerateBounds({ minX: 7, maxX: 7, minY: -3, maxY: -3 });
-    expect(pt.maxX - pt.minX).toBe(1);
-    expect(pt.maxY - pt.minY).toBe(1);
-    expect((pt.minX + pt.maxX) / 2).toBe(7);
-
-    const seg = expandDegenerateBounds({ minX: 2, maxX: 2, minY: -5, maxY: 5 });
-    expect(seg.maxX - seg.minX).toBe(1);
-    expect(seg.maxY - seg.minY).toBe(10);
-
-    const real = { minX: -10, maxX: 10, minY: -8, maxY: 8 };
-    expect(expandDegenerateBounds(real)).toEqual(real);
+describe("centroid", () => {
+  test("averages every coordinate of points of any dimension", () => {
+    expect(
+      centroid([
+        [0, 0],
+        [4, 2],
+      ]),
+    ).toEqual([2, 1]);
+    expect(
+      centroid([
+        [1, 2, 3],
+        [3, 4, 5],
+      ]),
+    ).toEqual([2, 3, 4]);
+    expect(() => centroid([])).toThrow();
   });
 });
 
 describe("nearestEdge", () => {
+  // A square whose side is under the default 0.5 tolerance, which is what a
+  // small polytope looks like once the view is zoomed in on it: every edge is
+  // within tolerance of every interior point, so the pick has to be by distance
+  // rather than by index order.
   const SMALL_SQUARE: Vec[] = [
     [0, 0],
     [0.3, 0],
@@ -239,13 +165,14 @@ describe("nearestEdge", () => {
     [0, 0.3],
   ];
 
-  test("picks the nearest edge, not the lowest index, when a small polytope puts every edge in tolerance", () => {
-    // the default 0.5 tolerance exceeds this square's side length, so all four
-    // edges qualify for any interior point
+  test("picks the nearest edge, not the lowest index, when every edge is in tolerance", () => {
     expect(nearestEdge(SMALL_SQUARE, [0, 0.15])).toBe(3);
     expect(nearestEdge(SMALL_SQUARE, [0.15, 0.3])).toBe(2);
     expect(nearestEdge(SMALL_SQUARE, [0.3, 0.15])).toBe(1);
     expect(nearestEdge(SMALL_SQUARE, [0.15, 0])).toBe(0);
+    // 0.02 off the left edge, 0.10 off the top edge
+    expect(nearestEdge(SMALL_SQUARE, [0.02, 0.2])).toBe(3);
+    expect(nearestEdge(SMALL_SQUARE, [0.1, 0.28])).toBe(2);
   });
 
   test("still returns the right edge for a large polytope", () => {
@@ -263,10 +190,14 @@ describe("nearestEdge", () => {
   test("keeps the closing edge of a closed polygon reachable, and skips it for a polyline", () => {
     expect(nearestEdge(SMALL_SQUARE, [0.15, 0.02])).toBe(0);
     expect(nearestEdge(SMALL_SQUARE, [0.02, 0.15])).toBe(3);
+    // the last->first chord is this square's left edge, which only becomes a
+    // boundary once the chain is closed
     expect(nearestEdge(SMALL_SQUARE, [0.02, 0.15], 0.5, false)).not.toBe(3);
+    // the centre of the square is 0.15 from the bottom, right and top edges
+    expect(nearestEdge(SMALL_SQUARE, [0.15, 0.15], 0.5, false)).toBe(0);
   });
 
-  test("returns null when no edge is within tolerance", () => {
+  test("returns null when no edge is within tolerance, in world units", () => {
     const triangle: Vec[] = [
       [0, 0],
       [10, 0],
@@ -274,6 +205,11 @@ describe("nearestEdge", () => {
     ];
     // incenter: ~2.3 clear of every edge
     expect(nearestEdge(triangle, [7.3, 2.7])).toBeNull();
+    expect(nearestEdge(SMALL_SQUARE, [-1, 0.15])).toBeNull();
+    // 0.02 from the left edge and 0.13 from the top: only the left edge
+    // survives a 0.05 tolerance
+    expect(nearestEdge(SMALL_SQUARE, [0.02, 0.17], 0.05)).toBe(3);
+    expect(nearestEdge(SMALL_SQUARE, [0.1, 0.17], 0.05)).toBeNull();
   });
 
   test("breaks exact ties by lowest index", () => {
@@ -286,6 +222,15 @@ describe("nearestEdge", () => {
     // the centre sits sqrt(2)/2 = 0.7071... from all four edges
     expect(nearestEdge(diamond, [0, 0], 0.71)).toBe(0);
     expect(nearestEdge(diamond, [0, 0], 0.5)).toBeNull();
+  });
+
+  test("skips degenerate zero-length edges", () => {
+    const withDuplicate: Vec[] = [
+      [0, 0],
+      [0, 0],
+      [0.3, 0],
+    ];
+    expect(nearestEdge(withDuplicate, [0.15, 0], 0.5, false)).toBe(1);
   });
 });
 
@@ -315,30 +260,5 @@ describe("polygonContains and convexHull", () => {
     expect(hull).toHaveLength(4);
     expect(isConvexPolygon(hull)).toBe(true);
     expect(hull.some(([x, y]) => x === 2 && y === 1)).toBe(false);
-  });
-});
-
-describe("boundaryDirections", () => {
-  // hasNontrivialRecessionDirection used Math.hypot(A, B) and
-  // isObjectiveDirectionUnbounded used Math.hypot(-B, A) before they shared
-  // one helper; the share is sound only if both forms, and the candidate
-  // tuples built from them, agree bit for bit.
-  test("Math.hypot(A, B) and Math.hypot(-B, A) agree bit for bit over 10,000 random inputs", () => {
-    let seed = 12345;
-    const next = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
-    const magnitudes = [1, 1e-3, 1e3, 1e-150, 1e150, 1e-310, 1e308];
-    const sample = (i: number, zeroEvery: number) => (i % zeroEvery === 0 ? 0 : (next() * 2 - 1) * magnitudes[Math.floor(next() * magnitudes.length)]!);
-    for (let i = 0; i < 10000; i++) {
-      const A = sample(i, 7);
-      const B = sample(i, 11);
-      const n1 = Math.hypot(A, B);
-      const dx = -B;
-      const dy = A;
-      const n2 = Math.hypot(dx, dy);
-      expect(Object.is(n1, n2)).toBe(true);
-      const recession = [-B / n1, A / n1, B / n1, -A / n1];
-      const objective = [dx / n2, dy / n2, -dx / n2, -dy / n2];
-      for (let k = 0; k < 4; k++) expect(Object.is(recession[k], objective[k])).toBe(true);
-    }
   });
 });

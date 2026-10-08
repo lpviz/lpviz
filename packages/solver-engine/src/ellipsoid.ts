@@ -1,5 +1,5 @@
-import { type DenseMatrix, dot, linesToDenseAb } from "@lpviz/math/blas";
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import { type DenseMatrix, dot, denseFromConstraints } from "@lpviz/math/blas";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
@@ -175,12 +175,12 @@ const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
  * `objective'c + rho` upper-bounds the optimum while the incumbent lower-bounds it; that gap is
  * the stopping measure and the vertical lift of the 3D iterate path.
  */
-export function ellipsoid(vertices: Vertices, lines: Lines, objective: VecN, opts: EllipsoidOptions): SolverResult {
+export function ellipsoid(vertices: Vec[], constraints: Constraint[], objective: Float64Array, opts: EllipsoidOptions): SolverResult {
   const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
 
   assertMaxit(maxit);
 
-  const { A, b } = linesToDenseAb(lines);
+  const { A, b } = denseFromConstraints(constraints);
   const n = A.cols;
   if (n < 2) {
     throw new Error("The ellipsoid method requires at least two variables.");
@@ -308,7 +308,7 @@ function onInitialBoundary(x: Float64Array, center: Float64Array, semiAxes: Floa
  * The drawn region's bounding box, inflated by `scale`: the ellipsoid method circumscribes it, the
  * cutting-plane methods take the box itself as their initial localizing set.
  */
-export function regionBoundingBox(vertices: Vertices, n: number, scale: number) {
+export function regionBoundingBox(vertices: Vec[], n: number, scale: number) {
   const center = new Float64Array(n);
   const halfExtents = new Float64Array(n).fill(FALLBACK_HALF_EXTENT);
   const inflation = Math.max(MIN_INITIAL_SCALE, scale);
@@ -347,7 +347,7 @@ export function regionBoundingBox(vertices: Vertices, n: number, scale: number) 
 
 // The smallest axis-aligned ellipsoid around that box: semi-axis
 // sqrt(n) * halfExtent puts every box corner exactly on the boundary.
-function initialEllipsoid(vertices: Vertices, n: number, scale: number) {
+function initialEllipsoid(vertices: Vec[], n: number, scale: number) {
   const { center, halfExtents } = regionBoundingBox(vertices, n, scale);
   const P = new Float64Array(n * n);
   for (let j = 0; j < n; j++) {
@@ -445,7 +445,7 @@ function quadraticForm(P: Float64Array, v: Float64Array, n: number) {
 }
 
 // "converged" and "maxit" read the same for every method in the family; the
-// other stops name the method's localizing set, as `[lead, explanation?]` lines.
+// other stops name the method's localizing set, as `[lead, explanation?]` constraints.
 export function buildFooter(termination: Termination, iterationCount: number, solveTime: number, stops: Partial<Record<Termination, [lead: string, explanation?: string]>>) {
   const [lead, explanation] = stops[termination] ?? ["Did not converge"];
   return `${solveFooter(termination === "converged", iterationCount, solveTime, lead)}\n${explanation ? `${explanation}\n` : ""}`;

@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { Lines, Vec } from "@lpviz/math/types";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import { cuttingPlane, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid, ellipsoidStride, localizingSetStride } from "../src/ellipsoid";
 import { footerOf, lastIterate, rowsOf } from "./fixtures";
 
 // Three-variable regions as half-spaces [a1, a2, a3, b] (a'x <= b).
-const BOX: Lines = [
+const BOX: Constraint[] = [
   [1, 0, 0, 3],
   [-1, 0, 0, 1],
   [0, 1, 0, 2],
@@ -15,13 +15,13 @@ const BOX: Lines = [
 ];
 // the box with one corner sliced off, so a random objective can land on a
 // non-axis-aligned facet
-const SLICED: Lines = [...BOX, [1, 1, 1, 6]];
+const SLICED: Constraint[] = [...BOX, [1, 1, 1, 6]];
 
 const det3 = (a: ArrayLike<number>, b: ArrayLike<number>, c: ArrayLike<number>) =>
   a[0]! * (b[1]! * c[2]! - b[2]! * c[1]!) - a[1]! * (b[0]! * c[2]! - b[2]! * c[0]!) + a[2]! * (b[0]! * c[1]! - b[1]! * c[0]!);
 
 // Brute-force vertex enumeration: every feasible intersection of three planes.
-function verticesOf(planes: Lines): Vec[] {
+function verticesOf(planes: Constraint[]): Vec[] {
   const out: Vec[] = [];
   for (let i = 0; i < planes.length; i++)
     for (let j = i + 1; j < planes.length; j++)
@@ -48,7 +48,7 @@ const QUERY_POINTS: QueryPoint[] = ["chebyshev", "analytic", "volumetric"];
 const shared = { maxit: 2000, tol: 1e-6, rayShoot: true, initialScale: 1.5 };
 const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 const value = (c: Float64Array, p: ArrayLike<number>) => c[0]! * p[0]! + c[1]! * p[1]! + c[2]! * p[2]!;
-const feasible = (planes: Lines, p: ArrayLike<number>) => planes.every((q) => q[0] * p[0]! + q[1] * p[1]! + q[2] * p[2]! <= q[3]! + 1e-6);
+const feasible = (planes: Constraint[], p: ArrayLike<number>) => planes.every((q) => q[0] * p[0]! + q[1] * p[1]! + q[2] * p[2]! <= q[3]! + 1e-6);
 
 describe("ellipsoid family in three variables", () => {
   for (const [name, planes] of [
@@ -101,7 +101,7 @@ describe("ellipsoid family in three variables", () => {
   test("the 2-variable packed layout is unchanged", () => {
     expect(ellipsoidStride(2)).toBe(5);
     expect(localizingSetStride(2)).toBe(2);
-    const square: Lines = [
+    const square: Constraint[] = [
       [1, 0, -4],
       [-1, 0, 6],
       [0, 1, -4],

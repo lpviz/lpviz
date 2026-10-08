@@ -1,16 +1,26 @@
 import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath, ResultTextBlock } from "./solverState";
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import type { NumericRow } from "@lpviz/solver-engine/result";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
 
 export type SolverWorkerPayload =
-  | { solver: "ipm"; lines: Lines; objective: VecN; startPoint?: number[]; alphaMax: number; correctorThreshold: number; maxit: number }
-  | { solver: "simplex"; lines: Lines; objective: VecN; startVertex?: number[]; dual: boolean; enteringRule: EnteringRule; leavingRule: LeavingRule }
-  | { solver: "pdhg"; lines: Lines; objective: VecN; startPoint?: number[]; ineq: boolean; halpern: boolean; maxit: number; eta: number; tau: number; colorByBasis: boolean }
-  | { solver: "central"; vertices: Vertices; lines: Lines; objective: VecN; niter: number; interiorPoint?: number[] }
-  | { solver: "ellipsoid"; vertices: Vertices; lines: Lines; objective: VecN; maxit: number; deepCuts: boolean; rayShoot: boolean; queryPoint: EllipsoidQueryPoint; initialScale: number };
+  | { solver: "ipm"; constraints: Constraint[]; objective: Float64Array; startPoint?: number[]; alphaMax: number; correctorThreshold: number; maxit: number }
+  | { solver: "simplex"; constraints: Constraint[]; objective: Float64Array; startVertex?: number[]; dual: boolean; enteringRule: EnteringRule; leavingRule: LeavingRule }
+  | { solver: "pdhg"; constraints: Constraint[]; objective: Float64Array; startPoint?: number[]; ineq: boolean; halpern: boolean; maxit: number; eta: number; tau: number; colorByBasis: boolean }
+  | { solver: "central"; vertices: Vec[]; constraints: Constraint[]; objective: Float64Array; niter: number; interiorPoint?: number[] }
+  | {
+      solver: "ellipsoid";
+      vertices: Vec[];
+      constraints: Constraint[];
+      objective: Float64Array;
+      maxit: number;
+      deepCuts: boolean;
+      rayShoot: boolean;
+      queryPoint: EllipsoidQueryPoint;
+      initialScale: number;
+    };
 
 export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 

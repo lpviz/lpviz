@@ -2,9 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { encodeSharedState, decodeSharedState } from "./compactUrl";
 import type { SharedAppState } from "./sharedState";
 import type { Vec } from "@lpviz/math/types";
-import { buildConstraintRep } from "@lpviz/polytope/constraintRep";
+import { constraintsFromChain } from "@lpviz/polytope/constraints";
 import { simplex } from "@lpviz/solver-engine/simplex";
-import { isConvexPolygon } from "@lpviz/math/geometry";
+import { isConvexPolygon } from "@lpviz/math/polygon";
 import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/problems";
 
 const MAX_OPTIMUM_ERROR = 0.001;
@@ -40,9 +40,9 @@ function bruteForceOptimum(vertices: Vec[], objective: Vec): number {
 }
 
 function solveForOptimum(vertices: Vec[], objective: Vec): { value: number; x: number; y: number } | null {
-  const { lines } = buildConstraintRep(vertices, true);
-  if (lines.length === 0) return null;
-  const result = simplex(lines, Float64Array.of(objective[0], objective[1]), { tol: 1e-9, dual: false });
+  const constraints = constraintsFromChain(vertices, true);
+  if (constraints.length === 0) return null;
+  const result = simplex(constraints, Float64Array.of(objective[0], objective[1]), { tol: 1e-9, dual: false });
   if (result.status !== "optimal") return null;
   const last = result.iterations[result.iterations.length - 1]!;
   return { value: objective[0] * last[0]! + objective[1] * last[1]!, x: last[0]!, y: last[1]! };

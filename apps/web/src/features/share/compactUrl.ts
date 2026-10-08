@@ -1,4 +1,5 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, isDimension, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
+import { isDimension, vecFrom } from "@lpviz/math/vec";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 import type { Vec } from "@lpviz/math/types";
 
@@ -213,7 +214,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
     const solverMode = SOLVER_MODES[(flags >> 2) & 0x07];
     if (!completionMode || !solverMode) return null;
 
-    const readPoint = (scale: number): Vec => Array.from({ length: dimension }, () => dequantize(readZigZag(bytes, cursor), scale)) as Vec;
+    const readPoint = (scale: number): Vec => vecFrom(Array.from({ length: dimension }, () => dequantize(readZigZag(bytes, cursor), scale)));
 
     const vertexCount = readVarint(bytes, cursor);
     if (vertexCount > 100_000) return null;
@@ -221,7 +222,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
     const running = new Array<number>(dimension).fill(0);
     for (let i = 0; i < vertexCount; i++) {
       for (let j = 0; j < dimension; j++) running[j] = running[j]! + readZigZag(bytes, cursor);
-      vertices.push(running.map((value) => dequantize(value, COORDINATE_SCALE)) as Vec);
+      vertices.push(vecFrom(running.map((value) => dequantize(value, COORDINATE_SCALE))));
     }
 
     const objective: Vec | null = (flags & 0x40) !== 0 ? readPoint(OBJECTIVE_SCALE) : null;

@@ -1,16 +1,16 @@
 import type { CompletionMode, State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/core/store";
-import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains } from "@lpviz/math/geometry";
+import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains, segmentProjection } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
 import { vecDistance } from "@lpviz/math/vec";
-import { type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
-import { deriveRegionFromPoints } from "@lpviz/polytope/regionAssembly";
+import { type Polytope } from "@lpviz/polytope/polytope";
+import { derivePolytope } from "@lpviz/polytope/polytope";
 
 type EditorRegionResult =
   | { status: "nonconvex" }
   | {
       status: "ready";
-      polytope: PolytopeRepresentation;
+      polytope: Polytope;
       promotion: {
         vertices: Vec[];
         interiorPoint: Vec;
@@ -94,7 +94,8 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
     return { status: "nonconvex" };
   }
 
-  const region = deriveRegionFromPoints(sourceVertices, sourceMode === "open" ? "open" : "closed");
+  // a draft is derived as if closed so the fill preview and the panel show the polygon so far
+  const region = derivePolytope(sourceVertices, sourceMode !== "open");
 
   if (geometry.isDerivedClosed) {
     return {
@@ -120,7 +121,7 @@ export function computeEditorRegionForState(state: State): EditorRegionResult {
 
   return {
     status: "ready",
-    polytope: deriveRegionFromPoints(region.vertices, "closed"),
+    polytope: derivePolytope(region.vertices, true),
     promotion: {
       vertices: region.vertices,
       interiorPoint: centroid(region.vertices),
@@ -225,14 +226,12 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      const dx = end[0] - start[0];
-      const dy = end[1] - start[1];
-      const len2 = dx * dx + dy * dy;
+      const { dx, dy, len2, t: projected } = segmentProjection(action.point, start, end);
       if (len2 === 0) {
         return { kind: "noop" };
       }
 
-      const t = Math.max(0, Math.min(1, ((action.point[0] - start[0]) * dx + (action.point[1] - start[1]) * dy) / len2));
+      const t = Math.max(0, Math.min(1, projected));
       const nextVertices = displayVertices.slice();
       nextVertices.splice(action.edgeIndex + 1, 0, [start[0] + t * dx, start[1] + t * dy]);
 

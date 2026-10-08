@@ -44,7 +44,7 @@ function terminalConsumesWheel(target: Element | null, delta: number): boolean {
   return false;
 }
 
-// Firefox reports lines, and some setups report pages; normalize to pixels so
+// Firefox reports constraints, and some setups report pages; normalize to pixels so
 // one notch means the same thing everywhere.
 function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {

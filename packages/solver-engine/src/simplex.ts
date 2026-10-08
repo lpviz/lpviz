@@ -1,6 +1,6 @@
-import { createDenseMatrix, type DenseMatrix, dot, linesToDenseAb, transposedMatVec } from "@lpviz/math/blas";
+import { createDenseMatrix, type DenseMatrix, dot, denseFromConstraints, transposedMatVec } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, VecN, VecNs } from "@lpviz/math/types";
+import type { Constraint } from "@lpviz/math/types";
 import { coordinateHeaders, fmtCoordinates, fmtE, fmtStr, logColumnWidths } from "./fmt";
 import type { LogSection, SolverResult } from "./result";
 
@@ -371,14 +371,14 @@ function createCyclingGuard(initial: PivotRules, tol: number) {
 // The primal vertex a dual basis identifies: the intersection of the n lowest-index constraint
 // planes whose dual variables are basic. Two variables keep their closed form; more go through a
 // dense solve, and a singular support yields the origin either way.
-function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[], n: number, tol: number): Float64Array {
+function primalPointFromDualBasis(constraints: Constraint[], basisIndices: readonly number[], n: number, tol: number): Float64Array {
   const sorted = [...basisIndices].sort((a, b) => a - b);
-  const support = sorted.filter((index) => index < lines.length).slice(0, n);
+  const support = sorted.filter((index) => index < constraints.length).slice(0, n);
   if (support.length < n) return new Float64Array(n);
 
   if (n === 2) {
-    const first = lines[support[0]!]!;
-    const second = lines[support[1]!]!;
+    const first = constraints[support[0]!]!;
+    const second = constraints[support[1]!]!;
     const determinant = first[0] * second[1] - first[1] * second[0];
     if (Math.abs(determinant) <= tol) return new Float64Array(2);
 
@@ -390,7 +390,7 @@ function primalPointFromDualBasis(lines: Lines, basisIndices: readonly number[],
   const matrix = new Float64Array(n * n);
   const rhs = new Float64Array(n);
   for (let row = 0; row < n; row++) {
-    const line = lines[support[row]!]!;
+    const line = constraints[support[row]!]!;
     for (let j = 0; j < n; j++) matrix[row * n + j] = line[j]!;
     rhs[row] = line[n]!;
   }
@@ -418,7 +418,7 @@ function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, bas
   const mRows = A.rows;
   const nCols = A.cols;
   const basis = basisInit.slice();
-  const iterations: VecNs = [];
+  const iterations: Float64Array[] = [];
   const logs: string[] = [];
   const widths = logColumnWidths(dimension);
   const header = `${fmtStr("Iter", 5)} ${coordinateHeaders(dimension)} ${fmtStr("Obj", widths.measure)} ${"basis".padEnd(nCols, " ")}\n`;
@@ -476,7 +476,7 @@ function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, bas
 
 type PhaseRun = { iterations: Float64Array[]; logs: string[] };
 
-// A phase's lines as a log section: the header, one row per iterate, then the closing lines. A
+// A phase's constraints as a log section: the header, one row per iterate, then the closing constraints. A
 // phase that ended optimal closes with its summary line as the footer; one that ended unbounded
 // or infeasible keeps every closing line as a note and names the outcome in the footer.
 function phaseSection({ iterations, logs }: PhaseRun, outcome?: string): LogSection {
@@ -554,7 +554,7 @@ function phase1Problem(b: Float64Array, columnsOf: (gamma: Float64Array) => Dens
   return { columns, bPhase1, aPhase1, cPhase1, phase1Basis };
 }
 
-function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array, objective: Float64Array, cfg: { tol: number; pivotRules: PivotRules }) {
+function solveDualMode(constraints: Constraint[], primalA: DenseMatrix, primalB: Float64Array, objective: Float64Array, cfg: { tol: number; pivotRules: PivotRules }) {
   const { tol, pivotRules } = cfg;
   const dualAFull = transposeMatrix(primalA);
   const bDualFull = Float64Array.from(objective);
@@ -589,7 +589,7 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   const cDual = Float64Array.from(primalB, (value) => -value);
   const { columns: aPhase2, bPhase1, aPhase1, cPhase1, phase1Basis } = phase1Problem(bDual, (gamma) => scaleRows(dualA, gamma));
   const n = primalA.cols;
-  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (_, basisIndices) => primalPointFromDualBasis(lines, basisIndices, n, tol) };
+  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (_, basisIndices) => primalPointFromDualBasis(constraints, basisIndices, n, tol) };
 
   const phase1 = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
 
@@ -610,7 +610,7 @@ function solveDualMode(lines: Lines, primalA: DenseMatrix, primalB: Float64Array
   return simplexResult(phase1, { iterations: phase2.iterations, logs: phase2Logs }, status, "dual");
 }
 
-function primalPointFromSplitTableau(tableauX: VecN, n: number) {
+function primalPointFromSplitTableau(tableauX: Float64Array, n: number) {
   const point = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     point[i] = (tableauX[i] ?? 0) - (tableauX[n + i] ?? 0);
@@ -662,16 +662,16 @@ function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Floa
   return basis;
 }
 
-export function simplex(lines: Lines, objective: VecN, opts: SimplexOptions): SolverResult {
+export function simplex(constraints: Constraint[], objective: Float64Array, opts: SimplexOptions): SolverResult {
   const { tol, dual, startVertex } = opts;
   const pivotRules = resolvePivotRules(opts);
-  const { A: aOriginal, b } = linesToDenseAb(lines);
+  const { A: aOriginal, b } = denseFromConstraints(constraints);
   const m = aOriginal.rows;
   const n = aOriginal.cols;
   const cObjective = Float64Array.from(objective);
 
   if (dual) {
-    return solveDualMode(lines, aOriginal, b, cObjective, { tol, pivotRules });
+    return solveDualMode(constraints, aOriginal, b, cObjective, { tol, pivotRules });
   }
 
   // Phase 1 works on [A⁺, -A⁺, diag(γ)] with the rows flipped nonnegative;

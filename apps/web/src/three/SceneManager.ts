@@ -13,7 +13,7 @@ export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   private layers: Layer[] = [];
-  // The trace-lines pass renders through an impostor when one applies: in 2D
+  // The trace-constraints pass renders through an impostor when one applies: in 2D
   // a world-anchored accumulation cache (so neither camera motion nor a trace
   // append re-renders baked chunks); while the 3D view is in motion a
   // single-sample offscreen composite instead of the MSAA canvas.

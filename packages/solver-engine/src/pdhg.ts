@@ -1,5 +1,5 @@
-import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
-import type { Lines, VecN, VecNs } from "@lpviz/math/types";
+import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, denseFromConstraints, matVec, transposedMatVec } from "@lpviz/math/blas";
+import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
@@ -139,7 +139,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const header = numericLogHeader(dimension, "eps");
 
   const rows: NumericRow[] = [];
-  const iterates: VecNs = [];
+  const iterates: Float64Array[] = [];
   const eps: number[] = [];
   const phases: number[] = [];
   const restartIndices: number[] = [];
@@ -254,11 +254,11 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   };
 }
 
-export function pdhg(lines: Lines, objective: VecN, options: PDHGOptions): SolverResult {
+export function pdhg(constraints: Constraint[], objective: Float64Array, options: PDHGOptions): SolverResult {
   const { ineq, maxit, startPoint } = options;
   assertMaxit(maxit);
 
-  const { A, b } = linesToDenseAb(lines);
+  const { A, b } = denseFromConstraints(constraints);
   const nOrig = A.cols;
   const m = A.rows;
   const x0 = startPoint && startPoint.length === nOrig ? Float64Array.from(startPoint) : undefined;

@@ -1,7 +1,7 @@
 import { ORTHO_MIN_SCALE_FACTOR } from "./projection2d";
 import { Euler, Vector3 } from "three";
 
-import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
+import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/bounds";
 import type { PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "./defaults";
 import { configurePerspectiveCameraFromSnapshot, getPerspectiveDistanceFromSnapshot3D, projectCanvasPointToWorldPlane } from "./projection3d";

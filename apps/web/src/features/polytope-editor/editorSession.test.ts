@@ -313,7 +313,7 @@ describe("computeEditorRegionForState", () => {
     );
     expect(result.status).toBe("ready");
     if (result.status === "ready") {
-      expect(result.polytope.inequalities).toHaveLength(3);
+      expect(result.polytope.constraints).toHaveLength(3);
     }
   });
 });

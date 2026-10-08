@@ -12,7 +12,7 @@ const ROTATE_TAIL_ROWS = 8;
 
 type RenderOptions = { limitVirtualRows?: boolean };
 
-const getMaxLineChars = (lines: string[]) => lines.reduce((m, line) => Math.max(m, ...line.split("\n").map((l) => l.length)), 0);
+const getMaxLineChars = (constraints: string[]) => constraints.reduce((m, line) => Math.max(m, ...line.split("\n").map((l) => l.length)), 0);
 const createVirtualBlock = (row: VirtualResultRow, index: number): ResultTextBlock => ({
   className: "iterate-item",
   text: formatVirtualResultRow(row),

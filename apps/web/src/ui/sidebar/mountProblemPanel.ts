@@ -3,6 +3,7 @@ import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderNullStateLogo } from "@/ui/logo";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
+import { formatConstraint } from "@lpviz/polytope/constraints";
 
 const VARIABLE_NAMES = ["x", "y", "z"];
 
@@ -53,7 +54,7 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
 
     // objective-only updates (every rotation step) must not rebuild the
     // constraint rows; rebuild only when their source actually changed
-    const itemsKey: unknown[] = [state.polytope?.inequalities, state.completionMode, state.inequalitiesMessage];
+    const itemsKey: unknown[] = [state.polytope?.constraints, state.completionMode, state.inequalitiesMessage];
     if (lastItemsKey && itemsKey.every((value, i) => Object.is(value, lastItemsKey![i]))) {
       return;
     }
@@ -65,12 +66,14 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
       return;
     }
     if (!state.polytope) return;
-    const items = state.completionMode === "draft" ? state.polytope.inequalities.slice(0, Math.max(0, state.polytope.inequalities.length - 1)) : state.polytope.inequalities;
-    items.forEach((text, index) => {
+    const { constraints } = state.polytope;
+    // while drafting, the closing edge is not drawn yet, so its constraint is not listed either
+    const listed = state.completionMode === "draft" ? constraints.slice(0, Math.max(0, constraints.length - 1)) : constraints;
+    listed.forEach((constraint, index) => {
       inequalities.append(
         el("div", {
           className: "inequality-item",
-          text,
+          text: formatConstraint(constraint),
           attrs: { "data-index": String(index) },
         }),
       );

@@ -1,5 +1,5 @@
 import { DEFAULT_VIEW_ANGLE, getState, setState } from "@/features/core/store";
-import type { BoundingBox } from "@lpviz/math/geometry";
+import type { BoundingBox } from "@lpviz/math/bounds";
 import { fitViewport2DToBounds } from "@lpviz/viewport/projection2d";
 import { buildResetViewport3DView, fitViewport3DToBounds } from "@lpviz/viewport/view3d";
 import type { ViewportRuntimeContext } from "./context";

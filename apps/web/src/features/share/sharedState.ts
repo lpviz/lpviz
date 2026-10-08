@@ -1,5 +1,6 @@
 import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type Dimension, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
 import type { Vec } from "@lpviz/math/types";
+import { vecFrom } from "@lpviz/math/vec";
 
 export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
 
@@ -89,8 +90,8 @@ export function expandSharedAppState<T>(value: T): T {
 // whether it arrived as the compact codec's tuple or a legacy link's {x, y}.
 function finiteVec(value: unknown, dimension: Dimension): Vec | null {
   const coords: unknown[] | null = Array.isArray(value) ? value : typeof value === "object" && value !== null ? [(value as { x: unknown }).x, (value as { y: unknown }).y] : null;
-  if (!coords || coords.length !== dimension || !coords.every((coordinate) => Number.isFinite(coordinate))) return null;
-  return [...(coords as number[])] as Vec;
+  if (!coords || coords.length !== dimension || !coords.every((coordinate): coordinate is number => typeof coordinate === "number" && Number.isFinite(coordinate))) return null;
+  return vecFrom(coords);
 }
 
 export function buildSharedStatePatch(sharedState: SharedAppState, dimension: Dimension): Partial<State> {

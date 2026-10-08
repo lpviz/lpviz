@@ -1,4 +1,4 @@
-import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/geometry";
+import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
 import { getAvailableViewportSize, getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./types";
 

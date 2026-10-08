@@ -1,4 +1,4 @@
-import type { Lines } from "./types";
+import type { Constraint } from "./types";
 
 export type DenseMatrix = {
   rows: number;
@@ -10,14 +10,14 @@ export function createDenseMatrix(rows: number, cols: number, data?: Float64Arra
   return { rows, cols, data: data ?? new Float64Array(rows * cols) };
 }
 
-export function linesToDenseAb(lines: Lines) {
-  const rows = lines.length;
-  const cols = rows === 0 ? 0 : lines[0]!.length - 1;
+export function denseFromConstraints(constraints: Constraint[]) {
+  const rows = constraints.length;
+  const cols = rows === 0 ? 0 : constraints[0]!.length - 1;
   const data = new Float64Array(rows * cols);
   const b = new Float64Array(rows);
 
   for (let i = 0; i < rows; i++) {
-    const line = lines[i]!;
+    const line = constraints[i]!;
     const rowOffset = i * cols;
     for (let j = 0; j < cols; j++) {
       data[rowOffset + j] = line[j]!;

@@ -1,7 +1,27 @@
 import { getState, setState } from "@/features/core/store";
-import { computeObjectiveRotationStep } from "@lpviz/polytope/objectiveDirection";
+import type { Vec } from "@lpviz/math/types";
+import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/halfSpaces";
+import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 
 const BASE_ROTATION_WAIT_MS = 30;
+
+type RotationDirection = 1 | -1;
+
+// The objective turned by one step. Over an unbounded region the step reverses rather than point
+// the objective into an unbounded direction; when both ways do, it keeps turning so the loop
+// never stalls (the solver reports the unboundedness for those frames).
+function rotateObjective(objectiveVector: Vec, angleStep: number, direction: RotationDirection, polytope: Polytope | null): { next: Vec; direction: RotationDirection } {
+  const angle = Math.atan2(objectiveVector[1], objectiveVector[0]);
+  const magnitude = Math.hypot(objectiveVector[0], objectiveVector[1]);
+  const turned = (way: RotationDirection): Vec => [magnitude * Math.cos(angle + angleStep * way), magnitude * Math.sin(angle + angleStep * way)];
+
+  let nextDirection = direction;
+  if (hasConstraints(polytope) && polytope.kind === "unbounded") {
+    const allowed = ([direction, direction === 1 ? -1 : 1] as const).find((way) => !isObjectiveDirectionUnbounded(polytope.constraints, turned(way)));
+    if (allowed !== undefined) nextDirection = allowed;
+  }
+  return { next: turned(nextDirection), direction: nextDirection };
+}
 
 // the per-step rotation angle, never zero (a zero step would rotate forever)
 export const objectiveAngleStep = (settings: { objectiveAngleStep: number }) => Math.max(0.001, settings.objectiveAngleStep || 0.001);
@@ -31,7 +51,7 @@ export function createRotationController(deps: { computePath: () => Promise<void
   // clear the in-flight flag or re-arm the loop of the current one from its
   // finally block (which would let the loop start overlapping solves)
   let session = 0;
-  let direction: 1 | -1 = 1;
+  let direction: RotationDirection = 1;
 
   const ensureLoop = () => {
     if (!getState().rotateObjectiveMode || rafId !== null) return;
@@ -59,15 +79,11 @@ export function createRotationController(deps: { computePath: () => Promise<void
     if (!state.rotateObjectiveMode || inFlight) return;
     inFlight = true;
     const mySession = session;
-    const rotationStep = computeObjectiveRotationStep({
-      objectiveVector: state.objectiveVector ?? [1, 0],
-      angleStep: objectiveAngleStep(state.solverSettings),
-      rotationDirection: direction,
-      polytope: state.polytope,
-    });
-    direction = rotationStep.nextDirection;
+    if (!state.objectiveVector) return;
+    const step = rotateObjective(state.objectiveVector, objectiveAngleStep(state.solverSettings), direction, state.polytope);
+    direction = step.direction;
     setState({
-      objectiveVector: rotationStep.nextObjective,
+      objectiveVector: step.next,
       highlightIteratePathIndex: null,
     });
     if (getState().traceEnabled) deps.syncTraceCapacity();

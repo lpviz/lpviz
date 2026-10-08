@@ -1,54 +1,54 @@
 import { describe, expect, test } from "bun:test";
-import { deriveRegionFromPoints } from "../src/regionAssembly";
-import { buildConstraintRep } from "../src/constraintRep";
-import { isConvexChain } from "@lpviz/math/geometry";
-import type { Vertices } from "@lpviz/math/types";
+import { constraintsFromChain } from "../src/constraints";
+import { derivePolytope } from "../src/polytope";
+import { isConvexChain } from "@lpviz/math/polygon";
+import type { Vec } from "@lpviz/math/types";
 
-describe("deriveRegionFromPoints", () => {
+describe("derivePolytope", () => {
   test("closed convex polygons are bounded", () => {
-    const square: Vertices = [
+    const square: Vec[] = [
       [0, 0],
       [4, 0],
       [4, 4],
       [0, 4],
     ];
-    expect(deriveRegionFromPoints(square, "closed").kind).toBe("bounded");
+    expect(derivePolytope(square, true).kind).toBe("bounded");
   });
 
   test("an unconstrained open region is degenerate, not empty", () => {
-    expect(deriveRegionFromPoints([[1, 1]], "open").kind).toBe("degenerate");
+    expect(derivePolytope([[1, 1]], false).kind).toBe("degenerate");
     expect(
-      deriveRegionFromPoints(
+      derivePolytope(
         [
           [1, 1],
           [1, 1],
         ],
-        "open",
+        false,
       ).kind,
     ).toBe("degenerate");
   });
 
   test("a single open half-plane is unbounded", () => {
     expect(
-      deriveRegionFromPoints(
+      derivePolytope(
         [
           [0, 0],
           [2, 0],
         ],
-        "open",
+        false,
       ).kind,
     ).toBe("unbounded");
   });
 
   test("an open chain that closes onto itself is bounded", () => {
-    const chain: Vertices = [
+    const chain: Vec[] = [
       [0, 0],
       [1, 0],
       [1, 1],
       [-3, 1],
       [-3, -1],
     ];
-    expect(deriveRegionFromPoints(chain, "open").kind).toBe("bounded");
+    expect(derivePolytope(chain, false).kind).toBe("bounded");
   });
 });
 
@@ -62,7 +62,7 @@ describe("open chain half-plane orientation", () => {
   // Reported against this share link, a four-node chain whose first node sat
   // far outside the triangle the rest described:
   //   https://lpviz.net/?s=AsIABJCr0QH0nI4B78iOApm_qQH0rSmGziCbrAn1xArq284D6q7OBWQA
-  const FAR_FLUNG_CHAIN: Vertices = [
+  const FAR_FLUNG_CHAIN: Vec[] = [
     [171.4888, 116.5114],
     [-50.1616, -22.3379],
     [-16.2806, 4.376],
@@ -71,12 +71,12 @@ describe("open chain half-plane orientation", () => {
 
   // the chain's nodes that lie outside one of its own half-planes, as
   // "node index / line index" pairs
-  const violating = (chain: Vertices) => {
-    const { lines } = buildConstraintRep(chain, false);
+  const violating = (chain: Vec[]) => {
+    const constraints = constraintsFromChain(chain, false);
     const out: string[] = [];
     chain.forEach(([x, y], node) => {
-      lines.forEach(([A, B, C], line) => {
-        if (A * x + B * y - C > 1e-6) out.push(`v${node}/line${line}`);
+      constraints.forEach(([A, B, C], constraint) => {
+        if (A * x + B * y - C > 1e-6) out.push(`v${node}/line${constraint}`);
       });
     });
     return out;
@@ -96,7 +96,7 @@ describe("open chain half-plane orientation", () => {
     // flipped the half-plane above; the same chain at any size must orient
     // the same way
     for (const scale of [1e-5, 1e-3, 1e3]) {
-      const scaled: Vertices = FAR_FLUNG_CHAIN.map(([x, y]) => [x * scale, y * scale]);
+      const scaled: Vec[] = FAR_FLUNG_CHAIN.map(([x, y]) => [x * scale, y * scale]);
       expect(violating(scaled)).toEqual(["v0/line2"]);
     }
   });
@@ -115,12 +115,12 @@ describe("open chain half-plane orientation", () => {
     };
     for (let i = 0; i < 20000; i++) {
       const n = 3 + Math.floor(rnd() * 6);
-      const pts: Vertices = Array.from({ length: n }, () => [(rnd() * 2 - 1) * 100, (rnd() * 2 - 1) * 100]);
+      const pts: Vec[] = Array.from({ length: n }, () => [(rnd() * 2 - 1) * 100, (rnd() * 2 - 1) * 100]);
       if (new Set(pts.map(([x, y]) => `${x},${y}`)).size !== n) continue;
       if (!isConvexChain(pts)) continue;
-      const { lines } = buildConstraintRep(pts, false);
-      for (let e = 0; e + 2 < n && e < lines.length; e++) {
-        const [A, B, C] = lines[e]!;
+      const constraints = constraintsFromChain(pts, false);
+      for (let e = 0; e + 2 < n && e < constraints.length; e++) {
+        const [A, B, C] = constraints[e]!;
         const [px, py] = pts[e + 2]!;
         expect(A * px + B * py - C).toBeLessThanOrEqual(1e-6);
         checked++;
@@ -132,37 +132,37 @@ describe("open chain half-plane orientation", () => {
   test("a right-turning chain and its mirror are both internally valid", () => {
     // these two are mirror images and turn opposite ways, so the fix has to
     // orient them by opposite rules; neither may exclude its own nodes
-    const up: Vertices = [
+    const up: Vec[] = [
       [0, 0],
       [2, 0],
       [2, 2],
     ];
-    const down: Vertices = up.map<[number, number]>(([x, y]) => [x, -y] as [number, number]);
+    const down: Vec[] = up.map(([x, y]) => [x, -y]);
     expect(violating(up).length).toBe(0);
     expect(violating(down).length).toBe(0);
 
     // each keeps the interior on the side its own turn implies
-    const upLines = buildConstraintRep(up, false).lines;
-    const downLines = buildConstraintRep(down, false).lines;
+    const upConstraints = constraintsFromChain(up, false);
+    const downConstraints = constraintsFromChain(down, false);
     // the first edge runs +x in both, so the interior is above in one and below
     // in the other
-    expect(upLines[0]![1]).toBeLessThan(0);
-    expect(downLines[0]![1]).toBeGreaterThan(0);
-    expect(deriveRegionFromPoints(up, "open").kind).not.toBe("empty");
-    expect(deriveRegionFromPoints(down, "open").kind).not.toBe("empty");
+    expect(upConstraints[0]![1]).toBeLessThan(0);
+    expect(downConstraints[0]![1]).toBeGreaterThan(0);
+    expect(derivePolytope(up, false).kind).not.toBe("empty");
+    expect(derivePolytope(down, false).kind).not.toBe("empty");
   });
 
   test("a collinear chain keeps its previous orientation", () => {
     // no turn to read, so the centroid rule decides as before: both edges keep
     // the region above the x-axis (the natural normal for a +x edge is -y)
-    const flat: Vertices = [
+    const flat: Vec[] = [
       [0, 0],
       [1, 0],
       [2, 0],
     ];
-    const { lines } = buildConstraintRep(flat, false);
-    expect(lines.length).toBe(2);
-    for (const [A, B, C] of lines) {
+    const constraints = constraintsFromChain(flat, false);
+    expect(constraints.length).toBe(2);
+    for (const [A, B, C] of constraints) {
       expect(A).toBeCloseTo(0, 9);
       expect(B).toBeLessThan(0);
       expect(C).toBeCloseTo(0, 9);
