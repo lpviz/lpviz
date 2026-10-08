@@ -1,7 +1,8 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
 import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type EditorInteractionState, type HistoryEntry, type State } from "@/features/core/store";
 import type { SaveHistory } from "@/features/history/historyService";
-import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/interactionState";
+import { captureHistoryEntry } from "@/features/history/historyState";
+import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 import type { Vec } from "@lpviz/math/types";
@@ -14,24 +15,18 @@ const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteractio
 };
 
 type DragActionDeps = {
-  canvasManager: ViewportApi;
+  viewportApi: ViewportApi;
   saveHistory: SaveHistory;
   sendPolytope: () => void;
   /** Re-solve the active solver after the start marker moved or reset. */
   onSolverStartMoved: () => void;
 };
 
-export const updatePanControls = (canvasManager: ViewportApi) => {
-  canvasManager.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
+export const updatePanControls = (viewportApi: ViewportApi) => {
+  viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
 };
 
-const captureHistoryEntry = (state: Pick<State, "vertices" | "objectiveVector" | "completionMode">): HistoryEntry => ({
-  vertices: state.vertices.map((v) => [...v]),
-  objectiveVector: state.objectiveVector ? [...state.objectiveVector] : null,
-  completionMode: state.completionMode,
-});
-
-const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, canvasManager: ViewportApi, sendPolytope: () => void) => {
+const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, viewportApi: ViewportApi, sendPolytope: () => void) => {
   const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
   let operation: ConstraintDragTarget["operation"];
 
@@ -65,24 +60,24 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, c
     },
   });
   sendPolytope();
-  canvasManager.draw();
+  viewportApi.draw();
 };
 
 // moves whatever the drag holds (a vertex, a constraint, the start marker or
 // the objective) to the pointer's logical position
-const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { canvasManager, sendPolytope, onSolverStartMoved }: Omit<DragActionDeps, "saveHistory">) => {
+const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { viewportApi, sendPolytope, onSolverStartMoved }: Omit<DragActionDeps, "saveHistory">) => {
   if (dragTarget.kind === "point") {
     const pointIndex = dragTarget.index;
     setState({
       vertices: getState().vertices.map((v, i) => (i === pointIndex ? logicalCoords : v)),
     });
     sendPolytope();
-    canvasManager.draw();
+    viewportApi.draw();
     return;
   }
 
   if (dragTarget.kind === "constraint") {
-    applyConstraintDrag(dragTarget, logicalCoords, canvasManager, sendPolytope);
+    applyConstraintDrag(dragTarget, logicalCoords, viewportApi, sendPolytope);
     return;
   }
 
@@ -94,25 +89,25 @@ const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { canvasMan
       solverStartPoint: off ? [logicalCoords[0] + off[0], logicalCoords[1] + off[1]] : logicalCoords,
     });
     onSolverStartMoved();
-    canvasManager.draw();
+    viewportApi.draw();
     return;
   }
 
   setState({ objectiveVector: logicalCoords });
   sendPolytope();
-  canvasManager.draw();
+  viewportApi.draw();
 };
 
-const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec, canvasManager: ViewportApi) => {
+const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec, viewportApi: ViewportApi) => {
   if (phase === "empty" || phase === "sketching_polytope") {
     setCurrentMouse(logicalCoords);
-    canvasManager.draw();
+    viewportApi.draw();
     return;
   }
 
   if (phase === "awaiting_objective" || phase === "objective_preview") {
     setState({ currentObjective: logicalCoords });
-    canvasManager.draw();
+    viewportApi.draw();
   }
 };
 
@@ -120,7 +115,7 @@ const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec, canvasMan
 // apply) and end, plus the undo-history entry captured at the start and
 // persisted on the first real move.
 export function createDragActions(deps: DragActionDeps) {
-  const { canvasManager, saveHistory, sendPolytope } = deps;
+  const { viewportApi, saveHistory, sendPolytope } = deps;
   let pendingDragHistory: HistoryEntry | null = null;
 
   const persistPendingDragHistory = () => {
@@ -130,8 +125,8 @@ export function createDragActions(deps: DragActionDeps) {
   };
 
   const restoreViewportControls = () => {
-    canvasManager.setControlsBlocked(false);
-    updatePanControls(canvasManager);
+    viewportApi.setControlsBlocked(false);
+    updatePanControls(viewportApi);
   };
 
   const cleanupDragState = () => {
@@ -151,7 +146,7 @@ export function createDragActions(deps: DragActionDeps) {
 
   const handleDragStart = (clientX: number, clientY: number): boolean => {
     const state = getState();
-    const target = getDragStartTarget(canvasManager, state, clientX, clientY);
+    const target = getDragStartTarget(viewportApi, state, clientX, clientY);
     if (!target) return false;
 
     if (target.kind === "objective" || target.kind === "solver-start") {
@@ -163,7 +158,7 @@ export function createDragActions(deps: DragActionDeps) {
       setState({
         editorInteraction: { kind: "dragging", target },
       });
-      canvasManager.setControlsBlocked(true);
+      viewportApi.setControlsBlocked(true);
       return true;
     }
 
@@ -177,7 +172,7 @@ export function createDragActions(deps: DragActionDeps) {
     });
     pendingDragHistory = captureHistoryEntry(state);
     if (target.kind === "point") {
-      canvasManager.setControlsBlocked(true);
+      viewportApi.setControlsBlocked(true);
     }
     return true;
   };
@@ -190,7 +185,7 @@ export function createDragActions(deps: DragActionDeps) {
       return;
     }
 
-    const logicalCoords = getLogicalFromClient(canvasManager, clientX, clientY);
+    const logicalCoords = getLogicalFromClient(viewportApi, clientX, clientY);
     if (initialInteraction.kind === "pending-drag" && exceedsDragThreshold(initialState, clientX, clientY)) {
       setState({
         editorInteraction: {
@@ -198,7 +193,7 @@ export function createDragActions(deps: DragActionDeps) {
           target: initialInteraction.target,
         },
       });
-      canvasManager.setControlsBlocked(true);
+      viewportApi.setControlsBlocked(true);
     }
 
     const state = getState();
@@ -209,7 +204,7 @@ export function createDragActions(deps: DragActionDeps) {
       return;
     }
 
-    updatePointerPreview(phaseSnapshot, logicalCoords, canvasManager);
+    updatePointerPreview(phaseSnapshot, logicalCoords, viewportApi);
   };
 
   const handleDragEnd = () => {

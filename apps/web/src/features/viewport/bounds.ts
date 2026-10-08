@@ -39,8 +39,8 @@ export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePat
   };
 
   const addPath = (path: IteratePath) => {
-    const { points, count, stride } = path;
-    for (let i = 0; i < count; i++) {
+    const { points, stride } = path;
+    for (let i = 0; i < path.count; i++) {
       const base = i * stride;
       addPoint(points[base]!, points[base + 1]!);
       const z = iterateHeight(path, i);

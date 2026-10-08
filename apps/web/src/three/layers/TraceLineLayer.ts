@@ -1,6 +1,6 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { flatXYZ } from "../helpers/flatPositions";
+import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
@@ -75,7 +75,7 @@ export class TraceLineLayer extends ZScaledGroupLayer {
       if (this.assigned.has(entry)) continue;
       if (entry.count < 2) continue;
       const ribbon = freed.pop() ?? this.makeRibbon();
-      ribbon.setPath(flatXYZ(entry), entry.count);
+      ribbon.setPath(iteratePositions(entry), entry.count);
       ribbon.setDepth(is3D);
       ribbon.mesh.userData.traceSeq = this.nextSeq++;
       ribbon.mesh.visible = true;

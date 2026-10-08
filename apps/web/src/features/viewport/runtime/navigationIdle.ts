@@ -6,11 +6,11 @@ export type NavigationIdleTracker = ReturnType<typeof createNavigationIdleTracke
 
 // Drives store.isNavigatingViewport: set when a navigation gesture begins or
 // a frame arrives, cleared VIEWPORT_NAVIGATION_IDLE_MS after the last one.
-export function createNavigationIdleTracker({ shouldUseExternal2DViewport }: { shouldUseExternal2DViewport: () => boolean }) {
+export function createNavigationIdleTracker({ wants2DControls }: { wants2DControls: () => boolean }) {
   let navigationIdleTimeoutId: number | null = null;
 
-  // external 2D xor external 3D owns navigation whenever no transition runs
-  const isExternalViewportNavigationOwned = () => !getState().isTransitioning3D;
+  // the 2D or the 3D controls own navigation whenever no transition runs
+  const controlsOwnNavigation = () => !getState().isTransitioning3D;
 
   const setViewportNavigationActive = (active: boolean) => {
     if (getState().isNavigatingViewport === active) {
@@ -27,7 +27,7 @@ export function createNavigationIdleTracker({ shouldUseExternal2DViewport }: { s
   };
 
   const beginViewportNavigation = () => {
-    if (!isExternalViewportNavigationOwned()) {
+    if (!controlsOwnNavigation()) {
       return;
     }
     clearViewportNavigationTimeout();
@@ -38,7 +38,7 @@ export function createNavigationIdleTracker({ shouldUseExternal2DViewport }: { s
     clearViewportNavigationTimeout();
     navigationIdleTimeoutId = window.setTimeout(() => {
       navigationIdleTimeoutId = null;
-      if (!isExternalViewportNavigationOwned()) {
+      if (!controlsOwnNavigation()) {
         return;
       }
       setViewportNavigationActive(false);
@@ -46,7 +46,7 @@ export function createNavigationIdleTracker({ shouldUseExternal2DViewport }: { s
   };
 
   const notifyViewportNavigationFrame = () => {
-    if (!shouldUseExternal2DViewport()) {
+    if (!wants2DControls()) {
       return;
     }
     beginViewportNavigation();

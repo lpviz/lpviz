@@ -3,7 +3,7 @@ import { iterateHeight, type IteratePath } from "@/features/core/store";
 // Write the first `count` iterates of a path into `dst` as [x, y, z]*count. z is the render-space
 // height from iterateHeight; the zScale and 2D/3D-transition flatten are applied per-layer via
 // object3D.scale.z, never baked here.
-export function writeFlatXYZ(dst: Float32Array, path: IteratePath, count = path.count): void {
+export function writeIteratePositions(dst: Float32Array, path: IteratePath, count = path.count): void {
   const { points, stride } = path;
   for (let i = 0; i < count; i++) {
     const s = i * stride;
@@ -18,17 +18,17 @@ export function writeFlatXYZ(dst: Float32Array, path: IteratePath, count = path.
 // every caller copies it into its own texture or attribute synchronously.
 let scratch = new Float32Array(0);
 
-export function flatXYZ(path: IteratePath): Float32Array {
+export function iteratePositions(path: IteratePath): Float32Array {
   if (scratch.length < path.count * 3) {
     scratch = new Float32Array(path.count * 3);
   }
-  writeFlatXYZ(scratch, path);
+  writeIteratePositions(scratch, path);
   return scratch;
 }
 
 // One [x, y, z] for the iterate at `index`, used by the single-point sprite
 // layers (star / highlight). Returns null when the index is out of range.
-export function flatPointXYZ(path: IteratePath, index: number): [number, number, number] | null {
+export function iteratePosition(path: IteratePath, index: number): [number, number, number] | null {
   if (index < 0 || index >= path.count) return null;
   const base = index * path.stride;
   return [path.points[base]!, path.points[base + 1]!, iterateHeight(path, index)];

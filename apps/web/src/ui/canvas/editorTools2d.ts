@@ -7,7 +7,7 @@ import type { EditorTools, EditorToolsDeps } from "./editorTools";
 export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
   const drag = createDragActions(deps);
   const edit = createEditActions(deps);
-  updatePanControls(deps.canvasManager);
+  updatePanControls(deps.viewportApi);
   return {
     handleDragStart: drag.handleDragStart,
     handleDragMove: drag.handleDragMove,

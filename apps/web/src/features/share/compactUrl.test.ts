@@ -175,6 +175,11 @@ describe("compact share links", () => {
     expect(roundTrip(BASE)!.dimension).toBe(2);
   });
 
+  test("a two-variable link is the v2 payload, byte for byte", () => {
+    expect(encodeSharedState(BASE)).toBe("AlEABf_wBN_UA4DiCZ-cAcC4AsCpB7-pB4DxBJ-NBt_UA4DUYYCfSQA");
+    expect(encodeSharedState({ ...BASE, dimension: 2 })).toBe(encodeSharedState(BASE));
+  });
+
   test("still reads v2 links, which carry two coordinates and no dimension byte", () => {
     // frozen payloads from the v2 encoder: BASE, then BASE as a simplex link with a
     // dragged start point, a z scale, the 3D flag and one non-default setting

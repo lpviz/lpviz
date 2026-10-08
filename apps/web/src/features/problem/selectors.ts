@@ -22,7 +22,8 @@ export const isEmptyRegion = (state: Pick<EditorState, "polytope">): boolean => 
 export const hasObjective = (state: Pick<EditorState, "objectiveVector">): boolean => state.objectiveVector !== null;
 
 /** The drawing is finished, derived, and has an objective: everything a solve needs. */
-export const isReadyForSolvers = (state: EditorState): boolean => computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope) && state.objectiveVector !== null;
+export const isReadyForSolvers = (state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective" | "polytope">): boolean =>
+  computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope) && state.objectiveVector !== null;
 
 /** An unbounded region recedes along `direction`, so maximizing it has no optimum. */
 export const isUnboundedDirection = (state: Pick<EditorState, "polytope">, direction: Vec): boolean =>

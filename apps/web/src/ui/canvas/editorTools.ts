@@ -20,7 +20,7 @@ export type EditorTools = {
 };
 
 export type EditorToolsDeps = {
-  canvasManager: ViewportApi;
+  viewportApi: ViewportApi;
   saveHistory: SaveHistory;
   sendPolytope: () => void;
   handleUndoRedo: HandleUndoRedo;

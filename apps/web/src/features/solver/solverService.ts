@@ -1,13 +1,12 @@
-import { updateIteratePathsWithTrace } from "@/features/core/store";
+import { setIterateResult } from "@/features/solver/iterateStore";
 import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, SolverWorkerSuccessResponse, VirtualResultRow } from "@/features/solver/types";
 import { fmtCoordinates, fmtExp, fmtExpUnsigned, fmtIteration, logColumnWidths } from "@lpviz/solver-engine/fmt";
 
 // Push an unpacked worker result into the store's iterate fields and hand its
 // log to the result panel.
 export function applySolverResult({ result }: SolverWorkerSuccessResponse, updateResult: (payload: ResultRenderPayload) => void): void {
-  const { iterations, log, phases, restartIndices, ellipsoids, localizingSets } = result;
-  updateIteratePathsWithTrace(iterations, phases, restartIndices, ellipsoids, localizingSets);
-  updateResult(renderPayload(log));
+  setIterateResult(result);
+  updateResult(renderPayload(result.log));
 }
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {

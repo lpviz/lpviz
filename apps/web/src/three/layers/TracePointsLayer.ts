@@ -2,7 +2,7 @@ import { getState, MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/s
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { PointsMaterial } from "three";
 import { BufferAttribute, DynamicDrawUsage } from "three";
-import { flatXYZ } from "../helpers/flatPositions";
+import { iteratePositions } from "../helpers/iteratePositions";
 import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
@@ -39,7 +39,7 @@ const tracePointPositionCache = new WeakMap<object, Float32Array>();
 function getCachedTracePointPositions(entry: TraceEntry) {
   const cached = tracePointPositionCache.get(entry);
   if (cached) return cached;
-  const sampled = entry.count === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(flatXYZ(entry), entry.count));
+  const sampled = entry.count === 0 ? new Float32Array() : new Float32Array(buildTraceSamplePositions(iteratePositions(entry), entry.count));
   tracePointPositionCache.set(entry, sampled);
   return sampled;
 }

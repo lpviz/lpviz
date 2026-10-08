@@ -3,7 +3,7 @@ import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot"
 import { Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { flatPointXYZ } from "../helpers/flatPositions";
+import { iteratePosition } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds } from "../helpers/hugeBounds";
@@ -155,7 +155,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
       const segments = this.slots[used]!;
-      const iterate = flatPointXYZ(raw.iteratePath, index);
+      const iterate = iteratePosition(raw.iteratePath, index);
       if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)) {
         continue;
       }
@@ -180,7 +180,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
       this.polygon.visible = false;
       return;
     }
-    const iterate = flatPointXYZ(raw.iteratePath, index);
+    const iterate = iteratePosition(raw.iteratePath, index);
     const written = this.writePolygon(raw.iterateLocalizingSets, index, iterate?.[2] ?? 0);
     if (written === 0) {
       this.polygon.visible = false;

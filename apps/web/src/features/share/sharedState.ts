@@ -1,11 +1,25 @@
-import { COMPLETION_MODES, SOLVER_MODES, type CompletionMode, type Dimension, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type CompletionMode, type Dimension, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import type { SolverSettingUpdater } from "@/features/solver/solverState";
 import type { Vec } from "@lpviz/math/types";
 import { vecFrom } from "@lpviz/math/vec";
+import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
+type SharedSettingKey = keyof ShareSettings;
 
-// shared with every solver mode, on top of the active control's own keys
-export const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
+// shared with every solver mode, on top of the active mode's own keys
+const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
+
+// the settings each solver mode puts in a link
+const SOLVER_SHARE_KEYS: Record<SolverMode, readonly SharedSettingKey[]> = {
+  central: ["centralPathIter"],
+  ipm: ["alphaMax", "correctorThreshold", "maxitIPM"],
+  simplex: ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"],
+  ellipsoid: ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"],
+  pdhg: ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"],
+};
+
+const SHARED_SETTING_KEYS: readonly SharedSettingKey[] = [...GLOBAL_SHARE_KEYS, ...Object.values(SOLVER_SHARE_KEYS).flat()];
 
 export type SharedAppState = {
   /** how many coordinates every point carries; absent in links from before the 3-variable editor (two) */
@@ -21,73 +35,39 @@ export type SharedAppState = {
   is3DMode?: boolean;
 };
 
-// Decode-only since links became base64url (see compactUrl.ts): this maps the
-// short keys of the older JSONCrush payloads back to their full names, so links
-// shared before that change still open. Every key that ever shipped stays here
-// ("E"/"L" carried the simplex pivot rules); a retired key such as "w"
-// (ipmColorByPhase) or "u" (zAxisOffsetOnly) may still appear in old links.
-const shareKeyMap = {
-  vertices: "v",
-  completionMode: "k",
-  objective: "o",
-  solverMode: "s",
-  settings: "g",
-  zScale: "l",
-  is3DMode: "b",
-  alphaMax: "a",
-  correctorThreshold: "f",
-  maxitIPM: "i",
-  simplexDualMode: "d",
-  simplexEnteringRule: "E",
-  simplexLeavingRule: "L",
-  pdhgEta: "e",
-  pdhgTau: "t",
-  maxitPDHG: "p",
-  pdhgIneqMode: "m",
-  pdhgHalpernMode: "j",
-  pdhgColorByBasis: "h",
-  centralPathIter: "c",
-  maxitEllipsoid: "n",
-  ellipsoidDeepCuts: "u",
-  ellipsoidRayShoot: "z",
-  // every lowercase letter is taken; uppercase never collides with them
-  ellipsoidQueryPoint: "Q",
-  ellipsoidInitialScale: "w",
-  objectiveAngleStep: "r",
-  objectiveRotationSpeed: "q",
-} as const;
-
-const expandedShareKeyMap = Object.fromEntries(Object.entries(shareKeyMap).map(([key, value]) => [value, key])) as Record<string, string>;
-
-const FORBIDDEN_SHARE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-
-function transformShareObject<T>(value: T, keyMap: Record<string, string>): T {
-  if (value === null || value === undefined || typeof value !== "object") {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => transformShareObject(item, keyMap)) as unknown as T;
-  }
-
-  const result = Object.create(null) as Record<string, unknown>;
-  for (const [key, nestedValue] of Object.entries(value as Record<string, unknown>)) {
-    const mappedKey = keyMap[key] || key;
-    if (FORBIDDEN_SHARE_KEYS.has(mappedKey)) {
-      continue;
-    }
-    result[mappedKey] = transformShareObject(nestedValue, keyMap);
-  }
-  return result as T;
+/** The settings a link for `mode` carries: the global ones and the mode's own. */
+export function collectShareSettings(settings: SolverSettings, mode: SolverMode): ShareSettings {
+  const shared: ShareSettings = {};
+  const copy = <K extends SharedSettingKey>(key: K) => {
+    shared[key] = settings[key];
+  };
+  for (const key of GLOBAL_SHARE_KEYS) copy(key);
+  for (const key of SOLVER_SHARE_KEYS[mode]) copy(key);
+  return shared;
 }
 
-export function expandSharedAppState<T>(value: T): T {
-  return transformShareObject(value, expandedShareKeyMap);
+// The share payload is untrusted. A value reaches the store only when it has
+// the default's shape: a finite number, a boolean, or one of the engine's rule
+// names. Anything else is dropped so a hand-edited link can neither blank a
+// <select> nor throw inside the settings panel's store subscriber.
+function isValidSharedSetting<K extends SharedSettingKey>(key: K, value: unknown): value is SolverSettings[K] {
+  if (key === "simplexEnteringRule") return isEnteringRule(value);
+  if (key === "simplexLeavingRule") return isLeavingRule(value);
+  const fallback: unknown = DEFAULT_SOLVER_SETTINGS[key];
+  return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
 
-// The shared payload is the only untrusted input path in the app: a crafted
-// link must not be able to push NaN or arbitrary values into the store. A point
-// is kept only when it has the problem's dimension and finite coordinates,
-// whether it arrived as the compact codec's tuple or a legacy link's {x, y}.
+/** Push every valid shared setting into the store; unknown keys and malformed values are ignored. */
+export function applySharedSettings(settings: ShareSettings, update: SolverSettingUpdater): void {
+  for (const key of SHARED_SETTING_KEYS) {
+    const value: unknown = settings[key];
+    if (isValidSharedSetting(key, value)) update(key, value);
+  }
+}
+
+// A point is kept only when it has the problem's dimension and finite coordinates, whether it
+// arrived as the compact codec's tuple or a legacy link's {x, y}: a crafted link must not be able
+// to push NaN or arbitrary values into the store.
 function finiteVec(value: unknown, dimension: Dimension): Vec | null {
   const coords: unknown[] | null = Array.isArray(value) ? value : typeof value === "object" && value !== null ? [(value as { x: unknown }).x, (value as { y: unknown }).y] : null;
   if (!coords || coords.length !== dimension || !coords.every((coordinate): coordinate is number => typeof coordinate === "number" && Number.isFinite(coordinate))) return null;

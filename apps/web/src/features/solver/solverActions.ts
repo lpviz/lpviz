@@ -1,10 +1,11 @@
-import { getState, resetTraceState, setState, setTraceCapacity, on, type SolverMode } from "@/features/core/store";
+import { getState, on, setState, type SolverMode } from "@/features/core/store";
 import { isReadyForSolvers } from "@/features/problem/selectors";
-import { createSolverControls, type SolverControl, type SolverSettingUpdater } from "@/features/solver/solverControls";
+import { resetTraceState, setTraceCapacity } from "@/features/solver/iterateStore";
 import { createReplayController } from "@/features/solver/replayController";
-import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
+import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createSolveRunner } from "@/features/solver/solveRunner";
+import type { SolverSettingUpdater } from "@/features/solver/solverState";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type SolverActions = {
@@ -12,7 +13,8 @@ export type SolverActions = {
   setActiveSolverMode: (mode: SolverMode, solve?: boolean) => void;
   setTraceEnabled: (enabled: boolean) => void;
   startRotation: () => void;
-  stopRotation: () => void;
+  /** stop the objective rotation and any replay */
+  stopMotion: () => void;
   toggleReplay: () => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
   invalidatePendingSolveResults: () => void;
@@ -20,42 +22,32 @@ export type SolverActions = {
   clearComputedState: () => void;
   setConstraintHighlight: (index: number | null) => void;
   setIterateHighlight: (index: number | null) => void;
-  solverControls: SolverControl[];
   destroy: () => void;
 };
 
-export function createSolverActions(getCanvasManager: () => ViewportApi | null): SolverActions {
+export function createSolverActions(getViewportApi: () => ViewportApi | null): SolverActions {
   let iterateHoverActive = false;
-  const present = createResultPresenter({ getCanvasManager });
+  const presenter = createResultPresenter({ getViewportApi });
 
   const updateSolverSetting: SolverSettingUpdater = (key, value) =>
     setState({
       solverSettings: { ...getState().solverSettings, [key]: value },
     });
-  const solverControls = createSolverControls({ updateSolverSetting });
-  const getSolverControl = (mode: SolverMode) => solverControls.find((c) => c.mode === mode);
 
   const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
 
   const replay = createReplayController({
-    getCanvasManager,
+    getViewportApi,
     isIterateHoverActive: () => iterateHoverActive,
   });
-  const { computePath, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ getCanvasManager, present, replay, getSolverControl });
+  const { solve, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ getViewportApi, presenter, replay });
 
   const rotation = createRotationController({
-    computePath,
+    solve,
     syncTraceCapacity,
-    hasCanvas: () => getCanvasManager() !== null,
+    hasCanvas: () => getViewportApi() !== null,
   });
-  const setRotationActive = (active: boolean) => {
-    replay.cancel();
-    if (!active) rotation.cancel();
-    else rotation.resetTiming();
-    setState({ rotateObjectiveMode: active, highlightIteratePathIndex: null });
-    if (!active) present.restoreFullVirtualResult();
-  };
-  const stopActiveMotion = () => {
+  const stopMotion = () => {
     const s = getState();
     const wasRotating = s.rotateObjectiveMode;
     if (!wasRotating && !s.replayActive) return;
@@ -66,29 +58,29 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
       rotateObjectiveMode: false,
       highlightIteratePathIndex: null,
     });
-    if (wasRotating) present.restoreFullVirtualResult();
+    if (wasRotating) presenter.restoreFullVirtualResult();
   };
   const handleProblemChange = () => {
     const s = getState();
     if (!isReadyForSolvers(s)) {
       invalidatePendingSolveResults();
-      stopActiveMotion();
+      stopMotion();
       clearComputedState();
       return;
     }
     if (!s.rotateObjectiveMode) {
       resetTraceState();
-      void computePath();
+      void solve();
       return;
     }
-    void computePath().finally(() => rotation.rearm());
+    void solve().finally(() => rotation.rearm());
   };
   const setTraceEnabled = (enabled: boolean) => {
-    const cm = getCanvasManager();
+    const viewportApi = getViewportApi();
     setState({ traceEnabled: enabled });
     if (!enabled) {
       resetTraceState();
-      cm?.draw();
+      viewportApi?.draw();
     } else syncTraceCapacity();
   };
   const startRotation = () => {
@@ -97,43 +89,44 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
       syncTraceCapacity();
       resetTraceState();
     }
-    setRotationActive(true);
+    replay.cancel();
+    setState({ rotateObjectiveMode: true, highlightIteratePathIndex: null });
     rotation.begin();
   };
   const recomputeIfModeActive = (mode: SolverMode) => {
-    if (!getState().rotateObjectiveMode && getState().solverMode === mode) void computePath();
+    if (!getState().rotateObjectiveMode && getState().solverMode === mode) void solve();
   };
   const resetTraceAndRedrawIfNeeded = () => {
     if (getState().traceBuffer.length === 0) return;
     resetTraceState();
-    getCanvasManager()?.draw();
+    getViewportApi()?.draw();
   };
-  const setActiveSolverMode = (mode: SolverMode, solve = false) => {
+  const setActiveSolverMode = (mode: SolverMode, solveNow = false) => {
     invalidatePendingSolveResults();
     if (getState().solverMode !== mode) resetTraceAndRedrawIfNeeded();
     setState({ solverMode: mode });
-    if (solve && !getState().rotateObjectiveMode) void computePath();
+    if (solveNow && !getState().rotateObjectiveMode) void solve();
   };
   const setConstraintHighlight = (index: number | null) => {
-    const cm = getCanvasManager();
-    if (!cm || getState().highlightIndex === index) return;
+    const viewportApi = getViewportApi();
+    if (!viewportApi || getState().highlightIndex === index) return;
     setState({ highlightIndex: index });
-    cm.draw();
+    viewportApi.draw();
   };
   const setIterateHighlight = (index: number | null) => {
-    const cm = getCanvasManager();
-    if (!cm) return;
+    const viewportApi = getViewportApi();
+    if (!viewportApi) return;
     iterateHoverActive = index !== null;
     if (getState().highlightIteratePathIndex === index) return;
     setState({ highlightIteratePathIndex: index });
-    cm.draw();
+    viewportApi.draw();
   };
   let wasNavigatingViewport = getState().isNavigatingViewport;
   const controller = new AbortController();
   on(
     ["isNavigatingViewport"],
     ({ isNavigatingViewport }) => {
-      if (wasNavigatingViewport && !isNavigatingViewport) present.flushDeferred();
+      if (wasNavigatingViewport && !isNavigatingViewport) presenter.flushDeferred();
       wasNavigatingViewport = isNavigatingViewport;
     },
     controller.signal,
@@ -143,7 +136,7 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
     setActiveSolverMode,
     setTraceEnabled,
     startRotation,
-    stopRotation: stopActiveMotion,
+    stopMotion,
     toggleReplay: replay.toggle,
     recomputeIfModeActive,
     invalidatePendingSolveResults,
@@ -151,7 +144,6 @@ export function createSolverActions(getCanvasManager: () => ViewportApi | null):
     clearComputedState,
     setConstraintHighlight,
     setIterateHighlight,
-    solverControls,
     destroy: () => {
       rotation.cancel();
       // stop any active replay; its RAF loop would otherwise keep mutating

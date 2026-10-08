@@ -5,7 +5,7 @@ import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
 export type ViewportActions = ReturnType<typeof createViewportActions>;
 
-export function createViewportActions(getCanvasManager: () => ViewportApi | null, initialSidebarWidth: number) {
+export function createViewportActions(getViewportApi: () => ViewportApi | null, initialSidebarWidth: number) {
   let currentSidebarWidth = initialSidebarWidth;
   // Pixels along the top of the canvas covered by the problem gallery while
   // it is open. Zoom-to-fit keeps the region below it, so a preset picked from
@@ -15,15 +15,15 @@ export function createViewportActions(getCanvasManager: () => ViewportApi | null
     topInset = Math.max(0, px);
   };
   const syncSidebarViewport = () => {
-    const cm = getCanvasManager();
+    const cm = getViewportApi();
     if (!cm) return;
     cm.setSidebarWidth(currentSidebarWidth);
     cm.updateDimensions();
     cm.draw();
   };
-  const resetView = () => getCanvasManager()?.resetView();
+  const resetView = () => getViewportApi()?.resetView();
   const zoomToFit = () => {
-    const cm = getCanvasManager();
+    const cm = getViewportApi();
     if (!cm) return;
     const state = getState();
     const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
@@ -33,14 +33,14 @@ export function createViewportActions(getCanvasManager: () => ViewportApi | null
     cm.setSidebarWidth(currentSidebarWidth);
   };
   const toggle3D = () => {
-    const cm = getCanvasManager();
+    const cm = getViewportApi();
     if (!cm) return;
     const s = getState();
     if (s.isTransitioning3D) return;
     cm.start3DTransition(!s.is3DMode);
   };
   const setZScale = (value: number) => {
-    const cm = getCanvasManager();
+    const cm = getViewportApi();
     if (!cm) return;
     setState({ zScale: value }); // zScale derives polytope+objective+trace+iterate
     const { is3DMode, isTransitioning3D } = getState();
@@ -48,7 +48,7 @@ export function createViewportActions(getCanvasManager: () => ViewportApi | null
   };
   const setSidebarWidth = (width: number) => {
     currentSidebarWidth = width;
-    const cm = getCanvasManager();
+    const cm = getViewportApi();
     if (!cm) return;
     cm.setSidebarWidth(width);
     cm.draw();

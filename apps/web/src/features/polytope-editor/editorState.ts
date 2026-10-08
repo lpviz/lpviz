@@ -1,5 +1,5 @@
 import type { ViewportState } from "@/features/viewport/viewportState";
-import type { Constraint, Vec } from "@lpviz/math/types";
+import type { Constraint, PointXYZ, Vec } from "@lpviz/math/types";
 import { vecDistance, type Dimension } from "@lpviz/math/vec";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
@@ -9,23 +9,24 @@ export type CompletionMode = (typeof COMPLETION_MODES)[number];
 type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; constraints: Constraint[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
-export type DragViewAnchor3D = { x: number; y: number; z: number };
 
+// In 3D a drag carries the grabbed point as its anchor: pointer rays that miss the floor plane are
+// projected onto the view-aligned plane through it instead (see toLogicalCoords3D).
 export type DragTarget =
-  | { kind: "point"; index: number; viewAnchor3D?: DragViewAnchor3D | undefined }
+  | { kind: "point"; index: number; viewAnchor3D?: PointXYZ | undefined }
   | {
       kind: "constraint";
       operation: ConstraintDragOperation;
       start: Vec;
       normal: Vec;
     }
-  | { kind: "objective"; viewAnchor3D?: DragViewAnchor3D | undefined }
+  | { kind: "objective"; viewAnchor3D?: PointXYZ | undefined }
   | {
       kind: "solver-start";
       // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
       // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
       grabOffset?: Vec;
-      viewAnchor3D?: DragViewAnchor3D | undefined;
+      viewAnchor3D?: PointXYZ | undefined;
     };
 export type EditorInteractionState =
   | { kind: "idle" }
@@ -103,7 +104,7 @@ export const EDITOR_DIRTY: Partial<Record<keyof EditorState, (s: Pick<ViewportSt
   highlightIndex: () => ({ constraints: true }),
 };
 
-export function computeDrawingPhase(state: EditorState): DrawingPhase {
+export function computeDrawingPhase(state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective">): DrawingPhase {
   const verticesCount = state.vertices.length;
   const regionFinished = state.completionMode !== "draft";
   const hasObjective = state.objectiveVector !== null;

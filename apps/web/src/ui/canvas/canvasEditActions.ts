@@ -10,7 +10,7 @@ import {
   getLogicalFromClient,
   solverStartNearLocalPoint,
   worldDistanceForPixels,
-} from "@/features/polytope-editor/interactionState";
+} from "@/features/polytope-editor/hitTesting";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { nearestEdge } from "@lpviz/math/polygon";
@@ -19,7 +19,7 @@ import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 
 type EditActionDeps = {
-  canvasManager: ViewportApi;
+  viewportApi: ViewportApi;
   saveHistory: SaveHistory;
   sendPolytope: () => void;
   handleUndoRedo: HandleUndoRedo;
@@ -32,7 +32,7 @@ type EditActionDeps = {
 
 type ApplyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => void;
 
-function createEditorTransitionApplier({ canvasManager, saveHistory, sendPolytope }: Pick<EditActionDeps, "canvasManager" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
+function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope }: Pick<EditActionDeps, "viewportApi" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
   const commitEdit = (result: { vertices: Vec[]; completionMode: "draft" | "open" | "closed"; interiorPoint: Vec | null }) => {
     saveHistory();
     setState({
@@ -43,9 +43,9 @@ function createEditorTransitionApplier({ canvasManager, saveHistory, sendPolytop
       inequalitiesMessage: null,
       highlightIndex: null,
     });
-    canvasManager.draw();
+    viewportApi.draw();
     sendPolytope();
-    updatePanControls(canvasManager);
+    updatePanControls(viewportApi);
   };
 
   return (transition) => {
@@ -65,15 +65,15 @@ function createEditorTransitionApplier({ canvasManager, saveHistory, sendPolytop
       saveHistory();
       setState({ objectiveVector: transition.objectiveVector });
       sendPolytope();
-      canvasManager.draw();
-      updatePanControls(canvasManager);
+      viewportApi.draw();
+      updatePanControls(viewportApi);
     }
   };
 }
 
 // click, double-click and context-menu edits
 function createPointerEditActions(
-  { canvasManager, onSolverStartMoved, isClickSuppressed }: Pick<EditActionDeps, "canvasManager" | "onSolverStartMoved" | "isClickSuppressed">,
+  { viewportApi, onSolverStartMoved, isClickSuppressed }: Pick<EditActionDeps, "viewportApi" | "onSolverStartMoved" | "isClickSuppressed">,
   applyEditorTransition: ApplyEditorTransition,
 ) {
   // How close (in screen pixels) a click must land to the first vertex to close
@@ -85,21 +85,21 @@ function createPointerEditActions(
     const state = getState();
     if (state.isTransitioning3D) return;
 
-    const local = getLocalFromClient(canvasManager, event.clientX, event.clientY);
+    const local = getLocalFromClient(viewportApi, event.clientX, event.clientY);
 
     // right-clicking the start marker resets it to the solver default
-    if (state.solverStartPoint && solverStartNearLocalPoint(canvasManager, state, local.x, local.y)) {
+    if (state.solverStartPoint && solverStartNearLocalPoint(viewportApi, state, local.x, local.y)) {
       swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
-      canvasManager.draw();
+      viewportApi.draw();
       return;
     }
 
     const {
       geometry: { vertices: displayVertices },
     } = getEditorContext(state);
-    const deleteIndex = findVertexNearLocalPoint(canvasManager, local.x, local.y, displayVertices);
+    const deleteIndex = findVertexNearLocalPoint(viewportApi, local.x, local.y, displayVertices);
     if (deleteIndex === -1) return;
 
     swallow(event);
@@ -114,7 +114,7 @@ function createPointerEditActions(
     const state = getState();
     if (state.isTransitioning3D) return;
 
-    const logicalMouse = getLogicalFromClient(canvasManager, clientX, clientY);
+    const logicalMouse = getLogicalFromClient(viewportApi, clientX, clientY);
     const {
       geometry: { vertices: displayVertices, mode: displayMode },
     } = getEditorContext(state);
@@ -127,7 +127,7 @@ function createPointerEditActions(
       return;
     }
 
-    const edgeIndex = nearestEdge(displayVertices, logicalMouse, worldDistanceForPixels(canvasManager, logicalMouse, EDGE_HIT_RADIUS_PX), displayMode === "closed");
+    const edgeIndex = nearestEdge(displayVertices, logicalMouse, worldDistanceForPixels(viewportApi, logicalMouse, EDGE_HIT_RADIUS_PX), displayMode === "closed");
     if (edgeIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-edge-point",
@@ -140,7 +140,7 @@ function createPointerEditActions(
       }
     }
 
-    const rayIndex = findBoundaryRayNearPoint(canvasManager, logicalMouse);
+    const rayIndex = findBoundaryRayNearPoint(viewportApi, logicalMouse);
     if (rayIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-boundary-ray-point",
@@ -172,12 +172,12 @@ function createPointerEditActions(
     if (state.is3DMode && !drawingPhase && !objectivePhase) return;
 
     if (drawingPhase || objectivePhase) {
-      const point = getLogicalFromClient(canvasManager, event.clientX, event.clientY);
+      const point = getLogicalFromClient(viewportApi, event.clientX, event.clientY);
       applyEditorTransition(
         getEditorTransition(state, {
           kind: "click",
           point,
-          closeThreshold: worldDistanceForPixels(canvasManager, point, CLOSE_HIT_RADIUS_PX),
+          closeThreshold: worldDistanceForPixels(viewportApi, point, CLOSE_HIT_RADIUS_PX),
         }),
       );
     }
@@ -187,7 +187,7 @@ function createPointerEditActions(
 }
 
 // shift+wheel in 3D scales the z axis
-const createWheelHandler = (canvasManager: ViewportApi) => (event: WheelEvent) => {
+const createWheelHandler = (viewportApi: ViewportApi) => (event: WheelEvent) => {
   const { is3DMode, isTransitioning3D, zScale } = getState();
   if (!is3DMode || isTransitioning3D || !event.shiftKey) return;
 
@@ -200,14 +200,14 @@ const createWheelHandler = (canvasManager: ViewportApi) => (event: WheelEvent) =
   const effectiveScale = (zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
   const clampedScale = Math.max(0.01, Math.min(100, effectiveScale));
   setState({ zScale: clampedScale });
-  canvasManager.draw();
+  viewportApi.draw();
 };
 
 const isTextEntryTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 
 function createKeyDownHandler(
-  { canvasManager, handleUndoRedo, showReplayDuration }: Pick<EditActionDeps, "canvasManager" | "handleUndoRedo" | "showReplayDuration">,
+  { viewportApi, handleUndoRedo, showReplayDuration }: Pick<EditActionDeps, "viewportApi" | "handleUndoRedo" | "showReplayDuration">,
   applyEditorTransition: ApplyEditorTransition,
 ) {
   const finishOpenRegion = () => {
@@ -217,7 +217,7 @@ function createKeyDownHandler(
     applyEditorTransition(finishResult);
     if (finishResult.kind !== "edit") return;
     setCurrentMouse(null);
-    canvasManager.set2DPanEnabled(true);
+    viewportApi.set2DPanEnabled(true);
   };
 
   // "+" lengthens the replay, "-" shortens it; the readout shows on every press, including one
@@ -255,7 +255,7 @@ function createKeyDownHandler(
     if (event.key.toLowerCase() === "h") {
       const { objectiveHidden } = getState();
       setState({ objectiveHidden: !objectiveHidden });
-      canvasManager.draw();
+      viewportApi.draw();
     }
     // "=" and "_" are the unshifted/shifted twins of "+" and "-", so both
     // layouts of each key work. Checked after the modifier guard above so
@@ -278,7 +278,7 @@ export function createEditActions(deps: EditActionDeps) {
   const applyEditorTransition = createEditorTransitionApplier(deps);
   return {
     ...createPointerEditActions(deps, applyEditorTransition),
-    handleWheel: createWheelHandler(deps.canvasManager),
+    handleWheel: createWheelHandler(deps.viewportApi),
     handleKeyDown: createKeyDownHandler(deps, applyEditorTransition),
   };
 }

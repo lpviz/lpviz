@@ -6,7 +6,7 @@ import type { ViewportRuntimeContext } from "./runtime/context";
 import { resetViewport2DControlsConfig, setViewport2DControlsConfig } from "./runtime/controls2d";
 import { resetViewport3DControlsConfig } from "./runtime/controls3d";
 import { createCoordsApi } from "./runtime/coords";
-import { createExternalControlsSync } from "./runtime/externalControlsSync";
+import { createControlsSync } from "./runtime/controlsSync";
 import { createLayoutApi } from "./runtime/layout";
 import { createNavigationIdleTracker } from "./runtime/navigationIdle";
 import { resetViewportRenderSnapshot } from "./runtime/snapshot";
@@ -46,16 +46,15 @@ export type ViewportRuntime = ViewportApi & {
 export async function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): Promise<ViewportRuntime> {
   let currentSidebarWidth = 0;
   // Snapshot ownership model. At any instant exactly one source owns the render
-  // snapshot: the external 2D viewport controls, the external 3D orbit controls,
-  // or the transition animator (the transitionController, created below). The
-  // store's is3DMode/isTransitioning3D describe the DESIRED mode; the `*Active`
-  // flags below describe which source is currently WIRED UP. The two
-  // intentionally diverge for the length of a transition: while isTransitioning3D
-  // is true both shouldUseExternal2D/3D() return false, so neither controls
-  // source is active, and the controller's isActive() latches on instead so the
+  // snapshot: the 2D pan/zoom controls, the 3D orbit controls, or the transition
+  // animator (the transitionController, created below). The store's
+  // is3DMode/isTransitioning3D describe the DESIRED mode; the `*Active` flags
+  // below describe which source is currently WIRED UP. The two intentionally
+  // diverge for the length of a transition: while isTransitioning3D is true both
+  // wants2DControls/wants3DControls() return false, so neither controls source
+  // is active, and the controller's isActive() latches on instead so the
   // animator owns the snapshot. Collapsing these into one "mode" enum would
-  // conflate desired vs. wired and lose that lag — see memory note
-  // viewport-ownership-consolidation.
+  // conflate desired vs. wired and lose that lag.
   //
   // managerSnapshot is the snapshot the runtime itself owns (3D controls + the
   // transition animator publish through it). It is an immutable VALUE: only the
@@ -65,16 +64,16 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
   let managerSnapshot: ViewportRenderSnapshot = {
     ...DEFAULT_VIEWPORT_RENDER_SNAPSHOT,
   };
-  let external2DViewportActive = false;
-  let external3DControlsActive = false;
+  let controls2DActive = false;
+  let controls3DActive = false;
   let cachedViewportRect = viewportBridge.getCanvasRect();
 
-  const shouldUseExternal2DViewport = () => {
+  const wants2DControls = () => {
     const state = getState();
     return !state.is3DMode && !state.isTransitioning3D;
   };
 
-  const shouldUseExternal3DControls = () => {
+  const wants3DControls = () => {
     const state = getState();
     return state.is3DMode && !state.isTransitioning3D;
   };
@@ -86,7 +85,7 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
 
   const getViewportRect = () => cachedViewportRect;
 
-  const navigation = createNavigationIdleTracker({ shouldUseExternal2DViewport });
+  const navigation = createNavigationIdleTracker({ wants2DControls });
 
   // the sub-modules reach the fields above only through these accessors
   const ctx: ViewportRuntimeContext = {
@@ -101,17 +100,17 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     setSidebarWidth: (width) => {
       currentSidebarWidth = width;
     },
-    isExternal3DControlsActive: () => external3DControlsActive,
-    shouldUseExternal2DViewport,
+    are3DControlsActive: () => controls3DActive,
+    wants2DControls,
     navigation,
   };
-  const controls = createExternalControlsSync(ctx);
-  const { publishSnapshot, getExternal2DSnapshot, syncManagerPlanarState, syncExternal2DControls } = controls;
+  const controls = createControlsSync(ctx);
+  const { publishSnapshot, get2DControlsSnapshot, syncManagerPlanarState, sync2DControls } = controls;
 
-  const syncExternal3DControls = (enabled: boolean, options: { syncFromSnapshot?: boolean } = {}) => {
-    external3DControlsActive = enabled;
+  const sync3DControls = (enabled: boolean, options: { syncFromSnapshot?: boolean } = {}) => {
+    controls3DActive = enabled;
     if (enabled) {
-      controls.rebuildExternal3DSnapshot();
+      controls.rebuild3DSnapshot();
     }
     controls.publish3DControlsConfig({
       syncFromSnapshot: enabled && options.syncFromSnapshot,
@@ -126,49 +125,49 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
     setManagerSnapshot: ctx.assignManagerSnapshot,
     getViewportRect,
     getSidebarWidth: ctx.getSidebarWidth,
-    shouldUseExternal2DViewport,
-    isExternal3DControlsActive: ctx.isExternal3DControlsActive,
-    getExternal2DSnapshot,
+    wants2DControls,
+    are3DControlsActive: ctx.are3DControlsActive,
+    get2DControlsSnapshot,
     publishSnapshot,
     syncManagerPlanarState,
-    syncExternal2DControls,
-    syncExternal3DControls,
+    sync2DControls,
+    sync3DControls,
     clearActiveNavigation: navigation.clearActiveNavigation,
   });
 
   controls.initialize();
 
-  external2DViewportActive = shouldUseExternal2DViewport();
-  syncExternal2DControls(external2DViewportActive, {
-    syncStateFromSnapshot: external2DViewportActive,
+  controls2DActive = wants2DControls();
+  sync2DControls(controls2DActive, {
+    syncStateFromSnapshot: controls2DActive,
   });
-  syncExternal3DControls(shouldUseExternal3DControls(), {
-    syncFromSnapshot: shouldUseExternal3DControls(),
+  sync3DControls(wants3DControls(), {
+    syncFromSnapshot: wants3DControls(),
   });
-  publishSnapshot(external2DViewportActive ? getExternal2DSnapshot() : managerSnapshot);
+  publishSnapshot(controls2DActive ? get2DControlsSnapshot() : managerSnapshot);
 
   const subscriptions = new AbortController();
   on(
     ["is3DMode", "isTransitioning3D"],
     () => {
-      const nextExternal2DViewportActive = shouldUseExternal2DViewport();
-      const nextExternal3DControlsActive = shouldUseExternal3DControls();
-      const external2DChanged = nextExternal2DViewportActive !== external2DViewportActive;
-      const external3DChanged = nextExternal3DControlsActive !== external3DControlsActive;
+      const next2DControlsActive = wants2DControls();
+      const next3DControlsActive = wants3DControls();
+      const changed2D = next2DControlsActive !== controls2DActive;
+      const changed3D = next3DControlsActive !== controls3DActive;
 
-      if (!external2DChanged && !external3DChanged) {
+      if (!changed2D && !changed3D) {
         return;
       }
 
-      syncExternal2DControls(nextExternal2DViewportActive);
+      sync2DControls(next2DControlsActive);
 
-      if (external3DChanged) {
-        syncExternal3DControls(nextExternal3DControlsActive, {
-          syncFromSnapshot: nextExternal3DControlsActive,
+      if (changed3D) {
+        sync3DControls(next3DControlsActive, {
+          syncFromSnapshot: next3DControlsActive,
         });
       }
 
-      external2DViewportActive = nextExternal2DViewportActive;
+      controls2DActive = next2DControlsActive;
 
       // the transition animator owns the snapshot until it completes; don't let
       // a mode change mid-transition publish a competing controls snapshot
@@ -176,9 +175,9 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
         return;
       }
 
-      if (external2DViewportActive) {
+      if (controls2DActive) {
         syncManagerPlanarState();
-        syncExternal2DControls(true);
+        sync2DControls(true);
         publishSnapshot(managerSnapshot);
         return;
       }
@@ -201,12 +200,12 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
       viewportBridge.invalidate({ layers: false });
     },
     ...createLayoutApi({ ...ctx, controls, transition }),
-    ...createViewFitApi({ ...ctx, applyExternalPerspectivePose: controls.applyExternalPerspectivePose }),
+    ...createViewFitApi({ ...ctx, applyPerspectivePose: controls.applyPerspectivePose }),
     setControlsBlocked: controls.setControlsBlocked,
     set2DPanEnabled: (enabled) => {
       setViewport2DControlsConfig({ panEnabled: enabled });
     },
-    ...createCoordsApi({ ...ctx, getExternal2DSnapshot }),
+    ...createCoordsApi({ ...ctx, get2DControlsSnapshot }),
     getUnboundedClipBounds: () => ({ minX: -VIEWPORT_UNBOUNDED_EXTENT, maxX: VIEWPORT_UNBOUNDED_EXTENT, minY: -VIEWPORT_UNBOUNDED_EXTENT, maxY: VIEWPORT_UNBOUNDED_EXTENT }),
     start3DTransition: (targetMode) => transition.begin(targetMode),
     getCanvasElement: () => viewportBridge.getCanvasElement(),

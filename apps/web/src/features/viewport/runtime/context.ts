@@ -14,8 +14,8 @@ export type ViewportRuntimeContext = {
   refreshViewportRect: () => DOMRect;
   getSidebarWidth: () => number;
   setSidebarWidth: (width: number) => void;
-  // the ownership flag: whether the external 3D orbit controls are wired up
-  isExternal3DControlsActive: () => boolean;
-  shouldUseExternal2DViewport: () => boolean;
+  // the ownership flag: whether the 3D orbit controls are wired up
+  are3DControlsActive: () => boolean;
+  wants2DControls: () => boolean;
   navigation: NavigationIdleTracker;
 };

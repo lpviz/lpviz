@@ -26,7 +26,7 @@ const run = (count: number): VirtualResultPayload => ({
 // all of it. The window must still reach the last row — the iterate the
 // viewport stars — and every shown row must keep its own index for hovering.
 describe("rotation row window", () => {
-  const presenter = createResultPresenter({ getCanvasManager: () => null });
+  const presenter = createResultPresenter({ getViewportApi: () => null });
   const shown = () => {
     const rows = getState().resultVirtualRows;
     return Array.from({ length: rows.length }, (_, i) => rows.at(i)!);

@@ -10,11 +10,13 @@ import type { Vec } from "@lpviz/math/types";
 
 // v2 added the extended-flags byte (and with it the solver start point); v3 a
 // dimension byte after it, with that many coordinates per vertex, objective and
-// start point. v1 and v2 are still read: their headers are shorter and carry
-// two coordinates. Bumping rather than redefining a version matters even when
-// it barely escaped — a stale link decoded against the wrong header layout
-// would not fail, it would silently load a *different* problem, which is the
-// exact failure this format was written to eliminate.
+// start point. A two-variable problem is still written as v2, so its links are
+// the same bytes they always were; v1 and v2 are still read, their headers
+// being shorter and carrying two coordinates. Bumping rather than redefining a
+// version matters even when it barely escaped — a stale link decoded against
+// the wrong header layout would not fail, it would silently load a *different*
+// problem, which is the exact failure this format was written to eliminate.
+const PLANAR_VERSION = 2;
 const VERSION = 3;
 const MIN_VERSION = 1;
 // 1e-4 of a world unit is far below one screen pixel at any usable zoom, and vertices are where the
@@ -136,8 +138,9 @@ const SETTINGS: readonly SettingCodec[] = [
 // ─── encode / decode ────────────────────────────────────────────────────────
 
 export function encodeSharedState(state: SharedAppState): string {
-  const bytes: number[] = [VERSION];
   const dimension = state.dimension ?? 2;
+  const version = dimension === 2 ? PLANAR_VERSION : VERSION;
+  const bytes: number[] = [version];
   // the first `dimension` coordinates of a point, or null when any is missing or not finite
   const coordinates = (point: Vec | null | undefined): number[] | null => {
     if (point == null) return null;
@@ -155,7 +158,7 @@ export function encodeSharedState(state: SharedAppState): string {
   const start = coordinates(state.solverStartPoint);
   bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (objective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
   bytes.push(start ? HAS_SOLVER_START : 0);
-  bytes.push(dimension);
+  if (version >= 3) bytes.push(dimension);
 
   const vertices = state.vertices ?? [];
   writeVarint(bytes, vertices.length);
