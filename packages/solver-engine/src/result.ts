@@ -15,7 +15,7 @@ export interface NumericRow {
 
 /**
  * One printed section: a header line, one row per iterate (preformatted text
- * or the columns to format), the closing constraints that are not iterates, and a
+ * or the columns to format), the closing lines that are not iterates, and a
  * footer. A log with several sections is a phased run (simplex).
  */
 export interface LogSection {
@@ -38,11 +38,40 @@ export interface SolverResult {
   /** a phase label per iterate: simplex's phase, pdhg's basis hash */
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
-  /** the ellipsoid family's shape per iterate, packed as ellipsoidStride(n) values (see ellipsoid.ts) */
+  /** the ellipsoid family's shape per iterate, packed as ellipsoidStride(n) values (see localization.ts) */
   ellipsoids?: Float64Array | undefined;
-  /** the cutting planes' localizing set per iterate, localizingSetStride(n) values per entry between polygonOffsets[i] and [i + 1] */
-  polygonPoints?: Float64Array | undefined;
-  polygonOffsets?: Uint32Array | undefined;
+  /** the cutting planes' localizing set per iterate, localizingSetStride(n) values per entry between localizingSetOffsets[i] and [i + 1] */
+  localizingSetPoints?: Float64Array | undefined;
+  localizingSetOffsets?: Uint32Array | undefined;
+  /** simplex: how the run ended */
   status?: "optimal" | "unbounded" | "infeasible" | undefined;
+  /** simplex: which LP it walked */
   mode?: "primal" | "dual" | undefined;
+}
+
+/** The lockstep record of a run: one point, one log row and one convergence measure per iterate. */
+export class NumericTrace {
+  readonly iterations: Float64Array[] = [];
+  readonly rows: NumericRow[] = [];
+  readonly convergence: number[] = [];
+
+  get count(): number {
+    return this.iterations.length;
+  }
+
+  record(point: Float64Array, objective: number, infeasibility: number, convergence: number): void {
+    this.rows.push({ iteration: this.iterations.length + 1, point, objective, infeasibility, convergence });
+    this.iterations.push(point);
+    this.convergence.push(convergence);
+  }
+
+  /** Mark the last recorded iterate as a restart (pdhg's Halpern scheme). */
+  markRestart(): void {
+    const last = this.rows[this.rows.length - 1];
+    if (last) last.restart = true;
+  }
+
+  result(header: string, footer: string, extras: Partial<SolverResult> = {}): SolverResult {
+    return { iterations: this.iterations, convergence: this.convergence, log: [{ header, rows: this.rows, footer }], ...extras };
+  }
 }

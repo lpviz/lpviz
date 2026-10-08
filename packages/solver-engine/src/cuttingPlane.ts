@@ -1,24 +1,10 @@
-import { dot, denseFromConstraints } from "@lpviz/math/blas";
-import { solveDenseSystem } from "@lpviz/math/lapack";
+import { type DenseMatrix, denseFromConstraints, dot, quadraticForm as denseQuadraticForm } from "@lpviz/math/blas";
+import { cholesky, invertFromCholesky, logDetFromCholesky } from "@lpviz/math/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import {
-  FEASIBILITY_TOLERANCE,
-  Incumbent,
-  appendIncumbent,
-  buildFooter,
-  clipPolygon,
-  ellipsoidLogHeader,
-  localizingSetStride,
-  mostViolatedConstraint,
-  newTrace,
-  packPolygons,
-  recordIterate,
-  regionBoundingBox,
-  type Termination,
-} from "./ellipsoid";
+import { assertMaxit } from "./limits";
+import { FEASIBILITY_TOLERANCE, Incumbent, LocalizationTrace, localizationFooter, localizationLogHeader, mostViolatedConstraint, regionBoundingBox, type Termination } from "./localization";
 import type { SolverResult } from "./result";
-import { assertMaxit } from "./time";
 
 const MAX_NEWTON_STEPS = 80;
 const NEWTON_DECREMENT_TOLERANCE = 1e-12;
@@ -39,7 +25,8 @@ const LP_BOUND = 1e6;
 // away from it, and the optimum it leads to is a finite value.
 const RECESSION_TOLERANCE = 1e-9;
 
-export type QueryPoint = "analytic" | "chebyshev" | "volumetric";
+export const QUERY_POINTS = ["chebyshev", "analytic", "volumetric"] as const;
+export type QueryPoint = (typeof QUERY_POINTS)[number];
 
 export interface CuttingPlaneOptions {
   maxit: number;
@@ -68,10 +55,10 @@ type QueryResult = {
  * gap is an actual LP, solved exactly each iteration.
  *
  * Written for n variables: the barriers' Hessians are n x n (two variables keep their closed
- * forms, more go through a dense solve), and the localizing set is emitted as a polygon for n = 2
- * and as its half-spaces otherwise.
+ * forms, more go through a Cholesky factorization), and the localizing set is emitted as a polygon
+ * for n = 2 and as its half-spaces otherwise.
  */
-export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
+export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
   const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
 
   assertMaxit(maxit);
@@ -103,18 +90,16 @@ export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objecti
   }
   const boxRowCount = localizing.length;
   // the drawn localizing set is the clipped box polygon for two variables and
-  // the half-space list itself otherwise (see LocalizingSetPath)
+  // the half-space list itself otherwise (see localizingSetStride)
   const boxPolygon = n === 2 ? [lo[0]!, lo[1]!, hi[0]!, lo[1]!, hi[0]!, hi[1]!, lo[0]!, hi[1]!] : null;
-  const polygons: number[][] = [];
-  const trace = newTrace(maxit, n, polygons);
-  const { iterations, rows, rho, ellipsoids, stride } = trace;
+  const trace = new LocalizationTrace(maxit, n, true);
 
-  const incumbent = new Incumbent(A, b, c, rayShoot, dot(c, c));
+  const incumbent = new Incumbent(A, b, c, rayShoot);
   let upperBound = Infinity;
   let termination: Termination = "maxit";
   const startTime = performance.now();
 
-  while (iterations.length < maxit) {
+  while (trace.count < maxit) {
     const query = computeQueryPoint(queryPoint, localizing, n);
     if (!query) {
       termination = "exhausted";
@@ -143,19 +128,8 @@ export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objecti
 
     // the localizing set as it stood when this point was queried: the box, cut
     // by everything learned so far
-    if (boxPolygon) {
-      let polygon = boxPolygon;
-      for (let i = boxRowCount; i < localizing.length; i++) {
-        const cut = localizing[i]!;
-        polygon = clipPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
-        if (polygon.length === 0) break;
-      }
-      polygons.push(polygon === boxPolygon ? [...boxPolygon] : polygon);
-    } else {
-      polygons.push(localizing.flat());
-    }
-
-    recordIterate(trace, point, query.P, objectiveValue, Math.max(0, violation), objectiveRadius);
+    const drawn = boxPolygon ? clippedBox(boxPolygon, localizing, boxRowCount) : localizing.flat();
+    trace.recordIterate(point, query.P, objectiveValue, Math.max(0, violation), objectiveRadius, drawn);
 
     if (feasible && incumbent.certifies(upperBound, tol)) {
       termination = "converged";
@@ -178,23 +152,49 @@ export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objecti
 
   // Both of these are claims of optimality, and both are wrong when the
   // objective is unbounded: nothing but the initial box stopped the method.
-  if ((termination === "converged" || termination === "exhausted") && incumbent.objective > -Infinity && objectiveIsUnbounded(A, c)) {
+  if ((termination === "converged" || termination === "exhausted") && incumbent.found && objectiveIsUnbounded(A, c)) {
     termination = "unbounded";
   }
 
-  const footer = buildFooter(termination, iterations.length, performance.now() - startTime, {
-    exhausted: incumbent.objective === -Infinity ? ["No feasible point inside the initial box"] : ["Localizing set exhausted", "Nothing better than the incumbent remains, so it is optimal"],
+  const footer = localizationFooter(termination, trace.count, performance.now() - startTime, {
+    exhausted: incumbent.found ? ["Localizing set exhausted", "Nothing better than the incumbent remains, so it is optimal"] : ["No feasible point inside the initial box"],
     unbounded: ["Stopped on the initial box boundary", "The objective is unbounded over this region: the method only searches inside the initial box"],
   });
-  appendIncumbent(trace, incumbent, upperBound);
+  trace.closeOnIncumbent(incumbent, upperBound);
+  return trace.result(localizationLogHeader(n), footer);
+}
 
-  return {
-    iterations,
-    convergence: rho,
-    ellipsoids: ellipsoids.slice(0, iterations.length * stride),
-    ...packPolygons(polygons, localizingSetStride(n)),
-    log: [{ header: ellipsoidLogHeader(n), rows, footer }],
-  };
+// The box polygon clipped by every cut learned so far (the box's own rows are the polygon already).
+function clippedBox(boxPolygon: number[], localizing: number[][], boxRowCount: number): number[] {
+  let polygon = boxPolygon;
+  for (let i = boxRowCount; i < localizing.length; i++) {
+    const cut = localizing[i]!;
+    polygon = clipPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
+    if (polygon.length === 0) break;
+  }
+  return polygon === boxPolygon ? [...boxPolygon] : polygon;
+}
+
+// Sutherland-Hodgman clip of a convex polygon against `a'x <= b`.
+function clipPolygon(polygon: readonly number[], a0: number, a1: number, b: number): number[] {
+  const out: number[] = [];
+  const count = polygon.length / 2;
+  if (count === 0) return out;
+  for (let i = 0; i < count; i++) {
+    const x0 = polygon[i * 2]!;
+    const y0 = polygon[i * 2 + 1]!;
+    const next = (i + 1) % count;
+    const x1 = polygon[next * 2]!;
+    const y1 = polygon[next * 2 + 1]!;
+    const d0 = a0 * x0 + a1 * y0 - b;
+    const d1 = a0 * x1 + a1 * y1 - b;
+    if (d0 <= 0) out.push(x0, y0);
+    if ((d0 < 0 && d1 > 0) || (d0 > 0 && d1 < 0)) {
+      const t = d0 / (d0 - d1);
+      out.push(x0 + t * (x1 - x0), y0 + t * (y1 - y0));
+    }
+  }
+  return out;
 }
 
 /**
@@ -203,7 +203,7 @@ export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objecti
  * boundary test does not transfer: the query points here are strictly interior, and a *bounded*
  * objective whose optimal face is a ray also runs into the box, so position cannot tell the two apart.
  */
-function objectiveIsUnbounded(A: { rows: number; cols: number; data: Float64Array }, c: Float64Array): boolean {
+function objectiveIsUnbounded(A: DenseMatrix, c: Float64Array): boolean {
   const n = A.cols;
   const cone: LpRow[] = [];
   for (let i = 0; i < A.rows; i++) {
@@ -311,32 +311,7 @@ function quadraticForm(M: Float64Array, a: LpRow, n: number): number {
   if (n === 2) {
     return M[0]! * a[0]! * a[0]! + 2 * M[1]! * a[0]! * a[1]! + M[3]! * a[1]! * a[1]!;
   }
-  let quadratic = 0;
-  for (let j = 0; j < n; j++) {
-    let sum = 0;
-    for (let k = 0; k < n; k++) sum += M[j * n + k]! * a[k]!;
-    quadratic += a[j]! * sum;
-  }
-  return quadratic;
-}
-
-// Lower Cholesky factor of a symmetric matrix, or null when it is not (numerically) positive
-// definite — which is also the positive-definiteness test the callers need.
-function cholesky(H: Float64Array, n: number): Float64Array | null {
-  const L = new Float64Array(n * n);
-  for (let j = 0; j < n; j++) {
-    let diagonal = H[j * n + j]!;
-    for (let k = 0; k < j; k++) diagonal -= L[j * n + k]! * L[j * n + k]!;
-    if (!(diagonal > 0) || !Number.isFinite(diagonal)) return null;
-    const ljj = Math.sqrt(diagonal);
-    L[j * n + j] = ljj;
-    for (let i = j + 1; i < n; i++) {
-      let sum = H[i * n + j]!;
-      for (let k = 0; k < j; k++) sum -= L[i * n + k]! * L[j * n + k]!;
-      L[i * n + j] = sum / ljj;
-    }
-  }
-  return L;
+  return denseQuadraticForm(M, a, n);
 }
 
 // log det H for symmetric positive definite H, or null otherwise.
@@ -346,10 +321,7 @@ function logDetSymmetric(H: Float64Array, n: number): number | null {
     return determinant > 0 ? Math.log(determinant) : null;
   }
   const L = cholesky(H, n);
-  if (!L) return null;
-  let logDet = 0;
-  for (let j = 0; j < n; j++) logDet += 2 * Math.log(L[j * n + j]!);
-  return Number.isFinite(logDet) ? logDet : null;
+  return L && logDetFromCholesky(L, n);
 }
 
 // H^-1 for symmetric positive definite H, or null otherwise.
@@ -362,25 +334,10 @@ function invertSymmetric(H: Float64Array, n: number): Float64Array | null {
     if (!(determinant > 0) || !Number.isFinite(determinant)) return null;
     return Float64Array.of(a22 / determinant, -a12 / determinant, -a12 / determinant, a11 / determinant);
   }
-  if (!cholesky(H, n)) return null;
-  const inverse = new Float64Array(n * n);
-  const unit = new Float64Array(n);
-  const column = new Float64Array(n);
-  const lu = new Float64Array(n * n);
-  try {
-    for (let k = 0; k < n; k++) {
-      unit.fill(0);
-      unit[k] = 1;
-      solveDenseSystem(H, n, unit, column, lu);
-      for (let j = 0; j < n; j++) {
-        if (!Number.isFinite(column[j]!)) return null;
-        inverse[j * n + k] = column[j]!;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return inverse;
+  const L = cholesky(H, n);
+  if (!L) return null;
+  const inverse = invertFromCholesky(L, n);
+  return inverse.every(Number.isFinite) ? inverse : null;
 }
 
 // Damped Newton on a self-concordant barrier: full steps once the Newton

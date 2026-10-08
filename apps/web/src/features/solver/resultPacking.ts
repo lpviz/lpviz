@@ -1,4 +1,4 @@
-import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/ellipsoid";
+import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
 import type { PackedLogSection, PackedRows, ResultLogSection, ResultRowsView, SolverResultView, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse } from "./types";
 
@@ -60,7 +60,7 @@ function packLog(log: SolverLog): PackedLogSection[] {
 }
 
 export function packSolverResponse(id: number, request: SolverWorkerPayload, result: SolverResult): { wire: SolverWireSuccess; transfer: ArrayBuffer[] } {
-  const { convergence, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets } = result;
+  const { convergence, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = result;
   const stride = request.objective.length;
   const { points, lift } = packIterations(result.iterations, stride, convergence ? liftOf(request.solver, convergence) : null);
   const log = packLog(result.log);
@@ -72,11 +72,11 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   if (ellipsoids) transfer.push(ellipsoids.buffer);
   // empty buffers are not worth a transfer, and skipping them keeps a
   // detached zero-length array from ever reaching the client
-  if (polygonPoints?.length) transfer.push(polygonPoints.buffer);
-  if (polygonOffsets?.length) transfer.push(polygonOffsets.buffer);
+  if (localizingSetPoints?.length) transfer.push(localizingSetPoints.buffer);
+  if (localizingSetOffsets?.length) transfer.push(localizingSetOffsets.buffer);
   // none of these arrays is ever backed by a SharedArrayBuffer
   return {
-    wire: { id, success: true, iterations: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets },
+    wire: { id, success: true, iterations: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets },
     transfer: transfer as ArrayBuffer[],
   };
 }
@@ -108,7 +108,7 @@ function unpackSection({ header, rows, notes, footer }: PackedLogSection): Resul
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
-  const { id, iterations, stride, lift, log, phases, restartIndices, ellipsoids, polygonPoints, polygonOffsets } = wire;
+  const { id, iterations, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
   const result: SolverResultView = {
     // The packed iterations are already a flat block in one transferred buffer, so the iterate
     // path is that buffer verbatim — no per-iterate views are materialized (their allocation,
@@ -122,9 +122,9 @@ export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResp
     const shapeStride = ellipsoidStride(stride);
     result.ellipsoids = { data: ellipsoids, count: Math.floor(ellipsoids.length / shapeStride), stride: shapeStride };
   }
-  if (polygonOffsets) {
-    result.localizingSets =
-      polygonOffsets.length > 1 ? { points: polygonPoints ?? new Float64Array(0), offsets: polygonOffsets, count: polygonOffsets.length - 1, stride: localizingSetStride(stride) } : null;
+  // the offsets alone say how many sets there are; an empty run has none to draw
+  if (localizingSetOffsets && localizingSetOffsets.length > 1) {
+    result.localizingSets = { points: localizingSetPoints ?? new Float64Array(0), offsets: localizingSetOffsets, count: localizingSetOffsets.length - 1, stride: localizingSetStride(stride) };
   }
   return { id, success: true, result };
 }

@@ -11,15 +11,14 @@ import type { SolverWorkerPayload, SolverWorkerRequest } from "./types";
 const DEFAULT_TOLERANCE = 1e-5;
 const SOLVER_NAMES = { ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", central: "Central Path", ellipsoid: "Ellipsoid" };
 
-// Every engine reads its options by property, so spreading the request's
-// remaining fields hands each one exactly the options it was built with (an
-// absent startPoint/startVertex key reads as undefined either way).
+// A request is an engine's options minus the shared tolerance (see SolverWorkerPayload), so the
+// rest of each one spreads straight into the engine.
 function executeSolver(data: SolverWorkerPayload): SolverResult {
   try {
     switch (data.solver) {
       case "ipm": {
         const { solver: _, constraints, objective, ...options } = data;
-        return ipm(constraints, objective, { eps_p: DEFAULT_TOLERANCE, eps_d: DEFAULT_TOLERANCE, eps_opt: DEFAULT_TOLERANCE, ...options });
+        return ipm(constraints, objective, { tol: DEFAULT_TOLERANCE, ...options });
       }
       case "simplex": {
         const { solver: _, constraints, objective, ...options } = data;

@@ -1,19 +1,36 @@
 import { describe, expect, test } from "bun:test";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import { centralPath } from "../src/centralPath";
-import { ellipsoid } from "../src/ellipsoid";
+import { ellipsoid, type EllipsoidOptions } from "../src/ellipsoid";
 import { ipm } from "../src/ipm";
 import { pdhg } from "../src/pdhg";
-import { ENTERING_RULES, LEAVING_RULES, simplex } from "../src/simplex";
-import { SQUARE, SQUARE_VERTICES, footerOf, largePolygon, lastIterate, lcg, logText, phase1Count, randomPolygon, rowsOf } from "./fixtures";
+import { ENTERING_RULES, LEAVING_RULES, MAX_CONSECUTIVE_DEGENERATE_PIVOTS, simplex } from "../src/simplex";
+import {
+  PDHG_DEFAULTS,
+  SQUARE,
+  SQUARE_VERTICES,
+  bruteForceOptimum,
+  ellipseAt,
+  footerOf,
+  ipmOptions,
+  largePolygon,
+  lastIterate,
+  lcg,
+  logText,
+  objectiveValue,
+  phase1Count,
+  randomPolygon,
+  rowsOf,
+} from "./fixtures";
 
 // The square plus x + y <= -8, which passes exactly through the optimum
 // (-4, -4) of the objective (2, 1): three constraints meet there, so the ratio test
 // ties and the index rules take visibly different routes.
-const DEGENERATE_SQUARE = [...SQUARE, [1, 1, -8]] as [number, number, number][];
+const DEGENERATE_SQUARE: Constraint[] = [...SQUARE, [1, 1, -8]];
 
 // Seven nearly concurrent constraints on which primal simplex with entering rule
 // "last" cycles in Phase 1 (found by fuzzing; see the cycling-guard test).
-const STALL_LINES = [
+const STALL_LINES: Constraint[] = [
   [-0.9697749358075918, -0.24400117597950474, -3.3722141566558337],
   [-0.9964356544434488, -0.08435630713737943, -3.2387883117373377],
   [-0.9996118936712689, -0.027857889922603827, -3.1719450077092093],
@@ -21,7 +38,7 @@ const STALL_LINES = [
   [-0.29831925841830076, 0.9544661440076098, 1.1470257024838302],
   [-0.6805175119924961, -0.7327318171551874, -3.1296687759153756],
   [-0.977278470566636, -0.2119594087719077, -3.3521836075692066],
-] as [number, number, number][];
+];
 const STALL_OBJECTIVE = Float64Array.of(-0.04722023010253906, 0.20946311950683594);
 
 // Every explicit entering/leaving pair, plus {} for the engine defaults.
@@ -30,19 +47,10 @@ const RULE_OPTIONS = [{}, ...RULE_COMBOS];
 
 // a log row whose iteration number carries the cycling-guard marker, e.g. "  27d"
 const GUARDED_ROW = /^\s*\d+d /m;
-const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
-const pdhgDefaults = {
-  halpern: false,
-  maxit: 2000,
-  eta: 0.25,
-  tau: 0.25,
-  tol: 1e-4,
-  colorByBasis: false,
-};
 
 describe("pdhg", () => {
   test("eq-mode rows report the recovered (x, y), not the split variable", () => {
-    const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...pdhgDefaults, ineq: false });
+    const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...PDHG_DEFAULTS, ineq: false });
     const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
     const last = lastIterate(r);
     expect(lastRow.point[0]).toBeCloseTo(last[0]!, 8);
@@ -52,7 +60,7 @@ describe("pdhg", () => {
   });
 
   test("ineq mode records the converged iterate", () => {
-    const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...pdhgDefaults, ineq: true });
+    const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...PDHG_DEFAULTS, ineq: true });
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
     expect(lastRow.convergence).toBeLessThanOrEqual(1e-4);
@@ -62,7 +70,7 @@ describe("pdhg", () => {
 
   test("eq mode stops at the last finite iterate on divergence", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), {
-      ...pdhgDefaults,
+      ...PDHG_DEFAULTS,
       ineq: false,
       eta: 0.75,
       tau: 0.75,
@@ -93,39 +101,39 @@ describe("simplex", () => {
 
   test("dual mode handles redundant zero rows (vertical strip)", () => {
     // x in [-1, 2], maximize x: the y-column of the dual system is all zeros
-    const strip = [
+    const strip: Constraint[] = [
       [1, 0, 2],
       [-1, 0, 1],
-    ] as [number, number, number][];
+    ];
     const r = simplex(strip, Float64Array.of(1, 0), opts(true));
     expect(r.status).toBe("optimal");
   });
 
   test("dual mode reports an infeasible primal as infeasible, not unbounded", () => {
     // x <= 1 and x >= 2: empty region
-    const empty = [
+    const empty: Constraint[] = [
       [1, 0, 1],
       [-1, 0, -2],
       [0, 1, 1],
       [0, -1, -2],
-    ] as [number, number, number][];
+    ];
     const r = simplex(empty, Float64Array.of(1, 1), opts(true));
     expect(r.status).toBe("infeasible");
   });
 
   test("primal mode throws on an infeasible region", () => {
-    const empty = [
+    const empty: Constraint[] = [
       [1, 0, 1],
       [-1, 0, -2],
-    ] as [number, number, number][];
+    ];
     expect(() => simplex(empty, Float64Array.of(1, 0), opts(false))).toThrow(/infeasible/i);
   });
 
   test("unbounded LP is reported as unbounded in primal mode", () => {
-    const strip = [
+    const strip: Constraint[] = [
       [1, 0, 2],
       [-1, 0, 1],
-    ] as [number, number, number][];
+    ];
     const r = simplex(strip, Float64Array.of(0, 1), opts(false));
     expect(r.status).toBe("unbounded");
   });
@@ -138,14 +146,14 @@ describe("simplex", () => {
       if (!polygon) continue;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
-      const expected = Math.max(...polygon.hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      const expected = bruteForceOptimum(obj, polygon.hull);
       runs++;
       for (const dual of [false, true]) {
         for (const rules of RULE_OPTIONS) {
           const r = simplex(polygon.constraints, obj, { ...opts(dual), ...rules });
           const last = lastIterate(r);
           expect(r.status).toBe("optimal");
-          expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
+          expect(objectiveValue(obj, last)).toBeCloseTo(expected, 5);
           // nondegenerate vertices never need the Bland fallback
           expect(logText(r)).not.toMatch(GUARDED_ROW);
         }
@@ -156,20 +164,20 @@ describe("simplex", () => {
 
   // Regression: a 255-constraint Phase 1 takes a pivot per artificial variable,
   // which used to cost two dense O(m³) solves each — seconds per run. The
-  // maintained basis inverse is refactored every 100 pivots, so this run also
-  // crosses that boundary several times and must still land on the optimum.
+  // maintained basis inverse is refactored every REFACTOR_INTERVAL pivots, so
+  // this run also crosses that boundary many times and must still land on the optimum.
   test("a 255-gon solves in well under a second and matches brute force", () => {
     const rand = lcg(11);
     const { hull, constraints } = largePolygon(rand, 255);
     const obj = Float64Array.of(7, -1.4);
-    const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+    const expected = bruteForceOptimum(obj, hull);
     const start = performance.now();
     const r = simplex(constraints, obj, opts(false));
     const elapsed = performance.now() - start;
     expect(r.status).toBe("optimal");
     expect(phase1Count(r)).toBeGreaterThan(200);
     const last = lastIterate(r);
-    expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
+    expect(objectiveValue(obj, last)).toBeCloseTo(expected, 5);
     // ~80ms here; the pre-fix code took ~3s, so this trips on a regression
     // without being sensitive to a slow CI machine
     expect(elapsed).toBeLessThan(1500);
@@ -242,17 +250,8 @@ describe("simplex pivot rules", () => {
 });
 
 describe("ipm", () => {
-  const opts = (alphaMax: number) => ({
-    eps_p: 1e-6,
-    eps_d: 1e-6,
-    eps_opt: 1e-6,
-    maxit: 200,
-    alphaMax,
-    correctorThreshold: 0.9,
-  });
-
   test("converges to the square optimum", () => {
-    const r = ipm(SQUARE, Float64Array.of(1, 1), opts(0.9));
+    const r = ipm(SQUARE, Float64Array.of(1, 1), ipmOptions(0.9));
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const last = lastIterate(r);
     expect(last[0]!).toBeCloseTo(-4, 3);
@@ -263,7 +262,7 @@ describe("ipm", () => {
     const rand = lcg(3);
     for (let t = 0; t < 100; t++) {
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
-      const r = ipm(SQUARE, obj, opts(1));
+      const r = ipm(SQUARE, obj, ipmOptions(1));
       for (const row of rowsOf(r)) {
         expect(Number.isFinite(row.point[0]!)).toBe(true);
         expect(Number.isFinite(row.point[1]!)).toBe(true);
@@ -280,20 +279,20 @@ describe("ipm", () => {
     const rand = lcg(11);
     const { hull, constraints } = largePolygon(rand, 255);
     const obj = Float64Array.of(7, -1.4);
-    const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+    const expected = bruteForceOptimum(obj, hull);
     const start = performance.now();
-    const r = ipm(constraints, obj, { ...opts(0.1), maxit: 1000 });
+    const r = ipm(constraints, obj, ipmOptions(0.1, 1000));
     const elapsed = performance.now() - start;
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const last = lastIterate(r);
-    expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 3);
+    expect(objectiveValue(obj, last)).toBeCloseTo(expected, 3);
     // ~10ms here against ~8s before the fix
     expect(elapsed).toBeLessThan(1500);
   });
 });
 
 describe("ellipsoid", () => {
-  const opts = (o: Partial<Parameters<typeof ellipsoid>[3]> = {}) => ({
+  const opts = (o: Partial<EllipsoidOptions> = {}) => ({
     maxit: 500,
     tol: 1e-6,
     deepCuts: true,
@@ -321,8 +320,7 @@ describe("ellipsoid", () => {
       expect(on.iterations.length).toBeLessThan(off.iterations.length);
       const a = off.iterations[off.iterations.length - 1]!;
       const b = on.iterations[on.iterations.length - 1]!;
-      const value = (p: Float64Array) => objective[0]! * p[0]! + objective[1]! * p[1]!;
-      expect(value(b)).toBeCloseTo(value(a), 4);
+      expect(objectiveValue(objective, b)).toBeCloseTo(objectiveValue(objective, a), 4);
     }
   });
 
@@ -371,8 +369,8 @@ describe("ellipsoid", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts());
     const last = lastIterate(r);
     const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
-    const expected = Math.max(...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
-    const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
+    const expected = bruteForceOptimum(objective, SQUARE_VERTICES);
+    const got = objectiveValue(objective, last);
     // the incumbent is feasible, so it can never beat the optimum, and the gap
     // stop certifies it to within the relative tolerance it was asked for
     expect(got).toBeLessThanOrEqual(expected + 1e-9);
@@ -386,9 +384,7 @@ describe("ellipsoid", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(-1, 2), opts({ maxit: 60 }));
     let previousDet = Infinity;
     for (let i = 0; i < queriedCount(r); i++) {
-      const p11 = r.ellipsoids![i * 5 + 2]!;
-      const p12 = r.ellipsoids![i * 5 + 3]!;
-      const p22 = r.ellipsoids![i * 5 + 4]!;
+      const { p11, p12, p22 } = ellipseAt(r, i);
       const det = p11 * p22 - p12 * p12;
       expect(p11).toBeGreaterThan(0);
       expect(p22).toBeGreaterThan(0);
@@ -400,13 +396,13 @@ describe("ellipsoid", () => {
 
   test("the first ellipsoid contains every vertex of the region", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ maxit: 1 }));
-    const [cx, cy, p11, p12, p22] = Array.from(r.ellipsoids!.slice(0, 5));
-    const det = p11! * p22! - p12! * p12!;
+    const { cx, cy, p11, p12, p22 } = ellipseAt(r, 0);
+    const det = p11 * p22 - p12 * p12;
     for (const [vx, vy] of SQUARE_VERTICES) {
-      const dx = vx - cx!;
-      const dy = vy - cy!;
+      const dx = vx - cx;
+      const dy = vy - cy;
       // (v - c)' P^-1 (v - c) <= 1
-      const quadratic = (p22! * dx * dx - 2 * p12! * dx * dy + p11! * dy * dy) / det;
+      const quadratic = (p22 * dx * dx - 2 * p12 * dx * dy + p11 * dy * dy) / det;
       expect(quadratic).toBeLessThanOrEqual(1 + 1e-9);
     }
   });
@@ -420,12 +416,12 @@ describe("ellipsoid", () => {
       const { hull, constraints } = polygon;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
-      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      const expected = bruteForceOptimum(obj, hull);
       runs++;
       const r = ellipsoid(hull, constraints, obj, opts());
       const last = lastIterate(r);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
-      expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 4);
+      expect(objectiveValue(obj, last)).toBeCloseTo(expected, 4);
     }
     expect(runs).toBeGreaterThan(8);
   });
@@ -433,43 +429,35 @@ describe("ellipsoid", () => {
   test("reports an unbounded objective instead of claiming optimality", () => {
     // x in [-1, 2], maximize y: the optimum is only bounded by the initial
     // ellipsoid, never by a constraint
-    const strip = [
+    const strip: Constraint[] = [
       [1, 0, 2],
       [-1, 0, 1],
-    ] as [number, number, number][];
-    const r = ellipsoid(
-      [
-        [-1, -5],
-        [2, -5],
-        [2, 5],
-        [-1, 5],
-      ],
-      strip,
-      Float64Array.of(0, 1),
-      opts(),
-    );
+    ];
+    const hull: Vec[] = [
+      [-1, -5],
+      [2, -5],
+      [2, 5],
+      [-1, 5],
+    ];
+    const r = ellipsoid(hull, strip, Float64Array.of(0, 1), opts());
     expect(footerOf(r).startsWith("Stopped on the initial ellipsoid boundary")).toBe(true);
     expect(footerOf(r)).toContain("unbounded");
   });
 
   test("stops instead of spinning when the region is empty", () => {
-    const empty = [
+    const empty: Constraint[] = [
       [1, 0, 1],
       [-1, 0, -2],
       [0, 1, 1],
       [0, -1, 1],
-    ] as [number, number, number][];
-    const r = ellipsoid(
-      [
-        [1, 1],
-        [2, 1],
-        [2, -1],
-        [1, -1],
-      ],
-      empty,
-      Float64Array.of(1, 1),
-      opts(),
-    );
+    ];
+    const hull: Vec[] = [
+      [1, 1],
+      [2, 1],
+      [2, -1],
+      [1, -1],
+    ];
+    const r = ellipsoid(hull, empty, Float64Array.of(1, 1), opts());
     expect(r.iterations.length).toBeLessThan(500);
     expect(footerOf(r).startsWith("Converged")).toBe(false);
   });
@@ -491,18 +479,18 @@ describe("centralPath", () => {
   });
 
   test("stays finite on a sliver region", () => {
-    const sliverLines = [
+    const sliverLines: Constraint[] = [
       [1, 0, -4],
       [-1, 0, 4.001],
       [0, 1, -4],
       [0, -1, 6],
-    ] as [number, number, number][];
-    const sliverVertices = [
+    ];
+    const sliverVertices: Vec[] = [
       [-4.001, -6],
       [-4, -6],
       [-4, -4],
       [-4.001, -4],
-    ] as [number, number][];
+    ];
     const r = centralPath(sliverVertices, sliverLines, Float64Array.of(1, 1), {
       niter: 20,
     });
@@ -519,29 +507,21 @@ describe("centralPath", () => {
     for (const seed of [3, 9]) {
       const { hull, constraints } = largePolygon(lcg(seed), 255);
       const obj = Float64Array.of(7, -1.4);
-      const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
+      const expected = bruteForceOptimum(obj, hull);
       const start = performance.now();
       const r = centralPath(hull, constraints, obj, { niter: 75 });
       const elapsed = performance.now() - start;
       expect(r.iterations.length).toBe(75);
       const last = lastIterate(r);
       // µ ends at 1e-5, so the path ends within ~m·µ of the LP optimum
-      expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 1);
+      expect(objectiveValue(obj, last)).toBeCloseTo(expected, 1);
       expect(elapsed).toBeLessThan(1000);
     }
   });
 });
 
 describe("draggable start point", () => {
-  const ipmOpts = (startPoint?: number[]) => ({
-    eps_p: 1e-6,
-    eps_d: 1e-6,
-    eps_opt: 1e-6,
-    maxit: 500,
-    alphaMax: 0.9,
-    correctorThreshold: 0.9,
-    startPoint,
-  });
+  const ipmOpts = (startPoint?: number[]) => ({ ...ipmOptions(0.9, 500), startPoint });
 
   test("ipm starts at the given point and still converges", () => {
     for (const start of [
@@ -571,11 +551,11 @@ describe("draggable start point", () => {
 
     for (const ineq of [true, false]) {
       const cold = pdhg(SQUARE, Float64Array.of(1, 1), {
-        ...pdhgDefaults,
+        ...PDHG_DEFAULTS,
         ineq,
       });
       const warm = pdhg(SQUARE, Float64Array.of(1, 1), {
-        ...pdhgDefaults,
+        ...PDHG_DEFAULTS,
         ineq,
         startPoint: [0, 0],
       });
@@ -589,7 +569,7 @@ describe("draggable start point", () => {
       [2, 2], // outside (the dual keeps the cold start's y = 1)
     ]) {
       const r = pdhg(SQUARE, Float64Array.of(1, 1), {
-        ...pdhgDefaults,
+        ...PDHG_DEFAULTS,
         ineq: true,
         startPoint: start,
       });
@@ -604,7 +584,7 @@ describe("draggable start point", () => {
 
   test("pdhg eq mode maps a negative start through the split exactly", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), {
-      ...pdhgDefaults,
+      ...PDHG_DEFAULTS,
       ineq: false,
       startPoint: [-5.5, -4.5],
     });
@@ -618,7 +598,7 @@ describe("draggable start point", () => {
 
   test("pdhg halpern accepts a warm start", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), {
-      ...pdhgDefaults,
+      ...PDHG_DEFAULTS,
       ineq: true,
       halpern: true,
       startPoint: [-5, -5],

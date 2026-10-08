@@ -1,13 +1,26 @@
-import { createDenseMatrix, type DenseMatrix, dot, denseFromConstraints, transposedMatVec } from "@lpviz/math/blas";
+import {
+  createDenseMatrix,
+  type DenseMatrix,
+  denseFromConstraints,
+  diagonalMatrix,
+  dot,
+  extractColumn,
+  hstackMatrices,
+  identityMatrix,
+  negateMatrix,
+  scaleRows,
+  transposeMatrix,
+  transposedMatVec,
+} from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
-import { coordinateHeaders, fmtCoordinates, fmtE, fmtStr, logColumnWidths } from "./fmt";
+import { coordinateHeaders, fmtCoordinates, fmtExp, fmtIteration, ITERATION_COLUMN_WIDTH, logColumnWidths, padLeft, padRight } from "./fmt";
+import { MAX_ITERATIONS } from "./limits";
 import type { LogSection, SolverResult } from "./result";
+import { splitStandardForm, unsplit } from "./standardForm";
 
-const MAX_ITERATIONS = 100_000;
-
-type SimplexStatus = "optimal" | "unbounded" | "infeasible";
-type SimplexMode = "primal" | "dual";
+type SimplexStatus = NonNullable<SolverResult["status"]>;
+type SimplexMode = NonNullable<SolverResult["mode"]>;
 
 /**
  * Pivot-selection rules for the entering variable (the UI labels them
@@ -47,8 +60,9 @@ function resolvePivotRules(opts: Pick<SimplexOptions, "enteringRule" | "leavingR
   };
 }
 
-interface SimplexOptions {
+export interface SimplexOptions {
   tol: number;
+  /** Walk the dual LP instead; each dual basis is plotted as the primal vertex it identifies. */
   dual: boolean;
   /**
    * Optional warm start: a vertex of {Ax <= b} to begin Phase 2 from,
@@ -56,86 +70,41 @@ interface SimplexOptions {
    * dual-feasible basis only when it is already optimal (by complementary
    * slackness), so dual simplex mode ignores it.
    */
-  startVertex?: number[];
+  startVertex?: readonly number[] | undefined;
   /** Entering-variable pivot rule (see ENTERING_RULES). Defaults to "first" (Bland). */
-  enteringRule?: EnteringRule;
+  enteringRule?: EnteringRule | undefined;
   /** Ratio-test tie-break (see LEAVING_RULES). Defaults to "first" (lowest index). */
-  leavingRule?: LeavingRule;
+  leavingRule?: LeavingRule | undefined;
 }
 
-function diagonalMatrix(values: Float64Array): DenseMatrix {
-  const size = values.length;
-  const matrix = createDenseMatrix(size, size);
-  for (let i = 0; i < size; i++) matrix.data[i * size + i] = values[i]!;
-  return matrix;
-}
-
-const identityMatrix = (size: number) => diagonalMatrix(new Float64Array(size).fill(1));
-
-function transposeMatrix(matrix: DenseMatrix): DenseMatrix {
-  const out = createDenseMatrix(matrix.cols, matrix.rows);
-  for (let row = 0; row < matrix.rows; row++) {
-    const rowOffset = row * matrix.cols;
-    for (let col = 0; col < matrix.cols; col++) {
-      out.data[col * matrix.rows + row] = matrix.data[rowOffset + col]!;
-    }
-  }
-  return out;
-}
-
-function negateMatrix(matrix: DenseMatrix): DenseMatrix {
-  const data = Float64Array.from(matrix.data, (value) => -value);
-  return createDenseMatrix(matrix.rows, matrix.cols, data);
-}
-
-function scaleRows(matrix: DenseMatrix, rowScales: Float64Array): DenseMatrix {
-  const out = createDenseMatrix(matrix.rows, matrix.cols);
-  for (let row = 0; row < matrix.rows; row++) {
-    const scale = rowScales[row]!;
-    const rowOffset = row * matrix.cols;
-    for (let col = 0; col < matrix.cols; col++) {
-      out.data[rowOffset + col] = matrix.data[rowOffset + col]! * scale;
-    }
-  }
-  return out;
-}
-
-function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
-  if (matrices.length === 0) return createDenseMatrix(0, 0);
-  const rows = matrices[0]!.rows;
-  const cols = matrices.reduce((sum, matrix) => sum + matrix.cols, 0);
-  const out = createDenseMatrix(rows, cols);
-  let colOffset = 0;
-  for (const matrix of matrices) {
-    for (let row = 0; row < rows; row++) {
-      const srcOffset = row * matrix.cols;
-      const dstOffset = row * cols + colOffset;
-      for (let col = 0; col < matrix.cols; col++) {
-        out.data[dstOffset + col] = matrix.data[srcOffset + col]!;
-      }
-    }
-    colOffset += matrix.cols;
-  }
-  return out;
-}
-
-function extractColumn(matrix: DenseMatrix, column: number, out = new Float64Array(matrix.rows)) {
-  for (let row = 0; row < matrix.rows; row++) {
-    out[row] = matrix.data[row * matrix.cols + column]!;
-  }
-  return out;
-}
-
-function basisString(basis: boolean[]) {
-  return basis.map((isBasic) => (isBasic ? 1 : 0)).join("");
+/** An LP in standard form, `max c'x s.t. Ax = b, x >= 0`, as a simplex phase walks it. */
+interface StandardLp {
+  A: DenseMatrix;
+  b: Float64Array;
+  c: Float64Array;
 }
 
 const REFACTOR_INTERVAL = 20;
 const UNSTABLE_PIVOT = 1e-6;
+// Only Bland's rule (lowest index entering and leaving) is guaranteed not to cycle, so after this
+// many consecutive degenerate pivots (minimum ratio ~ 0) a simplex phase falls back to it for the
+// rest of the phase; those iterations carry a "d" after their number in the log. A legitimately
+// degenerate vertex in the app's problems needs only a handful, and a false trigger is harmless.
+export const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
+// A warm-start vertex must be reproduced by its basis to this relative precision.
+const WARM_START_VERTEX_TOLERANCE = 1e-6;
+const UNBOUNDED_NOTE = "LP is unbounded. No leaving variable found.";
 
-class BasisInverse {
+/**
+ * The current basis: which columns are basic, the basic column of each row, and B⁻¹, maintained by
+ * eta updates between full refactorizations (every REFACTOR_INTERVAL pivots, or at once after a
+ * pivot too small to trust).
+ */
+class Basis {
   readonly m: number;
-  readonly basisIndices: number[];
+  /** the basic column of each row */
+  readonly columns: number[] = [];
+  readonly isBasic: boolean[];
   private readonly inverse: Float64Array;
   private readonly work: Float64Array;
   private readonly matrix: Float64Array;
@@ -144,10 +113,11 @@ class BasisInverse {
 
   constructor(
     private readonly A: DenseMatrix,
-    basisIndices: readonly number[],
+    isBasic: readonly boolean[],
   ) {
     this.m = A.rows;
-    this.basisIndices = basisIndices.slice();
+    this.isBasic = isBasic.slice();
+    for (let j = 0; j < isBasic.length; j++) if (isBasic[j]) this.columns.push(j);
     this.inverse = new Float64Array(this.m * this.m);
     this.work = new Float64Array(this.m * this.m);
     this.matrix = new Float64Array(this.m * this.m);
@@ -159,16 +129,10 @@ class BasisInverse {
     return this.pivotsSinceRefactor > 0;
   }
 
-  static fromFlags(A: DenseMatrix, basis: readonly boolean[]): BasisInverse {
-    const indices: number[] = [];
-    for (let i = 0; i < basis.length; i++) if (basis[i]) indices.push(i);
-    return new BasisInverse(A, indices);
-  }
-
   refactor(): void {
     const { m, A } = this;
     for (let col = 0; col < m; col++) {
-      const source = this.basisIndices[col]!;
+      const source = this.columns[col]!;
       for (let row = 0; row < m; row++) {
         this.matrix[row * m + col] = A.data[row * A.cols + source]!;
       }
@@ -178,12 +142,12 @@ class BasisInverse {
     this.pivotsSinceRefactor = 0;
   }
 
-  /** out = B⁻¹ v */
+  /** out = B⁻¹ v by a direct solve, independent of the maintained inverse. */
   solveExact(v: Float64Array, out: Float64Array): Float64Array {
     return solveDenseSystem(this.matrix, this.m, v, out, this.work);
   }
 
-  /** out = B⁻ᵀ v, direct solve; see solveExact. */
+  /** out = B⁻ᵀ v by a direct solve; see solveExact. */
   solveTransposeExact(v: Float64Array, out: Float64Array): Float64Array {
     const { m } = this;
     if (!this.transposed) {
@@ -222,7 +186,8 @@ class BasisInverse {
     return out;
   }
 
-  pivot(leavingRow: number, direction: Float64Array, enteringIndex: number): void {
+  /** Swap `entering` into the basis for the column `leavingRow` carries; `direction` is B⁻¹ times the entering column. */
+  pivot(leavingRow: number, direction: Float64Array, entering: number): void {
     const { m, inverse } = this;
     const pivotValue = direction[leavingRow]!;
     const rowR = leavingRow * m;
@@ -235,71 +200,64 @@ class BasisInverse {
       const rowI = i * m;
       for (let k = 0; k < m; k++) inverse[rowI + k]! -= factor * inverse[rowR + k]!;
     }
-    this.basisIndices[leavingRow] = enteringIndex;
+    this.isBasic[this.columns[leavingRow]!] = false;
+    this.isBasic[entering] = true;
+    this.columns[leavingRow] = entering;
     if (++this.pivotsSinceRefactor >= REFACTOR_INTERVAL || Math.abs(pivotValue) < UNSTABLE_PIVOT) {
       this.refactor();
     }
   }
 }
 
-function basisState(
-  cVec: Float64Array,
-  A: DenseMatrix,
-  bVec: Float64Array,
-  factor: BasisInverse,
-  scratch: {
-    xB: Float64Array;
-    cB: Float64Array;
-    duals: Float64Array;
-    aty: Float64Array;
-  },
-  exact = false,
-) {
-  const { m, basisIndices } = factor;
-  const nCols = A.cols;
-  if (exact) factor.solveExact(bVec, scratch.xB);
-  else factor.apply(bVec, scratch.xB);
-  const xTableau = new Float64Array(nCols);
-  for (let i = 0; i < m; i++) {
-    xTableau[basisIndices[i]!] = scratch.xB[i]!;
-    scratch.cB[i] = cVec[basisIndices[i]!]!;
-  }
-  if (exact) factor.solveTransposeExact(scratch.cB, scratch.duals);
-  else factor.applyTranspose(scratch.cB, scratch.duals);
-  transposedMatVec(A, scratch.duals, scratch.aty);
-  const reducedCosts = new Float64Array(nCols);
-  for (let j = 0; j < nCols; j++) reducedCosts[j] = cVec[j]! - scratch.aty[j]!;
-  return { xTableau, reducedCosts, objective: dot(cVec, xTableau) };
-}
+type PhaseScratch = ReturnType<typeof phaseScratch>;
 
-function basisScratch(m: number, nCols: number) {
+function phaseScratch(m: number, cols: number) {
   return {
     xB: new Float64Array(m),
     cB: new Float64Array(m),
     duals: new Float64Array(m),
-    aty: new Float64Array(nCols),
+    aty: new Float64Array(cols),
     enterColumn: new Float64Array(m),
     direction: new Float64Array(m),
   };
 }
 
-function selectEnteringIndex(basis: boolean[], reducedCosts: Float64Array, tol: number, rule: EnteringRule): number {
+// The basic solution of the current basis: x over every column, the reduced costs, the objective.
+function basicSolution(lp: StandardLp, basis: Basis, scratch: PhaseScratch, exact: boolean) {
+  const { A, b, c } = lp;
+  const { m, columns } = basis;
+  if (exact) basis.solveExact(b, scratch.xB);
+  else basis.apply(b, scratch.xB);
+  const x = new Float64Array(A.cols);
+  for (let i = 0; i < m; i++) {
+    x[columns[i]!] = scratch.xB[i]!;
+    scratch.cB[i] = c[columns[i]!]!;
+  }
+  if (exact) basis.solveTransposeExact(scratch.cB, scratch.duals);
+  else basis.applyTranspose(scratch.cB, scratch.duals);
+  transposedMatVec(A, scratch.duals, scratch.aty);
+  const reducedCosts = new Float64Array(A.cols);
+  for (let j = 0; j < A.cols; j++) reducedCosts[j] = c[j]! - scratch.aty[j]!;
+  return { x, reducedCosts, objective: dot(c, x) };
+}
+
+function selectEnteringIndex(isBasic: readonly boolean[], reducedCosts: Float64Array, tol: number, rule: EnteringRule): number {
   if (rule === "first") {
     for (let j = 0; j < reducedCosts.length; j++) {
-      if (!basis[j] && reducedCosts[j]! > tol) return j;
+      if (!isBasic[j] && reducedCosts[j]! > tol) return j;
     }
     return -1;
   }
   if (rule === "last") {
     for (let j = reducedCosts.length - 1; j >= 0; j--) {
-      if (!basis[j] && reducedCosts[j]! > tol) return j;
+      if (!isBasic[j] && reducedCosts[j]! > tol) return j;
     }
     return -1;
   }
   let best = -1;
   let bestCost = -Infinity;
   for (let j = 0; j < reducedCosts.length; j++) {
-    if (basis[j] || reducedCosts[j]! <= tol) continue;
+    if (isBasic[j] || reducedCosts[j]! <= tol) continue;
     // strict `>` keeps the lowest index on ties
     if (reducedCosts[j]! > bestCost) {
       bestCost = reducedCosts[j]!;
@@ -309,7 +267,7 @@ function selectEnteringIndex(basis: boolean[], reducedCosts: Float64Array, tol: 
   return best;
 }
 
-function selectLeavingIndex(xB: Float64Array, direction: Float64Array, basisIndices: number[], tol: number, rule: LeavingRule): number {
+function selectLeavingIndex(xB: Float64Array, direction: Float64Array, columns: readonly number[], tol: number, rule: LeavingRule): number {
   // Pass 1: the minimum ratio over the rows the entering variable drives down.
   let minRatio = Infinity;
   for (let i = 0; i < xB.length; i++) {
@@ -326,7 +284,7 @@ function selectLeavingIndex(xB: Float64Array, direction: Float64Array, basisIndi
   for (let i = 0; i < xB.length; i++) {
     if (direction[i]! <= tol) continue;
     if (xB[i]! / direction[i]! - minRatio >= tol) continue;
-    const originalIndex = basisIndices[i]!;
+    const originalIndex = columns[i]!;
     const prefer = leave === -1 || (rule === "first" ? originalIndex < chosenIndex : originalIndex > chosenIndex);
     if (prefer) {
       leave = i;
@@ -335,16 +293,6 @@ function selectLeavingIndex(xB: Float64Array, direction: Float64Array, basisIndi
   }
   return leave;
 }
-
-// Only Bland's rule (lowest index entering and leaving) is guaranteed not to cycle, so after this
-// many consecutive degenerate pivots (minimum ratio ~ 0) a simplex loop falls back to it for the
-// rest of the phase; those iterations carry a "d" after their number in the log. A legitimately
-// degenerate vertex in the app's problems needs only a handful, and a false trigger is harmless.
-const MAX_CONSECUTIVE_DEGENERATE_PIVOTS = 25;
-
-// Iteration column of a log row: "12" normally, "12d" while the cycling guard
-// has forced Bland's rule (see MAX_CONSECUTIVE_DEGENERATE_PIVOTS).
-const iterationLabel = (iteration: number, guarded: boolean) => fmtStr(guarded ? `${iteration}d` : `${iteration}`, 5);
 
 function createCyclingGuard(initial: PivotRules, tol: number) {
   const rules: PivotRules = { ...initial };
@@ -368,131 +316,100 @@ function createCyclingGuard(initial: PivotRules, tol: number) {
   };
 }
 
-// The primal vertex a dual basis identifies: the intersection of the n lowest-index constraint
-// planes whose dual variables are basic. Two variables keep their closed form; more go through a
-// dense solve, and a singular support yields the origin either way.
-function primalPointFromDualBasis(constraints: Constraint[], basisIndices: readonly number[], n: number, tol: number): Float64Array {
-  const sorted = [...basisIndices].sort((a, b) => a - b);
-  const support = sorted.filter((index) => index < constraints.length).slice(0, n);
-  if (support.length < n) return new Float64Array(n);
+const basisString = (isBasic: readonly boolean[]) => isBasic.map((basic) => (basic ? 1 : 0)).join("");
 
-  if (n === 2) {
-    const first = constraints[support[0]!]!;
-    const second = constraints[support[1]!]!;
-    const determinant = first[0] * second[1] - first[1] * second[0];
-    if (Math.abs(determinant) <= tol) return new Float64Array(2);
-
-    const x = (first[2] * second[1] - first[1] * second[2]) / determinant;
-    const y = (first[0] * second[2] - first[2] * second[0]) / determinant;
-    return Float64Array.of(x, y);
-  }
-
-  const matrix = new Float64Array(n * n);
-  const rhs = new Float64Array(n);
-  for (let row = 0; row < n; row++) {
-    const line = constraints[support[row]!]!;
-    for (let j = 0; j < n; j++) matrix[row * n + j] = line[j]!;
-    rhs[row] = line[n]!;
-  }
-  const point = new Float64Array(n);
-  try {
-    solveDenseSystem(matrix, n, rhs, point);
-  } catch {
-    return new Float64Array(n);
-  }
-  return point.every(Number.isFinite) ? point : new Float64Array(n);
-}
-
-type SimplexCoreConfig = {
+interface PhaseConfig {
   tol: number;
   pivotRules: PivotRules;
-  completionLabel: string;
+  phase: 1 | 2;
   /** the problem's variable count, which sizes the log's coordinate columns */
   dimension: number;
-  /** The point an iteration plots and logs, from the tableau and the basis columns. */
-  pointOf: (xTableau: Float64Array, basisIndices: readonly number[]) => Float64Array;
-};
+  /** The point an iteration plots and logs, from the basic solution and the basis. */
+  pointOf: (x: Float64Array, basis: Basis) => Float64Array;
+  /** the line logged when no leaving variable exists */
+  unboundedNote: string;
+}
 
-function simplexCore(cVec: Float64Array, A: DenseMatrix, bVec: Float64Array, basisInit: boolean[], cfg: SimplexCoreConfig) {
-  const { tol, pivotRules, completionLabel, dimension, pointOf } = cfg;
-  const mRows = A.rows;
-  const nCols = A.cols;
-  const basis = basisInit.slice();
-  const iterations: Float64Array[] = [];
-  const logs: string[] = [];
+/** What a phase hands on: its iterates and log, and the basis and objective it ended on. */
+interface PhaseRun {
+  iterations: Float64Array[];
+  log: LogSection;
+  isBasic: boolean[];
+  objective: number;
+  status: SimplexStatus;
+}
+
+function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: PhaseConfig): PhaseRun {
+  const { tol, pivotRules, phase, dimension, pointOf, unboundedNote } = cfg;
+  const { A } = lp;
   const widths = logColumnWidths(dimension);
-  const header = `${fmtStr("Iter", 5)} ${coordinateHeaders(dimension)} ${fmtStr("Obj", widths.measure)} ${"basis".padEnd(nCols, " ")}\n`;
-
-  logs.push(header);
+  const header = `${padLeft("Iter", ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(dimension)} ${padLeft("Obj", widths.measure)} ${padRight("basis", A.cols)}\n`;
+  const rows: string[] = [];
+  const notes: string[] = [];
+  const iterations: Float64Array[] = [];
   const guard = createCyclingGuard(pivotRules, tol);
+  const basis = new Basis(A, initialBasis);
+  const scratch = phaseScratch(basis.m, A.cols);
+  const { xB, enterColumn, direction } = scratch;
 
   let iteration = 0;
   let status: SimplexStatus = "optimal";
   let objective = 0;
-  const factor = BasisInverse.fromFlags(A, basis);
-  const scratch = basisScratch(mRows, nCols);
-  const { xB, enterColumn, direction } = scratch;
 
   while (true) {
     if (++iteration > MAX_ITERATIONS) throw new Error(`Simplex stalled after ${MAX_ITERATIONS} iterations`);
 
-    let state = basisState(cVec, A, bVec, factor, scratch);
-    let enterIndex = selectEnteringIndex(basis, state.reducedCosts, tol, guard.rules.entering);
+    let solution = basicSolution(lp, basis, scratch, false);
+    let entering = selectEnteringIndex(basis.isBasic, solution.reducedCosts, tol, guard.rules.entering);
 
-    if (enterIndex === -1 && factor.stale) {
-      factor.refactor();
-      state = basisState(cVec, A, bVec, factor, scratch, true);
-      enterIndex = selectEnteringIndex(basis, state.reducedCosts, tol, guard.rules.entering);
+    if (entering === -1 && basis.stale) {
+      // Optimality was claimed from the eta-updated inverse, whose accumulated error can hide a
+      // positive reduced cost: confirm it from a fresh factorization and exact solves.
+      basis.refactor();
+      solution = basicSolution(lp, basis, scratch, true);
+      entering = selectEnteringIndex(basis.isBasic, solution.reducedCosts, tol, guard.rules.entering);
     }
-    objective = state.objective;
-    const point = pointOf(state.xTableau, factor.basisIndices);
+    objective = solution.objective;
+    const point = pointOf(solution.x, basis);
     iterations.push(point);
-    logs.push(`${iterationLabel(iteration, guard.active)} ${fmtCoordinates(point, widths.coordinate)} ${fmtE(objective, widths.measure, 1)} ${basisString(basis)}\n`);
+    rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(objective, widths.measure, 1)} ${basisString(basis.isBasic)}\n`);
 
-    if (enterIndex === -1) break;
+    if (entering === -1) break;
 
-    extractColumn(A, enterIndex, enterColumn);
-    factor.apply(enterColumn, direction);
+    extractColumn(A, entering, enterColumn);
+    basis.apply(enterColumn, direction);
 
-    const leaveBasisIndex = selectLeavingIndex(xB, direction, factor.basisIndices, tol, guard.rules.leaving);
-
-    if (leaveBasisIndex === -1) {
-      logs.push("LP is unbounded. No leaving variable found.");
+    const leavingRow = selectLeavingIndex(xB, direction, basis.columns, tol, guard.rules.leaving);
+    if (leavingRow === -1) {
+      notes.push(unboundedNote);
       status = "unbounded";
       break;
     }
 
-    guard.recordPivot(xB[leaveBasisIndex]! / direction[leaveBasisIndex]!);
-    basis[enterIndex] = true;
-    basis[factor.basisIndices[leaveBasisIndex]!] = false;
-    factor.pivot(leaveBasisIndex, direction, enterIndex);
+    guard.recordPivot(xB[leavingRow]! / direction[leavingRow]!);
+    basis.pivot(leavingRow, direction, entering);
   }
 
-  const finalBasis = basis.slice();
-  logs.push(`${completionLabel} finished in ${iteration} iterations – basis ${basisString(finalBasis)}\n`);
-
-  return { iterations, logs, finalBasis, objective, status };
+  const isBasic = basis.isBasic.slice();
+  const footer = `Phase ${phase} finished in ${iteration} iterations – basis ${basisString(isBasic)}\n`;
+  return { iterations, log: { header, rows, notes, footer }, isBasic, objective, status };
 }
 
-type PhaseRun = { iterations: Float64Array[]; logs: string[] };
+type PhaseLog = Pick<PhaseRun, "iterations" | "log">;
 
-// A phase's constraints as a log section: the header, one row per iterate, then the closing constraints. A
-// phase that ended optimal closes with its summary line as the footer; one that ended unbounded
-// or infeasible keeps every closing line as a note and names the outcome in the footer.
-function phaseSection({ iterations, logs }: PhaseRun, outcome?: string): LogSection {
-  const [header = "", ...rest] = logs;
-  const closing = rest.slice(iterations.length);
-  const footer = outcome ?? closing.pop();
-  return { header, rows: rest.slice(0, iterations.length), notes: closing, ...(footer === undefined ? {} : { footer }) };
-}
+// A phase that never ran: its log is the one line saying why.
+const skippedPhase = (reason: string): PhaseLog => ({ iterations: [], log: { header: reason, rows: [] } });
 
-function simplexResult(phase1: PhaseRun, phase2: PhaseRun, status: SimplexStatus, mode: SimplexMode): SolverResult {
-  const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : undefined;
+function simplexResult(phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus, mode: SimplexMode): SolverResult {
+  const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : null;
+  // a run that did not end optimal keeps Phase 2's closing line as a note and names the outcome in the footer
+  const { header, rows, notes = [], footer } = phase2.log;
+  const closing: LogSection = outcome ? { header, rows, notes: footer === undefined ? notes : [...notes, footer], footer: outcome } : phase2.log;
   return {
     iterations: [...phase1.iterations, ...phase2.iterations],
     // the phase of each iterate, only once there are two phases to tell apart
     ...(phase1.iterations.length > 0 ? { phases: [...phase1.iterations.map(() => 0), ...phase2.iterations.map(() => 1)] } : {}),
-    log: [phaseSection(phase1), phaseSection(phase2, outcome)],
+    log: [phase1.log, closing],
     status,
     mode,
   };
@@ -501,22 +418,21 @@ function simplexResult(phase1: PhaseRun, phase2: PhaseRun, status: SimplexStatus
 // Drives any artificial variable still basic after Phase 1 out of the basis by swapping in the
 // lowest-index original column with a nonzero pivot. A basis repair step, deliberately
 // independent of the selected pivot rules.
-function pivotOutArtificialVariables(phase1Matrix: DenseMatrix, bVec: Float64Array, basisInit: boolean[], originalColumnCount: number, tol: number) {
-  const basis = basisInit.slice();
-  const column = new Float64Array(phase1Matrix.rows);
-  const direction = new Float64Array(phase1Matrix.rows);
-  const factor = BasisInverse.fromFlags(phase1Matrix, basis);
+function pivotOutArtificialVariables(phase1: StandardLp, isBasic: readonly boolean[], originalColumnCount: number, tol: number): boolean[] {
+  const { A } = phase1;
+  const column = new Float64Array(A.rows);
+  const direction = new Float64Array(A.rows);
+  const basis = new Basis(A, isBasic);
 
   while (true) {
-    const rowIndex = factor.basisIndices.findIndex((index) => index >= originalColumnCount);
+    const rowIndex = basis.columns.findIndex((index) => index >= originalColumnCount);
     if (rowIndex === -1) break;
-    const artificialIndex = factor.basisIndices[rowIndex]!;
     let replacement = -1;
 
     for (let j = 0; j < originalColumnCount; j++) {
-      if (basis[j]) continue;
-      extractColumn(phase1Matrix, j, column);
-      factor.apply(column, direction);
+      if (basis.isBasic[j]) continue;
+      extractColumn(A, j, column);
+      basis.apply(column, direction);
       if (Math.abs(direction[rowIndex]!) > tol) {
         replacement = j;
         break;
@@ -526,14 +442,11 @@ function pivotOutArtificialVariables(phase1Matrix: DenseMatrix, bVec: Float64Arr
     if (replacement === -1) {
       throw new Error("Could not pivot artificial variables out of the Phase 1 basis.");
     }
-
-    basis[artificialIndex] = false;
-    basis[replacement] = true;
-    factor.pivot(rowIndex, direction, replacement);
+    basis.pivot(rowIndex, direction, replacement);
   }
 
-  const phase2Basis = basis.slice(0, originalColumnCount);
-  if (phase2Basis.filter(Boolean).length !== bVec.length) {
+  const phase2Basis = basis.isBasic.slice(0, originalColumnCount);
+  if (phase2Basis.filter(Boolean).length !== A.rows) {
     throw new Error("Phase 1 did not produce a valid Phase 2 basis.");
   }
   return phase2Basis;
@@ -544,85 +457,108 @@ function pivotOutArtificialVariables(phase1Matrix: DenseMatrix, bVec: Float64Arr
 // is appended, the objective is -sum(artificials) and they form the first basis.
 function phase1Problem(b: Float64Array, columnsOf: (gamma: Float64Array) => DenseMatrix) {
   const gamma = Float64Array.from(b, (value) => (value < 0 ? -1 : 1));
-  const bPhase1 = Float64Array.from(b, (value, index) => value * gamma[index]!);
+  const flippedB = Float64Array.from(b, (value, index) => value * gamma[index]!);
   const columns = columnsOf(gamma);
   const { rows, cols } = columns;
-  const aPhase1 = hstackMatrices(columns, identityMatrix(rows));
-  const cPhase1 = new Float64Array(cols + rows).fill(-1, cols);
-  const phase1Basis = Array(cols + rows).fill(false);
-  for (let i = 0; i < rows; i++) phase1Basis[cols + i] = true;
-  return { columns, bPhase1, aPhase1, cPhase1, phase1Basis };
+  const lp: StandardLp = { A: hstackMatrices(columns, identityMatrix(rows)), b: flippedB, c: new Float64Array(cols + rows).fill(-1, cols) };
+  const isBasic: boolean[] = new Array<boolean>(cols + rows).fill(false);
+  for (let i = 0; i < rows; i++) isBasic[cols + i] = true;
+  return { columns, lp, isBasic };
 }
 
-function solveDualMode(constraints: Constraint[], primalA: DenseMatrix, primalB: Float64Array, objective: Float64Array, cfg: { tol: number; pivotRules: PivotRules }) {
+// The primal vertex a dual basis identifies: the intersection of the n lowest-index constraint
+// planes whose dual variables are basic. Two variables keep their closed form; more go through a
+// dense solve, and a singular support yields the origin either way.
+function primalPointFromDualBasis(A: DenseMatrix, b: Float64Array, columns: readonly number[], tol: number): Float64Array {
+  const n = A.cols;
+  const support = [...columns]
+    .sort((p, q) => p - q)
+    .filter((index) => index < A.rows)
+    .slice(0, n);
+  if (support.length < n) return new Float64Array(n);
+
+  if (n === 2) {
+    const [i, k] = support as [number, number];
+    const a11 = A.data[i * 2]!;
+    const a12 = A.data[i * 2 + 1]!;
+    const a21 = A.data[k * 2]!;
+    const a22 = A.data[k * 2 + 1]!;
+    const determinant = a11 * a22 - a12 * a21;
+    if (Math.abs(determinant) <= tol) return new Float64Array(2);
+
+    const x = (b[i]! * a22 - a12 * b[k]!) / determinant;
+    const y = (a11 * b[k]! - b[i]! * a21) / determinant;
+    return Float64Array.of(x, y);
+  }
+
+  const matrix = new Float64Array(n * n);
+  const rhs = new Float64Array(n);
+  for (let row = 0; row < n; row++) {
+    const source = support[row]!;
+    for (let j = 0; j < n; j++) matrix[row * n + j] = A.data[source * n + j]!;
+    rhs[row] = b[source]!;
+  }
+  const point = new Float64Array(n);
+  try {
+    solveDenseSystem(matrix, n, rhs, point);
+  } catch {
+    return new Float64Array(n);
+  }
+  return point.every(Number.isFinite) ? point : new Float64Array(n);
+}
+
+function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array, cfg: Pick<PhaseConfig, "tol" | "pivotRules">): SolverResult {
   const { tol, pivotRules } = cfg;
-  const dualAFull = transposeMatrix(primalA);
-  const bDualFull = Float64Array.from(objective);
+  const dual = dropRedundantRows(transposeMatrix(A), Float64Array.from(objective), tol);
+  const cDual = Float64Array.from(b, (value) => -value);
+  const { columns: aPhase2, lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
+  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
 
-  // Rows of the dual system that are identically zero with a zero
-  // right-hand side are redundant (0 = 0); Phase 1 can never pivot their
-  // artificial variables out of the basis, so drop them up front.
-  const keptRows: number[] = [];
-  for (let row = 0; row < dualAFull.rows; row++) {
-    let allZero = true;
-    for (let col = 0; col < dualAFull.cols; col++) {
-      if (Math.abs(dualAFull.data[row * dualAFull.cols + col]!) > tol) {
-        allZero = false;
-        break;
-      }
-    }
-    if (!allZero || Math.abs(bDualFull[row]!) > tol) keptRows.push(row);
-  }
-  let dualA = dualAFull;
-  let bDual = bDualFull;
-  if (keptRows.length !== dualAFull.rows) {
-    dualA = createDenseMatrix(keptRows.length, dualAFull.cols);
-    for (let dstRow = 0; dstRow < keptRows.length; dstRow++) {
-      const srcOffset = keptRows[dstRow]! * dualAFull.cols;
-      for (let col = 0; col < dualAFull.cols; col++) {
-        dualA.data[dstRow * dualAFull.cols + col] = dualAFull.data[srcOffset + col]!;
-      }
-    }
-    bDual = Float64Array.from(keptRows, (row) => bDualFull[row]!);
-  }
-
-  const cDual = Float64Array.from(primalB, (value) => -value);
-  const { columns: aPhase2, bPhase1, aPhase1, cPhase1, phase1Basis } = phase1Problem(bDual, (gamma) => scaleRows(dualA, gamma));
-  const n = primalA.cols;
-  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (_, basisIndices) => primalPointFromDualBasis(constraints, basisIndices, n, tol) };
-
-  const phase1 = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
+  const phase1 = simplexPhase(phase1Lp, phase1Basis, { ...config, phase: 1 });
 
   if (Math.abs(phase1.objective) > tol) {
     // The dual LP is infeasible; the region is non-empty (emptiness is rejected before the
     // solver runs), so by LP duality the primal is unbounded. Still plot the Phase 1 trajectory.
-    return simplexResult(phase1, { iterations: [], logs: ["The dual LP is infeasible, so the primal LP is unbounded.\n"] }, "unbounded", "dual");
+    return simplexResult(phase1, skippedPhase("The dual LP is infeasible, so the primal LP is unbounded.\n"), "unbounded", "dual");
   }
 
-  const phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, phase1.finalBasis, aPhase2.cols, tol);
-  const phase2 = simplexCore(cDual, aPhase2, bPhase1, phase2Basis, core);
-
+  const phase2Basis = pivotOutArtificialVariables(phase1Lp, phase1.isBasic, aPhase2.cols, tol);
   // An unbounded dual means the primal LP being visualized is infeasible.
+  const phase2 = simplexPhase({ A: aPhase2, b: phase1Lp.b, c: cDual }, phase2Basis, { ...config, phase: 2, unboundedNote: "Dual LP is unbounded: the LP is infeasible." });
   const status: SimplexStatus = phase2.status === "unbounded" ? "infeasible" : phase2.status;
-  const phase2Logs =
-    phase2.status === "unbounded" ? phase2.logs.map((log) => (log === "LP is unbounded. No leaving variable found." ? "Dual LP is unbounded: the LP is infeasible." : log)) : phase2.logs;
-
-  return simplexResult(phase1, { iterations: phase2.iterations, logs: phase2Logs }, status, "dual");
+  return simplexResult(phase1, phase2, status, "dual");
 }
 
-function primalPointFromSplitTableau(tableauX: Float64Array, n: number) {
-  const point = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    point[i] = (tableauX[i] ?? 0) - (tableauX[n + i] ?? 0);
+// Rows of the dual system that are identically zero with a zero right-hand side are redundant
+// (0 = 0); Phase 1 can never pivot their artificial variables out of the basis, so drop them up front.
+function dropRedundantRows(A: DenseMatrix, b: Float64Array, tol: number): { A: DenseMatrix; b: Float64Array } {
+  const kept: number[] = [];
+  for (let row = 0; row < A.rows; row++) {
+    let allZero = true;
+    for (let col = 0; col < A.cols; col++) {
+      if (Math.abs(A.data[row * A.cols + col]!) > tol) {
+        allZero = false;
+        break;
+      }
+    }
+    if (!allZero || Math.abs(b[row]!) > tol) kept.push(row);
   }
-  return point;
+  if (kept.length === A.rows) return { A, b };
+  const reduced = createDenseMatrix(kept.length, A.cols);
+  for (let dstRow = 0; dstRow < kept.length; dstRow++) {
+    const srcOffset = kept[dstRow]! * A.cols;
+    for (let col = 0; col < A.cols; col++) {
+      reduced.data[dstRow * A.cols + col] = A.data[srcOffset + col]!;
+    }
+  }
+  return { A: reduced, b: Float64Array.from(kept, (row) => b[row]!) };
 }
 
 // Turn a user-supplied vertex of {Ax <= b} into a feasible Phase-2 basis for [A, -A, I]. Returns
 // null unless the point verifiably is a nondegenerate basic feasible solution (exactly n tight
 // rows, nonsingular basis whose basic solution is feasible and reproduces the vertex), so a bad
 // start degrades to the ordinary two-phase run, never a wrong path.
-function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Float64Array, aPhase2: DenseMatrix, vertex: number[], tol: number): boolean[] | null {
+function warmStartBasis(A: DenseMatrix, b: Float64Array, phase2: StandardLp, vertex: readonly number[], tol: number): boolean[] | null {
   const m = A.rows;
   const n = A.cols;
   const active: number[] = [];
@@ -639,65 +575,64 @@ function warmStartBasisFromVertex(A: DenseMatrix, b: Float64Array, cPhase2: Floa
   // |active| = n; interior points and degenerate corners fall back to Phase 1
   if (active.length !== n) return null;
 
-  const basis: boolean[] = new Array(2 * n + m).fill(false);
-  for (let j = 0; j < n; j++) basis[vertex[j]! >= 0 ? j : n + j] = true;
+  const isBasic: boolean[] = new Array<boolean>(phase2.A.cols).fill(false);
+  for (let j = 0; j < n; j++) isBasic[vertex[j]! >= 0 ? j : n + j] = true;
   const activeSet = new Set(active);
-  for (let i = 0; i < m; i++) if (!activeSet.has(i)) basis[2 * n + i] = true;
+  for (let i = 0; i < m; i++) if (!activeSet.has(i)) isBasic[2 * n + i] = true;
 
   try {
-    const scratch = basisScratch(m, aPhase2.cols);
-    const state = basisState(cPhase2, aPhase2, b, BasisInverse.fromFlags(aPhase2, basis), scratch);
+    const scratch = phaseScratch(m, phase2.A.cols);
+    const solution = basicSolution(phase2, new Basis(phase2.A, isBasic), scratch, false);
     for (let i = 0; i < m; i++) {
       if (scratch.xB[i]! < -tol) return null; // basis is not primal feasible
     }
+    const point = unsplit(solution.x, n);
     for (let j = 0; j < n; j++) {
-      const value = (state.xTableau[j] ?? 0) - (state.xTableau[n + j] ?? 0);
-      if (Math.abs(value - vertex[j]!) > 1e-6 * (1 + Math.abs(vertex[j]!))) {
+      if (Math.abs(point[j]! - vertex[j]!) > WARM_START_VERTEX_TOLERANCE * (1 + Math.abs(vertex[j]!))) {
         return null; // basic solution does not reproduce the vertex
       }
     }
   } catch {
     return null; // singular basis matrix
   }
-  return basis;
+  return isBasic;
 }
 
-export function simplex(constraints: Constraint[], objective: Float64Array, opts: SimplexOptions): SolverResult {
+/** Two-phase simplex on `max objective'x s.t. Ax <= b`, on the primal or (dual: true) the dual LP. */
+export function simplex(constraints: readonly Constraint[], objective: Float64Array, opts: SimplexOptions): SolverResult {
   const { tol, dual, startVertex } = opts;
   const pivotRules = resolvePivotRules(opts);
-  const { A: aOriginal, b } = denseFromConstraints(constraints);
-  const m = aOriginal.rows;
-  const n = aOriginal.cols;
-  const cObjective = Float64Array.from(objective);
+  const { A, b } = denseFromConstraints(constraints);
+  const m = A.rows;
+  const n = A.cols;
+  const c = Float64Array.from(objective);
 
   if (dual) {
-    return solveDualMode(constraints, aOriginal, b, cObjective, { tol, pivotRules });
+    return solveDualMode(A, b, c, { tol, pivotRules });
   }
 
   // Phase 1 works on [A⁺, -A⁺, diag(γ)] with the rows flipped nonnegative;
   // Phase 2 on the split standard form [A, -A, I] of the original rows.
-  const { bPhase1, aPhase1, cPhase1, phase1Basis } = phase1Problem(b, (gamma) => {
-    const aPositive = scaleRows(aOriginal, gamma);
+  const { lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(b, (gamma) => {
+    const aPositive = scaleRows(A, gamma);
     return hstackMatrices(aPositive, negateMatrix(aPositive), diagonalMatrix(gamma));
   });
-  const cPhase2 = new Float64Array(2 * n + m);
-  cPhase2.set(cObjective);
-  for (let j = 0; j < n; j++) cPhase2[n + j] = -cObjective[j]!;
-  const aPhase2 = hstackMatrices(aOriginal, negateMatrix(aOriginal), identityMatrix(m));
-  const core: SimplexCoreConfig = { tol, pivotRules, completionLabel: "Phase 2", dimension: n, pointOf: (xTableau) => primalPointFromSplitTableau(xTableau, n) };
+  const split = splitStandardForm(A, c);
+  const phase2Lp: StandardLp = { A: split.A, b, c: split.c };
+  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: n, pointOf: (x) => unsplit(x, n), unboundedNote: UNBOUNDED_NOTE };
 
-  const warmBasis = startVertex && startVertex.length === n ? warmStartBasisFromVertex(aOriginal, b, cPhase2, aPhase2, startVertex, tol) : null;
-  let phase1: PhaseRun = { iterations: [], logs: ["Skipped — warm start from the dragged start vertex.\n"] };
+  const warmBasis = startVertex && startVertex.length === n ? warmStartBasis(A, b, phase2Lp, startVertex, tol) : null;
+  let phase1: PhaseLog = skippedPhase("Skipped — warm start from the dragged start vertex.\n");
   let phase2Basis = warmBasis;
   if (!phase2Basis) {
-    const run = simplexCore(cPhase1, aPhase1, bPhase1, phase1Basis, { ...core, completionLabel: "Phase 1" });
+    const run = simplexPhase(phase1Lp, phase1Basis, { ...config, phase: 1 });
     // The Phase-1 objective equals -(sum of artificial values), so a negative
     // optimum means no feasible point exists.
     if (run.objective < -tol) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
     phase1 = run;
-    phase2Basis = pivotOutArtificialVariables(aPhase1, bPhase1, run.finalBasis, 2 * n + m, tol);
+    phase2Basis = pivotOutArtificialVariables(phase1Lp, run.isBasic, 2 * n + m, tol);
   }
 
-  const phase2 = simplexCore(cPhase2, aPhase2, b, phase2Basis, core);
+  const phase2 = simplexPhase(phase2Lp, phase2Basis, { ...config, phase: 2 });
   return simplexResult(phase1, phase2, phase2.status, "primal");
 }

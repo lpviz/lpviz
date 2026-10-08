@@ -3,6 +3,7 @@ import { hasFeasibleRegion, isReadyForSolvers } from "@/features/problem/selecto
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
 import type { Vec } from "@lpviz/math/types";
 import { zeroVec } from "@lpviz/math/vec";
+import type { QueryPoint } from "@lpviz/solver-engine/cuttingPlane";
 import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
@@ -21,7 +22,7 @@ export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] a
 export type SolverMode = (typeof SOLVER_MODES)[number];
 // Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
 // method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
-export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const;
+export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
 // Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
@@ -53,7 +54,7 @@ export const EMPTY_ITERATE_PATH: IteratePath = {
 // The ellipsoid family's per-iteration shape, parallel to the iterate path: element `i` is the
 // center followed by the upper triangle of the symmetric shape matrix P of
 // { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
-// for two variables). Null for every other solver.
+// for two variables; see @lpviz/solver-engine/localization). Null for every other solver.
 export interface EllipsoidPath {
   data: Float64Array;
   count: number;

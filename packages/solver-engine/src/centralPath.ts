@@ -1,9 +1,10 @@
-import { dot, infinityNorm, denseFromConstraints, matVec } from "@lpviz/math/blas";
-import { centroid } from "@lpviz/math/polygon";
-import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
+import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
+import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import { coordinateHeaders, fmtCoordinates, fmtE, fmtIntL, fmtStr, fmtStrL, logColumnWidths } from "./fmt";
+import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
+import { coordinateHeaders, fmtCoordinates, fmtExp, fmtExpUnsigned, formatMilliseconds, logColumnWidths, padLeft, padRight } from "./fmt";
+import { MAX_PATH_POINTS } from "./limits";
 import type { SolverResult } from "./result";
 
 const MIN_STEP_SIZE = 1e-10;
@@ -13,229 +14,218 @@ const MAX_LINE_SEARCH_ITERATIONS = 100;
 const NEWTON_GRADIENT_TOLERANCE = 1e-4;
 const NEWTON_DECREMENT_RELATIVE_TOLERANCE = 1e-12;
 const MAX_NEWTON_ITERATIONS = 2000;
+// the barrier parameter runs down a log-spaced ladder from 10^3 to 10^-5
 const BARRIER_PARAM_START = 3.0;
 const BARRIER_PARAM_END = -5.0;
+const ITERATION_COLUMN_WIDTH = 4;
 
-interface CentralPathOptions {
+export interface CentralPathOptions {
+  /** how many points of the path to trace, one per barrier parameter */
   niter: number;
   /**
    * A strictly feasible point to start the Newton steps from. Two-variable problems can find one
    * from their vertices or constraints; any other dimension must supply it.
    */
-  interiorPoint?: number[] | undefined;
+  interiorPoint?: readonly number[] | undefined;
 }
 
-function isStrictlyFeasible(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, x: ArrayLike<number>): boolean {
-  if (x.length !== A.cols) return false;
-  for (let i = 0; i < A.rows; i++) {
-    let ax = 0;
-    for (let j = 0; j < A.cols; j++) ax += A.data[i * A.cols + j]! * x[j]!;
-    if (!(ax < b[i]!)) return false;
-  }
-  return true;
-}
-
-function computeObjective(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  c: Float64Array,
-  mu: number,
-  point: Float64Array,
-  axScratch: Float64Array,
-  slackScratch: Float64Array,
-) {
-  matVec(A, point, axScratch);
-  let logBarrier = 0;
-  for (let i = 0; i < b.length; i++) {
-    const slack = b[i]! - axScratch[i]!;
-    slackScratch[i] = slack;
-    if (slack <= 0) return -Infinity;
-    logBarrier += Math.log(slack);
-  }
-  return dot(c, point) + mu * logBarrier;
-}
-
-function computeNewtonStep(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  c: Float64Array,
-  mu: number,
-  point: Float64Array,
-  gradient: Float64Array,
-  hessian: Float64Array,
-  axScratch: Float64Array,
-  slackScratch: Float64Array,
-  stepScratch: Float64Array,
-  luScratch: Float64Array,
-) {
-  matVec(A, point, axScratch);
-  gradient.set(c);
-  hessian.fill(0);
-
-  for (let i = 0; i < b.length; i++) {
-    const slack = b[i]! - axScratch[i]!;
-    slackScratch[i] = slack;
-    if (slack <= 0) {
-      return null;
-    }
-    const invSlack = 1 / slack;
-    const hessianScale = mu * invSlack * invSlack;
-    const gradientScale = mu * invSlack;
-    const rowOffset = i * A.cols;
-    for (let j = 0; j < A.cols; j++) {
-      const aij = A.data[rowOffset + j]!;
-      gradient[j]! -= gradientScale * aij;
-      for (let k = 0; k < A.cols; k++) {
-        hessian[j * A.cols + k]! += hessianScale * aij * A.data[rowOffset + k]!;
-      }
-    }
-  }
-
-  try {
-    solveDenseSystem(hessian, A.cols, gradient, stepScratch, luScratch);
-    return stepScratch;
-  } catch (error) {
-    console.error("Error in Newton step computation:", error);
-    return null;
-  }
-}
-
-function performLineSearch(
-  A: { rows: number; cols: number; data: Float64Array },
-  b: Float64Array,
-  c: Float64Array,
-  mu: number,
-  currentPoint: Float64Array,
-  currentObjective: number,
-  newtonStep: Float64Array,
-  gradientDotStep: number,
-  candidatePoint: Float64Array,
-  axScratch: Float64Array,
-  slackScratch: Float64Array,
-) {
-  let stepSize = 1;
-
-  for (let i = 0; i < MAX_LINE_SEARCH_ITERATIONS; i++) {
-    for (let j = 0; j < currentPoint.length; j++) {
-      candidatePoint[j] = currentPoint[j]! + newtonStep[j]! * stepSize;
-    }
-
-    const candidateObjective = computeObjective(A, b, c, mu, candidatePoint, axScratch, slackScratch);
-    if (candidateObjective !== -Infinity && candidateObjective >= currentObjective + LINE_SEARCH_SUFFICIENT_DECREASE * stepSize * gradientDotStep) {
-      return stepSize;
-    }
-
-    stepSize *= LINE_SEARCH_SHRINK_FACTOR;
-    if (stepSize < MIN_STEP_SIZE) {
-      return 0;
-    }
-  }
-
-  return 0;
-}
-
-function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b: Float64Array, c: Float64Array, mu: number, x0: Float64Array) {
-  const currentPoint = Float64Array.from(x0);
-  const gradient = new Float64Array(c.length);
-  const hessian = new Float64Array(c.length * c.length);
-  const step = new Float64Array(c.length);
-  const candidatePoint = new Float64Array(c.length);
-  const axScratch = new Float64Array(b.length);
-  const slackScratch = new Float64Array(b.length);
-  const luScratch = new Float64Array(c.length * c.length);
-
-  for (let iteration = 1; iteration <= MAX_NEWTON_ITERATIONS; iteration++) {
-    const newtonStep = computeNewtonStep(A, b, c, mu, currentPoint, gradient, hessian, axScratch, slackScratch, step, luScratch);
-    if (newtonStep === null) {
-      return null;
-    }
-
-    const gradientInfinityNorm = infinityNorm(gradient);
-    const decrement = dot(gradient, newtonStep);
-    const currentObjective = computeObjective(A, b, c, mu, currentPoint, axScratch, slackScratch);
-    if (gradientInfinityNorm < NEWTON_GRADIENT_TOLERANCE || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(currentObjective))) {
-      return Float64Array.from(currentPoint);
-    }
-
-    const stepSize = performLineSearch(A, b, c, mu, currentPoint, currentObjective, newtonStep, decrement, candidatePoint, axScratch, slackScratch);
-    if (stepSize === 0) {
-      return null;
-    }
-    for (let j = 0; j < currentPoint.length; j++) {
-      currentPoint[j]! += newtonStep[j]! * stepSize;
-    }
-  }
-
-  return null;
-}
-
-export function centralPath(vertices: Vec[], constraints: Constraint[], objective: Float64Array, opts: CentralPathOptions): SolverResult {
+/**
+ * The central path of `max objective'x s.t. Ax <= b`: for each barrier parameter mu on a log-spaced
+ * ladder, the maximizer of `c'x + mu * sum log(b - Ax)` by damped Newton steps started from the
+ * previous point. The barrier's share of the objective is the height the 3D view lifts each point by.
+ */
+export function centralPath(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CentralPathOptions): SolverResult {
   const { niter, interiorPoint } = opts;
 
-  if (niter > 2 ** 10) {
+  if (niter > MAX_PATH_POINTS) {
     throw new Error("niter > 2^10 not allowed");
   }
 
-  const startTime = Date.now();
+  const startTime = performance.now();
   const { A, b } = denseFromConstraints(constraints);
   const c = Float64Array.from(objective);
-  const barrierParameters = centralPathMu(niter);
-
   const n = A.cols;
-  const points: Float64Array[] = [];
-  const barrierTerms: number[] = [];
-  const rows: string[] = [];
-  const widths = logColumnWidths(n);
-  const header = `  ${fmtStrL("Iter", 4)} ${coordinateHeaders(n)} ${fmtStr("Obj", widths.measure)} ${fmtStr("µ", widths.measure)}  \n`;
+  const barrier = new BarrierProblem(A, b, c);
 
-  const startPoint = interiorPoint
-    ? isStrictlyFeasible(A, b, interiorPoint)
-      ? interiorPoint
-      : null
-    : n === 2
-      ? vertices.length >= 3
-        ? centroid(vertices)
-        : findStrictFeasiblePoint(constraints)
-      : null;
-  if (!startPoint) {
+  const start = startingPoint(barrier, interiorPoint, vertices, constraints);
+  if (!start) {
     throw new Error("Central Path requires a strictly feasible starting point.");
   }
 
-  let currentPoint = Float64Array.from(startPoint);
-  const axScratch = new Float64Array(b.length);
-  const slackScratch = new Float64Array(b.length);
+  const widths = logColumnWidths(n);
+  const header = `  ${padRight("Iter", ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(n)} ${padLeft("Obj", widths.measure)} ${padLeft("µ", widths.measure)}  \n`;
+  const points: Float64Array[] = [];
+  const barrierTerms: number[] = [];
+  const rows: string[] = [];
 
-  for (const mu of barrierParameters) {
-    const optimalPoint = centralPathXk(A, b, c, mu, currentPoint);
+  let current = start;
+  for (const mu of barrierParameters(niter)) {
+    const point = barrier.centralPoint(mu, current);
+    if (!point) continue;
 
-    if (!optimalPoint) {
-      continue;
-    }
-
-    const totalObjective = computeObjective(A, b, c, mu, optimalPoint, axScratch, slackScratch);
-    const linearObjective = dot(c, optimalPoint);
-    points.push(optimalPoint.slice());
+    const linearObjective = dot(c, point);
+    points.push(point.slice());
     // the barrier's share of the objective: what the 3D view lifts this iterate by
-    barrierTerms.push(totalObjective - linearObjective);
-
-    const progressLog = `  ${fmtIntL(points.length, 4)} ${fmtCoordinates(optimalPoint, widths.coordinate)} ${fmtE(linearObjective, widths.measure, 1)} ${fmtE(mu, widths.measure, 1, false)}  \n`;
-    rows.push(progressLog);
-
-    currentPoint = optimalPoint;
+    barrierTerms.push(barrier.value(mu, point) - linearObjective);
+    rows.push(
+      `  ${padRight(String(points.length), ITERATION_COLUMN_WIDTH)} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(linearObjective, widths.measure, 1)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`,
+    );
+    current = point;
   }
 
-  const tsolve = (Date.now() - startTime) / 1000;
-  return {
-    iterations: points,
-    convergence: barrierTerms,
-    log: [{ header, rows, footer: `Traced central path in ${Math.round(tsolve * 1000)}ms` }],
-  };
+  const footer = `Traced central path in ${formatMilliseconds(performance.now() - startTime)}`;
+  return { iterations: points, convergence: barrierTerms, log: [{ header, rows, footer }] };
 }
 
-function centralPathMu(niter: number): number[] {
+// A supplied point is checked, not trusted; without one, a two-variable problem starts from the
+// centroid of its vertices (or, for an open region, from a point its constraints admit).
+function startingPoint(barrier: BarrierProblem, interiorPoint: readonly number[] | undefined, vertices: Vec[], constraints: readonly Constraint[]): Float64Array | null {
+  if (interiorPoint) {
+    return barrier.isStrictlyFeasible(interiorPoint) ? Float64Array.from(interiorPoint) : null;
+  }
+  if (barrier.n !== 2) return null;
+  const point = vertices.length >= 3 ? centroid(vertices) : findStrictFeasiblePoint(constraints);
+  return point ? Float64Array.from(point) : null;
+}
+
+function barrierParameters(niter: number): number[] {
   if (niter <= 0) return [];
-  if (niter === 1) return [1000];
+  if (niter === 1) return [10 ** BARRIER_PARAM_START];
 
   const stepSize = (BARRIER_PARAM_END - BARRIER_PARAM_START) / (niter - 1);
   return Array.from({ length: niter }, (_, index) => 10 ** (BARRIER_PARAM_START + index * stepSize));
+}
+
+// The barrier objective `c'x + mu * sum log(b - Ax)` over `Ax < b`, with the Newton machinery that
+// maximizes it; the scratch buffers are reused across every call.
+class BarrierProblem {
+  readonly n: number;
+  private readonly ax: Float64Array;
+  private readonly slack: Float64Array;
+  private readonly gradient: Float64Array;
+  private readonly hessian: Float64Array;
+  private readonly step: Float64Array;
+  private readonly candidate: Float64Array;
+  private readonly luScratch: Float64Array;
+
+  constructor(
+    private readonly A: DenseMatrix,
+    private readonly b: Float64Array,
+    private readonly c: Float64Array,
+  ) {
+    this.n = A.cols;
+    this.ax = new Float64Array(b.length);
+    this.slack = new Float64Array(b.length);
+    this.gradient = new Float64Array(this.n);
+    this.hessian = new Float64Array(this.n * this.n);
+    this.step = new Float64Array(this.n);
+    this.candidate = new Float64Array(this.n);
+    this.luScratch = new Float64Array(this.n * this.n);
+  }
+
+  isStrictlyFeasible(x: ArrayLike<number>): boolean {
+    const { A, b } = this;
+    if (x.length !== A.cols) return false;
+    for (let i = 0; i < A.rows; i++) {
+      let ax = 0;
+      for (let j = 0; j < A.cols; j++) ax += A.data[i * A.cols + j]! * x[j]!;
+      if (!(ax < b[i]!)) return false;
+    }
+    return true;
+  }
+
+  /** The barrier objective at `point`, or -Infinity outside the region. */
+  value(mu: number, point: Float64Array): number {
+    const { A, b, c, ax, slack } = this;
+    matVec(A, point, ax);
+    let logBarrier = 0;
+    for (let i = 0; i < b.length; i++) {
+      const s = b[i]! - ax[i]!;
+      slack[i] = s;
+      if (s <= 0) return -Infinity;
+      logBarrier += Math.log(s);
+    }
+    return dot(c, point) + mu * logBarrier;
+  }
+
+  /** The maximizer for `mu`, by Newton steps from `x0`; null when the steps fail to converge. */
+  centralPoint(mu: number, x0: Float64Array): Float64Array | null {
+    const { gradient, step } = this;
+    const point = Float64Array.from(x0);
+
+    for (let iteration = 1; iteration <= MAX_NEWTON_ITERATIONS; iteration++) {
+      if (!this.newtonStep(mu, point)) return null;
+
+      const decrement = dot(gradient, step);
+      const current = this.value(mu, point);
+      if (infinityNorm(gradient) < NEWTON_GRADIENT_TOLERANCE || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(current))) {
+        return Float64Array.from(point);
+      }
+
+      const stepSize = this.lineSearch(mu, point, current, decrement);
+      if (stepSize === 0) return null;
+      for (let j = 0; j < point.length; j++) {
+        point[j]! += step[j]! * stepSize;
+      }
+    }
+
+    return null;
+  }
+
+  // The gradient and the Newton step at `point` into their buffers; false when the point is
+  // outside the region or the Hessian is singular.
+  private newtonStep(mu: number, point: Float64Array): boolean {
+    const { A, b, c, ax, slack, gradient, hessian, step, luScratch } = this;
+    matVec(A, point, ax);
+    gradient.set(c);
+    hessian.fill(0);
+
+    for (let i = 0; i < b.length; i++) {
+      const s = b[i]! - ax[i]!;
+      slack[i] = s;
+      if (s <= 0) return false;
+      const invSlack = 1 / s;
+      const hessianScale = mu * invSlack * invSlack;
+      const gradientScale = mu * invSlack;
+      const rowOffset = i * A.cols;
+      for (let j = 0; j < A.cols; j++) {
+        const aij = A.data[rowOffset + j]!;
+        gradient[j]! -= gradientScale * aij;
+        for (let k = 0; k < A.cols; k++) {
+          hessian[j * A.cols + k]! += hessianScale * aij * A.data[rowOffset + k]!;
+        }
+      }
+    }
+
+    try {
+      solveDenseSystem(hessian, A.cols, gradient, step, luScratch);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Backtracking along the Newton step until the Armijo condition holds; zero when no step does.
+  private lineSearch(mu: number, point: Float64Array, current: number, gradientDotStep: number): number {
+    const { step, candidate } = this;
+    let stepSize = 1;
+
+    for (let i = 0; i < MAX_LINE_SEARCH_ITERATIONS; i++) {
+      for (let j = 0; j < point.length; j++) {
+        candidate[j] = point[j]! + step[j]! * stepSize;
+      }
+
+      const next = this.value(mu, candidate);
+      if (next !== -Infinity && next >= current + LINE_SEARCH_SUFFICIENT_DECREASE * stepSize * gradientDotStep) {
+        return stepSize;
+      }
+
+      stepSize *= LINE_SEARCH_SHRINK_FACTOR;
+      if (stepSize < MIN_STEP_SIZE) {
+        return 0;
+      }
+    }
+
+    return 0;
+  }
 }

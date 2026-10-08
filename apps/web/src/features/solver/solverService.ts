@@ -1,6 +1,6 @@
 import { updateIteratePathsWithTrace } from "@/features/core/store";
 import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, SolverWorkerSuccessResponse, VirtualResultRow } from "@/features/solver/types";
-import { fmtCoordinates, fmtE, fmtStr, logColumnWidths } from "@lpviz/solver-engine/fmt";
+import { fmtCoordinates, fmtExp, fmtExpUnsigned, fmtIteration, logColumnWidths } from "@lpviz/solver-engine/fmt";
 
 // Push an unpacked worker result into the store's iterate fields and hand its
 // log to the result panel.
@@ -12,9 +12,8 @@ export function applySolverResult({ result }: SolverWorkerSuccessResponse, updat
 
 export function formatVirtualResultRow(row: VirtualResultRow): string {
   if (typeof row === "string") return row;
-  const iteration = fmtStr(row.restart ? `${row.iteration}r` : `${row.iteration}`, 5);
   const { coordinate, measure } = logColumnWidths(row.point.length);
-  return `${iteration} ${fmtCoordinates(row.point, coordinate)} ${fmtE(row.objective, measure, 1)} ${fmtE(row.infeasibility, measure, 1)} ${fmtE(row.convergence, measure, 1, false)}`;
+  return `${fmtIteration(row.iteration, row.restart ? "r" : "")} ${fmtCoordinates(row.point, coordinate)} ${fmtExp(row.objective, measure, 1)} ${fmtExp(row.infeasibility, measure, 1)} ${fmtExpUnsigned(row.convergence, measure, 1)}`;
 }
 
 // A one-section log is a single run and scrolls as a virtual list; a log with

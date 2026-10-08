@@ -104,3 +104,54 @@ export function invertDenseMatrix(matrix: Float64Array, size: number, out: Float
   }
   return out;
 }
+
+/**
+ * The lower Cholesky factor L (L Lᵀ = H) of a symmetric matrix, or null when it is not numerically
+ * positive definite — which is also the positive-definiteness test every caller needs before
+ * trusting an inverse or a log-determinant.
+ */
+export function cholesky(H: Float64Array, size: number): Float64Array | null {
+  const L = new Float64Array(size * size);
+  for (let j = 0; j < size; j++) {
+    let diagonal = H[j * size + j]!;
+    for (let k = 0; k < j; k++) diagonal -= L[j * size + k]! * L[j * size + k]!;
+    if (!(diagonal > 0) || !Number.isFinite(diagonal)) return null;
+    const ljj = Math.sqrt(diagonal);
+    L[j * size + j] = ljj;
+    for (let i = j + 1; i < size; i++) {
+      let sum = H[i * size + j]!;
+      for (let k = 0; k < j; k++) sum -= L[i * size + k]! * L[j * size + k]!;
+      L[i * size + j] = sum / ljj;
+    }
+  }
+  return L;
+}
+
+/** log det (L Lᵀ) from a Cholesky factor, or null when it is not finite. */
+export function logDetFromCholesky(L: Float64Array, size: number): number | null {
+  let logDet = 0;
+  for (let j = 0; j < size; j++) logDet += 2 * Math.log(L[j * size + j]!);
+  return Number.isFinite(logDet) ? logDet : null;
+}
+
+/** (L Lᵀ)⁻¹ from a Cholesky factor, by a forward and a back substitution per unit column. */
+export function invertFromCholesky(L: Float64Array, size: number): Float64Array {
+  const inverse = new Float64Array(size * size);
+  const column = new Float64Array(size);
+  for (let k = 0; k < size; k++) {
+    // forward: L y = e_k
+    for (let i = 0; i < size; i++) {
+      let sum = i === k ? 1 : 0;
+      for (let j = 0; j < i; j++) sum -= L[i * size + j]! * column[j]!;
+      column[i] = sum / L[i * size + i]!;
+    }
+    // back: Lᵀ x = y
+    for (let i = size - 1; i >= 0; i--) {
+      let sum = column[i]!;
+      for (let j = i + 1; j < size; j++) sum -= L[j * size + i]! * column[j]!;
+      column[i] = sum / L[i * size + i]!;
+    }
+    for (let i = 0; i < size; i++) inverse[i * size + k] = column[i]!;
+  }
+  return inverse;
+}

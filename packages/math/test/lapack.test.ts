@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { invertDenseMatrix, solveDenseSystem } from "../src/lapack";
+import { cholesky, invertDenseMatrix, invertFromCholesky, logDetFromCholesky, solveDenseSystem } from "../src/lapack";
 
 const solve = (matrix: number[], rhs: number[]) => {
   const size = Math.sqrt(matrix.length);
@@ -56,5 +56,33 @@ describe("invertDenseMatrix", () => {
 
   test("throws on a singular matrix", () => {
     expect(() => invert([1, 2, 2, 4])).toThrow("Singular linear system");
+  });
+});
+
+describe("cholesky", () => {
+  // H = L Lᵀ with L = [[2, 0, 0], [1, 3, 0], [-1, 2, 1]]
+  const H = Float64Array.of(4, 2, -2, 2, 10, 5, -2, 5, 6);
+
+  test("recovers the lower factor of a positive definite matrix", () => {
+    const L = cholesky(H, 3)!;
+    expect(Array.from(L)).toEqual([2, 0, 0, 1, 3, 0, -1, 2, 1]);
+  });
+
+  test("rejects an indefinite matrix", () => {
+    expect(cholesky(Float64Array.of(1, 2, 2, 1), 2)).toBeNull();
+  });
+
+  test("the log-determinant and the inverse follow from the factor", () => {
+    const L = cholesky(H, 3)!;
+    // det H = (det L)² = (2 · 3 · 1)² = 36
+    expect(logDetFromCholesky(L, 3)).toBeCloseTo(Math.log(36), 12);
+    const inverse = invertFromCholesky(L, 3);
+    for (let i = 0; i < 3; i++) {
+      for (let j = 0; j < 3; j++) {
+        let sum = 0;
+        for (let k = 0; k < 3; k++) sum += H[i * 3 + k]! * inverse[k * 3 + j]!;
+        expect(sum).toBeCloseTo(i === j ? 1 : 0, 12);
+      }
+    }
   });
 });

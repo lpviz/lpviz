@@ -1,11 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { cuttingPlane, type QueryPoint } from "../src/cuttingPlane";
+import type { Constraint, Vec } from "@lpviz/math/types";
+import { QUERY_POINTS, cuttingPlane, type CuttingPlaneOptions, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
-import { SQUARE, SQUARE_VERTICES, footerOf, lastIterate, lcg, randomPolygon, rowsOf } from "./fixtures";
+import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, ellipseAt, footerOf, lastIterate, lcg, objectiveValue, randomPolygon, rowsOf } from "./fixtures";
 
-const QUERY_POINTS: QueryPoint[] = ["chebyshev", "analytic", "volumetric"];
-
-const opts = (queryPoint: QueryPoint, o: Record<string, unknown> = {}) => ({
+const opts = (queryPoint: QueryPoint, o: Partial<CuttingPlaneOptions> = {}) => ({
   maxit: 500,
   tol: 1e-6,
   rayShoot: true,
@@ -24,12 +23,11 @@ describe("cuttingPlane", () => {
       const { hull, constraints } = polygon;
       const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(objective[0]!) + Math.abs(objective[1]!) < 0.2) continue;
-      const expected = Math.max(...hull.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
+      const expected = bruteForceOptimum(objective, hull);
       runs++;
       for (const queryPoint of QUERY_POINTS) {
         const r = cuttingPlane(hull, constraints, objective, opts(queryPoint));
-        const last = lastIterate(r);
-        const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
+        const got = objectiveValue(objective, lastIterate(r));
         expect(got).toBeLessThanOrEqual(expected + 1e-7);
         expect(expected - got).toBeLessThanOrEqual(1e-6 * (1 + Math.abs(expected)) + 1e-7);
       }
@@ -66,7 +64,7 @@ describe("cuttingPlane", () => {
 
   test("rho is a genuine bound: it never understates the true gap", () => {
     const objective = Float64Array.of(1, 1);
-    const expected = Math.max(...SQUARE_VERTICES.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
+    const expected = bruteForceOptimum(objective, SQUARE_VERTICES);
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       // objective at the query point plus rho upper-bounds the optimum at every
@@ -106,9 +104,7 @@ describe("cuttingPlane", () => {
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       for (let i = 0; i < r.iterations.length; i++) {
-        const p11 = r.ellipsoids![i * 5 + 2]!;
-        const p12 = r.ellipsoids![i * 5 + 3]!;
-        const p22 = r.ellipsoids![i * 5 + 4]!;
+        const { p11, p12, p22 } = ellipseAt(r, i);
         expect(p11).toBeGreaterThan(0);
         expect(p22).toBeGreaterThan(0);
         expect(p11 * p22 - p12 * p12).toBeGreaterThan(0);
@@ -148,18 +144,18 @@ describe("cuttingPlane", () => {
   });
 
   test("an empty region terminates instead of spinning", () => {
-    const empty = [
+    const empty: Constraint[] = [
       [1, 0, 1],
       [-1, 0, -2],
       [0, 1, 1],
       [0, -1, 1],
-    ] as [number, number, number][];
-    const hull = [
+    ];
+    const hull: Vec[] = [
       [1, 1],
       [2, 1],
       [2, -1],
       [1, -1],
-    ] as [number, number][];
+    ];
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(hull, empty, Float64Array.of(1, 1), opts(queryPoint));
       expect(r.iterations.length).toBeLessThan(500);
@@ -170,16 +166,16 @@ describe("cuttingPlane", () => {
   test("reports an unbounded objective instead of claiming optimality", () => {
     // x in [-1, 2], maximize y: the optimum is only bounded by the initial box,
     // never by a constraint
-    const strip = [
+    const strip: Constraint[] = [
       [1, 0, 2],
       [-1, 0, 1],
-    ] as [number, number, number][];
-    const hull = [
+    ];
+    const hull: Vec[] = [
       [-1, -5],
       [2, -5],
       [2, 5],
       [-1, 5],
-    ] as [number, number][];
+    ];
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
         const r = cuttingPlane(hull, strip, Float64Array.of(0, 1), opts(queryPoint, { rayShoot }));
@@ -195,15 +191,15 @@ describe("cuttingPlane", () => {
   // value 3 along the whole ray from (2,1) in the direction (-1, 1) — even
   // though that optimal face runs off into the initial box exactly where an
   // unbounded objective would stop. The ellipsoid method is the reference.
-  const WEDGE = [
+  const WEDGE: Constraint[] = [
     [1, -2, 0],
     [1, 1, 3],
-  ] as [number, number, number][];
-  const WEDGE_CHAIN = [
+  ];
+  const WEDGE_CHAIN: Vec[] = [
     [0, 0],
     [2, 1],
     [1, 2],
-  ] as [number, number][];
+  ];
 
   test("an objective that is unbounded over an open region says so", () => {
     for (const objective of [Float64Array.of(-1, 0), Float64Array.of(-1, 1)]) {

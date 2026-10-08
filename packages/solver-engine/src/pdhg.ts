@@ -1,15 +1,18 @@
-import { createDenseMatrix, type DenseMatrix, dot, infinityNorm, denseFromConstraints, matVec, transposedMatVec } from "@lpviz/math/blas";
+import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, maxAbsDifference, transposedMatVec } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
-import { numericLogHeader } from "./fmt";
-import type { NumericRow, SolverResult } from "./result";
-import { assertMaxit, solveFooter } from "./time";
+import { numericLogHeader, solveFooter } from "./fmt";
+import { assertMaxit } from "./limits";
+import { NumericTrace, type SolverResult } from "./result";
+import { splitStandardForm, unsplit } from "./standardForm";
 
 const BASIS_THRESHOLD = 1e-10;
+const BASIS_HASH_MULTIPLIER = 33;
 const HALPERN_SUFFICIENT_REDUCTION = 0.2;
 const HALPERN_NECESSARY_REDUCTION = 0.5;
 const HALPERN_ARTIFICIAL_RESTART_THRESHOLD = 0.36;
 
-interface PDHGOptions {
+export interface PDHGOptions {
+  /** run on `Ax ≤ b` directly, or on its split standard form `Ax = b, x ≥ 0` */
   ineq: boolean;
   halpern: boolean;
   maxit: number;
@@ -17,8 +20,8 @@ interface PDHGOptions {
   tau: number;
   tol: number;
   colorByBasis: boolean;
-  /** Optional primal warm start; safe from any x0 (duals derived per mode). */
-  startPoint?: number[];
+  /** Optional primal warm start; the duals keep the cold start's values. */
+  startPoint?: readonly number[] | undefined;
 }
 
 // Worst row of Ax - b: its violation in inequality mode, its mismatch in equality mode.
@@ -31,45 +34,43 @@ function primalResidual(ax: Float64Array, b: Float64Array, ineq: boolean) {
   return worst;
 }
 
-function pdhgEpsilon(
-  A: DenseMatrix,
-  b: Float64Array,
-  c: Float64Array,
-  xk: Float64Array,
-  yk: Float64Array,
-  axScratch: Float64Array,
-  atYScratch: Float64Array,
-  bNorm: number,
-  cNorm: number,
-  ineq: boolean,
-) {
-  matVec(A, xk, axScratch);
-  const primal = primalResidual(axScratch, b, ineq);
+// The relative KKT error of a primal-dual pair: the worst of the primal residual, the dual
+// residual and the duality gap, each scaled by the data it is measured against.
+class KktError {
+  private readonly ax: Float64Array;
+  private readonly aty: Float64Array;
+  private readonly bNorm: number;
+  private readonly cNorm: number;
 
-  transposedMatVec(A, yk, atYScratch);
-  let dualResidual = 0;
-  for (let i = 0; i < atYScratch.length; i++) {
-    const residual = ineq ? Math.abs(c[i]! + atYScratch[i]!) : Math.max(0, -atYScratch[i]! - c[i]!);
-    if (residual > dualResidual) dualResidual = residual;
+  constructor(
+    private readonly A: DenseMatrix,
+    private readonly b: Float64Array,
+    private readonly c: Float64Array,
+    private readonly ineq: boolean,
+  ) {
+    this.ax = new Float64Array(A.rows);
+    this.aty = new Float64Array(A.cols);
+    this.bNorm = infinityNorm(b);
+    this.cNorm = infinityNorm(c);
   }
 
-  const cTx = dot(c, xk);
-  const bTy = dot(b, yk);
-  const dualityGap = Math.abs(cTx + bTy) / (1 + Math.abs(cTx) + Math.abs(bTy));
-  return Math.max(primal / (1 + bNorm), dualResidual / (1 + cNorm), dualityGap);
-}
+  of(xk: Float64Array, yk: Float64Array): number {
+    const { A, b, c, ineq, ax, aty } = this;
+    matVec(A, xk, ax);
+    const primal = primalResidual(ax, b, ineq);
 
-function computeFixedPointError(currentX: Float64Array, nextX: Float64Array, currentY: Float64Array, nextY: Float64Array) {
-  let error = 0;
-  for (let i = 0; i < currentX.length; i++) {
-    const delta = Math.abs(nextX[i]! - currentX[i]!);
-    if (delta > error) error = delta;
+    transposedMatVec(A, yk, aty);
+    let dualResidual = 0;
+    for (let i = 0; i < aty.length; i++) {
+      const residual = ineq ? Math.abs(c[i]! + aty[i]!) : Math.max(0, -aty[i]! - c[i]!);
+      if (residual > dualResidual) dualResidual = residual;
+    }
+
+    const cTx = dot(c, xk);
+    const bTy = dot(b, yk);
+    const dualityGap = Math.abs(cTx + bTy) / (1 + Math.abs(cTx) + Math.abs(bTy));
+    return Math.max(primal / (1 + this.bNorm), dualResidual / (1 + this.cNorm), dualityGap);
   }
-  for (let i = 0; i < currentY.length; i++) {
-    const delta = Math.abs(nextY[i]! - currentY[i]!);
-    if (delta > error) error = delta;
-  }
-  return error;
 }
 
 function shouldRestartHalpern(innerIteration: number, totalIteration: number, fixedPointError: number, initialFixedPointError: number, lastTrialFixedPointError: number) {
@@ -91,7 +92,7 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
  * differ only in the residuals, the basis hash, the initial dual and which
  * variable takes the projected, extrapolated step.
  */
-function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, options: PDHGOptions): SolverResult {
+function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, options: Omit<PDHGOptions, "startPoint">): SolverResult {
   const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = options;
 
   const { rows: m, cols: n } = A;
@@ -100,14 +101,8 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const nOrig = slackOffset / 2;
   // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
   const dimension = ineq ? n : nOrig;
-  const pointOf = (xk: Float64Array): Float64Array => {
-    if (ineq) return xk.slice();
-    const point = new Float64Array(nOrig);
-    for (let j = 0; j < nOrig; j++) point[j] = (xk[j] ?? 0) - (xk[nOrig + j] ?? 0);
-    return point;
-  };
-  const bNorm = infinityNorm(b);
-  const cNorm = infinityNorm(c);
+  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, nOrig));
+  const kkt = new KktError(A, b, c, ineq);
 
   let xk = new Float64Array(n);
   // Equality duals are sign-free, so 0 is the neutral "no price information"
@@ -135,37 +130,25 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   let initialFixedPointError = Number.POSITIVE_INFINITY;
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
 
-  let epsilonK = pdhgEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm, ineq);
-  const header = numericLogHeader(dimension, "eps");
+  let epsilonK = kkt.of(xk, yk);
 
-  const rows: NumericRow[] = [];
-  const iterates: Float64Array[] = [];
-  const eps: number[] = [];
-  const phases: number[] = [];
+  const trace = new NumericTrace();
+  const basisHashes: number[] = [];
   const restartIndices: number[] = [];
   const startTime = performance.now();
 
   while (k <= maxit) {
-    iterates.push(xk.slice());
     if (colorByBasis) {
       // ineq: which duals are active; eq: which slacks are at their bound
-      let phase = 0;
+      let hash = 0;
       for (let i = 0; i < m; i++) {
-        phase = (phase * 33 + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slackOffset + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
+        hash = (hash * BASIS_HASH_MULTIPLIER + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slackOffset + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
       }
-      phases.push(phase);
+      basisHashes.push(hash);
     }
 
     matVec(A, xk, axScratch);
-    rows.push({
-      iteration: k,
-      restart: false,
-      point: pointOf(xk),
-      objective: -dot(c, xk),
-      infeasibility: primalResidual(axScratch, b, ineq),
-      convergence: epsilonK,
-    });
-    eps.push(epsilonK);
+    trace.record(pointOf(xk), -dot(c, xk), primalResidual(axScratch, b, ineq), epsilonK);
 
     if (epsilonK <= tol || k === maxit) {
       break;
@@ -201,7 +184,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     }
 
     if (halpern) {
-      const fixedPointError = computeFixedPointError(xk, nextX, yk, nextY);
+      const fixedPointError = Math.max(maxAbsDifference(xk, nextX), maxAbsDifference(yk, nextY));
       if (!Number.isFinite(initialFixedPointError)) {
         initialFixedPointError = fixedPointError;
       }
@@ -213,10 +196,8 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
         anchorY.set(nextY);
         initialFixedPointError = fixedPointError;
         innerIteration = 1;
-        restartIndices.push(iterates.length - 1);
-        if (rows.length > 0) {
-          rows[rows.length - 1]!.restart = true;
-        }
+        restartIndices.push(trace.count - 1);
+        trace.markRestart();
       } else {
         const weight = innerIteration / (innerIteration + 1);
         const anchorWeight = 1 - weight;
@@ -237,62 +218,35 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     }
     k++;
 
-    epsilonK = pdhgEpsilon(A, b, c, xk, yk, axScratch, atYScratch, bNorm, cNorm, ineq);
+    epsilonK = kkt.of(xk, yk);
     if (!Number.isFinite(epsilonK)) {
       break;
     }
   }
 
-  const footer = solveFooter(epsilonK <= tol, iterates.length, performance.now() - startTime);
-
-  return {
-    iterations: iterates,
-    convergence: eps,
-    log: [{ header, rows, footer }],
-    phases: colorByBasis ? phases : undefined,
+  const footer = solveFooter(epsilonK <= tol, trace.count, performance.now() - startTime);
+  return trace.result(numericLogHeader(dimension, "eps"), footer, {
+    phases: colorByBasis ? basisHashes : undefined,
     restartIndices: halpern ? restartIndices : undefined,
-  };
+  });
 }
 
-export function pdhg(constraints: Constraint[], objective: Float64Array, options: PDHGOptions): SolverResult {
-  const { ineq, maxit, startPoint } = options;
+/** PDHG on `max objective'x s.t. Ax ≤ b`, directly (ineq) or on the split standard form (eq). */
+export function pdhg(constraints: readonly Constraint[], objective: Float64Array, options: PDHGOptions): SolverResult {
+  const { ineq, maxit, startPoint, ...rest } = options;
   assertMaxit(maxit);
 
   const { A, b } = denseFromConstraints(constraints);
   const nOrig = A.cols;
-  const m = A.rows;
   const x0 = startPoint && startPoint.length === nOrig ? Float64Array.from(startPoint) : undefined;
+  // max c'x is min (−c)'x
+  const cost = Float64Array.from(objective, (value) => -value);
 
   if (ineq) {
-    return pdhgCore(
-      A,
-      b,
-      Float64Array.from(objective, (value) => -value),
-      x0,
-      options,
-    );
+    return pdhgCore(A, b, cost, x0, { ...rest, ineq, maxit });
   }
 
-  // x = x^+ - x^- where x^+, x^- ≥ 0
-  // A(x^+ - x^-) = b becomes A[x^+; x^-; s] = b with slack s
-  const AHat = createDenseMatrix(m, 2 * nOrig + m);
-  for (let i = 0; i < m; i++) {
-    const originalRowOffset = i * nOrig;
-    const targetRowOffset = i * AHat.cols;
-    for (let j = 0; j < nOrig; j++) {
-      const value = A.data[originalRowOffset + j]!;
-      AHat.data[targetRowOffset + j] = value;
-      AHat.data[targetRowOffset + nOrig + j] = -value;
-    }
-    AHat.data[targetRowOffset + 2 * nOrig + i] = 1;
-  }
-
-  // ĉ = [-c; c; 0_m]
-  const cHat = new Float64Array(2 * nOrig + m);
-  for (let i = 0; i < nOrig; i++) {
-    cHat[i] = -objective[i]!;
-    cHat[nOrig + i] = objective[i]!;
-  }
+  const split = splitStandardForm(A, cost);
   // Warm start mapped into the split variables chi = [x^+; x^-; s] >= 0:
   // x^+ - x^- = x0 exactly, so the displayed first iterate is the chosen
   // point. The slack block stays at the cold start's zeros — like the cold
@@ -300,22 +254,12 @@ export function pdhg(constraints: Constraint[], objective: Float64Array, options
   // chi0 >= 0 (the splitting's hard constraint) holds by construction.
   let chi0: Float64Array | undefined;
   if (x0) {
-    chi0 = new Float64Array(2 * nOrig + m);
+    chi0 = new Float64Array(split.c.length);
     for (let j = 0; j < nOrig; j++) {
       const value = x0[j]!;
       if (value >= 0) chi0[j] = value;
       else chi0[nOrig + j] = -value;
     }
   }
-  const result = pdhgCore(AHat, b, cHat, chi0, options);
-
-  // x = x^+ - x^-
-  const iterations = result.iterations.map((chi) => {
-    const point = new Float64Array(nOrig);
-    for (let i = 0; i < nOrig; i++) {
-      point[i] = chi[i]! - chi[nOrig + i]!;
-    }
-    return point;
-  });
-  return { ...result, iterations };
+  return pdhgCore(split.A, b, split.c, chi0, { ...rest, ineq, maxit });
 }
