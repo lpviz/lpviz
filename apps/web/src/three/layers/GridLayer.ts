@@ -1,10 +1,8 @@
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { Color, DoubleSide, GLSL3, Mesh, PlaneGeometry, ShaderMaterial } from "three";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import type { Layer } from "../Layer";
-
-const GRID_COLOR = "#e0e0e0";
-const AXIS_COLOR = "#707070";
+import type { Layer, LayerPlacement } from "../Layer";
+import { PALETTE } from "../palette";
 
 // Fragment-shader grid on a single static quad: unit constraints and axes are computed per pixel from
 // world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Constraint[] are
@@ -47,7 +45,6 @@ void main() {
 
 export class GridLayer implements Layer {
   readonly object3D: Mesh;
-  readonly renderPass = "background" as const;
   readonly invalidationKeys = ["grid"] as const;
   private material: ShaderMaterial;
   private centerX = 0;
@@ -59,8 +56,8 @@ export class GridLayer implements Layer {
       vertexShader: VERTEX_SHADER,
       fragmentShader: FRAGMENT_SHADER,
       uniforms: {
-        gridColor: { value: new Color(GRID_COLOR) },
-        axisColor: { value: new Color(AXIS_COLOR) },
+        gridColor: { value: new Color(PALETTE.grid) },
+        axisColor: { value: new Color(PALETTE.axis) },
       },
       transparent: true,
       depthWrite: false,
@@ -70,6 +67,10 @@ export class GridLayer implements Layer {
     mesh.renderOrder = RENDER_ORDER.grid;
     mesh.frustumCulled = false;
     this.object3D = mesh;
+  }
+
+  placements(): readonly LayerPlacement[] {
+    return [{ object3D: this.object3D, pass: "background" }];
   }
 
   update(): void {

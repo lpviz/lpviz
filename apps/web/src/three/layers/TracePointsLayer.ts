@@ -1,17 +1,13 @@
-import { getState, MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import type { PointsMaterial } from "three";
-import { BufferAttribute, DynamicDrawUsage } from "three";
+import { MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
-import { makePoints, pointsMaterial } from "../helpers/points";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
-import { ZScaledGroupLayer } from "./base/LayerBase";
+import { PALETTE } from "../palette";
+import { PointCloudLayer } from "./base/PointCloudLayer";
 
-const TRACE_COLOR = "#ffa500";
 const TRACE_POINT_PIXEL_SIZE = 6;
-const TRACE_POINTS_RENDER_ORDER = RENDER_ORDER.tracePoints;
 
 type TraceEntry = State["traceBuffer"][number];
 
@@ -34,6 +30,7 @@ function buildTraceSamplePositions(pathPositions: Float32Array, pointCount: numb
   return samples;
 }
 
+// a trace entry is immutable once appended, so its samples are computed once
 const tracePointPositionCache = new WeakMap<object, Float32Array>();
 
 function getCachedTracePointPositions(entry: TraceEntry) {
@@ -44,68 +41,37 @@ function getCachedTracePointPositions(entry: TraceEntry) {
   return sampled;
 }
 
-// grow-only concat scratch: the buffer changes on every rotation step, and
-// allocating the full concatenation each time churns the GC
-let concatScratch = new Float32Array(0);
-
-function buildAllTracePointPositions(raw: State, mode: "2d" | "3d"): { array: Float32Array; length: number } {
-  if (!raw.traceEnabled || raw.traceBuffer.length === 0 || !shouldRenderSnapshotMode(mode, raw)) {
-    return { array: concatScratch, length: 0 };
-  }
-  let total = 0;
-  for (const entry of raw.traceBuffer) {
-    total += getCachedTracePointPositions(entry).length;
-  }
-  if (concatScratch.length < total) {
-    concatScratch = new Float32Array(Math.max(total, concatScratch.length * 2));
-  }
-  let offset = 0;
-  for (const entry of raw.traceBuffer) {
-    const chunk = getCachedTracePointPositions(entry);
-    concatScratch.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return { array: concatScratch, length: total };
-}
-
-export class TracePointsLayer extends ZScaledGroupLayer {
-  override readonly renderPass = "trace" as const;
-  override readonly invalidationKeys = ["trace"] as const;
-  private pts = makePoints(pointsMaterial(SHARED_CIRCLE_TEXTURE, TRACE_POINT_PIXEL_SIZE, TRACE_COLOR), TRACE_POINTS_RENDER_ORDER, true);
-
+// Sampled points of every traced path, in one cloud.
+export class TracePointsLayer extends PointCloudLayer {
   constructor() {
-    super();
-    this.object3D.add(this.pts);
+    super({
+      color: PALETTE.trace,
+      pixelSize: TRACE_POINT_PIXEL_SIZE,
+      texture: SHARED_CIRCLE_TEXTURE,
+      renderOrder: RENDER_ORDER.tracePoints,
+      renderPass: "trace",
+      invalidationKeys: ["trace"],
+      vertexColors: false,
+    });
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [state.traceEnabled, state.traceBuffer, state.is3DMode, state.isTransitioning3D, snap.mode];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const positions = buildAllTracePointPositions(raw, getViewportRenderSnapshot().mode);
-    this.object3D.visible = positions.length > 0;
-    if (positions.length > 0) {
-      // grow-only attribute updated in place (see concatScratch)
-      const count = positions.length / 3;
-      const geometry = this.pts.geometry;
-      let attr = geometry.getAttribute("position") as BufferAttribute | undefined;
-      if (!attr || attr.array !== positions.array || attr.count < count) {
-        attr = new BufferAttribute(positions.array, 3);
-        attr.setUsage(DynamicDrawUsage);
-        geometry.dispose();
-        geometry.setAttribute("position", attr);
-      } else {
-        attr.needsUpdate = true;
-      }
-      geometry.setDrawRange(0, count);
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    if (!state.traceEnabled || state.traceBuffer.length === 0 || !shouldRenderSnapshotMode(snap.mode, state)) {
+      this.hide();
+      return;
     }
-  }
-
-  dispose(): void {
-    (this.pts.material as PointsMaterial).dispose();
-    this.pts.geometry.dispose();
+    const chunks = state.traceBuffer.map(getCachedTracePointPositions);
+    const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    this.draw(total / 3, (positions) => {
+      let offset = 0;
+      for (const chunk of chunks) {
+        positions.set(chunk, offset);
+        offset += chunk.length;
+      }
+    });
   }
 }

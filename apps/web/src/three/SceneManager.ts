@@ -158,12 +158,8 @@ export class SceneManager {
 
   addLayer(layer: Layer): void {
     this.layers.push(layer);
-    if (layer.renderObjects) {
-      for (const { object3D, pass } of layer.renderObjects) {
-        this.scenes[pass].add(object3D);
-      }
-    } else {
-      this.scenes[layer.renderPass ?? "foreground"].add(layer.object3D);
+    for (const { object3D, pass } of layer.placements()) {
+      this.scenes[pass].add(object3D);
     }
     this.invalidate();
   }

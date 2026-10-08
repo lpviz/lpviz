@@ -1,16 +1,17 @@
-import { getState, iterateHeight } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { iterateHeight, type State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
+import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Square markers on the iterates where PDHG restarted (a subset of the path).
 export class IterateRestartPointsLayer extends PointCloudLayer {
   constructor() {
     super({
-      color: "#800080",
+      color: PALETTE.iterate,
       pixelSize: 8 * 1.4,
       texture: SHARED_SQUARE_TEXTURE,
       renderOrder: RENDER_ORDER.iterateRestartPoints,
@@ -20,25 +21,23 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
     });
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    return [raw.iteratePath, raw.iteratePhases, raw.iterateRestartIndices, getViewportRenderSnapshot().mode];
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [state.iteratePath, state.iteratePhases, state.iterateRestartIndices, snap.mode];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const path = raw.iteratePath;
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    const path = state.iteratePath;
     const { points, count, stride } = path;
-    if (!shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw)) {
+    if (!shouldRenderSnapshotMode(snap.mode, state)) {
       this.hide();
       return;
     }
-    const indices = raw.iterateRestartIndices.filter((idx) => idx >= 0 && idx < count);
+    const indices = state.iterateRestartIndices.filter((idx) => idx >= 0 && idx < count);
     if (indices.length === 0) {
       this.hide();
       return;
     }
-    const phases = raw.iteratePhases;
+    const phases = state.iteratePhases;
     const hasPhases = phases.length === count && phases.length > 0;
     this.draw(
       indices.length,

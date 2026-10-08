@@ -1,6 +1,9 @@
+import { readFileSync } from "node:fs";
 import { defineConfig, type Connect, type Plugin } from "vite";
 import { DOCS_PAGES } from "./apps/web/docs/pages";
 import { renderDocsPage } from "./apps/web/docs/render";
+
+const { version } = JSON.parse(readFileSync(new URL("./apps/web/package.json", import.meta.url), "utf8")) as { version: string };
 
 // The documentation pages are rendered from apps/web/docs into docs/<slug>.html
 // at build time. In production, Cloudflare's asset server maps clean URLs onto
@@ -34,6 +37,7 @@ function docsPages(): Plugin {
 }
 
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(version) },
   resolve: {
     tsconfigPaths: true,
   },

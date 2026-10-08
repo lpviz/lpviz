@@ -1,5 +1,4 @@
-import { getState } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox } from "@lpviz/math/bounds";
 import type { Constraint, PointXY } from "@lpviz/math/types";
@@ -10,10 +9,9 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { CLIP_MARGIN_UNITS, visibleBounds2D } from "../helpers/visibleBounds";
+import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
-const CONSTRAINT_COLOR = "#ff0000";
-const CONSTRAINT_RENDER_ORDER = RENDER_ORDER.constraintLines;
 const CONSTRAINT_LINE_THICKNESS = 2;
 const DEFAULT_3D_EXTENT = 5000;
 const EPS = 1e-10;
@@ -69,20 +67,18 @@ function clipLineToBounds(line: Constraint, b: BoundingBox): [PointXY, PointXY] 
 }
 
 export class ConstraintHighlightLayer extends LayerBase {
-  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, false)), CONSTRAINT_RENDER_ORDER);
+  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.accent, CONSTRAINT_LINE_THICKNESS, false)), RENDER_ORDER.constraintLines);
   // "grid" fires on zoom/resize/pan, which move the visible bounds this
   // layer clips against; the dependency check below keeps updates cheap.
   override readonly invalidationKeys = ["constraints", "grid"] as const;
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
     return [
-      raw.completionMode,
-      raw.highlightIndex,
-      raw.polytope,
-      raw.is3DMode,
-      raw.isTransitioning3D,
+      state.completionMode,
+      state.highlightIndex,
+      state.polytope,
+      state.is3DMode,
+      state.isTransitioning3D,
       snap.mode,
       snap.orthographic.left,
       snap.orthographic.right,
@@ -97,16 +93,13 @@ export class ConstraintHighlightLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
-
-    if (raw.completionMode === "draft" || raw.highlightIndex === null || !raw.polytope || !hasConstraints(raw.polytope) || !rendersPlanarDrawing(snap.mode, raw)) {
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    if (state.completionMode === "draft" || state.highlightIndex === null || !state.polytope || !hasConstraints(state.polytope) || !rendersPlanarDrawing(snap.mode, state)) {
       this.object3D.visible = false;
       return;
     }
 
-    const line = raw.polytope.constraints[raw.highlightIndex];
+    const line = state.polytope.constraints[state.highlightIndex];
     if (!line) {
       this.object3D.visible = false;
       return;
@@ -121,7 +114,7 @@ export class ConstraintHighlightLayer extends LayerBase {
     const [start, end] = clipped;
     replaceLinePositions(this.object3D.geometry, [start.x, start.y, 0, end.x, end.y, 0]);
 
-    this.object3D.material = lineDepthMaterial(CONSTRAINT_COLOR, CONSTRAINT_LINE_THICKNESS, snap.mode === "3d");
+    this.object3D.material = lineDepthMaterial(PALETTE.accent, CONSTRAINT_LINE_THICKNESS, snap.mode === "3d");
     this.object3D.visible = true;
   }
 

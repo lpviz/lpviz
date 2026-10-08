@@ -1,5 +1,5 @@
 import { getViewportRenderSnapshot, subscribeFullViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { OrthographicCamera, PerspectiveCamera } from "three";
+import { OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
 import type { SceneManager } from "../SceneManager";
 
 const EPS = 1e-9;
@@ -12,10 +12,13 @@ type PerspectiveProjection = { fov: number; aspect: number; near: number; far: n
 export class CameraController {
   private ortho = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
   readonly perspective = new PerspectiveCamera(45, 1, 0.1, 10000);
+  // The point the perspective camera looks at, which the orbit controls move too. NaN until the
+  // first snapshot is applied, so nothing matches it before then.
+  readonly perspectiveTarget = new Vector3(NaN, NaN, NaN);
   private unsubscribe: () => void;
   private pendingSnapshot = false;
-  // tracked apart from the camera's own fields, which ControlsController also
-  // writes when it syncs from its config
+  // tracked apart from the camera's own fields, which the orbit controls also
+  // write when they sync from their config
   private lastPerspectiveProjection: PerspectiveProjection | null = null;
 
   constructor(private sceneManager: SceneManager) {
@@ -68,14 +71,14 @@ export class CameraController {
     }
     this.perspective.position.copy(position);
     this.perspective.up.copy(up);
-    this.perspective.lookAt(snap.target.x, snap.target.y, snap.target.z);
+    this.perspectiveTarget.set(snap.target.x, snap.target.y, snap.target.z);
+    this.perspective.lookAt(this.perspectiveTarget);
     this.perspective.updateMatrixWorld();
-    this.perspective.userData.lpvizLookAtTarget = xyz(snap.target);
   }
 
   private perspectiveAlreadyMatchesSnapshot(): boolean {
     const snap = getViewportRenderSnapshot();
-    const target = this.perspective.userData.lpvizLookAtTarget as { x?: number; y?: number; z?: number } | undefined;
+    const target = this.perspectiveTarget;
     return (
       nearlyEqual(this.perspective.fov, snap.perspective.fov) &&
       nearlyEqual(this.perspective.aspect, snap.perspective.aspect) &&
@@ -87,7 +90,6 @@ export class CameraController {
       nearlyEqual(this.perspective.up.x, snap.perspective.up.x) &&
       nearlyEqual(this.perspective.up.y, snap.perspective.up.y) &&
       nearlyEqual(this.perspective.up.z, snap.perspective.up.z) &&
-      !!target &&
       nearlyEqual(target.x, snap.target.x) &&
       nearlyEqual(target.y, snap.target.y) &&
       nearlyEqual(target.z, snap.target.z)
@@ -100,6 +102,6 @@ export class CameraController {
   }
 }
 
-function nearlyEqual(a: number | undefined, b: number): boolean {
-  return a !== undefined && Math.abs(a - b) <= EPS;
+function nearlyEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) <= EPS;
 }

@@ -11,7 +11,7 @@ const NULL_STATE_LOGO_LINES = [
   "    /\\____\\ \\  __/\\ \\___/ \\ \\_\\/\\____\\  ",
   "    \\/____/\\ \\ \\/  \\/__/   \\/_/\\/____/  ",
   "            \\ \\_\\                       ",
-  "             \\/_/               v1.2.0",
+  `             \\/_/               v${__APP_VERSION__}`,
   "                                        ",
 ] as const;
 
@@ -20,6 +20,7 @@ const NULL_STATE_LOGO_VIEWBOX_HEIGHT = NULL_STATE_LOGO_LINES.length * LINE_HEIGH
 
 // One <text> per non-space glyph. The glyphs are slashes, backslashes,
 // underscores and the version string (no <, > or &), so nothing needs escaping.
+// The version is the app package's, defined at build time (see vite.config.ts).
 const GLYPHS = NULL_STATE_LOGO_LINES.map((line, row) =>
   Array.from(line)
     .map((glyph, column) => (glyph === " " ? "" : `<text x="${column * CHAR_ADVANCE}" y="${FONT_SIZE + row * LINE_HEIGHT}">${glyph}</text>`))

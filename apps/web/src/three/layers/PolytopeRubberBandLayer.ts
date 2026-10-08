@@ -7,13 +7,12 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { applyHugeBounds } from "../helpers/hugeBounds";
 import { lineDepthMaterial, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
-import type { Layer } from "../Layer";
-
-const POLYTOPE_OUTLINE_COLOR = "#000000";
+import type { Layer, LayerPlacement } from "../Layer";
+import { PALETTE } from "../palette";
 
 const POLY_LINE_THICKNESS = 2;
 
-const rbMat = lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false);
+const rbMat = lineDepthMaterial(PALETTE.polytopeOutline, POLY_LINE_THICKNESS, false);
 
 const RUBBER_BAND_BUF = new Float32Array(6);
 
@@ -26,6 +25,10 @@ export class PolytopeRubberBandLayer implements Layer {
     geo.setPositions([0, 0, 0, 0, 0, 0]);
     applyHugeBounds(geo);
     this.object3D = setupLine(new Line2(geo, rbMat), RENDER_ORDER.polyEdges);
+  }
+
+  placements(): readonly LayerPlacement[] {
+    return [{ object3D: this.object3D, pass: "foreground" }];
   }
 
   update(): void {

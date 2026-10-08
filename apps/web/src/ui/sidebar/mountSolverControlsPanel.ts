@@ -54,7 +54,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
       renderedMode = s.solverMode;
       syncSettings = buildSettings(s.solverMode, s.solverSettings);
     }
-    syncSettings(s);
+    syncSettings(s.solverSettings);
   }
 
   render(getState());

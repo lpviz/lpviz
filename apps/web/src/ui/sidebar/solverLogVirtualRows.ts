@@ -2,6 +2,19 @@ import type { State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { rowEl } from "./solverLogBlocks";
 
+// The font is sized so the widest line fits the panel: the stylesheet's size, the monospace
+// glyph width as a fraction of it, and the range the fit may land in.
+const BASE_FONT_PX = 18;
+const GLYPH_WIDTH_EM = 0.55;
+const FIT_SHRINK = 0.875;
+const FIT_SLACK_PX = 10;
+const MAX_FIT_SCALE = 4;
+const MIN_FONT_PX = 10;
+const MAX_FONT_PX = 24;
+// before a row or the panel has a measured height
+const FALLBACK_ROW_HEIGHT_PX = 18;
+const FALLBACK_VIEW_HEIGHT_PX = 600;
+
 // Sizes the result's font to fit the widest line in its width.
 // The horizontal padding is static CSS; reading computed style per render
 // (interleaved with the DOM writes below) forced a layout pass per solve
@@ -20,11 +33,10 @@ export function createResultFit(result: HTMLElement) {
       if (fitKey === lastFitKey) return;
       lastFitKey = fitKey;
       if (effectiveWidth > 0) {
-        const baseSize = 18;
-        const targetWidth = Math.max(1, effectiveWidth - 10);
-        const maxLineWidth = s.resultMaxLineChars * baseSize * 0.55;
-        const scale = Math.min(4, Math.max(0, targetWidth / maxLineWidth));
-        const fontSize = Math.min(24, Math.max(10, baseSize * scale * 0.875));
+        const targetWidth = Math.max(1, effectiveWidth - FIT_SLACK_PX);
+        const maxLineWidth = s.resultMaxLineChars * BASE_FONT_PX * GLYPH_WIDTH_EM;
+        const scale = Math.min(MAX_FIT_SCALE, Math.max(0, targetWidth / maxLineWidth));
+        const fontSize = Math.min(MAX_FONT_PX, Math.max(MIN_FONT_PX, BASE_FONT_PX * scale * FIT_SHRINK));
         result.style.fontSize = `${fontSize}px`;
         result.style.setProperty("--virtual-font-size", `${fontSize}px`);
       }
@@ -60,10 +72,10 @@ export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRo
         text: first.text,
       });
       rowsEl.append(probe);
-      rowHeight = probe.offsetHeight || 18;
+      rowHeight = probe.offsetHeight || FALLBACK_ROW_HEIGHT_PX;
       probe.remove();
     }
-    const viewHeight = sc.clientHeight || result.clientHeight || 600;
+    const viewHeight = sc.clientHeight || result.clientHeight || FALLBACK_VIEW_HEIGHT_PX;
     const start = Math.max(0, Math.floor(sc.scrollTop / rowHeight) - VIRTUAL_OVERSCAN_ROWS);
     const end = Math.min(blocks.length, Math.ceil((sc.scrollTop + viewHeight) / rowHeight) + VIRTUAL_OVERSCAN_ROWS);
     if (start === windowStart && end === windowEnd) return;

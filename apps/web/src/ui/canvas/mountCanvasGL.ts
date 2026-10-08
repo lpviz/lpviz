@@ -1,7 +1,8 @@
 import type { ViewportBridge } from "@/features/viewport/types";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
-import { ControlsController } from "@/three/controllers/ControlsController";
+import { OrbitController } from "@/three/controllers/OrbitController";
+import { attachPanZoom2D } from "@/three/controllers/panZoom2D";
 import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
@@ -28,7 +29,9 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   const transitionCtl = new TransitionController(mgr);
   mgr.addTick(() => transitionCtl.tick());
   const cameraCtl = new CameraController(mgr);
-  const controlsCtl = new ControlsController(mgr, cameraCtl.perspective);
+  // the 2D listeners register before the 3D ones on the same targets
+  const detachPanZoom2D = attachPanZoom2D(canvas);
+  const orbit = new OrbitController(mgr, cameraCtl.perspective, cameraCtl.perspectiveTarget);
   const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),
@@ -56,7 +59,8 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   return {
     canvas,
     destroy: () => {
-      controlsCtl.dispose();
+      orbit.dispose();
+      detachPanZoom2D();
       cameraCtl.dispose();
       transitionCtl.dispose();
       mgr.dispose();

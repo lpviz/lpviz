@@ -1,5 +1,4 @@
-import { getState, type State } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { isConvexChain, isConvexPolygon } from "@lpviz/math/polygon";
@@ -11,12 +10,10 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { visibleBounds2D } from "../helpers/visibleBounds";
-import type { LayerRenderObject } from "../Layer";
+import type { LayerPlacement } from "../Layer";
+import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
-const POLYTOPE_FILL_COLOR = "#e6e6e6";
-const POLYTOPE_HIGHLIGHT_COLOR = "#ff0000";
-const POLYTOPE_OUTLINE_COLOR = "#000000";
 const POLY_LINE_THICKNESS = 2;
 const DEFAULT_UNBOUNDED_EXTENT = 5000;
 const EPS = 1e-10;
@@ -155,7 +152,6 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
 
 export class PolytopeBaseLayer extends LayerBase {
   readonly object3D: Group;
-  readonly renderObjects: readonly LayerRenderObject[];
   override readonly invalidationKeys = ["polytope"] as const;
   private fillMesh: Mesh;
   private fillMatNormal: MeshBasicMaterial;
@@ -165,23 +161,19 @@ export class PolytopeBaseLayer extends LayerBase {
 
   constructor() {
     super();
-    const fMatN = fillMaterial(POLYTOPE_FILL_COLOR);
-    const fMatH = fillMaterial(POLYTOPE_HIGHLIGHT_COLOR);
+    const fMatN = fillMaterial(PALETTE.polytopeFill);
+    const fMatH = fillMaterial(PALETTE.accent);
     const mesh = new Mesh(undefined, fMatN);
     mesh.renderOrder = RENDER_ORDER.polytopeFill;
     mesh.frustumCulled = false;
     mesh.visible = false;
 
-    const nEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(POLYTOPE_OUTLINE_COLOR, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
-    const hEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(POLYTOPE_HIGHLIGHT_COLOR, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+    const nEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.polytopeOutline, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+    const hEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.accent, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
 
     const edgeGroup = new Group();
     edgeGroup.add(nEdges, hEdges);
     this.object3D = edgeGroup;
-    this.renderObjects = [
-      { object3D: mesh, pass: "transparent" },
-      { object3D: edgeGroup, pass: "foreground" },
-    ];
     this.fillMesh = mesh;
     this.fillMatNormal = fMatN;
     this.fillMatHighlight = fMatH;
@@ -189,16 +181,22 @@ export class PolytopeBaseLayer extends LayerBase {
     this.highlightEdges = hEdges;
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
+  // the fill renders in the transparent pass, under everything drawn on the floor; the edges above it
+  override placements(): readonly LayerPlacement[] {
     return [
-      raw.vertices,
-      raw.completionMode,
-      raw.highlightIndex,
-      raw.polytope,
-      raw.is3DMode,
-      raw.isTransitioning3D,
+      { object3D: this.fillMesh, pass: "transparent" },
+      { object3D: this.object3D, pass: "foreground" },
+    ];
+  }
+
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [
+      state.vertices,
+      state.completionMode,
+      state.highlightIndex,
+      state.polytope,
+      state.is3DMode,
+      state.isTransitioning3D,
       snap.mode,
       snap.orthographic.left,
       snap.orthographic.right,
@@ -207,15 +205,11 @@ export class PolytopeBaseLayer extends LayerBase {
       snap.unitsPerPixel,
       snap.target.x,
       snap.target.y,
-      snap.transitionZMultiplier,
     ];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
-
-    const visible = raw.vertices.length > 0 && rendersPlanarDrawing(snap.mode, raw);
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    const visible = state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
     this.object3D.visible = visible;
     if (!visible) {
       this.fillMesh.visible = false;
@@ -223,7 +217,7 @@ export class PolytopeBaseLayer extends LayerBase {
     }
 
     const is3D = snap.mode === "3d";
-    const result = buildPolytopeGeometry(raw, snap);
+    const result = buildPolytopeGeometry(state, snap);
 
     if (result.fillVertices.length >= 3) {
       // free the previous fill's GL buffers before the geometry is replaced
@@ -236,8 +230,8 @@ export class PolytopeBaseLayer extends LayerBase {
     }
 
     const edges: [LineSegments2, number[], string][] = [
-      [this.normalEdges, result.normalSegments, POLYTOPE_OUTLINE_COLOR],
-      [this.highlightEdges, result.highlightSegments, POLYTOPE_HIGHLIGHT_COLOR],
+      [this.normalEdges, result.normalSegments, PALETTE.polytopeOutline],
+      [this.highlightEdges, result.highlightSegments, PALETTE.accent],
     ];
     for (const [segs, segments, color] of edges) {
       segs.visible = segments.length >= 6;

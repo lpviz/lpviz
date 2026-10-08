@@ -16,47 +16,56 @@ const APP_DESCRIPTION = "Interactive web app for visualizing linear programming 
 const pagePath = (page: DocsPage): string => (page === overview ? "/docs/" : `/docs/${page.slug}`);
 const pageUrl = (page: DocsPage): string => ORIGIN + pagePath(page);
 const text = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
-const json = JSON.stringify;
 
-function jsonLd(page: DocsPage): string {
+// The page's schema.org graph: the app and its documentation collection on the overview, the
+// article and its breadcrumbs on every other page.
+function jsonLdGraph(page: DocsPage): object[] {
   if (page === overview) {
-    const parts = articles.map((a) => `              { "@type": "TechArticle", "name": ${json(a.schema.name)}, "url": ${json(pageUrl(a))} }`);
-    return `          {
-            "@type": "WebApplication",
-            "@id": "${ORIGIN}/#app",
-            "name": "lpviz",
-            "url": "${ORIGIN}/",
-            "description": ${json(APP_DESCRIPTION)},
-            "applicationCategory": "EducationalApplication",
-            "operatingSystem": "Any (web browser)"
-          },
-          {
-            "@type": "CollectionPage",
-            "@id": ${json(pageUrl(page))},
-            "name": ${json(page.schema.name)},
-            "description": ${json(page.schema.description)},
-            "isPartOf": { "@id": "${ORIGIN}/#app" },
-            "hasPart": [
-${parts.join(",\n")}
-            ]
-          }`;
+    return [
+      {
+        "@type": "WebApplication",
+        "@id": `${ORIGIN}/#app`,
+        name: "lpviz",
+        url: `${ORIGIN}/`,
+        description: APP_DESCRIPTION,
+        applicationCategory: "EducationalApplication",
+        operatingSystem: "Any (web browser)",
+      },
+      {
+        "@type": "CollectionPage",
+        "@id": pageUrl(page),
+        name: page.schema.name,
+        description: page.schema.description,
+        isPartOf: { "@id": `${ORIGIN}/#app` },
+        hasPart: articles.map((article) => ({ "@type": "TechArticle", name: article.schema.name, url: pageUrl(article) })),
+      },
+    ];
   }
-  return `          {
-            "@type": "TechArticle",
-            "headline": ${json(page.og.title)},
-            "description": ${json(page.schema.description)},
-            "url": ${json(pageUrl(page))},
-            "isPartOf": { "@type": "CollectionPage", "@id": ${json(pageUrl(overview))} }
-          },
-          {
-            "@type": "BreadcrumbList",
-            "itemListElement": [
-              { "@type": "ListItem", "position": 1, "name": "lpviz", "item": "${ORIGIN}/" },
-              { "@type": "ListItem", "position": 2, "name": ${json(overview.nav)}, "item": ${json(pageUrl(overview))} },
-              { "@type": "ListItem", "position": 3, "name": ${json(page.nav)}, "item": ${json(pageUrl(page))} }
-            ]
-          }`;
+  return [
+    {
+      "@type": "TechArticle",
+      headline: page.og.title,
+      description: page.schema.description,
+      url: pageUrl(page),
+      isPartOf: { "@type": "CollectionPage", "@id": pageUrl(overview) },
+    },
+    {
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        { "@type": "ListItem", position: 1, name: "lpviz", item: `${ORIGIN}/` },
+        { "@type": "ListItem", position: 2, name: overview.nav, item: pageUrl(overview) },
+        { "@type": "ListItem", position: 3, name: page.nav, item: pageUrl(page) },
+      ],
+    },
+  ];
 }
+
+// JSON-LD as the page's <script> body, indented to sit inside the head.
+const jsonLd = (page: DocsPage): string =>
+  JSON.stringify({ "@context": "https://schema.org", "@graph": jsonLdGraph(page) }, null, 2)
+    .split("\n")
+    .map((line) => "      " + line)
+    .join("\n");
 
 // The last article's "next" leads back to the overview.
 function pager(page: DocsPage): string {
@@ -94,12 +103,7 @@ export function renderDocsPage(page: DocsPage): string {
     <meta name="twitter:title" content="${text(page.twitter.title)}" />
     <meta name="twitter:description" content="${text(page.twitter.description)}" />
     <script type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@graph": [
 ${jsonLd(page)}
-        ]
-      }
     </script>
   </head>
   <body>
