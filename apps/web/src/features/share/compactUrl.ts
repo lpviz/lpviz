@@ -1,4 +1,4 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES, type Dimension } from "@/features/core/store";
+import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, isDimension, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 import type { Vec } from "@lpviz/math/types";
 
@@ -16,7 +16,6 @@ import type { Vec } from "@lpviz/math/types";
 // exact failure this format was written to eliminate.
 const VERSION = 3;
 const MIN_VERSION = 1;
-const DIMENSIONS = [2, 3];
 // 1e-4 of a world unit is far below one screen pixel at any usable zoom, and vertices are where the
 // bytes go; the objective is printed to three decimals, so it gets enough precision that a
 // round-tripped link renders identically rather than one ulp off.
@@ -205,8 +204,8 @@ export function decodeSharedState(text: string): SharedAppState | null {
       return null;
     }
     const extended = version >= 2 ? bytes[2]! : 0;
-    const dimension = version >= 3 ? bytes[3]! : 2;
-    if (!DIMENSIONS.includes(dimension)) return null;
+    const dimension = version >= 3 ? bytes[3] : 2;
+    if (!isDimension(dimension)) return null;
     const cursor: Cursor = { at: headerLength };
 
     const flags = bytes[1]!;
@@ -247,7 +246,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
     }
 
     return {
-      dimension: dimension as Dimension,
+      dimension,
       vertices,
       completionMode,
       objective,

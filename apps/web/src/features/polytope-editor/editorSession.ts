@@ -1,7 +1,8 @@
 import type { CompletionMode, State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/core/store";
-import { centroid, isConvexChain, isConvexPolygon, VRep } from "@lpviz/math/geometry";
+import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains } from "@lpviz/math/geometry";
 import type { Vec } from "@lpviz/math/types";
+import { vecDistance } from "@lpviz/math/vec";
 import { type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
 import { deriveRegionFromPoints } from "@lpviz/polytope/regionAssembly";
 
@@ -160,23 +161,22 @@ export function getEditorTransition(
       }
 
       if (state.vertices.length >= 3) {
-        const polytope = VRep.fromPoints(state.vertices);
         // closeThreshold is supplied by the canvas caller as the world-space
         // equivalent of a fixed pixel hit radius, so closing on the first
         // vertex stays equally easy at any zoom (it is otherwise a tiny target
         // when zoomed out, e.g. on mobile). Defaults to a world distance.
         const closeThreshold = action.closeThreshold ?? 0.5;
-        if (VRep.distance(action.point, state.vertices[0]!) < closeThreshold) {
+        if (vecDistance(action.point, state.vertices[0]!) < closeThreshold) {
           return edit(state.vertices, "closed", centroid(state.vertices));
         }
 
-        if (polytope.contains(action.point)) {
+        if (polygonContains(state.vertices, action.point)) {
           return edit(state.vertices, "closed", action.point);
         }
       }
 
       const tentative = [...state.vertices, action.point];
-      if (tentative.length >= 3 && !VRep.fromPoints(tentative).isConvex()) {
+      if (tentative.length >= 3 && !isConvexPolygon(tentative)) {
         return {
           kind: "reject-nonconvex",
           reason: "Adding this vertex would make the polytope nonconvex. Please choose another point.",
@@ -260,12 +260,11 @@ export function getEditorTransition(
         return { kind: "noop" };
       }
 
-      const polytope = VRep.fromPoints(displayVertices);
-      if (polytope.isConvex() || !polytope.contains(action.point)) {
+      if (isConvexPolygon(displayVertices) || !polygonContains(displayVertices, action.point)) {
         return { kind: "noop" };
       }
 
-      const hull = polytope.computeConvexHull();
+      const hull = convexHull(displayVertices);
       if (hull.length < 3) {
         return { kind: "noop" };
       }

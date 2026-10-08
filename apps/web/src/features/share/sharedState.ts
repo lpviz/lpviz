@@ -33,7 +33,6 @@ const shareKeyMap = {
   settings: "g",
   zScale: "l",
   is3DMode: "b",
-  dimension: "D",
   alphaMax: "a",
   correctorThreshold: "f",
   maxitIPM: "i",

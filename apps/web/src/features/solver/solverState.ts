@@ -71,9 +71,6 @@ export interface LocalizingSetPath {
   stride: number;
 }
 
-// A path kept from an earlier solve while tracing.
-export type TraceEntry = IteratePath;
-
 export type SolverSettings = {
   alphaMax: number;
   correctorThreshold: number;
@@ -155,7 +152,8 @@ export type SolverState = {
   iterateRestartIndices: number[];
 
   traceEnabled: boolean;
-  traceBuffer: TraceEntry[];
+  // the paths of earlier solves kept while tracing
+  traceBuffer: IteratePath[];
   maxTraceCount: number;
 };
 

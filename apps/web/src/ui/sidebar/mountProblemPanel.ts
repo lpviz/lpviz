@@ -4,13 +4,19 @@ import { el } from "@/ui/dom";
 import { renderNullStateLogo } from "@/ui/logo";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
 
+const VARIABLE_NAMES = ["x", "y", "z"];
+
+// "7x + 3y", or "1x - 2y + 3z" for three variables: one term per coefficient, rounded to three decimals
 function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): string {
   if (!objectiveVector) return "";
-  const round = (value: number) => Math.round(value * 1000) / 1000;
-  const a = round(objectiveVector[0]);
-  const b = round(objectiveVector[1]);
-  const bTerm = b >= 0 ? `+ ${b}y` : `- ${-b}y`;
-  return `${a}x ${bTerm}`;
+  return objectiveVector
+    .map((coefficient, j) => {
+      const value = Math.round(coefficient * 1000) / 1000;
+      const name = VARIABLE_NAMES[j] ?? `x${j + 1}`;
+      if (j === 0) return `${value}${name}`;
+      return value >= 0 ? `+ ${value}${name}` : `- ${-value}${name}`;
+    })
+    .join(" ");
 }
 
 export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {

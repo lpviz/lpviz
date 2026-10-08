@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox, clipRayToBoundingBox, isConvexChain, VRep } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox, isConvexChain, isConvexPolygon } from "@lpviz/math/geometry";
 import type { Line, Vec } from "@lpviz/math/types";
 import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
@@ -108,7 +108,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   // a polyline — testing it as a closed polygon spuriously flags it nonconvex
   // when the wrap-around edge v[n-1]->v[0] turns the other way, which is exactly
   // the validity test computeEditorRegionForState uses (isConvexChain).
-  const isNonconvex = isClosedRegion ? !VRep.fromPoints(displayVertices).isConvex() : !isConvexChain(displayVertices);
+  const isNonconvex = isClosedRegion ? !isConvexPolygon(displayVertices) : !isConvexChain(displayVertices);
 
   // an unbounded open region is clipped to a fixed extent; in 3D so is
   // everything (the visible rect is only meaningful under the ortho camera)

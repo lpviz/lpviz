@@ -10,7 +10,6 @@ import {
   type LocalizingSetPath,
   type SolverRuntimeState,
   type SolverState,
-  type TraceEntry,
 } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
@@ -22,6 +21,7 @@ export {
   COMPLETION_MODES,
   computeDrawingPhase,
   nearestPolytopeVertex,
+  isDimension,
   type CompletionMode,
   type Dimension,
   type DragTarget,
@@ -289,10 +289,10 @@ export function updateIteratePathsWithTrace(
   setState(patch);
 }
 
-function appendedTraceBuffer(state: State, path: IteratePath): TraceEntry[] {
+function appendedTraceBuffer(state: State, path: IteratePath): IteratePath[] {
   // The trace chunk shares the iterate path's flat buffers (no copy), which nothing mutates in
   // place; a replay interpolates over its own copy.
-  const raw: TraceEntry[] = [...state.traceBuffer, { ...path }];
+  const raw: IteratePath[] = [...state.traceBuffer, { ...path }];
   return raw.length > state.maxTraceCount ? raw.slice(raw.length - state.maxTraceCount) : raw;
 }
 

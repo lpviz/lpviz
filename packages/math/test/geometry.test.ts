@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { VRep, centroid, classifyRegion, expandDegenerateBounds, hasOpenBoundaryClosure, isConvexChain, isConvexPolygon, verticesFromLines } from "../src/geometry";
+import { centroid, classifyRegion, convexHull, expandDegenerateBounds, hasOpenBoundaryClosure, isConvexChain, isConvexPolygon, nearestEdge, polygonContains, verticesFromLines } from "../src/geometry";
 import type { Lines, Vec, Vertices } from "../src/types";
 
-describe("VRep.isConvex", () => {
+describe("isConvexPolygon", () => {
   test("tolerates floating-point noise from a vertex dragged onto an edge", () => {
     const nearCollinear: Vec[] = [
       [0, 0],
@@ -11,7 +11,7 @@ describe("VRep.isConvex", () => {
       [2, 2],
       [0, 2],
     ];
-    expect(VRep.fromPoints(nearCollinear).isConvex()).toBe(true);
+    expect(isConvexPolygon(nearCollinear)).toBe(true);
   });
 
   test("rejects a genuinely dented polygon", () => {
@@ -22,7 +22,7 @@ describe("VRep.isConvex", () => {
       [2, 2],
       [0, 2],
     ];
-    expect(VRep.fromPoints(dent).isConvex()).toBe(false);
+    expect(isConvexPolygon(dent)).toBe(false);
   });
 
   test("rejects a 180-degree spike", () => {
@@ -32,7 +32,7 @@ describe("VRep.isConvex", () => {
       [1, 0],
       [1, 1],
     ];
-    expect(VRep.fromPoints(spike).isConvex()).toBe(false);
+    expect(isConvexPolygon(spike)).toBe(false);
   });
 
   // Regression: a polygon that winds around itself turns the same way at every
@@ -41,7 +41,7 @@ describe("VRep.isConvex", () => {
   // reached the constraint builder as a valid region.
   test("rejects a self-overlapping polygon whose turns all agree", () => {
     const pentagram = starPolygon(5, 2);
-    expect(VRep.fromPoints(pentagram).isConvex()).toBe(false);
+    expect(isConvexPolygon(pentagram)).toBe(false);
     expect(isConvexPolygon(starPolygon(7, 3))).toBe(false);
     expect(isConvexPolygon(starPolygon(7, 2))).toBe(false);
     // a triangle traversed twice: the turns agree and every vertex lies on
@@ -132,7 +132,7 @@ describe("isConvexChain", () => {
     expect(isConvexChain(openChain)).toBe(true);
     // ...but as a closed polygon it is not convex, which is why the two tests
     // must not be conflated
-    expect(VRep.fromPoints(openChain).isConvex()).toBe(false);
+    expect(isConvexPolygon(openChain)).toBe(false);
   });
 });
 
@@ -231,7 +231,7 @@ describe("expandDegenerateBounds", () => {
   });
 });
 
-describe("VRep.findEdgeNearPoint", () => {
+describe("nearestEdge", () => {
   const SMALL_SQUARE: Vec[] = [
     [0, 0],
     [0.3, 0],
@@ -240,13 +240,12 @@ describe("VRep.findEdgeNearPoint", () => {
   ];
 
   test("picks the nearest edge, not the lowest index, when a small polytope puts every edge in tolerance", () => {
-    const edge = VRep.fromPoints(SMALL_SQUARE);
     // the default 0.5 tolerance exceeds this square's side length, so all four
     // edges qualify for any interior point
-    expect(edge.findEdgeNearPoint([0, 0.15])).toBe(3);
-    expect(edge.findEdgeNearPoint([0.15, 0.3])).toBe(2);
-    expect(edge.findEdgeNearPoint([0.3, 0.15])).toBe(1);
-    expect(edge.findEdgeNearPoint([0.15, 0])).toBe(0);
+    expect(nearestEdge(SMALL_SQUARE, [0, 0.15])).toBe(3);
+    expect(nearestEdge(SMALL_SQUARE, [0.15, 0.3])).toBe(2);
+    expect(nearestEdge(SMALL_SQUARE, [0.3, 0.15])).toBe(1);
+    expect(nearestEdge(SMALL_SQUARE, [0.15, 0])).toBe(0);
   });
 
   test("still returns the right edge for a large polytope", () => {
@@ -256,46 +255,66 @@ describe("VRep.findEdgeNearPoint", () => {
       [20, 20],
       [0, 20],
     ];
-    const rep = VRep.fromPoints(big);
-    expect(rep.findEdgeNearPoint([0, 10])).toBe(3);
-    expect(rep.findEdgeNearPoint([20, 10])).toBe(1);
-    expect(rep.findEdgeNearPoint([10, 20])).toBe(2);
+    expect(nearestEdge(big, [0, 10])).toBe(3);
+    expect(nearestEdge(big, [20, 10])).toBe(1);
+    expect(nearestEdge(big, [10, 20])).toBe(2);
   });
 
-  test("keeps the closing edge of a closed polygon reachable", () => {
-    const rep = VRep.fromPoints(SMALL_SQUARE);
-    expect(rep.findEdgeNearPoint([0.15, 0.02])).toBe(0);
-    expect(rep.findEdgeNearPoint([0.02, 0.15])).toBe(3);
+  test("keeps the closing edge of a closed polygon reachable, and skips it for a polyline", () => {
+    expect(nearestEdge(SMALL_SQUARE, [0.15, 0.02])).toBe(0);
+    expect(nearestEdge(SMALL_SQUARE, [0.02, 0.15])).toBe(3);
+    expect(nearestEdge(SMALL_SQUARE, [0.02, 0.15], 0.5, false)).not.toBe(3);
   });
 
   test("returns null when no edge is within tolerance", () => {
-    const rep = VRep.fromPoints([
+    const triangle: Vec[] = [
       [0, 0],
       [10, 0],
       [10, 10],
-    ]);
+    ];
     // incenter: ~2.3 clear of every edge
-    expect(rep.findEdgeNearPoint([7.3, 2.7])).toBeNull();
-  });
-
-  test("isPointNearEdge agrees with the nearest-edge choice", () => {
-    const rep = VRep.fromPoints(SMALL_SQUARE);
-    const point: Vec = [0, 0.15];
-    const nearest = rep.findEdgeNearPoint(point);
-    expect(nearest).not.toBeNull();
-    expect(rep.isPointNearEdge(point, nearest!)).toBe(true);
+    expect(nearestEdge(triangle, [7.3, 2.7])).toBeNull();
   });
 
   test("breaks exact ties by lowest index", () => {
-    const rep = VRep.fromPoints([
+    const diamond: Vec[] = [
       [-1, 0],
       [0, -1],
       [1, 0],
       [0, 1],
-    ]);
+    ];
     // the centre sits sqrt(2)/2 = 0.7071... from all four edges
-    expect(rep.findEdgeNearPoint([0, 0], 0.71)).toBe(0);
-    expect(rep.findEdgeNearPoint([0, 0], 0.5)).toBeNull();
+    expect(nearestEdge(diamond, [0, 0], 0.71)).toBe(0);
+    expect(nearestEdge(diamond, [0, 0], 0.5)).toBeNull();
+  });
+});
+
+describe("polygonContains and convexHull", () => {
+  const square: Vec[] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ];
+
+  test("contains interior points and not exterior ones", () => {
+    expect(polygonContains(square, [2, 2])).toBe(true);
+    expect(polygonContains(square, [5, 2])).toBe(false);
+    expect(polygonContains(square.slice(0, 2), [2, 0])).toBe(false);
+  });
+
+  test("the hull of a dented polygon drops the dent and keeps the extreme points", () => {
+    const dented: Vec[] = [
+      [0, 0],
+      [4, 0],
+      [2, 1],
+      [4, 4],
+      [0, 4],
+    ];
+    const hull = convexHull(dented);
+    expect(hull).toHaveLength(4);
+    expect(isConvexPolygon(hull)).toBe(true);
+    expect(hull.some(([x, y]) => x === 2 && y === 1)).toBe(false);
   });
 });
 
