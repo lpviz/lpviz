@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { projectWorldPosition3D } from "../src/projection3d";
-import { buildPerspectivePoseFromViewAngle, getViewportVisibleCenterCanvasPoint, projectCanvasPointToWorldPlane } from "../src/transition";
-import { createDefaultViewportRenderSnapshot } from "../src/types";
+import { buildPerspectivePoseFromViewAngle } from "../src/perspective";
+import { projectCanvasPointToWorldPlane, projectWorldPosition3D } from "../src/projection3d";
+import { createDefaultViewportRenderSnapshot, getViewportVisibleCenterCanvasPoint } from "../src/snapshot";
 import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds } from "../src/view3d";
 
 const W = 1200;

@@ -1,5 +1,6 @@
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
-import { getState, type ViewportDirtyFlags } from "@/features/core/store";
+import { getState } from "@/features/core/store";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer } from "three";
 import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";

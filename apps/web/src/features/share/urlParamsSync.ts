@@ -1,4 +1,5 @@
-import { ALL_VIEWPORT_DIRTY, getState, setState, type SolverMode } from "@/features/core/store";
+import { getState, setState, type SolverMode } from "@/features/core/store";
+import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import { decodeSharedState } from "@/features/share/compactUrl";
 import { buildSharedStatePatch, expandSharedAppState, GLOBAL_SHARE_KEYS, type ShareSettings, type SharedAppState } from "@/features/share/sharedState";
 import type { SolverControl, SolverSettingUpdater } from "@/features/solver/solverControls";

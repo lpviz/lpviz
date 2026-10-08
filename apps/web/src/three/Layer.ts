@@ -1,4 +1,4 @@
-import type { ViewportDirtyFlags } from "@/features/core/store";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import type { Object3D } from "three";
 
 type LayerInvalidationKey = keyof ViewportDirtyFlags;

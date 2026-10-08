@@ -1,14 +1,13 @@
-import { getState, setState } from "@/features/core/store";
+import { getState, setState, type State } from "@/features/core/store";
 import {
-  buildTransitionCompleteState,
-  buildTransitionStartState,
   buildViewport2DStateFromTransitionFrame,
   buildViewportTransitionFrame,
   buildViewportTransitionPlan,
-  TRANSITION_VIEWPORT_DIRTY_FLAGS,
+  type ViewportTransitionFrame,
   type ViewportTransitionPlan,
 } from "@lpviz/viewport/transition";
 import { getViewAngleFromSnapshot3D } from "@lpviz/viewport/view3d";
+import { WORLD_ANCHORED_DIRTY } from "../dirtyFlags";
 import type { ViewportRenderSnapshot } from "../types";
 import { setViewport2DControlsConfig, setViewport2DControlsState } from "./controls2d";
 import { resetViewportTransitionConfig, setViewportTransitionConfig } from "./transitionConfig";
@@ -25,6 +24,20 @@ export type TransitionController = {
   // abandon any in-flight transition without completing it (teardown)
   reset: () => void;
 };
+
+// The store's view of a transition: set when it starts, cleared when it completes.
+const transitionStartPatch = (targetMode: boolean, startTime: number, plan: ViewportTransitionPlan): Partial<State> => ({
+  isTransitioning3D: true,
+  transitionStartTime: startTime,
+  transition3DStartAngles: { ...plan.startAngles },
+  transition3DEndAngles: { ...plan.endAngles },
+  transitionDirection: plan.direction,
+  transitionProgress: 0,
+  is3DMode: targetMode,
+  viewAngle: { ...plan.startAngles },
+});
+
+const transitionCompletePatch = (plan: ViewportTransitionPlan): Partial<State> => ({ isTransitioning3D: false, transitionDirection: null, transitionProgress: 0, viewAngle: { ...plan.endAngles } });
 
 // Owns the 2D<->3D transition animation: the run/latch/progress/plan state and
 // the start -> per-frame -> complete lifecycle. Extracted from the runtime so
@@ -56,7 +69,7 @@ export function createTransitionController(deps: {
   // While a to-2D transition runs, keep the 2D controls' planar state in lockstep
   // with the animated frame so the handoff at completion is seamless. (to-3D
   // transitions have no planar control state to track.)
-  const syncPlanarState = (p: ViewportTransitionPlan, frame: ReturnType<typeof buildViewportTransitionFrame>) => {
+  const syncPlanarState = (p: ViewportTransitionPlan, frame: ViewportTransitionFrame) => {
     if (p.direction !== "to2d") return;
     const planarState = buildViewport2DStateFromTransitionFrame(p, frame, deps.getViewportRect(), deps.getSidebarWidth());
     setViewport2DControlsConfig({
@@ -121,9 +134,7 @@ export function createTransitionController(deps: {
       snapshotActive = true;
       plan = nextPlan;
       progress = 0;
-      setState(buildTransitionStartState(targetMode, startTime, nextPlan), {
-        viewportDirty: TRANSITION_VIEWPORT_DIRTY_FLAGS,
-      });
+      setState(transitionStartPatch(targetMode, startTime, nextPlan), { viewportDirty: WORLD_ANCHORED_DIRTY });
       const initialFrame = renderFrameAt(nextPlan, 0);
       deps.publishSnapshot(initialFrame.snapshot);
 
@@ -151,9 +162,7 @@ export function createTransitionController(deps: {
           snapshotActive = false;
           plan = null;
           if (completedPlan) {
-            setState(buildTransitionCompleteState(completedPlan), {
-              viewportDirty: TRANSITION_VIEWPORT_DIRTY_FLAGS,
-            });
+            setState(transitionCompletePatch(completedPlan), { viewportDirty: WORLD_ANCHORED_DIRTY });
           }
           resetViewportTransitionConfig();
           deps.publishSnapshot(deps.shouldUseExternal2DViewport() ? deps.getExternal2DSnapshot() : deps.getManagerSnapshot());

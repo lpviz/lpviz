@@ -1,5 +1,6 @@
 import type { AppActions } from "@/features/core/actions";
-import { ALL_VIEWPORT_DIRTY, freshState, getState, on, setState } from "@/features/core/store";
+import { freshState, getState, on, setState } from "@/features/core/store";
+import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { HistoryService } from "@/features/history/historyService";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";

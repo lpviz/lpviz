@@ -1,7 +1,7 @@
 import { getState, setState } from "@/features/core/store";
 import { buildViewport2DSnapshot } from "@lpviz/viewport/projection2d";
-import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/transition";
-import type { ViewportPerspectivePose } from "@lpviz/viewport/types";
+import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/perspective";
+import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
 import { buildViewport3DSnapshot, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D } from "@lpviz/viewport/view3d";
 import { getSnapshotViewportDirtyFlags } from "../snapshotDirty";
 import type { ViewportRenderSnapshot } from "../types";

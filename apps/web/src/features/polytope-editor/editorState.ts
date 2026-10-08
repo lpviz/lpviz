@@ -2,7 +2,7 @@ import type { ViewportState } from "@/features/viewport/viewportState";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { vecDistance, type Dimension } from "@lpviz/math/vec";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
-import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
+import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];

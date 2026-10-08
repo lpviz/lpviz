@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { createDefaultViewportRenderSnapshot } from "@lpviz/viewport/types";
+import { createDefaultViewportRenderSnapshot } from "@lpviz/viewport/snapshot";
 import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
 
 const base = createDefaultViewportRenderSnapshot({ width: 1000, height: 800 });

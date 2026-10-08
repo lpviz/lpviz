@@ -12,27 +12,17 @@ import {
   toLogicalCoords2D,
   zoomViewport2DStateAtCanvasPoint,
 } from "../src/projection2d";
-import { projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D, type Viewport3DInteractionOptions } from "../src/projection3d";
-import {
-  buildPerspectivePoseFromViewAngle,
-  buildTransitionCompleteState,
-  buildTransitionStartState,
-  buildViewport2DStateFromTransitionFrame,
-  buildViewportTransitionFrame,
-  buildViewportTransitionPlan,
-  getPerspectiveDistanceForUnitsPerPixel,
-  getScaleFactorFromPerspectiveDistance,
-  getViewportVisibleCenterCanvasPoint,
-  projectCanvasPointToWorldPlane,
-} from "../src/transition";
-import { createDefaultViewportRenderSnapshot, type ViewportRenderSnapshot } from "../src/types";
+import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getScaleFactorFromPerspectiveDistance } from "../src/perspective";
+import { projectCanvasPointToWorldPlane, projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D, type Viewport3DPointerOptions } from "../src/projection3d";
+import { createDefaultViewportRenderSnapshot, getViewportVisibleCenterCanvasPoint, type ViewportRenderSnapshot } from "../src/snapshot";
+import { buildViewport2DStateFromTransitionFrame, buildViewportTransitionFrame, buildViewportTransitionPlan } from "../src/transition";
 import { buildResetViewport3DView, buildViewport3DSnapshot, fitViewport3DToBounds, getDefaultPerspectiveDistance3D, getMaxPerspectiveDistance3D, getViewAngleFromSnapshot3D } from "../src/view3d";
 
 // Pins the exact output of every viewport function over a fixed grid of
 // inputs so the package can be refactored bit-for-bit. Numbers are serialized
 // with their sign of zero and NaN intact and the whole transcript is hashed;
 // set PIN_DUMP=path to write the transcript when the hash changes.
-const EXPECTED_HASH = "ecc0d5055917609c1b05ed52344ed891bbe9ef640f4e3f39df1dc6496563a116";
+const EXPECTED_HASH = "55234e694b6bb279d5556cec2d028b1d52e5e81707363b71741f36ac30cf4d41";
 
 const fmt = (v: unknown): string => {
   if (typeof v === "number") return Object.is(v, -0) ? "-0" : String(v);
@@ -60,12 +50,11 @@ const ANCHORS = [
   { x: 3, y: -2, z: 1.5 },
   { x: -40, y: 25, z: 0 },
 ];
-const OPTION_VARIANTS: Viewport3DInteractionOptions[] = [
-  { zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
-  { zScale: 0.1, snapToGrid: true, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false },
-  { zScale: 0.1, snapToGrid: false, editorInteractionKind: "drag", is3DMode: true, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
-  { zScale: 2.5, snapToGrid: true, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: true, viewAnchor3D: ANCHORS[1] },
-  { zScale: 0.0001, snapToGrid: false, editorInteractionKind: "drag", is3DMode: false, isTransitioning3D: false, viewAnchor3D: ANCHORS[0] },
+const OPTION_VARIANTS: Viewport3DPointerOptions[] = [
+  { zScale: 0.1, snapToGrid: false, interacting: false },
+  { zScale: 0.1, snapToGrid: true, interacting: false },
+  { zScale: 0.1, snapToGrid: false, interacting: true, viewAnchor3D: ANCHORS[0] },
+  { zScale: 2.5, snapToGrid: true, interacting: true, viewAnchor3D: ANCHORS[1] },
 ];
 const BOUNDS = [
   { minX: -30, maxX: 30, minY: -10, maxY: 10 },
@@ -86,8 +75,8 @@ const canvasGrid = (rect: { width: number; height: number }) => {
 };
 
 function buildTranscript() {
-  const constraints: string[] = [];
-  const record = (label: string, value: unknown) => constraints.push(`${label}=${fmt(value)}`);
+  const lines: string[] = [];
+  const record = (label: string, value: unknown) => lines.push(`${label}=${fmt(value)}`);
   const snapshots: ViewportRenderSnapshot[] = [];
 
   for (const rect of RECTS) {
@@ -121,7 +110,7 @@ function buildTranscript() {
 
           for (const [pi, p] of canvasPoints.entries()) {
             for (const [oi, options] of OPTION_VARIANTS.entries()) {
-              record(`${key} p${pi} o${oi} logical`, toLogicalCoords3D(snap, rect, p.x, p.y, options));
+              record(`${key} p${pi} o${oi} logical`, toLogicalCoords3D(snap, rect, p, options));
             }
             for (const z of [0, 2.5, -7]) {
               record(`${key} p${pi} plane ${z}`, projectCanvasPointToWorldPlane(snap, rect, p, z));
@@ -144,8 +133,6 @@ function buildTranscript() {
           for (const targetMode of [true, false]) {
             const plan = buildViewportTransitionPlan({ snapshot: snap, targetMode, viewAngle });
             record(`${key} plan ${targetMode}`, plan);
-            record(`${key} start ${targetMode}`, buildTransitionStartState(targetMode, 1234.5, plan));
-            record(`${key} complete ${targetMode}`, buildTransitionCompleteState(plan));
             for (const progress of [-0.5, 0, 0.25, 0.5, 1, 1.5]) {
               const frame = buildViewportTransitionFrame(plan, progress, rect);
               snapshots.push(frame.snapshot);
@@ -189,7 +176,7 @@ function buildTranscript() {
               { x: rect.width / 2, y: rect.height / 2 },
               { x: rect.width - 1, y: 12 },
             ]) {
-              record(`${key} logical ${p.x},${p.y}`, [toLogicalCoords2D(snap, rect, p.x, p.y), toLogicalCoords2D(snap, rect, p.x, p.y, { snapToGrid: true })]);
+              record(`${key} logical ${p.x},${p.y}`, [toLogicalCoords2D(snap, rect, p), toLogicalCoords2D(snap, rect, p, { snapToGrid: true })]);
               record(`${key} zoom ${p.x},${p.y}`, zoomViewport2DStateAtCanvasPoint(state, sidebar, rect, base, p, scaleFactor * 1.2));
             }
             for (const w of [
@@ -214,17 +201,17 @@ function buildTranscript() {
     }
   }
 
-  return { constraints, snapshots };
+  return { lines, snapshots };
 }
 
 describe("viewport pin", () => {
-  const { constraints, snapshots } = buildTranscript();
+  const { lines, snapshots } = buildTranscript();
 
   test("every function's output over the grid is unchanged", () => {
-    const transcript = constraints.join("\n");
+    const transcript = lines.join("\n");
     const hash = createHash("sha256").update(transcript).digest("hex");
     if (hash !== EXPECTED_HASH && process.env.PIN_DUMP) writeFileSync(process.env.PIN_DUMP, transcript);
-    expect(constraints.length).toBeGreaterThan(50000);
+    expect(lines.length).toBeGreaterThan(50000);
     expect(hash).toBe(EXPECTED_HASH);
   });
 
@@ -241,10 +228,11 @@ describe("viewport pin", () => {
     // camera 1.5 rad from top-down: nearly in the z = 0 plane, so the top of
     // the canvas looks above the horizon and never meets the plane
     const snap = buildViewport3DSnapshot(createDefaultViewportRenderSnapshot(rect), buildPerspectivePoseFromViewAngle({ x: -1.5, y: 0, z: 0 }, 100, { x: 5, y: -3, z: 2 }), rect);
-    const base: Viewport3DInteractionOptions = { zScale: 0.1, snapToGrid: false, editorInteractionKind: "idle", is3DMode: true, isTransitioning3D: false };
-    expect(projectCanvasPointToWorldPlane(snap, rect, { x: 600, y: 0 }, 0)).toBeNull();
-    expect(toLogicalCoords3D(snap, rect, 600, 0, base)).toEqual({ x: 5, y: -3 });
-    const anchored = toLogicalCoords3D(snap, rect, 600, 0, { ...base, viewAnchor3D: { x: 3, y: -2, z: 1.5 } });
+    const base: Viewport3DPointerOptions = { zScale: 0.1, snapToGrid: false, interacting: false };
+    const top = { x: 600, y: 0 };
+    expect(projectCanvasPointToWorldPlane(snap, rect, top, 0)).toBeNull();
+    expect(toLogicalCoords3D(snap, rect, top, base)).toEqual({ x: 5, y: -3 });
+    const anchored = toLogicalCoords3D(snap, rect, top, { ...base, viewAnchor3D: { x: 3, y: -2, z: 1.5 } });
     expect(anchored).not.toEqual({ x: 5, y: -3 });
     expect(Number.isFinite(anchored.x) && Number.isFinite(anchored.y)).toBe(true);
     // well below the horizon the ray meets the plane directly

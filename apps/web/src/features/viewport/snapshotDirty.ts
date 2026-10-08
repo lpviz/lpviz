@@ -1,5 +1,4 @@
-import { ALL_VIEWPORT_DIRTY, type ViewportDirtyFlags } from "@/features/core/store";
-import { TRANSITION_VIEWPORT_DIRTY_FLAGS } from "@lpviz/viewport/transition";
+import { ALL_VIEWPORT_DIRTY, WORLD_ANCHORED_DIRTY, type ViewportDirtyFlags } from "./dirtyFlags";
 import type { ViewportRenderSnapshot } from "./types";
 
 // Camera/layout changes don't go through the store's field-derived dirty flags
@@ -15,7 +14,7 @@ export function getSnapshotViewportDirtyFlags(prev: ViewportRenderSnapshot, next
     return ALL_VIEWPORT_DIRTY;
   }
   if (prev.transitionZMultiplier !== next.transitionZMultiplier) {
-    return TRANSITION_VIEWPORT_DIRTY_FLAGS;
+    return WORLD_ANCHORED_DIRTY;
   }
   const sizeChanged = prev.width !== next.width || prev.height !== next.height;
   const zoomChanged =

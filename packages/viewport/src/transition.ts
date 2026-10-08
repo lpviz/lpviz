@@ -1,14 +1,19 @@
-import { Euler, Vector3 } from "three";
+// The animated switch between the 2D and 3D views: a plan fixed when it starts, and the frame
+// (view angle, pose and snapshot) at any progress along it.
 
-import type { PointXY, PointXYZ } from "@lpviz/math/types";
-import { DEFAULT_VIEW_ANGLE } from "./defaults";
+import type { PointXYZ } from "@lpviz/math/types";
+import { DEFAULT_VIEW_ANGLE, MIN_PERSPECTIVE_DISTANCE } from "./defaults";
+import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getPerspectiveDistanceFromSnapshot3D, getScaleFactorFromPerspectiveDistance } from "./perspective";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
-import { getPerspectiveDistanceFromSnapshot3D, projectCanvasPointToWorldPlane } from "./projection3d";
-import { getViewportSize, orthographicFor, type ViewportDirtyFlags, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./types";
+import { projectCanvasPointToWorldPlane } from "./projection3d";
+import { getViewportSize, getViewportVisibleCenterCanvasPoint, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+
+export type ViewportTransitionDirection = "to3d" | "to2d";
 
 export type ViewportTransitionPlan = {
   baseSnapshot: ViewportRenderSnapshot;
-  direction: "to3d" | "to2d";
+  direction: ViewportTransitionDirection;
+  /** milliseconds */
   duration: number;
   startAngles: PointXYZ;
   endAngles: PointXYZ;
@@ -24,76 +29,29 @@ export type ViewportTransitionFrame = {
   snapshot: ViewportRenderSnapshot;
 };
 
-export const TRANSITION_VIEWPORT_DIRTY_FLAGS: ViewportDirtyFlags = { polytope: true, objective: true, trace: true, iterate: true };
-
+const TRANSITION_TO_3D_MS = 400;
+const TRANSITION_TO_2D_MS = 500;
 const ZERO_VIEW_ANGLE: PointXYZ = { x: 0, y: 0, z: 0 };
 const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 const lerpPoint = (start: PointXYZ, end: PointXYZ, t: number): PointXYZ => ({ x: lerp(start.x, end.x, t), y: lerp(start.y, end.y, t), z: lerp(start.z, end.z, t) });
 
-const transitionEuler = new Euler();
-const transitionDirection = new Vector3();
-const transitionPosition = new Vector3();
-const transitionUp = new Vector3();
-
-export { projectCanvasPointToWorldPlane };
-
-export function getPerspectiveDistanceForUnitsPerPixel(snapshot: ViewportRenderSnapshot, unitsPerPixel: number, height = snapshot.height || 1) {
-  const fov = snapshot.perspective.fov * (Math.PI / 180);
-  return Math.max(10, (height * unitsPerPixel) / (2 * Math.tan(fov / 2)));
-}
-
-export function getScaleFactorFromPerspectiveDistance(snapshot: ViewportRenderSnapshot, distance: number, height = snapshot.height || 1) {
-  const fov = snapshot.perspective.fov * (Math.PI / 180);
-  const safeDistance = Math.max(10, distance);
-  const viewportHeight = 2 * Math.tan(fov / 2) * safeDistance;
-  const unitsPerPixel = viewportHeight / Math.max(1, height);
-  return clampScaleFactor2D(1 / (unitsPerPixel * snapshot.gridSpacing));
-}
-
+/** Plan the switch from `snapshot` to 3D (`targetMode` true) or back to 2D, from the current 3D `viewAngle`. */
 export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }: { snapshot: ViewportRenderSnapshot; targetMode: boolean; viewAngle: PointXYZ }): ViewportTransitionPlan {
   const startTarget = { x: snapshot.target.x, y: snapshot.target.y, z: snapshot.target.z };
   const snapshotDistance = getPerspectiveDistanceFromSnapshot3D(snapshot);
   return {
     baseSnapshot: snapshot,
     direction: targetMode ? "to3d" : "to2d",
-    duration: targetMode ? 400 : 500,
+    duration: targetMode ? TRANSITION_TO_3D_MS : TRANSITION_TO_2D_MS,
     startAngles: targetMode ? { ...ZERO_VIEW_ANGLE } : { ...viewAngle },
     endAngles: targetMode ? { ...DEFAULT_VIEW_ANGLE } : { ...ZERO_VIEW_ANGLE },
     startTarget,
     endTarget: { ...startTarget, z: targetMode ? startTarget.z : 0 },
+    // a 3D view keeps its own distance on the way back; a 2D view takes the one that shows its zoom
     perspectiveDistance:
       !targetMode && Number.isFinite(snapshotDistance) && snapshotDistance > 0
-        ? Math.max(10, snapshotDistance)
+        ? Math.max(MIN_PERSPECTIVE_DISTANCE, snapshotDistance)
         : getPerspectiveDistanceForUnitsPerPixel(snapshot, snapshot.unitsPerPixel, snapshot.height),
-  };
-}
-
-export function buildTransitionStartState(targetMode: boolean, startTime: number, plan: ViewportTransitionPlan) {
-  return {
-    isTransitioning3D: true,
-    transitionStartTime: startTime,
-    transition3DStartAngles: { ...plan.startAngles },
-    transition3DEndAngles: { ...plan.endAngles },
-    transitionDirection: plan.direction,
-    transitionProgress: 0,
-    is3DMode: targetMode,
-    viewAngle: { ...plan.startAngles },
-  };
-}
-
-export function buildTransitionCompleteState(plan: ViewportTransitionPlan) {
-  return { isTransitioning3D: false, transitionDirection: null, transitionProgress: 0, viewAngle: { ...plan.endAngles } };
-}
-
-export function buildPerspectivePoseFromViewAngle(viewAngle: PointXYZ, distance: number, target: PointXYZ): ViewportPerspectivePose {
-  transitionEuler.set(-viewAngle.x, -viewAngle.y, -viewAngle.z, "XYZ");
-  transitionDirection.set(0, 0, 1).applyEuler(transitionEuler).normalize();
-  transitionPosition.set(target.x, target.y, target.z).add(transitionDirection.multiplyScalar(Math.max(10, distance)));
-  transitionUp.set(0, 1, 0).applyEuler(transitionEuler).normalize();
-  return {
-    position: { x: transitionPosition.x, y: transitionPosition.y, z: transitionPosition.z },
-    up: { x: transitionUp.x, y: transitionUp.y, z: transitionUp.z },
-    target: { x: target.x, y: target.y, z: target.z },
   };
 }
 
@@ -125,10 +83,7 @@ export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progr
   };
 }
 
-export function getViewportVisibleCenterCanvasPoint(rect: ViewportRect, sidebarWidth: number): PointXY {
-  return { x: sidebarWidth + ((rect.width || 1) - sidebarWidth) / 2, y: (rect.height || 1) / 2 };
-}
-
+/** The 2D state that shows what a transition frame shows at the visible center, for the handoff to the 2D controls. */
 export function buildViewport2DStateFromTransitionFrame(plan: ViewportTransitionPlan, frame: ViewportTransitionFrame, rect: ViewportRect, sidebarWidth: number): Viewport2DState {
   const visibleCenter = projectCanvasPointToWorldPlane(frame.snapshot, rect, getViewportVisibleCenterCanvasPoint(rect, sidebarWidth), plan.endTarget.z) ?? { x: frame.target.x, y: frame.target.y };
   return { gridSpacing: frame.snapshot.gridSpacing, scaleFactor: clampScaleFactor2D(frame.snapshot.scaleFactor), offsetX: -visibleCenter.x, offsetY: -visibleCenter.y };
