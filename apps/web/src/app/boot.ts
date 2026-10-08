@@ -14,27 +14,26 @@ import { mountSidebar } from "@/ui/sidebar/mountSidebar";
 export function boot(root: HTMLElement) {
   root.replaceChildren();
 
-  let canvasManager: ViewportRuntime | null = null;
+  let viewportApi: ViewportRuntime | null = null;
   let urlApplied = false;
 
   const history = createHistoryService(() => {
-    canvasManager?.draw();
+    viewportApi?.draw();
     polytope.send();
   });
 
-  const solver = createSolverActions(() => canvasManager);
+  const solver = createSolverActions(() => viewportApi);
   const polytope = createPolytopeService(solver.handleProblemChange);
-  const viewport = createViewportActions(() => canvasManager, DEFAULT_SIDEBAR_WIDTH);
-  const share = createShareService(() => solver.solverControls);
+  const viewport = createViewportActions(() => viewportApi, DEFAULT_SIDEBAR_WIDTH);
+  const share = createShareService();
   const layout = createLayout(root, viewport);
 
-  const setCanvasManager = (runtime: ViewportRuntime | null) => {
-    canvasManager = runtime;
+  const setViewportApi = (runtime: ViewportRuntime | null) => {
+    viewportApi = runtime;
     if (runtime && !urlApplied) {
       urlApplied = true;
       applyUrlParamsOnce({
-        canvasManager: runtime,
-        solverControls: solver.solverControls,
+        viewportApi: runtime,
         updateSolverSetting: solver.updateSolverSetting,
         invalidatePendingSolveResults: solver.invalidatePendingSolveResults,
         setActiveSolverMode: solver.setActiveSolverMode,
@@ -44,11 +43,11 @@ export function boot(root: HTMLElement) {
   };
 
   const ctx: AppContext = {
-    actions: createAppActions({ solver, viewport, share, history, polytope, getCanvasManager: () => canvasManager }),
+    actions: createAppActions({ solver, viewport, share, history, polytope, getViewportApi: () => viewportApi }),
     services: { history, polytope, viewport },
 
-    getCanvasManager: () => canvasManager,
-    setCanvasManager,
+    getViewportApi: () => viewportApi,
+    setViewportApi,
 
     getSidebarWidth: layout.getSidebarWidth,
     getViewportSidebarWidth: layout.getViewportSidebarWidth,

@@ -1,16 +1,6 @@
 import { freshHistoryState, type HistoryState } from "@/features/history/historyState";
 import { EDITOR_DIRTY, freshEditorState, initialEditorRuntimeState, type EditorRuntimeState, type EditorState } from "@/features/polytope-editor/editorState";
-import {
-  EMPTY_ITERATE_PATH,
-  freshSolverState,
-  initialSolverRuntimeState,
-  SOLVER_DIRTY,
-  type EllipsoidPath,
-  type IteratePath,
-  type LocalizingSetPath,
-  type SolverRuntimeState,
-  type SolverState,
-} from "@/features/solver/solverState";
+import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverRuntimeState, type SolverState } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
@@ -23,7 +13,6 @@ export {
   nearestPolytopeVertex,
   type CompletionMode,
   type DragTarget,
-  type DragViewAnchor3D,
   type DrawingPhase,
   type EditorInteractionState,
 } from "@/features/polytope-editor/editorState";
@@ -78,7 +67,7 @@ export type FreshState = Omit<State, keyof RuntimeState>;
 // A reset applies freshState() as one patch, and a patch's key order is the order its per-key
 // listeners fire in, so the keys keep the order the fields had before they were split into slices
 // (the slices interleave: the result fields sit between the region and the objective, and so on).
-const FRESH_KEY_ORDER: readonly (keyof FreshState)[] = [
+const FRESH_KEY_ORDER = [
   "vertices",
   "completionMode",
   "interiorPoint",
@@ -122,7 +111,7 @@ const FRESH_KEY_ORDER: readonly (keyof FreshState)[] = [
 
   "traceEnabled",
   "traceBuffer",
-];
+] as const satisfies readonly (keyof FreshState)[];
 
 /**
  * The starting values of everything else, composed from the slices. Fresh objects every call, so
@@ -251,72 +240,4 @@ export function onMeta(fn: MetaListener, signal: AbortSignal): void {
     },
     { once: true },
   );
-}
-
-export function clearIterateState(): void {
-  setState({
-    ...buildIterateStatePatch(EMPTY_ITERATE_PATH, undefined, undefined),
-    highlightIteratePathIndex: null,
-  });
-}
-
-export function updateIteratePathsWithTrace(
-  path: IteratePath,
-  phasesArray?: number[],
-  restartIndicesArray?: number[],
-  ellipsoids?: EllipsoidPath | null,
-  localizingSets?: LocalizingSetPath | null,
-): void {
-  const state = getState();
-  const patch: Partial<State> = buildIterateStatePatch(path, phasesArray, restartIndicesArray, ellipsoids ?? null, localizingSets ?? null);
-  if (state.traceEnabled && path.count > 0) {
-    patch.traceBuffer = appendedTraceBuffer(state, path);
-  }
-  // iterate (+ trace, if a chunk was appended) derived from the patched fields
-  setState(patch);
-}
-
-function appendedTraceBuffer(state: State, path: IteratePath): IteratePath[] {
-  // The trace chunk shares the iterate path's flat buffers (no copy), which nothing mutates in
-  // place; a replay interpolates over its own copy.
-  const raw: IteratePath[] = [...state.traceBuffer, { ...path }];
-  return raw.length > state.maxTraceCount ? raw.slice(raw.length - state.maxTraceCount) : raw;
-}
-
-function buildIterateStatePatch(
-  path: IteratePath,
-  phasesArray: number[] | undefined,
-  restartIndicesArray: number[] | undefined,
-  ellipsoids: EllipsoidPath | null = null,
-  localizingSets: LocalizingSetPath | null = null,
-): Partial<State> {
-  // The flat path and phase/restart arrays are never mutated after creation
-  // (replay grows a fresh IteratePath over the same shared buffer), so the
-  // "original" fields can share them instead of deep-copying.
-  return {
-    originalIteratePath: path,
-    iteratePath: path,
-    // every solver but the ellipsoid method passes none, which clears the
-    // previous solve's ellipses
-    iterateEllipsoids: ellipsoids,
-    iterateLocalizingSets: localizingSets,
-    iteratePhases: phasesArray ?? [],
-    originalIteratePhases: phasesArray ?? [],
-    iterateRestartIndices: restartIndicesArray ?? [],
-  };
-}
-
-export function resetTraceState(): void {
-  if (getState().traceBuffer.length === 0) return;
-  setState({ traceBuffer: [] });
-}
-
-export function setTraceCapacity(maxTraceCount: number): void {
-  const { traceBuffer } = getState();
-  // a repaint is derived only when traceBuffer actually changes (eviction);
-  // a capacity-only bump draws the same chunks
-  setState({
-    maxTraceCount,
-    traceBuffer: traceBuffer.length > maxTraceCount ? traceBuffer.slice(traceBuffer.length - maxTraceCount) : traceBuffer,
-  });
 }

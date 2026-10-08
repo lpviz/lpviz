@@ -1,6 +1,6 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import { flatXYZ } from "../helpers/flatPositions";
+import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { PHASE_COLORS_BYTES } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -56,7 +56,7 @@ export class IterateLineLayer extends ZScaledGroupLayer {
     const hasPhases = raw.iteratePhases.length === path.count && raw.iteratePhases.length > 0;
     // raw z: zScale and the 2D/3D transition flattening are applied via
     // object3D.scale.z, so neither rebuilds the path
-    this.ribbon.setPath(flatXYZ(path), path.count, hasPhases ? buildPhaseColors(raw.iteratePhases) : null);
+    this.ribbon.setPath(iteratePositions(path), path.count, hasPhases ? buildPhaseColors(raw.iteratePhases) : null);
     this.ribbon.mesh.visible = true;
     this.object3D.visible = true;
   }

@@ -11,7 +11,7 @@ function createEditorTools(deps: EditorToolsDeps): EditorTools {
 }
 
 export function attachCanvasInteractions(deps: Omit<EditorToolsDeps, "isClickSuppressed">): () => void {
-  const canvas = deps.canvasManager.getCanvasElement();
+  const canvas = deps.viewportApi.getCanvasElement();
   const gestures = createCanvasGestures(canvas);
   const tools = createEditorTools({ ...deps, isClickSuppressed: gestures.isClickSuppressed });
   const detachGestures = gestures.attach(tools);

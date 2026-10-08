@@ -29,9 +29,9 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
             runtime.destroy();
             return;
           }
-          ctx.setCanvasManager(runtime);
+          ctx.setViewportApi(runtime);
           detachInteractions = attachCanvasInteractions({
-            canvasManager: runtime,
+            viewportApi: runtime,
             saveHistory: ctx.services.history.save,
             sendPolytope: ctx.services.polytope.send,
             handleUndoRedo: ctx.services.history.handleUndoRedo,
@@ -43,7 +43,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
         })
         .catch((e) => console.error("Failed to initialize viewport", e));
     },
-    () => ctx.setCanvasManager(null),
+    () => ctx.setViewportApi(null),
   );
   const gallery = mountProblemGallery(main, ctx);
   const zoom = el("div", { id: "zoomControls" });
@@ -121,7 +121,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
       destroyed = true;
       controller.abort();
       detachInteractions?.();
-      ctx.getCanvasManager()?.destroy();
+      ctx.getViewportApi()?.destroy();
       gl.destroy();
       gallery.destroy();
       help.destroy();

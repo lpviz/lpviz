@@ -41,7 +41,7 @@ export type ResultPresenter = {
 // defer-while-navigating buffer. Extracted from solverActions so the
 // render/applyRender/pendingRender/lastVirtualResult tangle lives behind a small
 // interface instead of four closures sharing two mutable locals.
-export function createResultPresenter(deps: { getCanvasManager: () => ViewportApi | null }): ResultPresenter {
+export function createResultPresenter(deps: { getViewportApi: () => ViewportApi | null }): ResultPresenter {
   let lastVirtualResult: VirtualResultPayload | null = null;
   let pendingRender: {
     payload: ResultRenderPayload;
@@ -49,7 +49,7 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
   } | null = null;
 
   const applyRender = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
-    const cm = deps.getCanvasManager();
+    const cm = deps.getViewportApi();
     const limitVirtualRows = options.limitVirtualRows ?? getState().rotateObjectiveMode;
     if (payload.type === "virtual") {
       const rows = payload.rows;
@@ -98,7 +98,7 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
     lastVirtualResult = payload.type === "virtual" ? payload : null;
     if (getState().isNavigatingViewport) {
       pendingRender = { payload, options };
-      deps.getCanvasManager()?.draw();
+      deps.getViewportApi()?.draw();
       return;
     }
     pendingRender = null;
@@ -122,7 +122,7 @@ export function createResultPresenter(deps: { getCanvasManager: () => ViewportAp
       lastVirtualResult = null;
       pendingRender = null;
       setState({ resultDisplayMode: "usage", resultBlocks: null, ...noVirtualRows(), resultMaxLineChars: 0, highlightIteratePathIndex: null });
-      deps.getCanvasManager()?.draw();
+      deps.getViewportApi()?.draw();
     },
     restoreFullVirtualResult: () => {
       if (lastVirtualResult) render(lastVirtualResult, { limitVirtualRows: false });

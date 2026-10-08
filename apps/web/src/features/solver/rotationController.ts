@@ -31,8 +31,6 @@ export type RotationController = {
   begin: () => void;
   // stop the loop and drop any in-flight solve's re-arm (see the session guard)
   cancel: () => void;
-  // clear the frame-pacing accumulator without restarting the loop
-  resetTiming: () => void;
   // resume the RAF loop if rotation is still active (e.g. after a problem edit)
   rearm: () => void;
 };
@@ -42,7 +40,7 @@ export type RotationController = {
 // re-solves — at most one solve in flight at a time. Extracted from
 // solverActions so the loop's timing + single-flight + cancellation logic lives
 // in one testable place instead of six module-scoped variables.
-export function createRotationController(deps: { computePath: () => Promise<void>; syncTraceCapacity: () => void; hasCanvas: () => boolean }): RotationController {
+export function createRotationController(deps: { solve: () => Promise<void>; syncTraceCapacity: () => void; hasCanvas: () => boolean }): RotationController {
   let rafId: number | null = null;
   let lastFrameTime: number | null = null;
   let elapsedMs = 0;
@@ -88,7 +86,7 @@ export function createRotationController(deps: { computePath: () => Promise<void
     });
     if (getState().traceEnabled) deps.syncTraceCapacity();
     try {
-      await deps.computePath();
+      await deps.solve();
     } finally {
       if (mySession === session) {
         inFlight = false;
@@ -111,10 +109,6 @@ export function createRotationController(deps: { computePath: () => Promise<void
       lastFrameTime = null;
       elapsedMs = 0;
       inFlight = false;
-    },
-    resetTiming: () => {
-      lastFrameTime = null;
-      elapsedMs = 0;
     },
     rearm: () => ensureLoop(),
   };

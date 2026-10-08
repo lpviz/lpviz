@@ -14,7 +14,7 @@ export type ReplayController = {
 // 100k. Each frame computes the head's fractional position straight from the clock, crossing
 // however many iterates that takes; a per-step timer cannot deliver 100k ticks in a second.
 export function createReplayController(deps: {
-  getCanvasManager: () => ViewportApi | null;
+  getViewportApi: () => ViewportApi | null;
   // the user hovering a log row owns the highlight; the replay yields it
   isIterateHoverActive: () => boolean;
 }): ReplayController {
@@ -33,11 +33,11 @@ export function createReplayController(deps: {
       replayActive: false,
       ...(deps.isIterateHoverActive() ? {} : { highlightIteratePathIndex: null }),
     });
-    deps.getCanvasManager()?.draw();
+    deps.getViewportApi()?.draw();
   };
 
   const start = () => {
-    const cm = deps.getCanvasManager();
+    const cm = deps.getViewportApi();
     if (!cm) return;
     const snap = getState();
     if (snap.rotateObjectiveMode) return;
@@ -51,7 +51,8 @@ export function createReplayController(deps: {
     // One copy of the path per replay, never per frame: the sweep only ever rewrites the `stride`
     // floats (and the lift) of the moving head, so every point behind it is still the solver's own data.
     const points = orig.points.slice(0, total * stride);
-    const lift = orig.lift ? orig.lift.slice(0, total) : null;
+    const lifts = orig.lift ? { shown: orig.lift.slice(0, total), original: orig.lift } : null;
+    const lift = lifts?.shown ?? null;
     // which slot currently holds the interpolated head rather than its real
     // iterate, so it can be put back once the head has moved past it
     let headIndex = -1;
@@ -71,7 +72,7 @@ export function createReplayController(deps: {
       // whoever stopped the replay cleared the flag; a frame that was already
       // queued must not keep mutating the store or drawing after that
       if (!getState().replayActive) return;
-      const canvas = deps.getCanvasManager();
+      const canvas = deps.getViewportApi();
       if (!canvas) {
         cancel();
         return;
@@ -97,7 +98,7 @@ export function createReplayController(deps: {
         for (let k = 0; k < stride; k++) {
           points[from + k] = orig.points[from + k]!;
         }
-        if (lift && orig.lift) lift[headIndex] = orig.lift[headIndex]!;
+        if (lifts) lifts.shown[headIndex] = lifts.original[headIndex]!;
       }
       const fromBase = base * stride;
       const headBase = head * stride;
@@ -108,9 +109,9 @@ export function createReplayController(deps: {
         const a = orig.points[fromBase + k]!;
         points[headBase + k] = a + t * (orig.points[headBase + k]! - a);
       }
-      if (lift && orig.lift) {
-        const a = orig.lift[base]!;
-        lift[head] = a + t * (orig.lift[head]! - a);
+      if (lifts) {
+        const a = lifts.original[base]!;
+        lifts.shown[head] = a + t * (lifts.original[head]! - a);
       }
       headIndex = head;
 

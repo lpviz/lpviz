@@ -1,7 +1,7 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
-import { writeFlatXYZ } from "../helpers/flatPositions";
+import { writeIteratePositions } from "../helpers/iteratePositions";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
@@ -40,6 +40,6 @@ export class IteratePointsLayer extends PointCloudLayer {
     }
     const phases = raw.iteratePhases;
     const hasPhases = phases.length >= count && phases.length > 0;
-    this.draw(count, (pos) => writeFlatXYZ(pos, path, count), hasPhases ? (col) => writePhaseColors(col, phases, null, count) : null);
+    this.draw(count, (pos) => writeIteratePositions(pos, path, count), hasPhases ? (col) => writePhaseColors(col, phases, null, count) : null);
   }
 }

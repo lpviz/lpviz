@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Texture } from "three";
-import { flatPointXYZ } from "../../helpers/flatPositions";
+import { iteratePosition } from "../../helpers/iteratePositions";
 import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
 import type { RenderPassName } from "../../Layer";
 import { PointCloudLayer } from "./PointCloudLayer";
@@ -35,7 +35,7 @@ export abstract class SinglePointSpriteLayer extends PointCloudLayer {
   protected rebuild(): void {
     const raw = getState();
     const index = shouldRenderSnapshotMode(getViewportRenderSnapshot().mode, raw) ? this.selectIndex(raw) : null;
-    const xyz = index === null ? null : flatPointXYZ(raw.iteratePath, index);
+    const xyz = index === null ? null : iteratePosition(raw.iteratePath, index);
     if (!xyz) {
       this.hide();
       return;

@@ -14,7 +14,7 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
   });
   start.addEventListener("click", () => ctx.actions.startRotation());
   const stop = el("button", { text: "Stop Rotation" });
-  stop.addEventListener("click", () => ctx.actions.stopRotation());
+  stop.addEventListener("click", () => ctx.actions.stopMotion());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation is-hidden" });
   const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));

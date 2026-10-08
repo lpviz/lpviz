@@ -52,13 +52,13 @@ export function createTransitionController(deps: {
   setManagerSnapshot: (snapshot: ViewportRenderSnapshot) => void;
   getViewportRect: () => DOMRect;
   getSidebarWidth: () => number;
-  shouldUseExternal2DViewport: () => boolean;
-  isExternal3DControlsActive: () => boolean;
-  getExternal2DSnapshot: () => ViewportRenderSnapshot;
+  wants2DControls: () => boolean;
+  are3DControlsActive: () => boolean;
+  get2DControlsSnapshot: () => ViewportRenderSnapshot;
   publishSnapshot: (snapshot: ViewportRenderSnapshot) => void;
   syncManagerPlanarState: () => void;
-  syncExternal2DControls: (enabled: boolean) => void;
-  syncExternal3DControls: (enabled: boolean) => void;
+  sync2DControls: (enabled: boolean) => void;
+  sync3DControls: (enabled: boolean) => void;
   clearActiveNavigation: () => void;
 }): TransitionController {
   let runId = 0;
@@ -112,17 +112,17 @@ export function createTransitionController(deps: {
       // Clear it now, before the transition disables the controls that set it.
       deps.clearActiveNavigation();
 
-      const baseSnapshot = deps.shouldUseExternal2DViewport() ? deps.getExternal2DSnapshot() : deps.getManagerSnapshot();
-      const viewAngle = deps.isExternal3DControlsActive() ? getViewAngleFromSnapshot3D(baseSnapshot) : getState().viewAngle;
+      const baseSnapshot = deps.wants2DControls() ? deps.get2DControlsSnapshot() : deps.getManagerSnapshot();
+      const viewAngle = deps.are3DControlsActive() ? getViewAngleFromSnapshot3D(baseSnapshot) : getState().viewAngle;
       const startTime = performance.now();
 
-      if (deps.shouldUseExternal2DViewport()) {
+      if (deps.wants2DControls()) {
         deps.syncManagerPlanarState();
-        deps.syncExternal2DControls(false);
+        deps.sync2DControls(false);
       }
-      if (deps.isExternal3DControlsActive()) {
+      if (deps.are3DControlsActive()) {
         setState({ viewAngle });
-        deps.syncExternal3DControls(false);
+        deps.sync3DControls(false);
       }
 
       const nextPlan = buildViewportTransitionPlan({
@@ -165,7 +165,7 @@ export function createTransitionController(deps: {
             setState(transitionCompletePatch(completedPlan), { viewportDirty: WORLD_ANCHORED_DIRTY });
           }
           resetViewportTransitionConfig();
-          deps.publishSnapshot(deps.shouldUseExternal2DViewport() ? deps.getExternal2DSnapshot() : deps.getManagerSnapshot());
+          deps.publishSnapshot(deps.wants2DControls() ? deps.get2DControlsSnapshot() : deps.getManagerSnapshot());
         },
       });
     },

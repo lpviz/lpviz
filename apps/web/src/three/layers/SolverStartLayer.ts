@@ -1,5 +1,5 @@
 import { displayedSolverStartPoint, getState } from "@/features/core/store";
-import { flatPointXYZ } from "../helpers/flatPositions";
+import { iteratePosition } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
 import { PointCloudLayer } from "./base/PointCloudLayer";
@@ -39,7 +39,7 @@ export class SolverStartLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    const first = flatPointXYZ(raw.iteratePath, 0);
+    const first = iteratePosition(raw.iteratePath, 0);
     this.draw(1, (pos) => pos.set([point[0], point[1], first?.[2] ?? 0]));
   }
 }

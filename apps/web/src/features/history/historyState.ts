@@ -19,3 +19,12 @@ export function freshHistoryState(): HistoryState {
     redoStack: [],
   };
 }
+
+/** What undo restores, copied so later edits cannot reach into the entry. */
+export function captureHistoryEntry(state: HistoryEntry): HistoryEntry {
+  return {
+    vertices: state.vertices.map((vertex) => [...vertex]),
+    objectiveVector: state.objectiveVector ? [...state.objectiveVector] : null,
+    completionMode: state.completionMode,
+  };
+}

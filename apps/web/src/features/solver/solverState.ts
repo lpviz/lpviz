@@ -99,6 +99,8 @@ export type SolverSettings = {
   replaySpeed: number;
 };
 
+export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
+
 // exported so share links can omit any setting still at its default
 export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
   alphaMax: 0.1,

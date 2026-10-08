@@ -3,20 +3,20 @@ import type { PointXY, Vec } from "@lpviz/math/types";
 import { toCanvasCoords2D, toLogicalCoords2D } from "@lpviz/viewport/projection2d";
 import { projectWorldPosition3D, toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import type { ViewportRuntimeContext } from "./context";
-import type { ExternalControlsSync } from "./externalControlsSync";
+import type { ControlsSync } from "./controlsSync";
 
 // The ViewportApi methods that project between canvas and logical coordinates.
 export function createCoordsApi({
-  shouldUseExternal2DViewport,
+  wants2DControls,
   getManagerSnapshot,
   getViewportRect,
-  getExternal2DSnapshot,
-}: Pick<ViewportRuntimeContext, "shouldUseExternal2DViewport" | "getManagerSnapshot" | "getViewportRect"> & Pick<ExternalControlsSync, "getExternal2DSnapshot">) {
+  get2DControlsSnapshot,
+}: Pick<ViewportRuntimeContext, "wants2DControls" | "getManagerSnapshot" | "getViewportRect"> & Pick<ControlsSync, "get2DControlsSnapshot">) {
   return {
     toLogicalCoords: (x: number, y: number): PointXY => {
       const point = { x, y };
-      if (shouldUseExternal2DViewport()) {
-        return toLogicalCoords2D(getExternal2DSnapshot(), getViewportRect(), point, { snapToGrid: getState().snapToGrid });
+      if (wants2DControls()) {
+        return toLogicalCoords2D(get2DControlsSnapshot(), getViewportRect(), point, { snapToGrid: getState().snapToGrid });
       }
 
       const state = getState();
@@ -33,8 +33,8 @@ export function createCoordsApi({
       });
     },
     toCanvasCoords: (x: number, y: number, z?: number): PointXY => {
-      if (shouldUseExternal2DViewport()) {
-        return toCanvasCoords2D(getExternal2DSnapshot(), getViewportRect(), {
+      if (wants2DControls()) {
+        return toCanvasCoords2D(get2DControlsSnapshot(), getViewportRect(), {
           x,
           y,
         });
@@ -43,8 +43,8 @@ export function createCoordsApi({
       return toCanvasCoords3D(getManagerSnapshot(), getViewportRect(), { x, y }, z, getState().zScale);
     },
     getObjectiveScreenPosition: (point: Vec): PointXY => {
-      if (shouldUseExternal2DViewport()) {
-        return toCanvasCoords2D(getExternal2DSnapshot(), getViewportRect(), { x: point[0], y: point[1] });
+      if (wants2DControls()) {
+        return toCanvasCoords2D(get2DControlsSnapshot(), getViewportRect(), { x: point[0], y: point[1] });
       }
 
       return projectWorldPosition3D(getManagerSnapshot(), getViewportRect(), { x: point[0], y: point[1], z: 0 });
