@@ -1,26 +1,26 @@
 import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath, ResultTextBlock } from "./solverState";
 import type { Constraint, Vec } from "@lpviz/math/types";
+import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
+import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
+import type { IPMOptions } from "@lpviz/solver-engine/ipm";
+import type { PDHGOptions } from "@lpviz/solver-engine/pdhg";
 import type { NumericRow } from "@lpviz/solver-engine/result";
-import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
+import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
 
+// Each engine's own options, minus the tolerance the worker adds to all of them, on top of the
+// problem: its constraints and objective, plus the drawn vertices for the engines that localize
+// or start from the region. The central path's interior point is found from those vertices.
+type Problem = { constraints: Constraint[]; objective: Float64Array };
+type DrawnProblem = Problem & { vertices: Vec[] };
+
 export type SolverWorkerPayload =
-  | { solver: "ipm"; constraints: Constraint[]; objective: Float64Array; startPoint?: number[]; alphaMax: number; correctorThreshold: number; maxit: number }
-  | { solver: "simplex"; constraints: Constraint[]; objective: Float64Array; startVertex?: number[]; dual: boolean; enteringRule: EnteringRule; leavingRule: LeavingRule }
-  | { solver: "pdhg"; constraints: Constraint[]; objective: Float64Array; startPoint?: number[]; ineq: boolean; halpern: boolean; maxit: number; eta: number; tau: number; colorByBasis: boolean }
-  | { solver: "central"; vertices: Vec[]; constraints: Constraint[]; objective: Float64Array; niter: number; interiorPoint?: number[] }
-  | {
-      solver: "ellipsoid";
-      vertices: Vec[];
-      constraints: Constraint[];
-      objective: Float64Array;
-      maxit: number;
-      deepCuts: boolean;
-      rayShoot: boolean;
-      queryPoint: EllipsoidQueryPoint;
-      initialScale: number;
-    };
+  | ({ solver: "ipm" } & Problem & Omit<IPMOptions, "tol">)
+  | ({ solver: "simplex" } & Problem & Omit<SimplexOptions, "tol">)
+  | ({ solver: "pdhg" } & Problem & Omit<PDHGOptions, "tol">)
+  | ({ solver: "central" } & DrawnProblem & Omit<CentralPathOptions, "interiorPoint">)
+  | ({ solver: "ellipsoid" } & DrawnProblem & Omit<EllipsoidOptions, "tol"> & { queryPoint: EllipsoidQueryPoint });
 
 export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 
@@ -56,8 +56,8 @@ export type SolverWireSuccess = {
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
   ellipsoids?: Float64Array | undefined;
-  polygonPoints?: Float64Array | undefined;
-  polygonOffsets?: Uint32Array | undefined;
+  localizingSetPoints?: Float64Array | undefined;
+  localizingSetOffsets?: Uint32Array | undefined;
 };
 
 type SolverWorkerError = { id: number; success: false; error: string };
@@ -90,7 +90,7 @@ export type SolverResultView = {
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
   ellipsoids?: EllipsoidPath | undefined;
-  localizingSets?: LocalizingSetPath | null | undefined;
+  localizingSets?: LocalizingSetPath | undefined;
 };
 
 export type SolverWorkerSuccessResponse = { id: number; success: true; result: SolverResultView };
