@@ -11,7 +11,7 @@ const materialCache = new Map<string, LineMaterial>();
 // occludes correctly. One instance per distinct parameter set, shared by
 // every object that asks for it.
 export function lineDepthMaterial(color: string | number, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
-  const key = `${color}|${linewidth}|${is3D}|${is3D}|${opacity}`;
+  const key = `${color}|${linewidth}|${is3D}|${opacity}`;
   let mat = materialCache.get(key);
   if (!mat) {
     mat = new LineMaterial({ color, linewidth, depthTest: is3D, depthWrite: is3D, transparent: opacity < 1, opacity });

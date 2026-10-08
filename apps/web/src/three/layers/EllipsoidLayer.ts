@@ -1,5 +1,6 @@
-import { getState, type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
+import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import { Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -8,9 +9,9 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds } from "../helpers/hugeBounds";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
+import { PALETTE } from "../palette";
 import { ZScaledGroupLayer } from "./base/LayerBase";
 
-const ELLIPSOID_COLOR = "#377eb8";
 const ACTIVE_THICKNESS = 2.5;
 const TRAIL_THICKNESS = 1.5;
 // The localizing polyhedron is the region actually still under consideration: thinner and fainter
@@ -65,10 +66,8 @@ function sampleIndices(active: number, out: number[]): void {
 // Returns false when P is not numerically positive definite: the ellipse is then skipped rather
 // than drawn with a NaN transform. A 3-variable ellipsoid (stride 9) needs its own geometry and is
 // not drawn yet.
-const PLANAR_ELLIPSE_STRIDE = 5;
-
 function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: number, z: number): boolean {
-  if (ellipsoids.stride !== PLANAR_ELLIPSE_STRIDE) return false;
+  if (ellipsoids.stride !== ellipsoidStride(2)) return false;
   const base = index * ellipsoids.stride;
   const cx = ellipsoids.data[base]!;
   const cy = ellipsoids.data[base + 1]!;
@@ -126,24 +125,21 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     }
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    return [raw.iterateEllipsoids, raw.iterateLocalizingSets, raw.iteratePath, raw.highlightIteratePathIndex, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [state.iterateEllipsoids, state.iterateLocalizingSets, state.iteratePath, state.highlightIteratePathIndex, state.is3DMode, state.isTransitioning3D, snap.mode];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
-    const ellipsoids = raw.iterateEllipsoids;
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    const ellipsoids = state.iterateEllipsoids;
 
-    if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, raw)) {
+    if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, state)) {
       this.hideFrom(0);
       return;
     }
 
     // the replayed prefix, or the hovered row, bounds how much has "happened"
-    const revealed = raw.iteratePath.count > 0 ? Math.min(raw.iteratePath.count, ellipsoids.count) : ellipsoids.count;
-    const active = Math.min(raw.highlightIteratePathIndex ?? revealed - 1, ellipsoids.count - 1);
+    const revealed = state.iteratePath.count > 0 ? Math.min(state.iteratePath.count, ellipsoids.count) : ellipsoids.count;
+    const active = Math.min(state.highlightIteratePathIndex ?? revealed - 1, ellipsoids.count - 1);
     if (active < 0) {
       this.hideFrom(0);
       return;
@@ -155,7 +151,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
       const segments = this.slots[used]!;
-      const iterate = iteratePosition(raw.iteratePath, index);
+      const iterate = iteratePosition(state.iteratePath, index);
       if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)) {
         continue;
       }
@@ -171,7 +167,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
 
     // The localizing polyhedron is shown only for a hovered (or replayed) iterate: one per trail
     // slot buries the picture, so it reads as an inspection tool instead.
-    this.showLocalizingSet(raw, snap.mode === "3d");
+    this.showLocalizingSet(state, snap.mode === "3d");
   }
 
   private showLocalizingSet(raw: State, is3D: boolean): void {
@@ -194,7 +190,7 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
   // The localizing polygon as segment endpoint pairs, closed back to the start. A 3-variable
   // localizing set arrives as half-spaces (stride 4) and is not drawn yet.
   private writePolygon(sets: LocalizingSetPath | null, index: number, z: number): number {
-    if (!sets || sets.stride !== 2 || index >= sets.count) return 0;
+    if (!sets || sets.stride !== localizingSetStride(2) || index >= sets.count) return 0;
     const start = sets.offsets[index]!;
     const end = sets.offsets[index + 1]!;
     const count = end - start;
@@ -239,9 +235,9 @@ function slotOpacity(slot: number) {
 
 function slotMaterial(slot: number, is3D: boolean) {
   const newest = slot >= TRAIL_COUNT - 1;
-  return lineDepthMaterial(ELLIPSOID_COLOR, newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS, is3D, Number(slotOpacity(slot).toFixed(3)));
+  return lineDepthMaterial(PALETTE.ellipsoid, newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS, is3D, Number(slotOpacity(slot).toFixed(3)));
 }
 
 function polygonMaterial(is3D: boolean) {
-  return lineDepthMaterial(ELLIPSOID_COLOR, POLYGON_THICKNESS, is3D, POLYGON_OPACITY);
+  return lineDepthMaterial(PALETTE.ellipsoid, POLYGON_THICKNESS, is3D, POLYGON_OPACITY);
 }

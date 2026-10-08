@@ -8,15 +8,16 @@ type LayerInvalidationKey = keyof ViewportDirtyFlags;
 export const RENDER_PASSES = ["background", "transparent", "foreground", "vertices", "traceLines", "trace", "overlay"] as const;
 export type RenderPassName = (typeof RENDER_PASSES)[number];
 
-export type LayerRenderObject = {
+/** One of a layer's objects and the pass it renders in. */
+export type LayerPlacement = {
   readonly object3D: Object3D;
   readonly pass: RenderPassName;
 };
 
 export interface Layer {
-  readonly object3D: Object3D;
-  readonly renderPass?: RenderPassName;
-  readonly renderObjects?: readonly LayerRenderObject[];
+  /** the objects the layer draws, each in its pass */
+  placements(): readonly LayerPlacement[];
+  /** the dirty flags that make the layer update; a flagless invalidate updates every layer */
   readonly invalidationKeys: readonly LayerInvalidationKey[];
   update(): void;
   dispose(): void;

@@ -1,34 +1,42 @@
-import { getState } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Group, type Object3D } from "three";
-import type { Layer, RenderPassName } from "../../Layer";
+import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 
 // Template-method base for data-driven layers: a subclass declares the inputs whose reference
 // change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
 // against the previous one and calls `rebuild()` only on change. `everyFrame()` runs
 // unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
+// Both read the store and the render snapshot once per update and hand them down.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
-  readonly renderPass?: RenderPassName;
+  readonly renderPass: RenderPassName = "foreground";
   abstract readonly invalidationKeys: readonly (keyof ViewportDirtyFlags)[];
 
   private deps: readonly unknown[] | null = null;
 
+  placements(): readonly LayerPlacement[] {
+    return [{ object3D: this.object3D, pass: this.renderPass }];
+  }
+
   update(): void {
-    this.everyFrame();
-    const next = this.dependencies();
+    const state = getState();
+    const snap = getViewportRenderSnapshot();
+    this.everyFrame(state, snap);
+    const next = this.dependencies(state, snap);
     if (this.deps && sameDeps(this.deps, next)) return;
     this.deps = next;
-    this.rebuild();
+    this.rebuild(state, snap);
   }
 
   /** Inputs compared with Object.is; a change triggers `rebuild`. */
-  protected abstract dependencies(): readonly unknown[];
+  protected abstract dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[];
   /** Rebuild geometry/visibility from current state. Runs only on change. */
-  protected abstract rebuild(): void;
+  protected abstract rebuild(state: State, snap: ViewportRenderSnapshot): void;
   /** Cheap per-frame work (e.g. object3D.scale.z). Runs every update. */
-  protected everyFrame(): void {}
+  protected everyFrame(_state: State, _snap: ViewportRenderSnapshot): void {}
 
   abstract dispose(): void;
 }
@@ -37,8 +45,8 @@ export abstract class LayerBase implements Layer {
 // scale.z (the 2D ortho camera ignores z) so neither rebuilds geometry. Base
 // for every layer whose z follows the view.
 export abstract class ZScaledLayer extends LayerBase {
-  protected override everyFrame(): void {
-    this.object3D.scale.z = (getState().zScale / 100) * getViewportRenderSnapshot().transitionZMultiplier;
+  protected override everyFrame(state: State, snap: ViewportRenderSnapshot): void {
+    this.object3D.scale.z = (state.zScale / 100) * snap.transitionZMultiplier;
   }
 }
 

@@ -19,6 +19,9 @@ type SettingUpdater = <K extends keyof SolverSettings>(key: K) => (v: SolverSett
 // what a solver section is built from: the settings to show and the updater its controls write through
 export type SectionContext = { st: SolverSettings; set: SettingUpdater };
 
+/** One control of a solver section: the nodes it adds and how it follows the settings. */
+export type SettingControl = { nodes: Node[]; sync: (settings: SolverSettings) => void };
+
 export function checkbox(id: string, onChange: (v: boolean) => void) {
   const i = el("input", { attrs: { type: "checkbox", id } });
   i.addEventListener("change", () => onChange(i.checked));
@@ -34,13 +37,14 @@ export function select<T extends string>(id: string, options: readonly (readonly
   return s;
 }
 
+/** Follow a setting without fighting the person typing in the field. */
 export function setInputValue(input: SettingField, value: string) {
   if (document.activeElement !== input) input.value = value;
 }
 
 // A slider (id `<key>Slider`) with a live readout: <label>text " " <span></label>,
 // the input, and a <br> unless `br` is false.
-export function numberSlider({ st, set }: SectionContext, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec) {
+export function numberSlider({ st, set }: SectionContext, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
   const id = key + "Slider";
   const span = el("span", { text: format(st[key]) });
   const update = set(key);
@@ -56,27 +60,44 @@ export function numberSlider({ st, set }: SectionContext, { key, min, max, step,
   if (br) nodes.push(el("br"));
   return {
     nodes,
-    sync: (next: SolverSettings) => {
+    sync: (next) => {
       span.textContent = format(next[key]);
       setInputValue(input, String(next[key]));
     },
   };
 }
 
-// one <label>text " "<input type=checkbox></label> per entry, in order
-export function checkboxRow({ st, set }: SectionContext, labels: Partial<Record<SettingKeys<boolean>, string>>) {
+// one <label>text " "<input type=checkbox></label> per entry, in order; `applies` greys out the
+// boxes that the current settings make moot
+export function checkboxRow(
+  { st, set }: SectionContext,
+  labels: Partial<Record<SettingKeys<boolean>, string>>,
+  applies?: (settings: SolverSettings, key: SettingKeys<boolean>) => boolean,
+): SettingControl {
   const row = el("div", { className: "settings-checkbox-row" });
   const boxes = (Object.entries(labels) as [SettingKeys<boolean>, string][]).map(([key, label]) => {
-    const cb = checkbox(key, set(key));
-    cb.checked = st[key];
-    const wrap = el("label", { attrs: { for: key }, text: label + " " }, [cb]);
+    const box = checkbox(key, set(key));
+    box.checked = st[key];
+    const wrap = el("label", { attrs: { for: key }, text: label + " " }, [box]);
     row.append(wrap);
-    return [key, cb, wrap] as const;
+    return { key, box, wrap };
   });
-  return { row, boxes };
+  return {
+    nodes: [row],
+    sync: (next) => {
+      for (const { key, box, wrap } of boxes) {
+        box.checked = next[key];
+        if (!applies) continue;
+        const enabled = applies(next, key);
+        box.disabled = !enabled;
+        wrap.classList.toggle("is-disabled", !enabled);
+      }
+    },
+  };
 }
 
-export function renderMaxit({ st, set }: SectionContext, id: string, key: MaxitSettingKey) {
+// A log-scale slider for an iteration cap, with the decades marked under it.
+export function maxitSlider({ st, set }: SectionContext, id: string, key: MaxitSettingKey): SettingControl {
   const span = el("span", { text: fmt(st[key]) });
   const update = set(key);
   const input = range(id, String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP), (v) => {
@@ -92,8 +113,8 @@ export function renderMaxit({ st, set }: SectionContext, id: string, key: MaxitS
   const scale = ["1", "10", "100", "1k", "10k", "100k"].map((text) => el("span", { text }));
   wrap.append(label, input, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale));
   return {
-    element: wrap,
-    sync: (next: SolverSettings) => {
+    nodes: [wrap],
+    sync: (next) => {
       span.textContent = fmt(next[key]);
       setInputValue(input, String(maxitToSliderValue(next[key])));
     },

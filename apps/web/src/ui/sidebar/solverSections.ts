@@ -1,7 +1,7 @@
-import type { EllipsoidQueryPoint, SolverMode, State } from "@/features/core/store";
+import type { EllipsoidQueryPoint, SolverMode, SolverSettings } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { ENTERING_RULES, LEAVING_RULES, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
-import { checkbox, checkboxRow, fixed, numberSlider, renderMaxit, select, setInputValue, type SectionContext } from "./solverSettingControls";
+import { checkbox, checkboxRow, fixed, maxitSlider, numberSlider, select, setInputValue, type SectionContext, type SettingControl } from "./solverSettingControls";
 
 // The rule vocabulary comes from the engine; a Record turns a rule without a
 // label into a compile error.
@@ -16,96 +16,84 @@ const QUERY_POINT_OPTIONS = [
   ["volumetric", "Volumetric"],
 ] as const satisfies readonly (readonly [EllipsoidQueryPoint, string])[];
 
-export type SettingsSync = (state: State) => void;
+export type SettingsSync = (settings: SolverSettings) => void;
 
-function ipmSection(sec: HTMLElement, ctx: SectionContext): SettingsSync {
-  const alpha = numberSlider(ctx, { key: "alphaMax", min: "0.001", max: "1", step: "0.001", label: "αmax (maximum step size ratio):" });
-  const corrector = numberSlider(ctx, { key: "correctorThreshold", min: "0.001", max: "0.999", step: "0.001", label: "Corrector threshold:" });
-  const maxit = renderMaxit(ctx, "maxitSliderIPM", "maxitIPM");
-  sec.append(...alpha.nodes, ...corrector.nodes, maxit.element);
-  return (s) => {
-    alpha.sync(s.solverSettings);
-    corrector.sync(s.solverSettings);
-    maxit.sync(s.solverSettings);
-  };
-}
+const ipmSection = (ctx: SectionContext): SettingControl[] => [
+  numberSlider(ctx, { key: "alphaMax", min: "0.001", max: "1", step: "0.001", label: "αmax (maximum step size ratio):" }),
+  numberSlider(ctx, { key: "correctorThreshold", min: "0.001", max: "0.999", step: "0.001", label: "Corrector threshold:" }),
+  maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
+];
 
-function pdhgSection(sec: HTMLElement, ctx: SectionContext): SettingsSync {
-  const eta = numberSlider(ctx, { key: "pdhgEta", min: "0.001", max: "0.750", step: "0.001", label: "η (primal step size factor):" });
-  const tau = numberSlider(ctx, { key: "pdhgTau", min: "0.001", max: "0.750", step: "0.001", label: "τ (dual step size factor):" });
-  const maxit = renderMaxit(ctx, "maxitSliderPDHG", "maxitPDHG");
-  const { row, boxes } = checkboxRow(ctx, { pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" });
-  sec.append(...eta.nodes, ...tau.nodes, maxit.element, row);
-  return (s) => {
-    const next = s.solverSettings;
-    eta.sync(next);
-    tau.sync(next);
-    maxit.sync(next);
-    for (const [key, cb] of boxes) cb.checked = next[key];
-  };
-}
+const pdhgSection = (ctx: SectionContext): SettingControl[] => [
+  numberSlider(ctx, { key: "pdhgEta", min: "0.001", max: "0.750", step: "0.001", label: "η (primal step size factor):" }),
+  numberSlider(ctx, { key: "pdhgTau", min: "0.001", max: "0.750", step: "0.001", label: "τ (dual step size factor):" }),
+  maxitSlider(ctx, "maxitSliderPDHG", "maxitPDHG"),
+  checkboxRow(ctx, { pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }),
+];
 
-function ellipsoidSection(sec: HTMLElement, ctx: SectionContext): SettingsSync {
-  const scale = numberSlider(ctx, { key: "ellipsoidInitialScale", min: "1.05", max: "4", step: "0.05", label: "Initial ellipsoid size:", format: fixed(2) });
-  const maxit = renderMaxit(ctx, "maxitSliderEllipsoid", "maxitEllipsoid");
+function ellipsoidSection(ctx: SectionContext): SettingControl[] {
   const query = select("ellipsoidQueryPoint", QUERY_POINT_OPTIONS, ctx.set("ellipsoidQueryPoint"));
   query.value = ctx.st.ellipsoidQueryPoint;
-  const { row, boxes } = checkboxRow(ctx, { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" });
-  const queryRow = el("div", { className: "settings-inline-row" }, [el("label", { attrs: { for: "ellipsoidQueryPoint" }, text: "Query point:" }), query]);
-  sec.append(...scale.nodes, maxit.element, queryRow, row);
-  return (s) => {
-    const next = s.solverSettings;
-    scale.sync(next);
-    maxit.sync(next);
-    setInputValue(query, next.ellipsoidQueryPoint);
+  const queryRow: SettingControl = {
+    nodes: [el("div", { className: "settings-inline-row" }, [el("label", { attrs: { for: "ellipsoidQueryPoint" }, text: "Query point:" }), query])],
+    sync: (next) => setInputValue(query, next.ellipsoidQueryPoint),
+  };
+  return [
+    numberSlider(ctx, { key: "ellipsoidInitialScale", min: "1.05", max: "4", step: "0.05", label: "Initial ellipsoid size:", format: fixed(2) }),
+    maxitSlider(ctx, "maxitSliderEllipsoid", "maxitEllipsoid"),
+    queryRow,
     // the cut shape options belong to the ellipsoid update itself; the
     // other query points localize with a polyhedron and never form one
-    const cutsApply = next.ellipsoidQueryPoint === "ellipsoid";
-    for (const [key, cb, wrap] of boxes) {
-      cb.checked = next[key];
-      const applies = cutsApply || key === "ellipsoidRayShoot";
-      cb.disabled = !applies;
-      wrap.classList.toggle("is-disabled", !applies);
-    }
-  };
+    checkboxRow(ctx, { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" }, (next, key) => next.ellipsoidQueryPoint === "ellipsoid" || key === "ellipsoidRayShoot"),
+  ];
 }
 
-function simplexSection(sec: HTMLElement, ctx: SectionContext): SettingsSync {
+function simplexSection(ctx: SectionContext): SettingControl[] {
   const dual = checkbox("simplexDualMode", ctx.set("simplexDualMode"));
   dual.checked = ctx.st.simplexDualMode;
   const entering = select("simplexEnteringRule", ENTERING_RULE_OPTIONS, ctx.set("simplexEnteringRule"));
   entering.value = ctx.st.simplexEnteringRule;
   const leaving = select("simplexLeavingRule", LEAVING_RULE_OPTIONS, ctx.set("simplexLeavingRule"));
   leaving.value = ctx.st.simplexLeavingRule;
-  sec.append(
-    el("div", { className: "settings-checkbox-row" }, [el("label", { attrs: { for: "simplexDualMode" }, text: "Dual simplex mode " }, [dual])]),
-    // label + dropdown on one line, selects aligned via a 2-column grid
-    el("div", { className: "settings-select-grid" }, [
-      el("label", { attrs: { for: "simplexEnteringRule" }, text: "Entering:" }),
-      entering,
-      el("label", { attrs: { for: "simplexLeavingRule" }, text: "Leaving:" }),
-      leaving,
-    ]),
-  );
-  return (s) => {
-    dual.checked = s.solverSettings.simplexDualMode;
-    setInputValue(entering, s.solverSettings.simplexEnteringRule);
-    setInputValue(leaving, s.solverSettings.simplexLeavingRule);
-  };
+  return [
+    {
+      nodes: [
+        el("div", { className: "settings-checkbox-row" }, [el("label", { attrs: { for: "simplexDualMode" }, text: "Dual simplex mode " }, [dual])]),
+        // label + dropdown on one line, selects aligned via a 2-column grid
+        el("div", { className: "settings-select-grid" }, [
+          el("label", { attrs: { for: "simplexEnteringRule" }, text: "Entering:" }),
+          entering,
+          el("label", { attrs: { for: "simplexLeavingRule" }, text: "Leaving:" }),
+          leaving,
+        ]),
+      ],
+      sync: (next) => {
+        dual.checked = next.simplexDualMode;
+        setInputValue(entering, next.simplexEnteringRule);
+        setInputValue(leaving, next.simplexLeavingRule);
+      },
+    },
+  ];
 }
 
-function centralSection(sec: HTMLElement, ctx: SectionContext): SettingsSync {
-  const n = numberSlider(ctx, { key: "centralPathIter", min: "2", max: "100", step: "1", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false });
-  sec.append(...n.nodes);
-  return (s) => n.sync(s.solverSettings);
-}
+const centralSection = (ctx: SectionContext): SettingControl[] => [
+  numberSlider(ctx, { key: "centralPathIter", min: "2", max: "100", step: "1", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false }),
+];
+
+const SECTIONS: Record<SolverMode, (ctx: SectionContext) => SettingControl[]> = {
+  ipm: ipmSection,
+  pdhg: pdhgSection,
+  ellipsoid: ellipsoidSection,
+  simplex: simplexSection,
+  central: centralSection,
+};
 
 // Fills `sec` with the solver's controls and returns the sync that refreshes
-// them from state.
+// them from the settings.
 export function buildSolverSection(mode: SolverMode, sec: HTMLElement, ctx: SectionContext): SettingsSync {
-  if (mode === "ipm") return ipmSection(sec, ctx);
-  if (mode === "pdhg") return pdhgSection(sec, ctx);
-  if (mode === "ellipsoid") return ellipsoidSection(sec, ctx);
-  if (mode === "simplex") return simplexSection(sec, ctx);
-  return centralSection(sec, ctx);
+  const controls = SECTIONS[mode](ctx);
+  sec.append(...controls.flatMap((control) => control.nodes));
+  return (settings) => {
+    for (const control of controls) control.sync(settings);
+  };
 }

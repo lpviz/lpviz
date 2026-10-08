@@ -1,7 +1,9 @@
-import { displayedSolverStartPoint, getState } from "@/features/core/store";
+import { displayedSolverStartPoint, type State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePosition } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
+import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
@@ -16,7 +18,7 @@ import { PointCloudLayer } from "./base/PointCloudLayer";
 export class SolverStartLayer extends PointCloudLayer {
   constructor() {
     super({
-      color: "#8a8a8a",
+      color: PALETTE.solverStart,
       opacity: 0.9,
       pixelSize: 15,
       texture: SHARED_RING_TEXTURE,
@@ -27,19 +29,27 @@ export class SolverStartLayer extends PointCloudLayer {
     });
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    return [raw.solverStartPoint, raw.solverMode, raw.solverSettings.simplexDualMode, raw.vertices, raw.completionMode, raw.objectiveVector, raw.currentObjective, raw.polytope, raw.iteratePath];
+  protected dependencies(state: State, _snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [
+      state.solverStartPoint,
+      state.solverMode,
+      state.solverSettings.simplexDualMode,
+      state.vertices,
+      state.completionMode,
+      state.objectiveVector,
+      state.currentObjective,
+      state.polytope,
+      state.iteratePath,
+    ];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const point = displayedSolverStartPoint(raw);
+  protected rebuild(state: State, _snap: ViewportRenderSnapshot): void {
+    const point = displayedSolverStartPoint(state);
     if (!point) {
       this.hide();
       return;
     }
-    const first = iteratePosition(raw.iteratePath, 0);
+    const first = iteratePosition(state.iteratePath, 0);
     this.draw(1, (pos) => pos.set([point[0], point[1], first?.[2] ?? 0]));
   }
 }

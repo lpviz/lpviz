@@ -1,12 +1,13 @@
-import { getState, type State } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { type State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
+import { stampTraceSequence } from "../helpers/traceSequence";
+import { PALETTE } from "../palette";
 import { ZScaledGroupLayer } from "./base/LayerBase";
 
-const TRACE_COLOR = "#ffa500";
 const TRACE_OPACITY = 0.4;
 const TRACE_LINE_THICKNESS = 2;
 
@@ -25,13 +26,12 @@ export class TraceLineLayer extends ZScaledGroupLayer {
   private pool: PathRibbon[] = [];
   private assigned = new Map<TraceEntry, PathRibbon>();
   private lastMode: string | null = null;
-  // monotonic append sequence stamped on each ribbon mesh; TraceCache keys
-  // its incremental accumulation on it (see TraceCache.ts)
+  // monotonic append sequence stamped on each ribbon mesh (see traceSequence.ts)
   private nextSeq = 0;
 
   private makeRibbon(): PathRibbon {
     const ribbon = new PathRibbon({
-      color: TRACE_COLOR,
+      color: PALETTE.trace,
       opacity: TRACE_OPACITY,
       linewidth: TRACE_LINE_THICKNESS,
     });
@@ -41,25 +41,22 @@ export class TraceLineLayer extends ZScaledGroupLayer {
     return ribbon;
   }
 
-  protected dependencies(): readonly unknown[] {
-    const raw = getState();
-    return [raw.traceEnabled, raw.traceBuffer, raw.is3DMode, raw.isTransitioning3D, getViewportRenderSnapshot().mode];
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [state.traceEnabled, state.traceBuffer, state.is3DMode, state.isTransitioning3D, snap.mode];
   }
 
-  protected rebuild(): void {
-    const raw = getState();
-    const snap = getViewportRenderSnapshot();
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const modeChanged = this.lastMode !== snap.mode;
     this.lastMode = snap.mode;
 
-    const shouldShow = raw.traceEnabled && raw.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, raw);
+    const shouldShow = state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
     if (!shouldShow) {
       this.object3D.visible = false;
       return;
     }
 
     // Recycle ribbons whose entries were evicted from the buffer
-    const live = new Set<TraceEntry>(raw.traceBuffer);
+    const live = new Set<TraceEntry>(state.traceBuffer);
     const freed: PathRibbon[] = [];
     for (const [entry, ribbon] of this.assigned) {
       if (!live.has(entry)) {
@@ -71,13 +68,13 @@ export class TraceLineLayer extends ZScaledGroupLayer {
 
     // Build the path texture only for entries that don't have one yet
     const is3D = snap.mode === "3d";
-    for (const entry of raw.traceBuffer) {
+    for (const entry of state.traceBuffer) {
       if (this.assigned.has(entry)) continue;
       if (entry.count < 2) continue;
       const ribbon = freed.pop() ?? this.makeRibbon();
       ribbon.setPath(iteratePositions(entry), entry.count);
       ribbon.setDepth(is3D);
-      ribbon.mesh.userData.traceSeq = this.nextSeq++;
+      stampTraceSequence(ribbon.mesh, this.nextSeq++);
       ribbon.mesh.visible = true;
       this.assigned.set(entry, ribbon);
     }

@@ -1,13 +1,14 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import type { Mesh, Object3D, ShaderMaterial, WebGLRenderer } from "three";
+import type { Mesh, ShaderMaterial, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
 import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
+import { traceSequenceOf } from "./helpers/traceSequence";
 
 // World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
 // once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
-// sequence number (stamped on its mesh by TraceLineLayer): appends draw only the new chunks into
+// sequence number (see traceSequence.ts): appends draw only the new chunks into
 // the existing target with no clear (alpha-over of one shared color and opacity is associative,
 // so neither chunk order nor the order of the two composite quads changes the blend). Evictions
 // cannot be un-blended, so a rebuild leaves the oldest TRAILING_HEADROOM chunks out of the main
@@ -46,10 +47,6 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
 }
 `;
-
-function getTraceSeq(object: Object3D): number | undefined {
-  return object.userData.traceSeq as number | undefined;
-}
 
 type ViewParams = {
   width: number;
@@ -133,7 +130,7 @@ export class TraceCache {
     let minSeq = Infinity;
     let maxSeq = -Infinity;
     traceLinesScene.traverseVisible((object) => {
-      const seq = getTraceSeq(object);
+      const seq = traceSequenceOf(object);
       if (seq === undefined) return;
       live.push(object as Mesh);
       if (seq < minSeq) minSeq = seq;
@@ -282,7 +279,7 @@ export class TraceCache {
     for (let i = 0; i < live.length; i++) {
       const mesh = live[i]!;
       saved[i] = mesh.visible;
-      const seq = getTraceSeq(mesh)!;
+      const seq = traceSequenceOf(mesh)!;
       if (seq < startSeq || seq >= endSeq) mesh.visible = false;
     }
     render();
