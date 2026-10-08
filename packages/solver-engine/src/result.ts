@@ -15,7 +15,7 @@ export interface NumericRow {
 
 /**
  * One printed section: a header line, one row per iterate (preformatted text
- * or the columns to format), the closing lines that are not iterates, and a
+ * or the columns to format), the closing constraints that are not iterates, and a
  * footer. A log with several sections is a phased run (simplex).
  */
 export interface LogSection {

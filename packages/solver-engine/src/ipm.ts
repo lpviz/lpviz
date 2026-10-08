@@ -1,6 +1,6 @@
-import { dot, infinityNorm, linesToDenseAb, matVec, transposedMatVec } from "@lpviz/math/blas";
+import { dot, infinityNorm, denseFromConstraints, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, VecN } from "@lpviz/math/types";
+import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader } from "./fmt";
 import type { NumericRow, SolverResult } from "./result";
 import { assertMaxit, solveFooter } from "./time";
@@ -20,20 +20,20 @@ interface IPMOptions {
   startPoint?: number[] | undefined;
 }
 
-export function ipm(lines: Lines, objective: VecN, opts: IPMOptions): SolverResult {
+export function ipm(constraints: Constraint[], objective: Float64Array, opts: IPMOptions): SolverResult {
   const { eps_p, eps_d, eps_opt, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
   assertMaxit(maxit);
 
   // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
-  const { A: aOriginal, b: bOriginal } = linesToDenseAb(lines);
+  const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
   const A = { rows: aOriginal.rows, cols: aOriginal.cols, data: Float64Array.from(aOriginal.data, (value) => -value) };
   const b = Float64Array.from(bOriginal, (value) => -value);
   const c = Float64Array.from(objective, (value) => -value);
   const m = A.rows;
   const n = A.cols;
 
-  const iterates: VecN[] = [];
+  const iterates: Float64Array[] = [];
   const convergence: number[] = [];
   const rows: NumericRow[] = [];
   const header = numericLogHeader(n, "µ");

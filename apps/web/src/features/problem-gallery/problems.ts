@@ -1,5 +1,6 @@
-import { centroid, signedArea } from "@lpviz/math/geometry";
+import { centroid, signedArea } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
+import { boundsOf } from "@lpviz/math/vec";
 
 export type GalleryProblem = {
   id: string;
@@ -98,14 +99,9 @@ export const valtrPolygon = (count: number, rng: Rng): Vec[] => {
 };
 
 export const isWellProportioned = (points: Vec[]): boolean => {
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
-  const minX = Math.min(...xs);
-  const maxX = Math.max(...xs);
-  const minY = Math.min(...ys);
-  const maxY = Math.max(...ys);
-  const width = maxX - minX;
-  const height = maxY - minY;
+  const { min, max } = boundsOf(points);
+  const width = max[0]! - min[0]!;
+  const height = max[1]! - min[1]!;
   if (width <= 0 || height <= 0) return false;
   return Math.abs(signedArea(points)) / (width * height) >= RANDOM_POLYGON_MIN_FILL_RATIO;
 };
@@ -119,10 +115,9 @@ export const isWellProportioned = (points: Vec[]): boolean => {
 // outside roughly half the time while keeping the region within a couple of
 // widths of it (the gallery zooms to fit on load).
 const offsetFromOrigin = (points: Vec[], rng: Rng): Vec[] => {
-  const xs = points.map((p) => p[0]);
-  const ys = points.map((p) => p[1]);
-  const halfWidth = (Math.max(...xs) - Math.min(...xs)) / 2;
-  const halfHeight = (Math.max(...ys) - Math.min(...ys)) / 2;
+  const { min, max } = boundsOf(points);
+  const halfWidth = (max[0]! - min[0]!) / 2;
+  const halfHeight = (max[1]! - min[1]!) / 2;
   const angle = rng() * 2 * Math.PI;
   const ratio = rng() * RANDOM_POLYGON_MAX_OFFSET_RATIO;
   const dx = ratio * halfWidth * Math.cos(angle);

@@ -1,7 +1,8 @@
-import { dot, infinityNorm, linesToDenseAb, matVec } from "@lpviz/math/blas";
-import { centroid, findStrictFeasiblePoint } from "@lpviz/math/geometry";
+import { dot, infinityNorm, denseFromConstraints, matVec } from "@lpviz/math/blas";
+import { centroid } from "@lpviz/math/polygon";
+import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
 import { solveDenseSystem } from "@lpviz/math/lapack";
-import type { Lines, VecN, VecNs, Vertices } from "@lpviz/math/types";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import { coordinateHeaders, fmtCoordinates, fmtE, fmtIntL, fmtStr, fmtStrL, logColumnWidths } from "./fmt";
 import type { SolverResult } from "./result";
 
@@ -19,7 +20,7 @@ interface CentralPathOptions {
   niter: number;
   /**
    * A strictly feasible point to start the Newton steps from. Two-variable problems can find one
-   * from their vertices or lines; any other dimension must supply it.
+   * from their vertices or constraints; any other dimension must supply it.
    */
   interiorPoint?: number[] | undefined;
 }
@@ -168,7 +169,7 @@ function centralPathXk(A: { rows: number; cols: number; data: Float64Array }, b:
   return null;
 }
 
-export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, opts: CentralPathOptions): SolverResult {
+export function centralPath(vertices: Vec[], constraints: Constraint[], objective: Float64Array, opts: CentralPathOptions): SolverResult {
   const { niter, interiorPoint } = opts;
 
   if (niter > 2 ** 10) {
@@ -176,18 +177,26 @@ export function centralPath(vertices: Vertices, lines: Lines, objective: VecN, o
   }
 
   const startTime = Date.now();
-  const { A, b } = linesToDenseAb(lines);
+  const { A, b } = denseFromConstraints(constraints);
   const c = Float64Array.from(objective);
   const barrierParameters = centralPathMu(niter);
 
   const n = A.cols;
-  const points: VecNs = [];
+  const points: Float64Array[] = [];
   const barrierTerms: number[] = [];
   const rows: string[] = [];
   const widths = logColumnWidths(n);
   const header = `  ${fmtStrL("Iter", 4)} ${coordinateHeaders(n)} ${fmtStr("Obj", widths.measure)} ${fmtStr("µ", widths.measure)}  \n`;
 
-  const startPoint = interiorPoint ? (isStrictlyFeasible(A, b, interiorPoint) ? interiorPoint : null) : n === 2 ? (vertices.length >= 3 ? centroid(vertices) : findStrictFeasiblePoint(lines)) : null;
+  const startPoint = interiorPoint
+    ? isStrictlyFeasible(A, b, interiorPoint)
+      ? interiorPoint
+      : null
+    : n === 2
+      ? vertices.length >= 3
+        ? centroid(vertices)
+        : findStrictFeasiblePoint(constraints)
+      : null;
   if (!startPoint) {
     throw new Error("Central Path requires a strictly feasible starting point.");
   }

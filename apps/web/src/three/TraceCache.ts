@@ -5,7 +5,7 @@ import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
 import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
-// World-anchored impostor for the trace-lines render pass in 2D mode. Trace chunks are immutable
+// World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
 // once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
 // sequence number (stamped on its mesh by TraceLineLayer): appends draw only the new chunks into
 // the existing target with no clear (alpha-over of one shared color and opacity is associative,
@@ -117,7 +117,7 @@ export class TraceCache {
     this.fullRebuildNeeded = true;
   }
 
-  // Prepares the impostor for the trace-lines pass. Returns the scene with
+  // Prepares the impostor for the trace-constraints pass. Returns the scene with
   // the composite quads (the caller renders it in place of the pass), or
   // null when the pass must render directly.
   prepare(renderer: WebGLRenderer, traceLinesScene: Scene): Scene | null {

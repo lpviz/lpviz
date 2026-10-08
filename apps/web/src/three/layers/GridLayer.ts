@@ -6,8 +6,8 @@ import type { Layer } from "../Layer";
 const GRID_COLOR = "#e0e0e0";
 const AXIS_COLOR = "#707070";
 
-// Fragment-shader grid on a single static quad: unit lines and axes are computed per pixel from
-// world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Lines are
+// Fragment-shader grid on a single static quad: unit constraints and axes are computed per pixel from
+// world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Constraint[] are
 // one device pixel with derivative-based coverage, which fades the grid out instead of aliasing
 // when it gets denser than the pixel grid. The quad is kept modest (fp32 varyings wobble at deep
 // zoom when vertex coordinates are huge) and recentered onto the integer-snapped camera target

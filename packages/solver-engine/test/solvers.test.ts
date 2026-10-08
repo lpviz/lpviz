@@ -7,11 +7,11 @@ import { ENTERING_RULES, LEAVING_RULES, simplex } from "../src/simplex";
 import { SQUARE, SQUARE_VERTICES, footerOf, largePolygon, lastIterate, lcg, logText, phase1Count, randomPolygon, rowsOf } from "./fixtures";
 
 // The square plus x + y <= -8, which passes exactly through the optimum
-// (-4, -4) of the objective (2, 1): three lines meet there, so the ratio test
+// (-4, -4) of the objective (2, 1): three constraints meet there, so the ratio test
 // ties and the index rules take visibly different routes.
 const DEGENERATE_SQUARE = [...SQUARE, [1, 1, -8]] as [number, number, number][];
 
-// Seven nearly concurrent lines on which primal simplex with entering rule
+// Seven nearly concurrent constraints on which primal simplex with entering rule
 // "last" cycles in Phase 1 (found by fuzzing; see the cycling-guard test).
 const STALL_LINES = [
   [-0.9697749358075918, -0.24400117597950474, -3.3722141566558337],
@@ -142,7 +142,7 @@ describe("simplex", () => {
       runs++;
       for (const dual of [false, true]) {
         for (const rules of RULE_OPTIONS) {
-          const r = simplex(polygon.lines, obj, { ...opts(dual), ...rules });
+          const r = simplex(polygon.constraints, obj, { ...opts(dual), ...rules });
           const last = lastIterate(r);
           expect(r.status).toBe("optimal");
           expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 5);
@@ -160,11 +160,11 @@ describe("simplex", () => {
   // crosses that boundary several times and must still land on the optimum.
   test("a 255-gon solves in well under a second and matches brute force", () => {
     const rand = lcg(11);
-    const { hull, lines } = largePolygon(rand, 255);
+    const { hull, constraints } = largePolygon(rand, 255);
     const obj = Float64Array.of(7, -1.4);
     const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
     const start = performance.now();
-    const r = simplex(lines, obj, opts(false));
+    const r = simplex(constraints, obj, opts(false));
     const elapsed = performance.now() - start;
     expect(r.status).toBe("optimal");
     expect(phase1Count(r)).toBeGreaterThan(200);
@@ -278,11 +278,11 @@ describe("ipm", () => {
   // The normal-equations reduction must reach the same optimum in milliseconds.
   test("a 255-gon converges in well under a second to the brute-force optimum", () => {
     const rand = lcg(11);
-    const { hull, lines } = largePolygon(rand, 255);
+    const { hull, constraints } = largePolygon(rand, 255);
     const obj = Float64Array.of(7, -1.4);
     const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
     const start = performance.now();
-    const r = ipm(lines, obj, { ...opts(0.1), maxit: 1000 });
+    const r = ipm(constraints, obj, { ...opts(0.1), maxit: 1000 });
     const elapsed = performance.now() - start;
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const last = lastIterate(r);
@@ -417,12 +417,12 @@ describe("ellipsoid", () => {
     for (let t = 0; t < 60 && runs < 15; t++) {
       const polygon = randomPolygon(rand);
       if (!polygon) continue;
-      const { hull, lines } = polygon;
+      const { hull, constraints } = polygon;
       const obj = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(obj[0]!) + Math.abs(obj[1]!) < 0.1) continue;
       const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       runs++;
-      const r = ellipsoid(hull, lines, obj, opts());
+      const r = ellipsoid(hull, constraints, obj, opts());
       const last = lastIterate(r);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
       expect(obj[0]! * last[0]! + obj[1]! * last[1]!).toBeCloseTo(expected, 4);
@@ -517,11 +517,11 @@ describe("centralPath", () => {
 
   test("a 255-gon traces every point quickly", () => {
     for (const seed of [3, 9]) {
-      const { hull, lines } = largePolygon(lcg(seed), 255);
+      const { hull, constraints } = largePolygon(lcg(seed), 255);
       const obj = Float64Array.of(7, -1.4);
       const expected = Math.max(...hull.map((v) => obj[0]! * v[0] + obj[1]! * v[1]));
       const start = performance.now();
-      const r = centralPath(hull, lines, obj, { niter: 75 });
+      const r = centralPath(hull, constraints, obj, { niter: 75 });
       const elapsed = performance.now() - start;
       expect(r.iterations.length).toBe(75);
       const last = lastIterate(r);

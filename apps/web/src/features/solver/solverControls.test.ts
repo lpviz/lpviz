@@ -69,7 +69,7 @@ describe("ellipsoid request", () => {
       objectiveVector: [-1, 0],
       polytope: {
         kind: "unbounded",
-        lines: [
+        constraints: [
           [1, -2, 0],
           [1, 1, 3],
         ],

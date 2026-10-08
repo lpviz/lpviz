@@ -1,8 +1,9 @@
-import type { CompletionMode, DragTarget, DragViewAnchor3D, State } from "@/features/core/store";
+import type { DragTarget, DragViewAnchor3D, State } from "@/features/core/store";
 import { displayedSolverStartPoint, getState, iterateHeight } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { type BoundingBox, clipRayToBoundingBox, nearestEdge } from "@lpviz/math/geometry";
+import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
+import { distanceToSegment, nearestEdge } from "@lpviz/math/polygon";
 import type { PointXY, Vec } from "@lpviz/math/types";
 
 const VERTEX_HIT_RADIUS = 12;
@@ -51,12 +52,6 @@ export function worldDistanceForPixels(canvasManager: ViewportApi, worldPoint: V
   return Math.hypot(shifted.x - worldPoint[0], shifted.y - worldPoint[1]);
 }
 
-// The nearest edge within `tolerance` (world units); a draft or open chain
-// has no closing edge.
-export function findEdgeNearPoint(point: Vec, vertices: Vec[], completionMode: CompletionMode, tolerance = 0.5): number | null {
-  return nearestEdge(vertices, point, tolerance, completionMode === "closed");
-}
-
 function getVisibleBounds(canvasManager: ViewportApi): Bounds {
   const margin = 50;
   const topLeft = canvasManager.toLogicalCoords(-margin, -margin);
@@ -69,16 +64,6 @@ function getVisibleBounds(canvasManager: ViewportApi): Bounds {
   };
 }
 
-function distanceToSegment(point: Vec, start: Vec, end: Vec): number {
-  const dx = end[0] - start[0];
-  const dy = end[1] - start[1];
-  const len2 = dx * dx + dy * dy;
-  if (len2 === 0) return Math.hypot(point[0] - start[0], point[1] - start[1]);
-  const t = Math.max(0, Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / len2));
-  const projection = { x: start[0] + t * dx, y: start[1] + t * dy };
-  return Math.hypot(point[0] - projection.x, point[1] - projection.y);
-}
-
 export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Vec): number | null {
   const { completionMode, polytope } = getState();
   if (completionMode !== "open" || !polytope?.boundaryRays?.length) {
@@ -88,7 +73,7 @@ export function findBoundaryRayNearPoint(canvasManager: ViewportApi, point: Vec)
   const bounds = getVisibleBounds(canvasManager);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
     const ray = polytope.boundaryRays[index]!;
-    const clipped = clipRayToBoundingBox(ray.start, ray.direction, bounds);
+    const clipped = clipRayToBoundingBox(ray, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
     if (distanceToSegment(point, start, end) < 0.5) {
@@ -138,7 +123,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
   if (session.kind === "editing-closed" && state.vertices.length >= 3) {
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance);
     if (edgeIndex !== null) {
-      const lineContext = state.polytope?.lines;
+      const lineContext = state.polytope?.constraints;
       if (!lineContext || lineContext.length === 0) return null;
       const line = lineContext[edgeIndex];
       if (!line) return null;
@@ -151,7 +136,7 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
           operation: {
             kind: "closed-line",
             lineIndex: edgeIndex,
-            lines: lineContext.map(([A, B, C]) => [A, B, C]),
+            constraints: lineContext.map(([A, B, C]) => [A, B, C]),
           },
           start: logicalCoords,
           normal: [line[0], line[1]],
@@ -161,10 +146,10 @@ export function getDragStartTarget(canvasManager: ViewportApi, state: State, cli
   }
 
   if (session.kind === "editing-open" && state.vertices.length >= 2) {
-    const lineContext = state.polytope?.lines;
+    const lineContext = state.polytope?.constraints;
     if (!lineContext || lineContext.length === 0) return null;
 
-    const edgeIndex = findEdgeNearPoint(logicalCoords, state.vertices, "open", edgeTolerance);
+    const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance, false);
     if (edgeIndex !== null) {
       const line = lineContext[edgeIndex];
       if (!line) return null;

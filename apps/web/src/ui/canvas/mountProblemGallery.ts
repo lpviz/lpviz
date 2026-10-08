@@ -1,6 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { GALLERY_PROBLEMS, randomConvexPolygonPreview, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
 import { el } from "@/ui/dom";
+import { boundsOf } from "@lpviz/math/vec";
 
 const IDLE = 3000,
   ITEM_W = 84,
@@ -15,13 +16,10 @@ const IDLE = 3000,
 const RESHUFFLE_MS = 1000;
 type Shape = Pick<GalleryProblem, "vertices" | "objectiveVector">;
 function pointsAttribute(problem: Pick<GalleryProblem, "vertices">) {
-  const minX = Math.min(...problem.vertices.map((v) => v[0]));
-  const maxX = Math.max(...problem.vertices.map((v) => v[0]));
-  const minY = Math.min(...problem.vertices.map((v) => v[1]));
-  const maxY = Math.max(...problem.vertices.map((v) => v[1]));
-  const width = Math.max(maxX - minX, 1);
-  const height = Math.max(maxY - minY, 1);
-  return problem.vertices.map((v) => `${(8 + ((v[0] - minX) / width) * 44).toFixed(1)},${(36 - ((v[1] - minY) / height) * 28).toFixed(1)}`).join(" ");
+  const { min, max } = boundsOf(problem.vertices);
+  const width = Math.max(max[0]! - min[0]!, 1);
+  const height = Math.max(max[1]! - min[1]!, 1);
+  return problem.vertices.map((v) => `${(8 + ((v[0] - min[0]!) / width) * 44).toFixed(1)},${(36 - ((v[1] - min[1]!) / height) * 28).toFixed(1)}`).join(" ");
 }
 const shapeMarkup = (shape: Shape) => `<polygon points="${pointsAttribute(shape)}"/><line x1="30" y1="22" x2="${30 + shape.objectiveVector[0]}" y2="${22 - shape.objectiveVector[1]}"/>`;
 

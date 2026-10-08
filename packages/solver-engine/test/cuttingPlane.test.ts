@@ -21,13 +21,13 @@ describe("cuttingPlane", () => {
     for (let t = 0; t < 60 && runs < 12; t++) {
       const polygon = randomPolygon(rand, { gap: 0.3, radius: 6, spread: 12 });
       if (!polygon) continue;
-      const { hull, lines } = polygon;
+      const { hull, constraints } = polygon;
       const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
       if (Math.abs(objective[0]!) + Math.abs(objective[1]!) < 0.2) continue;
       const expected = Math.max(...hull.map((v) => objective[0]! * v[0] + objective[1]! * v[1]));
       runs++;
       for (const queryPoint of QUERY_POINTS) {
-        const r = cuttingPlane(hull, lines, objective, opts(queryPoint));
+        const r = cuttingPlane(hull, constraints, objective, opts(queryPoint));
         const last = lastIterate(r);
         const got = objective[0]! * last[0]! + objective[1]! * last[1]!;
         expect(got).toBeLessThanOrEqual(expected + 1e-7);

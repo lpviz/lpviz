@@ -3,7 +3,7 @@ import type { ShareSettings } from "@/features/share/sharedState";
 import { hasUnboundedObjectiveDirection, isEmptyRegion, isSolverSelectable } from "@/features/problem/selectors";
 import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
-import { hasPolytopeLines } from "@lpviz/polytope/polytopeTypes";
+import { hasConstraints } from "@lpviz/polytope/polytope";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
@@ -32,11 +32,11 @@ function isValidSharedSetting<K extends SharedKey>(key: K, value: unknown): valu
   return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
 
-// the objective vector + constraint lines guard common to every buildRequest
+// the objective vector + constraint constraints guard common to every buildRequest
 function objectiveBase(state: State) {
-  if (!state.objectiveVector || !hasPolytopeLines(state.polytope)) return null;
+  if (!state.objectiveVector || !hasConstraints(state.polytope)) return null;
   return {
-    lines: state.polytope.lines,
+    constraints: state.polytope.constraints,
     objective: Float64Array.from(state.objectiveVector),
   };
 }
@@ -81,7 +81,7 @@ export function createSolverControls({ updateSolverSetting }: { updateSolverSett
       mode: "central",
       isSelectable: (s) => isSolverSelectable(s, "central"),
       getRunBlock: (s) => {
-        if (!hasPolytopeLines(s.polytope)) return null;
+        if (!hasConstraints(s.polytope)) return null;
         if (s.polytope.kind === "empty") return messageBlocks("No valid region", "Central Path requires a feasible region.");
         if (hasUnboundedObjectiveDirection(s))
           return messageBlocks(
@@ -93,7 +93,7 @@ export function createSolverControls({ updateSolverSetting }: { updateSolverSett
       shareKeys: ["centralPathIter"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
-        if (!base || !hasPolytopeLines(s.polytope)) return null;
+        if (!base || !hasConstraints(s.polytope)) return null;
         return {
           solver: "central",
           vertices: s.polytope.vertices,
@@ -149,7 +149,7 @@ export function createSolverControls({ updateSolverSetting }: { updateSolverSett
       shareKeys: ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"],
       buildRequest: (s) => {
         const base = objectiveBase(s);
-        if (!base || !hasPolytopeLines(s.polytope)) return null;
+        if (!base || !hasConstraints(s.polytope)) return null;
         const ss = s.solverSettings;
         return {
           solver: "ellipsoid",

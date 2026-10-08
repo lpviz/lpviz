@@ -1,5 +1,5 @@
 import { getState, on, onMeta } from "@/features/core/store";
-import type { BoundingBox } from "@lpviz/math/geometry";
+import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY, Vec } from "@lpviz/math/types";
 import type { ViewportRuntimeContext } from "./runtime/context";
 import { resetViewport2DControlsConfig, setViewport2DControlsConfig } from "./runtime/controls2d";

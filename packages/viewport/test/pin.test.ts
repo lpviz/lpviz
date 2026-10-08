@@ -86,8 +86,8 @@ const canvasGrid = (rect: { width: number; height: number }) => {
 };
 
 function buildTranscript() {
-  const lines: string[] = [];
-  const record = (label: string, value: unknown) => lines.push(`${label}=${fmt(value)}`);
+  const constraints: string[] = [];
+  const record = (label: string, value: unknown) => constraints.push(`${label}=${fmt(value)}`);
   const snapshots: ViewportRenderSnapshot[] = [];
 
   for (const rect of RECTS) {
@@ -214,17 +214,17 @@ function buildTranscript() {
     }
   }
 
-  return { lines, snapshots };
+  return { constraints, snapshots };
 }
 
 describe("viewport pin", () => {
-  const { lines, snapshots } = buildTranscript();
+  const { constraints, snapshots } = buildTranscript();
 
   test("every function's output over the grid is unchanged", () => {
-    const transcript = lines.join("\n");
+    const transcript = constraints.join("\n");
     const hash = createHash("sha256").update(transcript).digest("hex");
     if (hash !== EXPECTED_HASH && process.env.PIN_DUMP) writeFileSync(process.env.PIN_DUMP, transcript);
-    expect(lines.length).toBeGreaterThan(50000);
+    expect(constraints.length).toBeGreaterThan(50000);
     expect(hash).toBe(EXPECTED_HASH);
   });
 

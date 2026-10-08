@@ -1,18 +1,14 @@
 import type { ViewportState } from "@/features/viewport/viewportState";
-import type { Line, Vec } from "@lpviz/math/types";
-import { vecDistance } from "@lpviz/math/vec";
-import { hasPolytopeLines, type PolytopeRepresentation } from "@lpviz/polytope/polytopeTypes";
+import type { Constraint, Vec } from "@lpviz/math/types";
+import { vecDistance, type Dimension } from "@lpviz/math/vec";
+import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 import type { ViewportDirtyFlags } from "@lpviz/viewport/types";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
-// How many decision variables the problem has: the length of every Vec the editor holds.
-const DIMENSIONS = [2, 3] as const;
-export type Dimension = (typeof DIMENSIONS)[number];
-export const isDimension = (value: unknown): value is Dimension => (DIMENSIONS as readonly unknown[]).includes(value);
 type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
-type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; lines: Line[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
+type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; constraints: Constraint[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
 export type DragViewAnchor3D = { x: number; y: number; z: number };
 
 export type DragTarget =
@@ -46,7 +42,7 @@ export type EditorState = {
   vertices: Vec[];
   completionMode: CompletionMode;
   interiorPoint: Vec | null;
-  polytope: PolytopeRepresentation | null;
+  polytope: Polytope | null;
   inequalitiesMessage: string | null;
 
   objectiveVector: Vec | null;
@@ -126,7 +122,7 @@ export function computeDrawingPhase(state: EditorState): DrawingPhase {
 
 /** Nearest vertex of the feasible region, or null if there are none. */
 export function nearestPolytopeVertex(state: EditorState, point: Vec): Vec | null {
-  if (!hasPolytopeLines(state.polytope)) return null;
+  if (!hasConstraints(state.polytope)) return null;
   let best: Vec | null = null;
   let bestDistance = Infinity;
   for (const vertex of state.polytope.vertices) {

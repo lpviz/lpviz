@@ -1,7 +1,7 @@
-import { dot, linesToDenseAb } from "@lpviz/math/blas";
+import { dot, denseFromConstraints } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
-import type { Lines, VecN, Vertices } from "@lpviz/math/types";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import {
   FEASIBILITY_TOLERANCE,
   Incumbent,
@@ -71,12 +71,12 @@ type QueryResult = {
  * forms, more go through a dense solve), and the localizing set is emitted as a polygon for n = 2
  * and as its half-spaces otherwise.
  */
-export function cuttingPlane(vertices: Vertices, lines: Lines, objective: VecN, opts: CuttingPlaneOptions): SolverResult {
+export function cuttingPlane(vertices: Vec[], constraints: Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
   const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
 
   assertMaxit(maxit);
 
-  const { A, b } = linesToDenseAb(lines);
+  const { A, b } = denseFromConstraints(constraints);
   const n = A.cols;
   if (n < 2) {
     throw new Error("The cutting-plane query points require at least two variables.");
