@@ -123,7 +123,7 @@ export function createDragActions(deps: DragActionDeps) {
     updatePanControls(viewportApi);
   };
 
-  const cleanupDragState = () => {
+  const cleanup = () => {
     pendingDragHistory = null;
     setState({
       editorInteraction: { kind: "idle" },
@@ -214,8 +214,8 @@ export function createDragActions(deps: DragActionDeps) {
       if (interaction.target.kind !== "solver-start") sendPolytope();
     }
 
-    cleanupDragState();
+    cleanup();
   };
 
-  return { cleanupDragState, handleDragStart, handleDragMove, handleDragEnd };
+  return { cleanup, handleDragStart, handleDragMove, handleDragEnd };
 }
