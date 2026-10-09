@@ -64,65 +64,14 @@ type RuntimeState = EditorRuntimeState & ViewportRuntimeState & SolverRuntimeSta
 
 export type FreshState = Omit<State, keyof RuntimeState>;
 
-// A reset applies freshState() as one patch, and a patch's key order is the order its per-key
-// listeners fire in, so the keys keep the order the fields had before they were split into slices
-// (the slices interleave: the result fields sit between the region and the objective, and so on).
-const FRESH_KEY_ORDER = [
-  "vertices",
-  "completionMode",
-  "interiorPoint",
-  "polytope",
-  "inequalitiesMessage",
-  "resultDisplayMode",
-  "resultBlocks",
-  "resultVirtualHeader",
-  "resultVirtualFooter",
-  "resultVirtualShowEmpty",
-  "resultVirtualRows",
-  "resultMaxLineChars",
-
-  "objectiveVector",
-  "currentObjective",
-  "objectiveHidden",
-
-  "solverMode",
-  "solverSettings",
-  "solverStartPoint",
-  "iteratePath",
-  "iterateEllipsoids",
-  "iterateLocalizingSets",
-  "iteratePhases",
-  "highlightIteratePathIndex",
-  "rotateObjectiveMode",
-  "replayActive",
-  "originalIteratePath",
-  "originalIteratePhases",
-  "iterateRestartIndices",
-
-  "snapToGrid",
-  "highlightIndex",
-  "editorInteraction",
-  "lastCompletedInteraction",
-
-  "historyStack",
-  "redoStack",
-
-  "zScale",
-
-  "traceEnabled",
-  "traceBuffer",
-] as const satisfies readonly (keyof FreshState)[];
-
 /**
  * The starting values of everything else, composed from the slices. Fresh objects every call, so
  * a reset never shares an array or settings object with the state it replaces; the initial state
- * is built from it, so the two cannot drift apart.
+ * is built from it, so the two cannot drift apart. A reset applies it as one patch, and every
+ * listener reads the whole patched state, so the order of the slices is immaterial.
  */
 export function freshState(): FreshState {
-  const slices: FreshState = { ...freshEditorState(), ...freshSolverState(), ...freshHistoryState(), ...freshViewportState() };
-  const fresh = {} as FreshState;
-  for (const key of FRESH_KEY_ORDER) (fresh as Record<keyof FreshState, unknown>)[key] = slices[key];
-  return fresh;
+  return { ...freshEditorState(), ...freshSolverState(), ...freshHistoryState(), ...freshViewportState() };
 }
 
 const initialState: State = {
