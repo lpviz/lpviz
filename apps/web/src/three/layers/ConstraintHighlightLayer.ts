@@ -1,4 +1,5 @@
 import type { State } from "@/features/core/store";
+import { UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox } from "@lpviz/math/bounds";
 import type { Constraint, PointXY } from "@lpviz/math/types";
@@ -13,7 +14,6 @@ import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
 const CONSTRAINT_LINE_THICKNESS = 2;
-const DEFAULT_3D_EXTENT = 5000;
 const EPS = 1e-10;
 
 function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
@@ -35,14 +35,7 @@ function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
     { x: rect.width, y: rect.height },
   ];
   const pts = screenPoints.map((p) => projectCanvasPointToWorldPlane(snap, rect, p, 0)).filter((p): p is PointXY => p !== null);
-  if (pts.length === 0) {
-    return {
-      minX: -DEFAULT_3D_EXTENT,
-      maxX: DEFAULT_3D_EXTENT,
-      minY: -DEFAULT_3D_EXTENT,
-      maxY: DEFAULT_3D_EXTENT,
-    };
-  }
+  if (pts.length === 0) return UNBOUNDED_CLIP_BOUNDS;
   return {
     minX: Math.min(...pts.map((p) => p.x)) - CLIP_MARGIN_UNITS,
     maxX: Math.max(...pts.map((p) => p.x)) + CLIP_MARGIN_UNITS,
@@ -77,8 +70,6 @@ export class ConstraintHighlightLayer extends LayerBase {
       state.completionMode,
       state.highlightIndex,
       state.polytope,
-      state.is3DMode,
-      state.isTransitioning3D,
       snap.mode,
       snap.orthographic.left,
       snap.orthographic.right,
@@ -93,13 +84,12 @@ export class ConstraintHighlightLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    if (state.completionMode === "draft" || state.highlightIndex === null || !state.polytope || !hasConstraints(state.polytope) || !rendersPlanarDrawing(snap.mode, state)) {
-      this.object3D.visible = false;
-      return;
-    }
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return state.completionMode !== "draft" && state.highlightIndex !== null && hasConstraints(state.polytope) && rendersPlanarDrawing(snap.mode, state);
+  }
 
-    const line = state.polytope.constraints[state.highlightIndex];
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    const line = state.highlightIndex !== null && hasConstraints(state.polytope) ? state.polytope.constraints[state.highlightIndex] : undefined;
     if (!line) {
       this.object3D.visible = false;
       return;

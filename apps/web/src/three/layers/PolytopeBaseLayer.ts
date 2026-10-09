@@ -1,4 +1,6 @@
-import { type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
+import { derivedClosure } from "@/features/problem/selectors";
+import { UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { isConvexChain, isConvexPolygon } from "@lpviz/math/polygon";
@@ -15,15 +17,7 @@ import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
 const POLY_LINE_THICKNESS = 2;
-const DEFAULT_UNBOUNDED_EXTENT = 5000;
 const EPS = 1e-10;
-
-const UNBOUNDED_BOUNDS: BoundingBox = {
-  minX: -DEFAULT_UNBOUNDED_EXTENT,
-  maxX: DEFAULT_UNBOUNDED_EXTENT,
-  minY: -DEFAULT_UNBOUNDED_EXTENT,
-  maxY: DEFAULT_UNBOUNDED_EXTENT,
-};
 
 const fillMaterial = (color: string) =>
   new MeshBasicMaterial({
@@ -96,10 +90,11 @@ type PolytopeRenderResult = {
 };
 
 function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): PolytopeRenderResult {
-  const { vertices, completionMode, highlightIndex, polytope } = state;
+  const { completionMode, highlightIndex, polytope } = state;
   const regionFinished = completionMode !== "draft";
-  const hasDerived = completionMode === "open" && polytope?.kind === "bounded" && polytope.vertices.length >= 3;
-  const displayVertices: Vec[] = hasDerived && polytope?.kind === "bounded" ? polytope.vertices : vertices;
+  const derived = derivedClosure(state);
+  const hasDerived = derived !== null;
+  const displayVertices: Vec[] = derived ?? state.vertices;
   const isClosedRegion = completionMode === "closed" || hasDerived;
   // A closed region (or an open one promoted to its derived hull) is a cyclic
   // polygon, so closed-polygon convexity applies. An un-promoted open region is
@@ -110,7 +105,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
 
   // an unbounded open region is clipped to a fixed extent; in 3D so is
   // everything (the visible rect is only meaningful under the ortho camera)
-  const bounds = (completionMode === "open" && !hasDerived && polytope?.kind === "unbounded") || snap.mode !== "2d" ? UNBOUNDED_BOUNDS : visibleBounds2D(snap);
+  const bounds = (completionMode === "open" && !hasDerived && polytope?.kind === "unbounded") || snap.mode !== "2d" ? UNBOUNDED_CLIP_BOUNDS : visibleBounds2D(snap);
 
   const fillVertices: Vec[] =
     isClosedRegion && displayVertices.length >= 3
@@ -195,8 +190,6 @@ export class PolytopeBaseLayer extends LayerBase {
       state.completionMode,
       state.highlightIndex,
       state.polytope,
-      state.is3DMode,
-      state.isTransitioning3D,
       snap.mode,
       snap.orthographic.left,
       snap.orthographic.right,
@@ -208,14 +201,14 @@ export class PolytopeBaseLayer extends LayerBase {
     ];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
     const visible = state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
-    this.object3D.visible = visible;
-    if (!visible) {
-      this.fillMesh.visible = false;
-      return;
-    }
+    if (!visible) this.fillMesh.visible = false;
+    return visible;
+  }
 
+  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+    this.object3D.visible = true;
     const is3D = snap.mode === "3d";
     const result = buildPolytopeGeometry(state, snap);
 

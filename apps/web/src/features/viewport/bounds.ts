@@ -1,5 +1,10 @@
 import { iterateHeight, type IteratePath } from "@/features/core/store";
+import type { BoundingBox } from "@lpviz/math/bounds";
 import type { Vec } from "@lpviz/math/types";
+
+// How far an unbounded region is drawn and fitted: far beyond any zoom, inside float precision.
+const UNBOUNDED_EXTENT = 5000;
+export const UNBOUNDED_CLIP_BOUNDS: BoundingBox = { minX: -UNBOUNDED_EXTENT, maxX: UNBOUNDED_EXTENT, minY: -UNBOUNDED_EXTENT, maxY: UNBOUNDED_EXTENT };
 
 type ZoomFitInputs = {
   vertices: Vec[];

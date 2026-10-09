@@ -4,7 +4,7 @@ import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
 import type { IPMOptions } from "@lpviz/solver-engine/ipm";
 import type { PDHGOptions } from "@lpviz/solver-engine/pdhg";
-import type { NumericRow } from "@lpviz/solver-engine/result";
+import type { LogSection, NumericRow } from "@lpviz/solver-engine/result";
 import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
@@ -39,12 +39,7 @@ export type PackedRows = {
   restart: Uint8Array;
 };
 
-export type PackedLogSection = {
-  header: string;
-  rows: string[] | PackedRows;
-  notes?: string[] | undefined;
-  footer?: string | undefined;
-};
+export type PackedLogSection = Omit<LogSection, "rows"> & { rows: string[] | PackedRows };
 
 export type SolverWireSuccess = {
   id: number;
@@ -75,12 +70,7 @@ export type ResultRowsView = {
   at(index: number): VirtualResultRow | undefined;
 };
 
-export type ResultLogSection = {
-  header: string;
-  rows: ResultRowsView;
-  notes?: string[] | undefined;
-  footer?: string | undefined;
-};
+export type ResultLogSection = Omit<LogSection, "rows"> & { rows: ResultRowsView };
 
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.

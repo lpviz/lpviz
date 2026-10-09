@@ -29,6 +29,11 @@ export class SolverStartLayer extends PointCloudLayer {
     });
   }
 
+  // shown through the 2D/3D transition too, unlike the other iterate layers
+  protected override visibleIn(): boolean {
+    return true;
+  }
+
   protected dependencies(state: State, _snap: ViewportRenderSnapshot): readonly unknown[] {
     return [
       state.solverStartPoint,

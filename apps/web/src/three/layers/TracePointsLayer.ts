@@ -55,15 +55,15 @@ export class TracePointsLayer extends PointCloudLayer {
     });
   }
 
-  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [state.traceEnabled, state.traceBuffer, state.is3DMode, state.isTransitioning3D, snap.mode];
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    if (!state.traceEnabled || state.traceBuffer.length === 0 || !shouldRenderSnapshotMode(snap.mode, state)) {
-      this.hide();
-      return;
-    }
+  protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
+    return [state.traceEnabled, state.traceBuffer, snap.mode];
+  }
+
+  protected rebuild(state: State): void {
     const chunks = state.traceBuffer.map(getCachedTracePointPositions);
     const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
     this.draw(total / 3, (positions) => {

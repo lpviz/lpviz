@@ -7,7 +7,6 @@ import { createShareService } from "@/features/share/shareService";
 import { applyUrlParamsOnce } from "@/features/share/urlParamsSync";
 import { createSolverActions } from "@/features/solver/solverActions";
 import type { ViewportRuntime } from "@/features/viewport/runtime";
-import { createViewportActions } from "@/features/viewport/viewportActions";
 import { mountCanvasStage } from "@/ui/canvas/mountCanvasStage";
 import { mountSidebar } from "@/ui/sidebar/mountSidebar";
 
@@ -24,9 +23,9 @@ export function boot(root: HTMLElement) {
 
   const solver = createSolverActions(() => viewportApi);
   const polytope = createPolytopeService(solver.handleProblemChange);
-  const viewport = createViewportActions(() => viewportApi, DEFAULT_SIDEBAR_WIDTH);
   const share = createShareService();
-  const layout = createLayout(root, viewport);
+  const actions = createAppActions({ solver, share, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
+  const layout = createLayout(root, actions);
 
   const setViewportApi = (runtime: ViewportRuntime | null) => {
     viewportApi = runtime;
@@ -43,8 +42,8 @@ export function boot(root: HTMLElement) {
   };
 
   const ctx: AppContext = {
-    actions: createAppActions({ solver, viewport, share, history, polytope, getViewportApi: () => viewportApi }),
-    services: { history, polytope, viewport },
+    actions,
+    services: { history, polytope },
 
     getViewportApi: () => viewportApi,
     setViewportApi,

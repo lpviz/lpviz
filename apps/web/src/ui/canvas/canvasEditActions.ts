@@ -1,6 +1,5 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
 import { DEFAULT_Z_SCALE, getState, setState } from "@/features/core/store";
-import type { HandleUndoRedo, SaveHistory } from "@/features/history/historyService";
 import { getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
@@ -17,22 +16,11 @@ import { nearestEdge } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
-
-type EditActionDeps = {
-  viewportApi: ViewportApi;
-  saveHistory: SaveHistory;
-  sendPolytope: () => void;
-  handleUndoRedo: HandleUndoRedo;
-  /** Re-solve the active solver after the start marker moved or reset. */
-  onSolverStartMoved: () => void;
-  showReplayDuration: (durationMs: number) => void;
-  // the gesture layer's "this click is the synthetic one after a double tap"
-  isClickSuppressed: () => boolean;
-};
+import type { EditorToolsDeps } from "./editorTools";
 
 type ApplyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => void;
 
-function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope }: Pick<EditActionDeps, "viewportApi" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
+function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope }: Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
   const commitEdit = (result: { vertices: Vec[]; completionMode: "draft" | "open" | "closed"; interiorPoint: Vec | null }) => {
     saveHistory();
     setState({
@@ -73,7 +61,7 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
 
 // click, double-click and context-menu edits
 function createPointerEditActions(
-  { viewportApi, onSolverStartMoved, isClickSuppressed }: Pick<EditActionDeps, "viewportApi" | "onSolverStartMoved" | "isClickSuppressed">,
+  { viewportApi, onSolverStartMoved, isClickSuppressed }: Pick<EditorToolsDeps, "viewportApi" | "onSolverStartMoved" | "isClickSuppressed">,
   applyEditorTransition: ApplyEditorTransition,
 ) {
   // How close (in screen pixels) a click must land to the first vertex to close
@@ -207,7 +195,7 @@ const isTextEntryTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 
 function createKeyDownHandler(
-  { viewportApi, handleUndoRedo, showReplayDuration }: Pick<EditActionDeps, "viewportApi" | "handleUndoRedo" | "showReplayDuration">,
+  { viewportApi, handleUndoRedo, showReplayDuration }: Pick<EditorToolsDeps, "viewportApi" | "handleUndoRedo" | "showReplayDuration">,
   applyEditorTransition: ApplyEditorTransition,
 ) {
   const finishOpenRegion = () => {
@@ -274,7 +262,7 @@ function createKeyDownHandler(
 // The editor's non-drag actions: applying editor transitions, the click /
 // double-click / context-menu edits, the z-scale wheel and the keyboard
 // shortcuts.
-export function createEditActions(deps: EditActionDeps) {
+export function createEditActions(deps: EditorToolsDeps) {
   const applyEditorTransition = createEditorTransitionApplier(deps);
   return {
     ...createPointerEditActions(deps, applyEditorTransition),

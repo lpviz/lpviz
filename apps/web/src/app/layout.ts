@@ -1,4 +1,4 @@
-import type { ViewportActions } from "@/features/viewport/viewportActions";
+import type { AppActions } from "@/app/appActions";
 
 export const DEFAULT_SIDEBAR_WIDTH = 450;
 const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
@@ -8,7 +8,7 @@ type Resizable = { sidebar: { updateWidth: (width: number) => void }; stage: { u
 // Sidebar geometry: its desktop width, its mobile height, the mobile/desktop
 // switch, and the handle drag that resizes it. `attach` wires the mounted
 // sidebar and stage plus the window listeners; `destroy` removes them.
-export function createLayout(root: HTMLElement, viewport: ViewportActions) {
+export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setSidebarWidth" | "syncViewportLayout">) {
   let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   let mobileSidebarHeight = Math.round(window.innerHeight * 0.42);
   const mobileQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);

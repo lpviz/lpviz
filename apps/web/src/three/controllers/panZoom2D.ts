@@ -1,18 +1,62 @@
-import { getViewport2DControlsConfig, isViewport2DPanActive, startViewport2DPan, stopViewport2DPan, updateViewport2DPan, zoomViewport2DAtCanvasPoint } from "@/features/viewport/runtime/controls2d";
+import { getState } from "@/features/core/store";
+import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewport/runtime/controls2d";
+import type { PointXY } from "@lpviz/math/types";
+import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
+import type { ViewportRect } from "@lpviz/viewport/snapshot";
 import { addListeners, getTouchCenter, getTouchDistance } from "./pointerEvents";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
 
-// The 2D view's pan (mouse, pen, one finger) and zoom (wheel, pinch), driven through the 2D
-// controls config so they act only while that config owns the view. Returns the detach.
+// The 2D view's pan (mouse, pen, one finger) and zoom (wheel, pinch). They read the 2D controls
+// config, act only while it owns the view, and report every move through it. Returns the detach.
 export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
+  // the view at the start of a pan, which each move offsets from
+  let activePan: { startClientX: number; startClientY: number; targetX: number; targetY: number; scaleFactor: number; gridSpacing: number } | null = null;
   let activePointerPanId: number | null = null;
   let activePinch: {
     startDistance: number;
     startScaleFactor: number;
   } | null = null;
 
-  const startPan = (clientX: number, clientY: number) => startViewport2DPan(clientX, clientY, canvas.getBoundingClientRect());
+  const canZoom = () => {
+    const config = get2DControlsConfig();
+    return config.enabled && !config.blocked;
+  };
+  const canPan = () => canZoom() && get2DControlsConfig().panEnabled && getState().editorInteraction.kind === "idle";
+  // a pan in progress ends the moment the controls lose the view
+  const unsubscribe = subscribe2DControlsConfig(() => {
+    const config = get2DControlsConfig();
+    if (!config.enabled || config.blocked || !config.panEnabled) activePan = null;
+  });
+
+  const startPan = (clientX: number, clientY: number) => {
+    if (!canPan()) return false;
+    const config = get2DControlsConfig();
+    const snapshot = buildViewport2DSnapshot(config.state, config.sidebarWidth, canvas.getBoundingClientRect(), config.fallbackSnapshot);
+    activePan = { startClientX: clientX, startClientY: clientY, targetX: snapshot.target.x, targetY: snapshot.target.y, scaleFactor: config.state.scaleFactor, gridSpacing: config.state.gridSpacing };
+    return true;
+  };
+  const panActive = () => activePan !== null && get2DControlsConfig().enabled;
+  const updatePan = (clientX: number, clientY: number) => {
+    const config = get2DControlsConfig();
+    if (!activePan || !config.enabled) return;
+    const unitsPerPixel = 1 / (activePan.gridSpacing * activePan.scaleFactor);
+    const target = { x: activePan.targetX - (clientX - activePan.startClientX) * unitsPerPixel, y: activePan.targetY + (clientY - activePan.startClientY) * unitsPerPixel };
+    config.onStateChange?.(buildViewport2DStateFromTarget(target, activePan.scaleFactor, activePan.gridSpacing, config.sidebarWidth));
+    config.onNavigationFrame?.();
+  };
+  const stopPan = () => {
+    if (!activePan) return false;
+    activePan = null;
+    return true;
+  };
+  const zoomAt = (point: PointXY, rect: ViewportRect, scaleFactor: number) => {
+    if (!canZoom()) return false;
+    const config = get2DControlsConfig();
+    config.onStateChange?.(zoomViewport2DStateAtCanvasPoint(config.state, config.sidebarWidth, rect, config.fallbackSnapshot, point, scaleFactor));
+    config.onNavigationFrame?.();
+    return true;
+  };
 
   const clearActivePointerPan = () => {
     if (activePointerPanId !== null && canvas.hasPointerCapture(activePointerPanId)) {
@@ -25,13 +69,13 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     if (event.touches.length !== 2) return false;
     const startDistance = getTouchDistance(event.touches);
     if (startDistance <= 0) return false;
-    const config = getViewport2DControlsConfig();
+    const config = get2DControlsConfig();
     if (!config.enabled || config.blocked) return false;
     activePinch = {
       startDistance,
       startScaleFactor: config.state.scaleFactor,
     };
-    stopViewport2DPan();
+    stopPan();
     clearActivePointerPan();
     canvas.focus();
     event.preventDefault();
@@ -45,7 +89,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     if (distance <= 0) return false;
     const rect = canvas.getBoundingClientRect();
     const center = getTouchCenter(event.touches);
-    const handled = zoomViewport2DAtCanvasPoint({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
+    const handled = zoomAt({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
     if (!handled) return false;
     event.preventDefault();
     event.stopImmediatePropagation();
@@ -61,13 +105,13 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     event.preventDefault();
   };
   const handleMouseMove = (event: MouseEvent) => {
-    if (!isViewport2DPanActive()) return;
-    updateViewport2DPan(event.clientX, event.clientY);
+    if (!panActive()) return;
+    updatePan(event.clientX, event.clientY);
     event.preventDefault();
   };
   const handleMouseUp = (event: MouseEvent) => {
-    if (event.button !== 0 || !isViewport2DPanActive()) return;
-    if (!stopViewport2DPan()) return;
+    if (event.button !== 0 || !panActive()) return;
+    if (!stopPan()) return;
     event.preventDefault();
   };
   const handlePointerDown = (event: PointerEvent) => {
@@ -81,16 +125,16 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     event.preventDefault();
   };
   const handlePointerMove = (event: PointerEvent) => {
-    if (activePointerPanId !== event.pointerId || !isViewport2DPanActive()) {
+    if (activePointerPanId !== event.pointerId || !panActive()) {
       return;
     }
-    updateViewport2DPan(event.clientX, event.clientY);
+    updatePan(event.clientX, event.clientY);
     event.preventDefault();
   };
   const handlePointerUp = (event: PointerEvent) => {
     if (activePointerPanId !== event.pointerId) return;
     clearActivePointerPan();
-    if (!stopViewport2DPan()) return;
+    if (!stopPan()) return;
     event.preventDefault();
   };
   // single-finger touches are handled here as well as through the pointer
@@ -109,8 +153,8 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     if (updatePinch(event)) return;
     if (event.touches.length !== 1) return;
     const touch = event.touches[0];
-    if (!touch || !isViewport2DPanActive()) return;
-    updateViewport2DPan(touch.clientX, touch.clientY);
+    if (!touch || !panActive()) return;
+    updatePan(touch.clientX, touch.clientY);
     event.preventDefault();
   };
   const handleTouchEnd = (event: TouchEvent) => {
@@ -119,14 +163,14 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
       event.preventDefault();
       return;
     }
-    if (!isViewport2DPanActive()) return;
-    if (!stopViewport2DPan()) return;
+    if (!panActive()) return;
+    if (!stopPan()) return;
     event.preventDefault();
   };
   const handleTouchCancel = (event: TouchEvent) => {
     activePinch = null;
-    if (!isViewport2DPanActive()) return;
-    if (!stopViewport2DPan()) return;
+    if (!panActive()) return;
+    if (!stopPan()) return;
     event.preventDefault();
   };
   const handleWheel = (event: WheelEvent) => {
@@ -134,8 +178,8 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     if (dominantDelta === 0) return;
 
     const rect = canvas.getBoundingClientRect();
-    const { state } = getViewport2DControlsConfig();
-    if (!zoomViewport2DAtCanvasPoint({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) {
+    const { state } = get2DControlsConfig();
+    if (!zoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) {
       return;
     }
     event.preventDefault();
@@ -158,6 +202,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   ]);
 
   return () => {
+    unsubscribe();
     removeListeners();
     clearActivePointerPan();
     activePinch = null;

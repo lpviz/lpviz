@@ -1,10 +1,9 @@
 import { getState } from "@/features/core/store";
 import { isReadyForSolvers } from "@/features/problem/selectors";
-import { clearIterateState, resetTraceState } from "@/features/solver/iterateStore";
+import { clearIterateState, resetTraceState, setIterateResult } from "@/features/solver/iterateStore";
 import type { ReplayController } from "@/features/solver/replayController";
-import type { ResultPresenter } from "@/features/solver/resultPresenter";
+import { renderPayload, type ResultPresenter } from "@/features/solver/resultPresenter";
 import { activeSolverControl } from "@/features/solver/solverControls";
-import { applySolverResult } from "@/features/solver/solverService";
 import { runSolverWorker } from "@/features/solver/workerClient";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
@@ -49,9 +48,10 @@ export function createSolveRunner({ getViewportApi, presenter, replay }: { getVi
       return;
     }
     try {
-      const response = await runSolverWorker(request);
+      const { result } = await runSolverWorker(request);
       if (generation !== requestGeneration) return;
-      applySolverResult(response, (payload) => presenter.render(payload));
+      setIterateResult(result);
+      presenter.render(renderPayload(result.log));
       viewportApi.draw();
     } catch (error) {
       if (generation !== requestGeneration) return;

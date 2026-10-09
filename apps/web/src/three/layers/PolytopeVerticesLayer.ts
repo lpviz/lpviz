@@ -1,4 +1,5 @@
 import type { State } from "@/features/core/store";
+import { derivedClosure } from "@/features/problem/selectors";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Vec } from "@lpviz/math/types";
 import { Group } from "three";
@@ -24,18 +25,19 @@ export class PolytopeVerticesLayer extends LayerBase {
     this.object3D.add(this.circles.points, this.squares.points);
   }
 
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
+  }
+
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
     return [state.vertices, state.completionMode, state.polytope, snap.mode];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    const visible = state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
-    this.object3D.visible = visible;
-    if (!visible) return;
-
-    const hasDerived = state.completionMode === "open" && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3;
-    const displayVertices = hasDerived && state.polytope?.kind === "bounded" ? state.polytope.vertices : state.vertices;
-    const isAnchor = (index: number) => state.completionMode === "open" && !hasDerived && (index === 0 || index === displayVertices.length - 1);
+  protected rebuild(state: State): void {
+    this.object3D.visible = true;
+    const derived = derivedClosure(state);
+    const displayVertices = derived ?? state.vertices;
+    const isAnchor = (index: number) => state.completionMode === "open" && !derived && (index === 0 || index === displayVertices.length - 1);
     const circles = displayVertices.filter((_, index) => !isAnchor(index));
     const squares = displayVertices.filter((_, index) => isAnchor(index));
     this.circles.draw(circles.length, (positions) => writeVertices(positions, circles));

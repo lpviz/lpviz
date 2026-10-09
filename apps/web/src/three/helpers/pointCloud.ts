@@ -1,5 +1,5 @@
-import { BufferAttribute, DynamicDrawUsage, type Points, type PointsMaterial, type Texture } from "three";
-import { makePoints, pointsMaterial } from "./points";
+import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Points, PointsMaterial, type Texture } from "three";
+import { applyHugeBounds } from "./hugeBounds";
 
 export type PointCloudStyle = {
   color: string;
@@ -11,18 +11,40 @@ export type PointCloudStyle = {
   vertexColors: boolean;
 };
 
+// Every point sprite in the app: a fixed screen-size, depth-ignoring sprite
+// whose shape is an alpha map (see sharedTextures.ts).
+const spriteMaterial = (style: PointCloudStyle, color: string, vertexColors: boolean) =>
+  new PointsMaterial({
+    color,
+    size: style.pixelSize,
+    sizeAttenuation: false,
+    transparent: (style.opacity ?? 1) < 1,
+    opacity: style.opacity ?? 1,
+    depthTest: false,
+    depthWrite: false,
+    alphaMap: style.texture,
+    alphaTest: 0.2,
+    vertexColors,
+  });
+
 // A point sprite cloud drawn in place: one grow-only DynamicDrawUsage position attribute (and
 // optional color attribute) and the plain/colored material pair. draw() writes straight into
-// the attribute arrays, so no intermediate copy exists on the rotation hot path.
+// the attribute arrays, so no intermediate copy exists on the rotation hot path. The geometry
+// starts empty with fake huge bounds, so the renderer neither computes them nor culls it.
 export class PointCloud {
   readonly points: Points;
   private readonly plain: PointsMaterial;
   private readonly colored: PointsMaterial | null;
 
   constructor(style: PointCloudStyle) {
-    this.plain = pointsMaterial(style.texture, style.pixelSize, style.color, style.opacity);
-    this.colored = style.vertexColors ? pointsMaterial(style.texture, style.pixelSize, "#ffffff", style.opacity, true) : null;
-    this.points = makePoints(this.plain, style.renderOrder, false);
+    this.plain = spriteMaterial(style, style.color, false);
+    this.colored = style.vertexColors ? spriteMaterial(style, "#ffffff", true) : null;
+    const geometry = new BufferGeometry();
+    applyHugeBounds(geometry);
+    this.points = new Points(geometry, this.plain);
+    this.points.renderOrder = style.renderOrder;
+    this.points.frustumCulled = false;
+    this.points.visible = false;
   }
 
   hide(): void {

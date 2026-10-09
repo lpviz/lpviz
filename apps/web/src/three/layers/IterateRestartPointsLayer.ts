@@ -2,7 +2,6 @@ import { iterateHeight, type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
@@ -25,13 +24,9 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
     return [state.iteratePath, state.iteratePhases, state.iterateRestartIndices, snap.mode];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+  protected rebuild(state: State): void {
     const path = state.iteratePath;
     const { points, count, stride } = path;
-    if (!shouldRenderSnapshotMode(snap.mode, state)) {
-      this.hide();
-      return;
-    }
     const indices = state.iterateRestartIndices.filter((idx) => idx >= 0 && idx < count);
     if (indices.length === 0) {
       this.hide();

@@ -1,6 +1,18 @@
+import { fmtCoordinates, fmtExp, fmtExpUnsigned, fmtIteration, logColumnWidths } from "@lpviz/solver-engine/fmt";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
-import type { PackedLogSection, PackedRows, ResultLogSection, ResultRowsView, SolverResultView, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse } from "./types";
+import type {
+  PackedLogSection,
+  PackedRows,
+  ResultLogSection,
+  ResultRowsView,
+  SolverResultView,
+  SolverWireResponse,
+  SolverWireSuccess,
+  SolverWorkerPayload,
+  SolverWorkerResponse,
+  VirtualResultRow,
+} from "./types";
 
 // The worker packs everything numeric into a few large typed arrays and transfers their buffers
 // (zero copy): structured-cloning tens of thousands of small arrays and row objects costs tens of
@@ -127,4 +139,11 @@ export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResp
     result.localizingSets = { points: localizingSetPoints ?? new Float64Array(0), offsets: localizingSetOffsets, count: localizingSetOffsets.length - 1, stride: localizingSetStride(stride) };
   }
   return { id, success: true, result };
+}
+
+/** A row as the log prints it: a preformatted line, or a numeric row in the engine's columns. */
+export function formatVirtualResultRow(row: VirtualResultRow): string {
+  if (typeof row === "string") return row;
+  const { coordinate, measure } = logColumnWidths(row.point.length);
+  return `${fmtIteration(row.iteration, row.restart ? "r" : "")} ${fmtCoordinates(row.point, coordinate)} ${fmtExp(row.objective, measure, 1)} ${fmtExp(row.infeasibility, measure, 1)} ${fmtExpUnsigned(row.convergence, measure, 1)}`;
 }

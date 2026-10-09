@@ -18,15 +18,14 @@ export class ObjectiveLayer extends LayerBase {
   override readonly invalidationKeys = ["objective"] as const;
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [state.objectiveHidden, state.objectiveVector, state.currentObjective, state.completionMode, state.polytope, state.isTransitioning3D, snap.mode, snap.unitsPerPixel];
+    return [state.objectiveVector, state.currentObjective, state.completionMode, state.polytope, snap.mode, snap.unitsPerPixel];
+  }
+
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return !state.objectiveHidden && shouldRenderSnapshotMode(snap.mode, state);
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    if (state.objectiveHidden || !shouldRenderSnapshotMode(snap.mode, state)) {
-      this.object3D.visible = false;
-      return;
-    }
-
     const target = state.objectiveVector || (state.completionMode !== "draft" && state.currentObjective ? state.currentObjective : null);
 
     if (!target || Math.hypot(target[0], target[1]) < OBJECTIVE_EPSILON) {

@@ -1,5 +1,6 @@
 import type { CompletionMode, State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/core/store";
+import { derivedClosure } from "@/features/problem/selectors";
 import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains, segmentProjection } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
 import { vecDistance } from "@lpviz/math/vec";
@@ -52,30 +53,11 @@ export function getEditorContext(state: State) {
             : { kind: "drafting" as const };
 
   const isDraggingGeometry = state.editorInteraction.kind === "dragging" && state.editorInteraction.target.kind !== "objective";
-  const geometry =
-    session.kind === "editing-open"
-      ? !isDraggingGeometry && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3
-        ? {
-            vertices: state.polytope.vertices,
-            mode: "closed" as const,
-            isDerivedClosed: true,
-          }
-        : {
-            vertices: state.vertices,
-            mode: "open" as const,
-            isDerivedClosed: false,
-          }
-      : session.kind === "editing-closed" || session.kind === "selecting-objective"
-        ? {
-            vertices: state.vertices,
-            mode: "closed" as const,
-            isDerivedClosed: false,
-          }
-        : {
-            vertices: state.vertices,
-            mode: "draft" as const,
-            isDerivedClosed: false,
-          };
+  // while its geometry is dragged an open chain is edited as drawn, not as the hull it closed into
+  const derived = session.kind === "editing-open" && !isDraggingGeometry ? derivedClosure(state) : null;
+  const geometry = derived
+    ? { vertices: derived, mode: "closed" as const, isDerivedClosed: true }
+    : { vertices: state.vertices, mode: session.kind === "editing-open" ? ("open" as const) : session.kind === "drafting" ? ("draft" as const) : ("closed" as const), isDerivedClosed: false };
 
   return {
     session,
