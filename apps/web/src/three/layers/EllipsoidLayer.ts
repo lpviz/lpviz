@@ -1,7 +1,7 @@
 import { type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
-import { Matrix4 } from "three";
+import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { iteratePosition } from "../helpers/iteratePositions";
@@ -9,7 +9,7 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { applyHugeBounds } from "../helpers/hugeBounds";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
-import { ZScaledGroupLayer } from "./base/LayerBase";
+import { ZScaledLayer } from "./base/LayerBase";
 
 const ACTIVE_THICKNESS = 2.5;
 const TRAIL_THICKNESS = 1.5;
@@ -96,7 +96,8 @@ function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: n
 // active iterate (the last one solved, or the one hovered in the log / replayed). Raw z is baked
 // into each ellipse's transform; zScale and the 2D/3D transition flatten ride on scale.z, exactly
 // as for the iterate path.
-export class EllipsoidLayer extends ZScaledGroupLayer {
+export class EllipsoidLayer extends ZScaledLayer {
+  readonly object3D = new Group();
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;

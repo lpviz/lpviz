@@ -1,6 +1,6 @@
 import { getState, setState } from "@/features/core/store";
-import { formatVirtualResultRow } from "@/features/solver/solverService";
-import type { ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
+import { formatVirtualResultRow } from "@/features/solver/resultPacking";
+import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 // While the objective rotates the log is re-rendered on every step, so it shows
@@ -11,6 +11,37 @@ const ROTATE_ROW_LIMIT = 20;
 const ROTATE_TAIL_ROWS = 8;
 
 type RenderOptions = { limitVirtualRows?: boolean };
+
+// A one-section log is a single run and scrolls as a virtual list; a log with
+// several sections is a phased run (simplex), small enough to render as blocks.
+export function renderPayload(log: ResultLogSection[]): ResultRenderPayload {
+  const [section] = log;
+  if (section && log.length === 1) {
+    return { type: "virtual", header: section.header, rows: section.rows, footer: section.footer ?? "" };
+  }
+  return { type: "blocks", blocks: phaseBlocks(log) };
+}
+
+function phaseBlocks(log: ResultLogSection[]): ResultTextBlock[] {
+  const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
+  const createBlock = (className: ResultTextBlock["className"], text: string, index?: number): ResultTextBlock => ({
+    className,
+    text: normalizeLog(text),
+    index,
+  });
+
+  const blocks: ResultTextBlock[] = [];
+  // a row's index is its iterate's position in the whole path
+  let offset = 0;
+  log.forEach(({ header, rows, notes = [], footer }, phase) => {
+    blocks.push(createBlock("iterate-header", `Phase ${phase + 1}\n${header}`));
+    for (let i = 0; i < rows.length; i++) blocks.push(createBlock("iterate-item", formatVirtualResultRow(rows.at(i)!), offset + i));
+    for (const note of notes) blocks.push(createBlock("iterate-item-nohover", note));
+    if (footer) blocks.push(createBlock("iterate-footer", footer));
+    offset += rows.length;
+  });
+  return blocks;
+}
 
 const getMaxLineChars = (constraints: string[]) => constraints.reduce((m, line) => Math.max(m, ...line.split("\n").map((l) => l.length)), 0);
 const createVirtualBlock = (row: VirtualResultRow, index: number): ResultTextBlock => ({

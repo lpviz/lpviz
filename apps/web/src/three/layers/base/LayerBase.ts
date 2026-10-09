@@ -2,7 +2,7 @@ import { getState, type State } from "@/features/core/store";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { Group, type Object3D } from "three";
+import type { Object3D } from "three";
 import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
 import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 
@@ -59,11 +59,6 @@ export abstract class ZScaledLayer extends LayerBase {
   protected override everyFrame(state: State, snap: ViewportRenderSnapshot): void {
     this.object3D.scale.z = (state.zScale / 100) * snap.transitionZMultiplier;
   }
-}
-
-// A z-scaled layer whose object3D is a plain Group of the objects it manages.
-export abstract class ZScaledGroupLayer extends ZScaledLayer {
-  readonly object3D = new Group();
 }
 
 function sameDeps(a: readonly unknown[], b: readonly unknown[]): boolean {

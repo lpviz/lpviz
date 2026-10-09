@@ -1,12 +1,13 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
+import { Group } from "three";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { PHASE_COLORS_BYTES } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { PALETTE } from "../palette";
-import { ZScaledGroupLayer } from "./base/LayerBase";
+import { ZScaledLayer } from "./base/LayerBase";
 
 const ITERATE_LINE_THICKNESS = 3;
 
@@ -29,7 +30,8 @@ function buildPhaseColors(phases: number[]): Uint8Array {
 
 // The iterate path renders as a screen-space ribbon (see pathRibbon.ts); phase coloring rides
 // along as a per-point color texture, one draw call for the whole path.
-export class IterateLineLayer extends ZScaledGroupLayer {
+export class IterateLineLayer extends ZScaledLayer {
+  readonly object3D = new Group();
   override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private ribbon = new PathRibbon({ color: PALETTE.iterate, opacity: 1, linewidth: ITERATE_LINE_THICKNESS });

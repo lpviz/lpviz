@@ -1,12 +1,13 @@
 import { type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
+import { Group } from "three";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { stampTraceSequence } from "../helpers/traceSequence";
 import { PALETTE } from "../palette";
-import { ZScaledGroupLayer } from "./base/LayerBase";
+import { ZScaledLayer } from "./base/LayerBase";
 
 const TRACE_OPACITY = 0.4;
 const TRACE_LINE_THICKNESS = 2;
@@ -20,7 +21,8 @@ type TraceEntry = State["traceBuffer"][number];
 // ribbon whose path texture is built and uploaded exactly once — a rotation
 // step costs one chunk upload, every iterate is drawn (no sampling), and
 // previously drawn curves can never shift between frames.
-export class TraceLineLayer extends ZScaledGroupLayer {
+export class TraceLineLayer extends ZScaledLayer {
+  readonly object3D = new Group();
   override readonly renderPass = "traceLines" as const;
   override readonly invalidationKeys = ["trace"] as const;
   private pool: PathRibbon[] = [];

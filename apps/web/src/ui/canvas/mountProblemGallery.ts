@@ -100,7 +100,7 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     root.style.left = `calc(${sw}px + (100vw - ${sw}px) / 2)`;
     root.style.setProperty("--problem-gallery-expanded-width", `min(${GALLERY_PROBLEMS.length * ITEM_W + Math.max(0, GALLERY_PROBLEMS.length - 1) * GAP + CHROME}px, calc(100vw - ${sw}px - 120px))`);
     root.style.setProperty("--problem-gallery-expanded-height", `${EXPANDED_H}px`);
-    ctx.services.viewport.setTopInset(expanded ? EXPANDED_H + INSET_GAP : 0);
+    ctx.actions.setTopInset(expanded ? EXPANDED_H + INSET_GAP : 0);
     toggle.setAttribute("aria-expanded", String(expanded));
     items.setAttribute("aria-hidden", String(!expanded));
     for (const r of reshuffles) r.setRunning(expanded);

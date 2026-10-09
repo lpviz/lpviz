@@ -3,23 +3,32 @@ import type { HistoryService } from "@/features/history/historyService";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
+import { collectZoomFitBounds } from "@/features/viewport/bounds";
 import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportRuntime } from "@/features/viewport/runtime";
-import type { ViewportActions } from "@/features/viewport/viewportActions";
+import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
-// The action table the UI panels call: the solver and viewport actions they use directly, plus
-// the app-level composites.
+// The action table the UI panels call: the solver actions they use directly, the view actions,
+// and the app-level composites.
 export type AppActions = Pick<
   SolverActions,
   "setConstraintHighlight" | "setIterateHighlight" | "updateSolverSetting" | "recomputeIfModeActive" | "setTraceEnabled" | "toggleReplay" | "startRotation" | "stopMotion"
-> &
-  Pick<ViewportActions, "zoomToFit" | "resetView" | "toggle3D" | "setZScale" | "setSidebarWidth" | "syncViewportLayout"> & {
-    share: () => void;
-    /** back to an empty canvas, with every setting at its default, after the person confirms */
-    reset: () => void;
-    setActiveSolverMode: (mode: SolverMode) => void;
-    loadGalleryProblem: (problem: GalleryProblem) => void;
-  };
+> & {
+  share: () => void;
+  /** back to an empty canvas, with every setting at its default, after the person confirms */
+  reset: () => void;
+  setActiveSolverMode: (mode: SolverMode) => void;
+  loadGalleryProblem: (problem: GalleryProblem) => void;
+  zoomToFit: () => void;
+  resetView: () => void;
+  toggle3D: () => void;
+  setZScale: (value: number) => void;
+  /** pixels along the top of the canvas an overlay covers (the open gallery), which zoom-to-fit keeps clear */
+  setTopInset: (px: number) => void;
+  setSidebarWidth: (width: number) => void;
+  /** the sidebar's width changed in a way that resized the canvas too */
+  syncViewportLayout: (sidebarWidth: number) => void;
+};
 
 const pick = <T, K extends keyof T>(source: T, ...keys: K[]): Pick<T, K> => Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>;
 
@@ -44,19 +53,29 @@ const afterViewTransition = (fn: () => void) => {
 
 export function createAppActions({
   solver,
-  viewport,
   share,
   history,
   polytope,
   getViewportApi,
+  initialSidebarWidth,
 }: {
   solver: SolverActions;
-  viewport: ViewportActions;
   share: { share: () => void };
   history: HistoryService;
   polytope: PolytopeService;
   getViewportApi: () => ViewportRuntime | null;
+  initialSidebarWidth: number;
 }): AppActions {
+  let sidebarWidth = initialSidebarWidth;
+  let topInset = 0;
+
+  const resetView = () => getViewportApi()?.resetView();
+  const toggle3D = () => {
+    const viewportApi = getViewportApi();
+    const state = getState();
+    if (viewportApi && !state.isTransitioning3D) viewportApi.start3DTransition(!state.is3DMode);
+  };
+
   return {
     ...pick(solver, "setConstraintHighlight", "setIterateHighlight", "updateSolverSetting", "recomputeIfModeActive", "setTraceEnabled", "toggleReplay", "startRotation", "stopMotion"),
     share: share.share,
@@ -72,17 +91,14 @@ export function createAppActions({
       // off until the region is finished
       viewportApi?.set2DPanEnabled(true);
       const { is3DMode, isTransitioning3D } = getState();
-      if (is3DMode && !isTransitioning3D) viewport.toggle3D();
+      if (is3DMode && !isTransitioning3D) toggle3D();
       afterViewTransition(() => {
-        viewport.resetView();
+        resetView();
         getViewportApi()?.draw();
       });
     },
-
-    ...pick(viewport, "zoomToFit", "resetView", "toggle3D", "setZScale", "setSidebarWidth", "syncViewportLayout"),
     setActiveSolverMode: (mode) => solver.setActiveSolverMode(mode, true),
-
-    loadGalleryProblem: (problem: GalleryProblem) => {
+    loadGalleryProblem: (problem) => {
       const viewportApi = getViewportApi();
       history.save();
       solver.invalidatePendingSolveResults();
@@ -110,7 +126,49 @@ export function createAppActions({
       viewportApi?.set2DPanEnabled(true);
       polytope.send();
       viewportApi?.draw();
-      window.requestAnimationFrame(() => viewport.zoomToFit());
+      window.requestAnimationFrame(() => zoomToFit());
+    },
+
+    // ---- the view ----
+    resetView,
+    toggle3D,
+    zoomToFit,
+    setZScale: (value) => {
+      const viewportApi = getViewportApi();
+      if (!viewportApi) return;
+      setState({ zScale: value }); // zScale derives polytope+objective+trace+iterate
+      const { is3DMode, isTransitioning3D } = getState();
+      if (is3DMode || isTransitioning3D) viewportApi.draw();
+    },
+    setTopInset: (px) => {
+      topInset = Math.max(0, px);
+    },
+    setSidebarWidth: (width) => {
+      sidebarWidth = width;
+      const viewportApi = getViewportApi();
+      if (!viewportApi) return;
+      viewportApi.setSidebarWidth(width);
+      viewportApi.draw();
+    },
+    syncViewportLayout: (width) => {
+      sidebarWidth = width;
+      const viewportApi = getViewportApi();
+      if (!viewportApi) return;
+      viewportApi.setSidebarWidth(width);
+      viewportApi.updateDimensions();
+      viewportApi.draw();
     },
   };
+
+  // an unbounded open region is fitted to its clip box; the gallery strip, when open, is kept clear
+  function zoomToFit() {
+    const viewportApi = getViewportApi();
+    if (!viewportApi) return;
+    const state = getState();
+    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
+    const zoomFit = collectZoomFitBounds(state);
+    if (!zoomFit && !isOpenUnbounded) return;
+    viewportApi.zoomToFit(isOpenUnbounded ? viewportApi.getUnboundedClipBounds() : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
+    viewportApi.setSidebarWidth(sidebarWidth);
+  }
 }

@@ -7,11 +7,10 @@ import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
 import { GridLayer } from "@/three/layers/GridLayer";
-import { IterateHighlightLayer } from "@/three/layers/IterateHighlightLayer";
 import { IterateLineLayer } from "@/three/layers/IterateLineLayer";
+import { createIterateHighlightLayer, createIterateStarLayer } from "@/three/layers/IterateMarkerLayer";
 import { IteratePointsLayer } from "@/three/layers/IteratePointsLayer";
 import { IterateRestartPointsLayer } from "@/three/layers/IterateRestartPointsLayer";
-import { IterateStarLayer } from "@/three/layers/IterateStarLayer";
 import { ObjectiveLayer } from "@/three/layers/ObjectiveLayer";
 import { PolytopeBaseLayer } from "@/three/layers/PolytopeBaseLayer";
 import { PolytopeRubberBandLayer } from "@/three/layers/PolytopeRubberBandLayer";
@@ -45,8 +44,8 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
     new IterateLineLayer(),
     new IteratePointsLayer(),
     new IterateRestartPointsLayer(),
-    new IterateHighlightLayer(),
-    new IterateStarLayer(),
+    createIterateHighlightLayer(),
+    createIterateStarLayer(),
     new SolverStartLayer(),
   ];
   for (const l of layers) mgr.addLayer(l);
