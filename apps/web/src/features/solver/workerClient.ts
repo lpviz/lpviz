@@ -3,76 +3,60 @@ import type { SolverWireResponse, SolverWorkerPayload, SolverWorkerResponse, Sol
 // oxlint-disable-next-line import/default -- vite's ?worker import provides the default export
 import SolverWorker from "./solverWorker?worker";
 
-const MAX_WORKER_QUEUE = 4;
-
-type PendingResolver = {
+type Request = {
+  id: number;
+  payload: SolverWorkerPayload;
   resolve: (value: SolverWorkerResponse) => void;
   reject: (reason?: unknown) => void;
 };
 
-type QueueEntry = PendingResolver & {
-  id: number;
-  payload: SolverWorkerPayload;
-};
-
+// One worker, one request in flight and at most one waiting behind it. The worker runs requests
+// one after another and cannot abandon one, and every caller wants only the newest problem's
+// answer (see solveRunner), so a request that arrives while one is waiting replaces it: the stale
+// one is never computed, and during a drag the picture lags the pointer by at most one solve.
 const worker = new SolverWorker();
-const pending = new Map<number, PendingResolver>();
-const requestQueue: QueueEntry[] = [];
+let inFlight: Request | null = null;
+let waiting: Request | null = null;
 let nextRequestId = 0;
 
+function dispatch() {
+  if (inFlight || !waiting) return;
+  inFlight = waiting;
+  waiting = null;
+  worker.postMessage({ id: inFlight.id, ...inFlight.payload });
+}
+
 worker.addEventListener("message", (event: MessageEvent<SolverWireResponse>) => {
-  const entry = pending.get(event.data.id);
-  if (!entry) return;
-  pending.delete(event.data.id);
-  scheduleDispatch();
-  entry.resolve(unpackSolverResponse(event.data));
+  const request = inFlight;
+  if (!request || event.data.id !== request.id) return;
+  inFlight = null;
+  dispatch();
+  request.resolve(unpackSolverResponse(event.data));
 });
 
 function rejectAll(reason: unknown) {
-  pending.forEach(({ reject }) => reject(reason));
-  pending.clear();
-  requestQueue.forEach(({ reject }) => reject(reason));
-  requestQueue.length = 0;
+  const requests = [inFlight, waiting];
+  inFlight = null;
+  waiting = null;
+  for (const request of requests) request?.reject(reason);
 }
 
 worker.addEventListener("error", (event) => {
   rejectAll(event.error ?? event.message ?? event);
 });
 
-// A reply that fails structured deserialization would otherwise leave its
-// pending entry stranded forever; once pending fills up, dispatch stops and
-// all solving is dead until reload.
+// A reply that fails structured deserialization would otherwise leave its request in flight
+// forever, and with it every solve until reload.
 worker.addEventListener("messageerror", () => {
   rejectAll(new Error("Solver worker reply could not be deserialized"));
 });
 
-function scheduleDispatch() {
-  while (pending.size < MAX_WORKER_QUEUE && requestQueue.length > 0) {
-    const entry = requestQueue.shift()!;
-    pending.set(entry.id, { resolve: entry.resolve, reject: entry.reject });
-    worker.postMessage({ id: entry.id, ...entry.payload });
-  }
-}
-
-function dropOverflow() {
-  const allowedQueueLength = Math.max(1, MAX_WORKER_QUEUE - pending.size);
-  while (requestQueue.length > allowedQueueLength) {
-    const dropped = requestQueue.shift();
-    if (!dropped) break;
-    dropped.reject(new Error("Solver request dropped due to queue overflow"));
-  }
-}
-
 export async function runSolverWorker(payload: SolverWorkerPayload): Promise<SolverWorkerSuccessResponse> {
-  const id = ++nextRequestId;
   const response = await new Promise<SolverWorkerResponse>((resolve, reject) => {
-    requestQueue.push({ id, payload, resolve, reject });
-    dropOverflow();
-    scheduleDispatch();
+    waiting?.reject(new Error("Solver request superseded by a newer one"));
+    waiting = { id: ++nextRequestId, payload, resolve, reject };
+    dispatch();
   });
-
-  if (!response.success) {
-    throw new Error(response.error);
-  }
+  if (!response.success) throw new Error(response.error);
   return response;
 }
