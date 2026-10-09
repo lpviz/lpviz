@@ -3,13 +3,15 @@ import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Group, type Object3D } from "three";
+import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
 import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 
 // Template-method base for data-driven layers: a subclass declares the inputs whose reference
 // change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
 // against the previous one and calls `rebuild()` only on change. `everyFrame()` runs
 // unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
-// Both read the store and the render snapshot once per update and hand them down.
+// A layer the view does not show (`visibleIn`) is hidden without a rebuild, and rebuilt when it
+// shows again. The store and the render snapshot are read once per update and handed down.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass: RenderPassName = "foreground";
@@ -25,12 +27,21 @@ export abstract class LayerBase implements Layer {
     const state = getState();
     const snap = getViewportRenderSnapshot();
     this.everyFrame(state, snap);
+    if (!this.visibleIn(state, snap)) {
+      this.object3D.visible = false;
+      this.deps = null;
+      return;
+    }
     const next = this.dependencies(state, snap);
     if (this.deps && sameDeps(this.deps, next)) return;
     this.deps = next;
     this.rebuild(state, snap);
   }
 
+  /** Whether the view shows the layer at all; by default while the snapshot's mode and the store agree. */
+  protected visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return shouldRenderSnapshotMode(snap.mode, state);
+  }
   /** Inputs compared with Object.is; a change triggers `rebuild`. */
   protected abstract dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[];
   /** Rebuild geometry/visibility from current state. Runs only on change. */

@@ -1,11 +1,11 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
 import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type EditorInteractionState, type HistoryEntry, type State } from "@/features/core/store";
-import type { SaveHistory } from "@/features/history/historyService";
 import { captureHistoryEntry } from "@/features/history/historyState";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 import type { Vec } from "@lpviz/math/types";
+import type { EditorToolsDeps } from "./editorTools";
 
 const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
   point: "dragged-point",
@@ -14,13 +14,7 @@ const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteractio
   objective: "dragged-objective",
 };
 
-type DragActionDeps = {
-  viewportApi: ViewportApi;
-  saveHistory: SaveHistory;
-  sendPolytope: () => void;
-  /** Re-solve the active solver after the start marker moved or reset. */
-  onSolverStartMoved: () => void;
-};
+type DragActionDeps = Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "sendPolytope" | "onSolverStartMoved">;
 
 export const updatePanControls = (viewportApi: ViewportApi) => {
   viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");

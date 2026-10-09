@@ -6,7 +6,6 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { iteratePosition } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { applyHugeBounds } from "../helpers/hugeBounds";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
@@ -126,13 +125,13 @@ export class EllipsoidLayer extends ZScaledGroupLayer {
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [state.iterateEllipsoids, state.iterateLocalizingSets, state.iteratePath, state.highlightIteratePathIndex, state.is3DMode, state.isTransitioning3D, snap.mode];
+    return [state.iterateEllipsoids, state.iterateLocalizingSets, state.iteratePath, state.highlightIteratePathIndex, snap.mode];
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const ellipsoids = state.iterateEllipsoids;
-
-    if (!ellipsoids || ellipsoids.count === 0 || !shouldRenderSnapshotMode(snap.mode, state)) {
+    this.object3D.visible = true;
+    if (!ellipsoids || ellipsoids.count === 0) {
       this.hideFrom(0);
       return;
     }

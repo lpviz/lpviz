@@ -44,12 +44,12 @@ export class IterateLineLayer extends ZScaledGroupLayer {
     return [state.iteratePath, state.iteratePhases, snap.mode];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return state.iteratePath.count >= 2 && shouldRenderSnapshotMode(snap.mode, state);
+  }
+
+  protected rebuild(state: State): void {
     const path = state.iteratePath;
-    if (path.count < 2 || !shouldRenderSnapshotMode(snap.mode, state)) {
-      this.object3D.visible = false;
-      return;
-    }
 
     const hasPhases = state.iteratePhases.length === path.count && state.iteratePhases.length > 0;
     // state z: zScale and the 2D/3D transition flattening are applied via

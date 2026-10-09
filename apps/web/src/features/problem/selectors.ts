@@ -21,6 +21,10 @@ export const isEmptyRegion = (state: Pick<EditorState, "polytope">): boolean => 
 
 export const hasObjective = (state: Pick<EditorState, "objectiveVector">): boolean => state.objectiveVector !== null;
 
+/** The polygon an open chain closed up into (its region came out bounded), which the drawing shows in its place; null otherwise. */
+export const derivedClosure = (state: Pick<EditorState, "completionMode" | "polytope">): Vec[] | null =>
+  state.completionMode === "open" && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3 ? state.polytope.vertices : null;
+
 /** The drawing is finished, derived, and has an objective: everything a solve needs. */
 export const isReadyForSolvers = (state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective" | "polytope">): boolean =>
   computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope) && state.objectiveVector !== null;

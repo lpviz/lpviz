@@ -7,7 +7,7 @@ import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { distanceToSegment, nearestEdge } from "@lpviz/math/polygon";
-import type { PointXY, PointXYZ, Vec } from "@lpviz/math/types";
+import type { Constraint, PointXY, PointXYZ, Vec } from "@lpviz/math/types";
 
 const VERTEX_HIT_RADIUS = 12;
 // tighter than the vertex radius: in simplex mode the marker sits on a
@@ -122,61 +122,31 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
   const vertex = vertexTarget();
   if (vertex) return vertex;
 
+  const constraints = state.polytope?.constraints;
+  if (!constraints || constraints.length === 0) return null;
+  // the drag shifts one constraint and re-derives the vertices from the whole set, which it
+  // never mutates (see applyConstraintDrag); the normal is the dragged constraint's
+  const constraintTarget = (operation: ConstraintDragTarget["operation"], constraint: Constraint | undefined): DragTarget | null =>
+    constraint ? { kind: "constraint", operation, start: logicalCoords, normal: [constraint[0], constraint[1]] } : null;
+
   if (session.kind === "editing-closed" && state.vertices.length >= 3) {
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance);
-    if (edgeIndex !== null) {
-      const constraints = state.polytope?.constraints;
-      if (!constraints || constraints.length === 0) return null;
-      const constraint = constraints[edgeIndex];
-      if (!constraint) return null;
-      const nextIndex = (edgeIndex + 1) % state.vertices.length;
-      const start = state.vertices[edgeIndex]!;
-      const end = state.vertices[nextIndex]!;
-      if (Math.hypot(end[0] - start[0], end[1] - start[1]) > 1e-6) {
-        // the drag shifts one constraint and re-derives the vertices from the whole set, which it
-        // never mutates (see applyConstraintDrag)
-        return {
-          kind: "constraint",
-          operation: { kind: "closed-line", lineIndex: edgeIndex, constraints },
-          start: logicalCoords,
-          normal: [constraint[0], constraint[1]],
-        };
-      }
-    }
+    if (edgeIndex === null) return null;
+    const start = state.vertices[edgeIndex]!;
+    const end = state.vertices[(edgeIndex + 1) % state.vertices.length]!;
+    if (Math.hypot(end[0] - start[0], end[1] - start[1]) <= 1e-6) return null;
+    return constraintTarget({ kind: "closed-line", lineIndex: edgeIndex, constraints }, constraints[edgeIndex]);
   }
 
   if (session.kind === "editing-open" && state.vertices.length >= 2) {
-    const constraints = state.polytope?.constraints;
-    if (!constraints || constraints.length === 0) return null;
-
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance, false);
-    if (edgeIndex !== null) {
-      const constraint = constraints[edgeIndex];
-      if (!constraint) return null;
-      return {
-        kind: "constraint",
-        operation: { kind: "open-vertices", vertexIndices: [edgeIndex, edgeIndex + 1] },
-        start: logicalCoords,
-        normal: [constraint[0], constraint[1]],
-      };
-    }
+    if (edgeIndex !== null) return constraintTarget({ kind: "open-vertices", vertexIndices: [edgeIndex, edgeIndex + 1] }, constraints[edgeIndex]);
 
     const rayIndex = findBoundaryRayNearPoint(viewportApi, logicalCoords);
     if (rayIndex === null) return null;
-
     // the first ray continues the chain's first edge, the last ray its last edge
-    const constraint = constraints[rayIndex === 0 ? 0 : constraints.length - 1];
-    if (!constraint) return null;
-
-    return {
-      kind: "constraint",
-      operation: {
-        kind: "open-vertices",
-        vertexIndices: rayIndex === 0 ? [0, 1] : [state.vertices.length - 2, state.vertices.length - 1],
-      },
-      start: logicalCoords,
-      normal: [constraint[0], constraint[1]],
-    };
+    const last = state.vertices.length - 1;
+    return constraintTarget({ kind: "open-vertices", vertexIndices: rayIndex === 0 ? [0, 1] : [last - 1, last] }, constraints[rayIndex === 0 ? 0 : constraints.length - 1]);
   }
 
   return null;

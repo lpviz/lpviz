@@ -41,19 +41,17 @@ export class TraceLineLayer extends ZScaledGroupLayer {
     return ribbon;
   }
 
+  protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
+    return state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
+  }
+
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [state.traceEnabled, state.traceBuffer, state.is3DMode, state.isTransitioning3D, snap.mode];
+    return [state.traceEnabled, state.traceBuffer, snap.mode];
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const modeChanged = this.lastMode !== snap.mode;
     this.lastMode = snap.mode;
-
-    const shouldShow = state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
-    if (!shouldShow) {
-      this.object3D.visible = false;
-      return;
-    }
 
     // Recycle ribbons whose entries were evicted from the buffer
     const live = new Set<TraceEntry>(state.traceBuffer);

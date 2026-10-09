@@ -1,6 +1,5 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { writeIteratePositions } from "../helpers/iteratePositions";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -26,14 +25,14 @@ export class IteratePointsLayer extends PointCloudLayer {
     return [state.iteratePath, state.iteratePhases, state.replayActive, snap.mode];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
+  protected rebuild(state: State): void {
     const path = state.iteratePath;
     // A replay's last point is the interpolated head sliding along the current
     // segment, not an iterate. The line layer draws it (that is the sweep), but
     // a dot there would be indistinguishable from a real iterate, so the cloud
     // stops one short and each dot appears exactly as the head reaches it.
     const count = path.count - (state.replayActive ? 1 : 0);
-    if (count <= 0 || !shouldRenderSnapshotMode(snap.mode, state)) {
+    if (count <= 0) {
       this.hide();
       return;
     }

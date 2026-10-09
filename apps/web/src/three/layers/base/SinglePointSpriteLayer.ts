@@ -2,7 +2,6 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Texture } from "three";
 import { iteratePosition } from "../../helpers/iteratePositions";
-import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
 import type { RenderPassName } from "../../Layer";
 import { PointCloudLayer } from "./PointCloudLayer";
 
@@ -31,8 +30,8 @@ export abstract class SinglePointSpriteLayer extends PointCloudLayer {
     return [...this.selectorDeps(state), state.iteratePath, snap.mode];
   }
 
-  protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    const index = shouldRenderSnapshotMode(snap.mode, state) ? this.selectIndex(state) : null;
+  protected rebuild(state: State): void {
+    const index = this.selectIndex(state);
     const xyz = index === null ? null : iteratePosition(state.iteratePath, index);
     if (!xyz) {
       this.hide();
