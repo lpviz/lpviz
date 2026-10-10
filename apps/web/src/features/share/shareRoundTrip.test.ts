@@ -44,7 +44,7 @@ function solveForOptimum(vertices: Vec[], objective: Vec): { value: number; x: n
   if (constraints.length === 0) return null;
   const result = simplex(constraints, Float64Array.of(objective[0], objective[1]), { tol: 1e-9, dual: false });
   if (result.status !== "optimal") return null;
-  const last = result.iterations[result.iterations.length - 1]!;
+  const last = result.iterates[result.iterates.length - 1]!;
   return { value: objective[0] * last[0]! + objective[1] * last[1]!, x: last[0]!, y: last[1]! };
 }
 

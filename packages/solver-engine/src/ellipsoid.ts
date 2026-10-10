@@ -1,17 +1,12 @@
-import { denseFromConstraints, dot, quadraticForm } from "@lpviz/math/blas";
+import { quadraticForm } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import { assertMaxit } from "./limits";
-import { FEASIBILITY_TOLERANCE, Incumbent, LocalizationTrace, localizationFooter, localizationLogHeader, mostViolatedConstraint, regionBoundingBox, type Termination } from "./localization";
+import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
 
 const INITIAL_BOUNDARY_TOLERANCE = 1e-3;
 
-export interface EllipsoidOptions {
-  maxit: number;
-  tol: number;
+export interface EllipsoidOptions extends LocalizationOptions {
   deepCuts: boolean;
-  rayShoot: boolean;
-  initialScale: number;
 }
 
 /**
@@ -25,47 +20,23 @@ export interface EllipsoidOptions {
  * the stopping measure and the vertical lift of the 3D iterate path.
  */
 export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: EllipsoidOptions): SolverResult {
-  const { maxit, tol, deepCuts, rayShoot, initialScale } = opts;
-
-  assertMaxit(maxit);
-
-  const { A, b } = denseFromConstraints(constraints);
-  const n = A.cols;
-  if (n < 2) {
-    throw new Error("The ellipsoid method requires at least two variables.");
-  }
-
-  const c = Float64Array.from({ length: n }, (_, j) => objective[j] ?? 0);
-  const { center, P } = initialEllipsoid(vertices, n, initialScale);
+  const run = new LocalizationRun(constraints, objective, opts, false, "The ellipsoid method requires at least two variables.");
+  const { A, c, n, trace, incumbent } = run;
+  const { center, P } = initialEllipsoid(vertices, n, opts.initialScale);
   const initialCenter = center.slice();
   const initialSemiAxes = Float64Array.from({ length: n }, (_, j) => Math.sqrt(P[j * n + j]!));
 
-  const trace = new LocalizationTrace(maxit, n, false);
   const g = new Float64Array(n);
   const Pg = new Float64Array(n);
   const nextP = new Float64Array(n * n);
 
-  const incumbent = new Incumbent(A, b, c, rayShoot);
-  let upperBound = Infinity;
-  let termination: Termination = "maxit";
-  const startTime = performance.now();
-
-  while (trace.count < maxit) {
-    const objectiveValue = dot(c, center);
-    const { row: worstRow, violation } = mostViolatedConstraint(A, b, center);
-    const feasible = violation <= FEASIBILITY_TOLERANCE;
-    if (feasible) incumbent.offer(center, objectiveValue);
+  while (trace.count < opts.maxit) {
+    const { objectiveValue, worstRow, violation, feasible } = run.query(center);
 
     const objectiveRadius = Math.sqrt(Math.max(0, quadraticForm(P, c, n)));
-    upperBound = objectiveValue + objectiveRadius;
+    run.upperBound = objectiveValue + objectiveRadius;
     trace.recordIterate(center, P, objectiveValue, Math.max(0, violation), objectiveRadius);
-
-    // Feasibility of the center is still required so that the last iterate the
-    // viewport marks as the answer is a point of the region.
-    if (feasible && incumbent.certifies(upperBound, tol)) {
-      termination = "converged";
-      break;
-    }
+    if (run.converged(feasible)) break;
 
     // cut normal g and its offset beta: keep { x : g'x <= g'center - beta }
     let beta: number;
@@ -81,14 +52,14 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
 
     const gPg = symmetricMatVec(P, g, Pg, n);
     if (!(gPg > 0) || !Number.isFinite(gPg)) {
-      termination = "degenerate";
+      run.termination = "degenerate";
       break;
     }
 
-    const alpha = deepCuts ? beta / Math.sqrt(gPg) : 0;
+    const alpha = opts.deepCuts ? beta / Math.sqrt(gPg) : 0;
     if (alpha >= 1) {
       // the half-space misses the ellipsoid: nothing feasible and better than the incumbent is left
-      termination = "infeasible";
+      run.termination = "infeasible";
       break;
     }
 
@@ -109,7 +80,7 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
     P.set(nextP);
 
     if (!Number.isFinite(center[0]!) || !Number.isFinite(P[0]!)) {
-      termination = "degenerate";
+      run.termination = "degenerate";
       break;
     }
   }
@@ -117,17 +88,15 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
   // tested on the converged center, not on the incumbent: a ray shoot can adopt
   // a feasible point far outside the initial ellipsoid on an unbounded region
   // whose objective is nonetheless bounded, and that is not this condition
-  if (termination === "converged" && onInitialBoundary(center, initialCenter, initialSemiAxes, n)) {
-    termination = "unbounded";
+  if (run.termination === "converged" && onInitialBoundary(center, initialCenter, initialSemiAxes, n)) {
+    run.termination = "unbounded";
   }
 
-  const footer = localizationFooter(termination, trace.count, performance.now() - startTime, {
+  return run.finish({
     infeasible: [incumbent.found ? "Cut away the last of the ellipsoid" : "No feasible point inside the initial ellipsoid"],
     degenerate: ["Ellipsoid degenerated numerically"],
     unbounded: ["Stopped on the initial ellipsoid boundary", "The objective is unbounded over this region: the method only searches inside the initial ellipsoid"],
   });
-  trace.closeOnIncumbent(incumbent, upperBound);
-  return trace.result(localizationLogHeader(n), footer);
 }
 
 // The smallest axis-aligned ellipsoid around the region's inflated bounding box: semi-axis

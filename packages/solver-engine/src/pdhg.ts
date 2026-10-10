@@ -35,9 +35,12 @@ function primalResidual(ax: Float64Array, b: Float64Array, ineq: boolean) {
 }
 
 // The relative KKT error of a primal-dual pair: the worst of the primal residual, the dual
-// residual and the duality gap, each scaled by the data it is measured against.
+// residual and the duality gap, each scaled by the data it is measured against. The primal side's
+// parts (A x, the residual, c'x) are kept from the last measurement for the log row and the step.
 class KktError {
-  private readonly ax: Float64Array;
+  readonly ax: Float64Array;
+  primal = 0;
+  cTx = 0;
   private readonly aty: Float64Array;
   private readonly bNorm: number;
   private readonly cNorm: number;
@@ -58,6 +61,7 @@ class KktError {
     const { A, b, c, ineq, ax, aty } = this;
     matVec(A, xk, ax);
     const primal = primalResidual(ax, b, ineq);
+    this.primal = primal;
 
     transposedMatVec(A, yk, aty);
     let dualResidual = 0;
@@ -67,6 +71,7 @@ class KktError {
     }
 
     const cTx = dot(c, xk);
+    this.cTx = cTx;
     const bTy = dot(b, yk);
     const dualityGap = Math.abs(cTx + bTy) / (1 + Math.abs(cTx) + Math.abs(bTy));
     return Math.max(primal / (1 + this.bNorm), dualResidual / (1 + this.cNorm), dualityGap);
@@ -92,16 +97,14 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
  * differ only in the residuals, the basis hash, the initial dual and which
  * variable takes the projected, extrapolated step.
  */
-function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, options: Omit<PDHGOptions, "startPoint">): SolverResult {
-  const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = options;
+function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, dimension: number, opts: Omit<PDHGOptions, "startPoint">): SolverResult {
+  const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = opts;
 
   const { rows: m, cols: n } = A;
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
   const slackOffset = n - m;
-  const nOrig = slackOffset / 2;
   // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
-  const dimension = ineq ? n : nOrig;
-  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, nOrig));
+  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, dimension));
   const kkt = new KktError(A, b, c, ineq);
 
   let xk = new Float64Array(n);
@@ -115,7 +118,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   let halpernY = new Float64Array(m);
   const anchorX = new Float64Array(n);
   const anchorY = new Float64Array(m).fill(ineq ? 1 : 0);
-  const axScratch = new Float64Array(m);
+  const axExtrapolated = new Float64Array(m);
   const atYScratch = new Float64Array(n);
   const extrapolated = new Float64Array(ineq ? m : n);
   if (x0) {
@@ -125,7 +128,6 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     xk.set(x0);
     anchorX.set(x0);
   }
-  let k = 1;
   let innerIteration = 1;
   let initialFixedPointError = Number.POSITIVE_INFINITY;
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
@@ -137,7 +139,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const restartIndices: number[] = [];
   const startTime = performance.now();
 
-  while (k <= maxit) {
+  while (trace.count < maxit) {
     if (colorByBasis) {
       // ineq: which duals are active; eq: which slacks are at their bound
       let hash = 0;
@@ -147,10 +149,10 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       basisHashes.push(hash);
     }
 
-    matVec(A, xk, axScratch);
-    trace.record(pointOf(xk), -dot(c, xk), primalResidual(axScratch, b, ineq), epsilonK);
+    // the parts kkt.of measured for this (xk, yk) are the row's, and the ineq step's
+    trace.record(pointOf(xk), -kkt.cTx, kkt.primal, epsilonK);
 
-    if (epsilonK <= tol || k === maxit) {
+    if (epsilonK <= tol || trace.count === maxit) {
       break;
     }
 
@@ -158,7 +160,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       // y_{k+1} = [y_k + τ(Ax_k - b)]_+
       // ỹ_k = y_{k+1} + (y_{k+1} - y_k)
       for (let i = 0; i < m; i++) {
-        const candidate = yk[i]! + tau * (axScratch[i]! - b[i]!);
+        const candidate = yk[i]! + tau * (kkt.ax[i]! - b[i]!);
         nextY[i] = candidate > 0 ? candidate : 0;
         extrapolated[i] = 2 * nextY[i]! - yk[i]!;
       }
@@ -177,9 +179,9 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
         extrapolated[i] = 2 * nextX[i]! - xk[i]!;
       }
       // y_{k+1} = y_k + τ(Ax̃_k - b)
-      matVec(A, extrapolated, axScratch);
+      matVec(A, extrapolated, axExtrapolated);
       for (let i = 0; i < m; i++) {
-        nextY[i] = yk[i]! + tau * (axScratch[i]! - b[i]!);
+        nextY[i] = yk[i]! + tau * (axExtrapolated[i]! - b[i]!);
       }
     }
 
@@ -189,7 +191,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
         initialFixedPointError = fixedPointError;
       }
 
-      if (shouldRestartHalpern(innerIteration, k, fixedPointError, initialFixedPointError, lastTrialFixedPointError)) {
+      if (shouldRestartHalpern(innerIteration, trace.count, fixedPointError, initialFixedPointError, lastTrialFixedPointError)) {
         xk.set(nextX);
         yk.set(nextY);
         anchorX.set(nextX);
@@ -216,7 +218,6 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       [xk, nextX] = [nextX, xk];
       [yk, nextY] = [nextY, yk];
     }
-    k++;
 
     epsilonK = kkt.of(xk, yk);
     if (!Number.isFinite(epsilonK)) {
@@ -232,9 +233,9 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
 }
 
 /** PDHG on `max objective'x s.t. Ax ≤ b`, directly (ineq) or on the split standard form (eq). */
-export function pdhg(constraints: readonly Constraint[], objective: Float64Array, options: PDHGOptions): SolverResult {
-  const { ineq, maxit, startPoint, ...rest } = options;
-  assertMaxit(maxit);
+export function pdhg(constraints: readonly Constraint[], objective: Float64Array, opts: PDHGOptions): SolverResult {
+  const { startPoint, ...core } = opts;
+  assertMaxit(core.maxit);
 
   const { A, b } = denseFromConstraints(constraints);
   const nOrig = A.cols;
@@ -242,8 +243,8 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
   // max c'x is min (−c)'x
   const cost = Float64Array.from(objective, (value) => -value);
 
-  if (ineq) {
-    return pdhgCore(A, b, cost, x0, { ...rest, ineq, maxit });
+  if (core.ineq) {
+    return pdhgCore(A, b, cost, x0, nOrig, core);
   }
 
   const split = splitStandardForm(A, cost);
@@ -261,5 +262,5 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
       else chi0[nOrig + j] = -value;
     }
   }
-  return pdhgCore(split.A, b, split.c, chi0, { ...rest, ineq, maxit });
+  return pdhgCore(split.A, b, split.c, chi0, nOrig, core);
 }

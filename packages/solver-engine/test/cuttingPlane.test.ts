@@ -58,7 +58,7 @@ describe("cuttingPlane", () => {
     });
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
-      expect(r.iterations.length).toBeLessThan(reference.iterations.length / 2);
+      expect(r.iterates.length).toBeLessThan(reference.iterates.length / 2);
     }
   });
 
@@ -103,7 +103,7 @@ describe("cuttingPlane", () => {
     const objective = Float64Array.of(1, 1);
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
-      for (let i = 0; i < r.iterations.length; i++) {
+      for (let i = 0; i < r.iterates.length; i++) {
         const { p11, p12, p22 } = ellipseAt(r, i);
         expect(p11).toBeGreaterThan(0);
         expect(p22).toBeGreaterThan(0);
@@ -158,7 +158,7 @@ describe("cuttingPlane", () => {
     ];
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(hull, empty, Float64Array.of(1, 1), opts(queryPoint));
-      expect(r.iterations.length).toBeLessThan(500);
+      expect(r.iterates.length).toBeLessThan(500);
       expect(footerOf(r).startsWith("Converged")).toBe(false);
     }
   });
@@ -235,7 +235,7 @@ describe("cuttingPlane", () => {
       const first = run();
       for (let i = 0; i < 3; i++) {
         const again = run();
-        expect(again.iterations.length).toBe(first.iterations.length);
+        expect(again.iterates.length).toBe(first.iterates.length);
         expect([...again.ellipsoids!]).toEqual([...first.ellipsoids!]);
       }
     }

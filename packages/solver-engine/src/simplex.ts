@@ -14,7 +14,7 @@ import {
 } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
-import { coordinateHeaders, fmtCoordinates, fmtExp, fmtIteration, ITERATION_COLUMN_WIDTH, logColumnWidths, padLeft, padRight } from "./fmt";
+import { coordinateHeaders, fmtCoordinates, fmtExp, fmtIteration, ITERATION_COLUMN_WIDTH, logColumnWidths } from "./fmt";
 import { MAX_ITERATIONS } from "./limits";
 import type { LogSection, SolverResult } from "./result";
 import { splitStandardForm, unsplit } from "./standardForm";
@@ -217,18 +217,22 @@ function phaseScratch(m: number, cols: number) {
     cB: new Float64Array(m),
     duals: new Float64Array(m),
     aty: new Float64Array(cols),
+    x: new Float64Array(cols),
+    reducedCosts: new Float64Array(cols),
     enterColumn: new Float64Array(m),
     direction: new Float64Array(m),
   };
 }
 
 // The basic solution of the current basis: x over every column, the reduced costs, the objective.
+// Both vectors live in the scratch and hold until the next call.
 function basicSolution(lp: StandardLp, basis: Basis, scratch: PhaseScratch, exact: boolean) {
   const { A, b, c } = lp;
   const { m, columns } = basis;
+  const { x, reducedCosts } = scratch;
   if (exact) basis.solveExact(b, scratch.xB);
   else basis.apply(b, scratch.xB);
-  const x = new Float64Array(A.cols);
+  x.fill(0);
   for (let i = 0; i < m; i++) {
     x[columns[i]!] = scratch.xB[i]!;
     scratch.cB[i] = c[columns[i]!]!;
@@ -236,7 +240,6 @@ function basicSolution(lp: StandardLp, basis: Basis, scratch: PhaseScratch, exac
   if (exact) basis.solveTransposeExact(scratch.cB, scratch.duals);
   else basis.applyTranspose(scratch.cB, scratch.duals);
   transposedMatVec(A, scratch.duals, scratch.aty);
-  const reducedCosts = new Float64Array(A.cols);
   for (let j = 0; j < A.cols; j++) reducedCosts[j] = c[j]! - scratch.aty[j]!;
   return { x, reducedCosts, objective: dot(c, x) };
 }
@@ -332,7 +335,7 @@ interface PhaseConfig {
 
 /** What a phase hands on: its iterates and log, and the basis and objective it ended on. */
 interface PhaseRun {
-  iterations: Float64Array[];
+  iterates: Float64Array[];
   log: LogSection;
   isBasic: boolean[];
   objective: number;
@@ -343,10 +346,10 @@ function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: Pha
   const { tol, pivotRules, phase, dimension, pointOf, unboundedNote } = cfg;
   const { A } = lp;
   const widths = logColumnWidths(dimension);
-  const header = `${padLeft("Iter", ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(dimension)} ${padLeft("Obj", widths.measure)} ${padRight("basis", A.cols)}\n`;
+  const header = `${"Iter".padStart(ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(dimension)} ${"Obj".padStart(widths.measure)} ${"basis".padEnd(A.cols)}\n`;
   const rows: string[] = [];
   const notes: string[] = [];
-  const iterations: Float64Array[] = [];
+  const iterates: Float64Array[] = [];
   const guard = createCyclingGuard(pivotRules, tol);
   const basis = new Basis(A, initialBasis);
   const scratch = phaseScratch(basis.m, A.cols);
@@ -371,7 +374,7 @@ function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: Pha
     }
     objective = solution.objective;
     const point = pointOf(solution.x, basis);
-    iterations.push(point);
+    iterates.push(point);
     rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(objective, widths.measure, 1)} ${basisString(basis.isBasic)}\n`);
 
     if (entering === -1) break;
@@ -392,13 +395,13 @@ function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: Pha
 
   const isBasic = basis.isBasic.slice();
   const footer = `Phase ${phase} finished in ${iteration} iterations – basis ${basisString(isBasic)}\n`;
-  return { iterations, log: { header, rows, notes, footer }, isBasic, objective, status };
+  return { iterates, log: { header, rows, notes, footer }, isBasic, objective, status };
 }
 
-type PhaseLog = Pick<PhaseRun, "iterations" | "log">;
+type PhaseLog = Pick<PhaseRun, "iterates" | "log">;
 
 // A phase that never ran: its log is the one line saying why.
-const skippedPhase = (reason: string): PhaseLog => ({ iterations: [], log: { header: reason, rows: [] } });
+const skippedPhase = (reason: string): PhaseLog => ({ iterates: [], log: { header: reason, rows: [] } });
 
 function simplexResult(phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus, mode: SimplexMode): SolverResult {
   const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : null;
@@ -406,9 +409,9 @@ function simplexResult(phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus
   const { header, rows, notes = [], footer } = phase2.log;
   const closing: LogSection = outcome ? { header, rows, notes: footer === undefined ? notes : [...notes, footer], footer: outcome } : phase2.log;
   return {
-    iterations: [...phase1.iterations, ...phase2.iterations],
+    iterates: [...phase1.iterates, ...phase2.iterates],
     // the phase of each iterate, only once there are two phases to tell apart
-    ...(phase1.iterations.length > 0 ? { phases: [...phase1.iterations.map(() => 0), ...phase2.iterations.map(() => 1)] } : {}),
+    ...(phase1.iterates.length > 0 ? { phases: [...phase1.iterates.map(() => 0), ...phase2.iterates.map(() => 1)] } : {}),
     log: [phase1.log, closing],
     status,
     mode,
@@ -603,7 +606,6 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
   const { tol, dual, startVertex } = opts;
   const pivotRules = resolvePivotRules(opts);
   const { A, b } = denseFromConstraints(constraints);
-  const m = A.rows;
   const n = A.cols;
   const c = Float64Array.from(objective);
 
@@ -630,7 +632,7 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
     // optimum means no feasible point exists.
     if (run.objective < -tol) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
     phase1 = run;
-    phase2Basis = pivotOutArtificialVariables(phase1Lp, run.isBasic, 2 * n + m, tol);
+    phase2Basis = pivotOutArtificialVariables(phase1Lp, run.isBasic, phase2Lp.A.cols, tol);
   }
 
   const phase2 = simplexPhase(phase2Lp, phase2Basis, { ...config, phase: 2 });

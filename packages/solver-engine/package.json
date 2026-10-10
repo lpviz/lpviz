@@ -4,7 +4,8 @@
   "version": "1.2.0",
   "type": "module",
   "dependencies": {
-    "@lpviz/math": "workspace:*"
+    "@lpviz/math": "workspace:*",
+    "@lpviz/polytope": "workspace:*"
   },
   "exports": {
     "./*": "./src/*.ts"

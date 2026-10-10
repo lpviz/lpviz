@@ -1,13 +1,14 @@
-// What the ellipsoid method and the cutting-plane methods share: the separation oracle, the
-// incumbent, the initial localization around the drawn region, the lockstep record of every
-// iterate's drawn shape, and the footer.
+// What the ellipsoid method and the cutting-plane methods share: the dense problem, the
+// separation oracle, the incumbent, the initial localization around the drawn region, the
+// lockstep record of every iterate's drawn shape, the stopping test and the footer.
 
-import type { DenseMatrix } from "@lpviz/math/blas";
-import type { Vec } from "@lpviz/math/types";
+import { type DenseMatrix, denseFromConstraints, dot } from "@lpviz/math/blas";
+import type { Constraint, Vec } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
+import { assertMaxit } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
 
-export const FEASIBILITY_TOLERANCE = 1e-9;
+const FEASIBILITY_TOLERANCE = 1e-9;
 // below this the objective is parallel to the face and never blocks the ray
 const RAY_BLOCKING_TOLERANCE = 1e-12;
 // closer than this to the last iterate, the incumbent is that iterate
@@ -36,11 +37,11 @@ export function localizingSetStride(n: number): number {
   return n === 2 ? 2 : n + 1;
 }
 
-export const localizationLogHeader = (n: number) => numericLogHeader(n, "ρ");
+const localizationLogHeader = (n: number) => numericLogHeader(n, "ρ");
 
 // The separation oracle every method in this family shares: the constraint
 // `x` violates by the most, or a nonpositive violation when `x` is feasible.
-export function mostViolatedConstraint(A: DenseMatrix, b: Float64Array, x: Float64Array) {
+function mostViolatedConstraint(A: DenseMatrix, b: Float64Array, x: Float64Array) {
   let row = 0;
   let violation = -Infinity;
   for (let i = 0; i < A.rows; i++) {
@@ -79,7 +80,7 @@ function objectiveRayStep(A: DenseMatrix, b: Float64Array, x: Float64Array, c: F
  * The best feasible point found so far. With the ray shoot, a feasible query point first slides
  * along the objective until a constraint blocks it, and that boundary point is the one adopted.
  */
-export class Incumbent {
+class Incumbent {
   readonly point: Float64Array;
   objective = -Infinity;
   private readonly objectiveNormSquared: number;
@@ -91,7 +92,7 @@ export class Incumbent {
     private readonly rayShoot: boolean,
   ) {
     this.point = new Float64Array(c.length);
-    this.objectiveNormSquared = c.reduce((sum, value) => sum + value * value, 0);
+    this.objectiveNormSquared = dot(c, c);
   }
 
   get found(): boolean {
@@ -166,11 +167,13 @@ export function regionBoundingBox(vertices: Vec[], n: number, scale: number) {
 }
 
 // "infeasible" is the ellipsoid method's empty localizing set, "exhausted" the cutting planes'.
-export type Termination = "converged" | "maxit" | "infeasible" | "exhausted" | "degenerate" | "unbounded";
+type Termination = "converged" | "maxit" | "infeasible" | "exhausted" | "degenerate" | "unbounded";
+// how the stops that are not "converged" or "maxit" read, as `[lead, explanation?]` lines
+type TerminationLines = Partial<Record<Termination, [lead: string, explanation?: string]>>;
 
 // "converged" and "maxit" read the same for every method in the family; the
-// other stops name the method's localizing set, as `[lead, explanation?]` lines.
-export function localizationFooter(termination: Termination, iterationCount: number, solveTime: number, stops: Partial<Record<Termination, [lead: string, explanation?: string]>>) {
+// other stops name the method's localizing set.
+function localizationFooter(termination: Termination, iterationCount: number, solveTime: number, stops: TerminationLines) {
   const [lead, explanation] = stops[termination] ?? ["Did not converge"];
   return `${solveFooter(termination === "converged", iterationCount, solveTime, lead)}\n${explanation ? `${explanation}\n` : ""}`;
 }
@@ -181,7 +184,7 @@ export function localizationFooter(termination: Termination, iterationCount: num
  * queried from. `rho` is the convergence measure: how much better than the iterate anything still
  * under consideration could be.
  */
-export class LocalizationTrace extends NumericTrace {
+class LocalizationTrace extends NumericTrace {
   readonly stride: number;
   private readonly ellipsoids: Float64Array;
   private readonly localizingSets: number[][] | null;
@@ -215,7 +218,7 @@ export class LocalizationTrace extends NumericTrace {
   closeOnIncumbent(incumbent: Incumbent, upperBound: number): void {
     if (!incumbent.found) return;
     const { point: best, objective: bestObjective } = incumbent;
-    const previous = this.iterations[this.count - 1];
+    const previous = this.iterates[this.count - 1];
     if (previous && best.every((value, j) => Math.abs(previous[j]! - value) < INCUMBENT_MERGE_TOLERANCE)) {
       return;
     }
@@ -261,4 +264,72 @@ function packLocalizingSets(sets: readonly (readonly number[])[], stride: number
   });
   localizingSetOffsets[sets.length] = at / stride;
   return { localizingSetPoints, localizingSetOffsets };
+}
+
+/** What the ellipsoid method and the cutting planes share in their options. */
+export interface LocalizationOptions {
+  maxit: number;
+  tol: number;
+  /** slide a feasible query point along the objective to the blocking constraint before adopting it */
+  rayShoot: boolean;
+  /** how much larger than the drawn region's bounding box the initial localization is */
+  initialScale: number;
+}
+
+/**
+ * One run of a method in the family: the dense problem, the oracle, the incumbent, the trace and
+ * the stopping test, so an engine holds only its own localizing set and its update of it.
+ */
+export class LocalizationRun {
+  readonly A: DenseMatrix;
+  readonly b: Float64Array;
+  readonly c: Float64Array;
+  readonly n: number;
+  readonly trace: LocalizationTrace;
+  readonly incumbent: Incumbent;
+  /** the best objective value anything still under consideration could have */
+  upperBound = Infinity;
+  termination: Termination = "maxit";
+  private readonly tol: number;
+  private readonly startTime = performance.now();
+
+  constructor(constraints: readonly Constraint[], objective: Float64Array, opts: LocalizationOptions, withLocalizingSets: boolean, tooFewVariables: string) {
+    assertMaxit(opts.maxit);
+    const { A, b } = denseFromConstraints(constraints);
+    if (A.cols < 2) throw new Error(tooFewVariables);
+    this.A = A;
+    this.b = b;
+    this.n = A.cols;
+    this.c = Float64Array.from({ length: this.n }, (_, j) => objective[j] ?? 0);
+    this.tol = opts.tol;
+    this.trace = new LocalizationTrace(opts.maxit, this.n, withLocalizingSets);
+    this.incumbent = new Incumbent(A, b, this.c, opts.rayShoot);
+  }
+
+  /** The oracle's answer at a query point, which is offered to the incumbent when feasible. */
+  query(point: Float64Array): { objectiveValue: number; worstRow: number; violation: number; feasible: boolean } {
+    const objectiveValue = dot(this.c, point);
+    const { row: worstRow, violation } = mostViolatedConstraint(this.A, this.b, point);
+    const feasible = violation <= FEASIBILITY_TOLERANCE;
+    if (feasible) this.incumbent.offer(point, objectiveValue);
+    return { objectiveValue, worstRow, violation, feasible };
+  }
+
+  /**
+   * Whether the incumbent is certified optimal by the upper bound, which ends the run. Feasibility
+   * of the query point is still required so that the last iterate the viewport marks as the answer
+   * is a point of the region.
+   */
+  converged(feasible: boolean): boolean {
+    if (!feasible || !this.incumbent.certifies(this.upperBound, this.tol)) return false;
+    this.termination = "converged";
+    return true;
+  }
+
+  /** The result: how the run ended, with the incumbent recorded as its final iterate. */
+  finish(stops: TerminationLines): SolverResult {
+    const footer = localizationFooter(this.termination, this.trace.count, performance.now() - this.startTime, stops);
+    this.trace.closeOnIncumbent(this.incumbent, this.upperBound);
+    return this.trace.result(localizationLogHeader(this.n), footer);
+  }
 }

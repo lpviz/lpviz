@@ -77,7 +77,7 @@ export const objectiveValue = (c: ArrayLike<number>, p: ArrayLike<number>) => {
 // the optimum of a bounded LP is attained at a vertex
 export const bruteForceOptimum = (c: ArrayLike<number>, vertices: readonly Vec[]) => Math.max(...vertices.map((v) => objectiveValue(c, v)));
 
-export const lastIterate = (r: { iterations: Float64Array[] }) => r.iterations[r.iterations.length - 1]!;
+export const lastIterate = (r: { iterates: Float64Array[] }) => r.iterates[r.iterates.length - 1]!;
 
 // How many of a simplex run's iterates belong to Phase 1 (its `phases` are absent when none do).
 export const phase1Count = (r: SolverResult) => (r.phases ?? []).filter((phase) => phase === 0).length;

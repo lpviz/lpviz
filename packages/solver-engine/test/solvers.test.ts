@@ -64,8 +64,8 @@ describe("pdhg", () => {
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
     expect(lastRow.convergence).toBeLessThanOrEqual(1e-4);
-    expect(r.iterations.length).toBe(rowsOf(r).length);
-    expect(r.iterations.length).toBe(r.convergence!.length);
+    expect(r.iterates.length).toBe(rowsOf(r).length);
+    expect(r.iterates.length).toBe(r.convergence!.length);
   });
 
   test("eq mode stops at the last finite iterate on divergence", () => {
@@ -245,7 +245,7 @@ describe("simplex pivot rules", () => {
     }
     expect(bland.status).toBe("unbounded");
     expect(cycling.status).toBe("unbounded");
-    expect(cycling.iterations.length).toBeLessThan(100);
+    expect(cycling.iterates.length).toBeLessThan(100);
   });
 });
 
@@ -317,9 +317,9 @@ describe("ellipsoid", () => {
     for (const objective of [Float64Array.of(1, 1), Float64Array.of(-1, 2), Float64Array.of(0.3, -1)]) {
       const off = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts({ rayShoot: false }));
       const on = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts({ rayShoot: true }));
-      expect(on.iterations.length).toBeLessThan(off.iterations.length);
-      const a = off.iterations[off.iterations.length - 1]!;
-      const b = on.iterations[on.iterations.length - 1]!;
+      expect(on.iterates.length).toBeLessThan(off.iterates.length);
+      const a = off.iterates[off.iterates.length - 1]!;
+      const b = on.iterates[on.iterates.length - 1]!;
       expect(objectiveValue(objective, b)).toBeCloseTo(objectiveValue(objective, a), 4);
     }
   });
@@ -350,16 +350,16 @@ describe("ellipsoid", () => {
   // method returns, and it is not in general the last point queried. That entry
   // reuses the previous iterate's ellipse, so the per-iterate invariants below
   // hold over everything before it.
-  const queriedCount = (r: ReturnType<typeof ellipsoid>) => r.iterations.length - 1;
+  const queriedCount = (r: ReturnType<typeof ellipsoid>) => r.iterates.length - 1;
 
   test("iterations, rows, rho and ellipsoids stay in lockstep", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ maxit: 40 }));
-    expect(rowsOf(r).length).toBe(r.iterations.length);
-    expect(r.convergence!.length).toBe(r.iterations.length);
-    expect(r.ellipsoids!.length).toBe(r.iterations.length * 5);
+    expect(rowsOf(r).length).toBe(r.iterates.length);
+    expect(r.convergence!.length).toBe(r.iterates.length);
+    expect(r.ellipsoids!.length).toBe(r.iterates.length * 5);
     for (let i = 0; i < queriedCount(r); i++) {
-      expect(r.ellipsoids![i * 5]!).toBe(r.iterations[i]![0]!);
-      expect(r.ellipsoids![i * 5 + 1]!).toBe(r.iterations[i]![1]!);
+      expect(r.ellipsoids![i * 5]!).toBe(r.iterates[i]![0]!);
+      expect(r.ellipsoids![i * 5 + 1]!).toBe(r.iterates[i]![1]!);
       expect(rowsOf(r)[i]!.convergence).toBe(r.convergence![i]!);
     }
   });
@@ -458,7 +458,7 @@ describe("ellipsoid", () => {
       [1, -1],
     ];
     const r = ellipsoid(hull, empty, Float64Array.of(1, 1), opts());
-    expect(r.iterations.length).toBeLessThan(500);
+    expect(r.iterates.length).toBeLessThan(500);
     expect(footerOf(r).startsWith("Converged")).toBe(false);
   });
 });
@@ -468,7 +468,7 @@ describe("centralPath", () => {
     const r = centralPath(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), {
       niter: 10,
     });
-    expect(r.iterations.length).toBe(10);
+    expect(r.iterates.length).toBe(10);
     expect(r.log).toHaveLength(1);
     expect(r.log[0]!.header).toContain("Iter");
     expect(r.log[0]!.rows).toHaveLength(10);
@@ -494,9 +494,9 @@ describe("centralPath", () => {
     const r = centralPath(sliverVertices, sliverLines, Float64Array.of(1, 1), {
       niter: 20,
     });
-    expect(r.iterations.length).toBeGreaterThan(0);
-    expect(r.convergence!.length).toBe(r.iterations.length);
-    for (const [i, p] of r.iterations.entries()) {
+    expect(r.iterates.length).toBeGreaterThan(0);
+    expect(r.convergence!.length).toBe(r.iterates.length);
+    for (const [i, p] of r.iterates.entries()) {
       expect(Number.isFinite(p[0]!)).toBe(true);
       expect(Number.isFinite(p[1]!)).toBe(true);
       expect(Number.isFinite(r.convergence![i]!)).toBe(true);
@@ -511,7 +511,7 @@ describe("centralPath", () => {
       const start = performance.now();
       const r = centralPath(hull, constraints, obj, { niter: 75 });
       const elapsed = performance.now() - start;
-      expect(r.iterations.length).toBe(75);
+      expect(r.iterates.length).toBe(75);
       const last = lastIterate(r);
       // µ ends at 1e-5, so the path ends within ~m·µ of the LP optimum
       expect(objectiveValue(obj, last)).toBeCloseTo(expected, 1);
@@ -529,8 +529,8 @@ describe("draggable start point", () => {
       [3, 7], // far outside (infeasible start)
     ]) {
       const r = ipm(SQUARE, Float64Array.of(1, 1), ipmOpts(start));
-      expect(r.iterations[0]![0]!).toBeCloseTo(start[0]!, 12);
-      expect(r.iterations[0]![1]!).toBeCloseTo(start[1]!, 12);
+      expect(r.iterates[0]![0]!).toBeCloseTo(start[0]!, 12);
+      expect(r.iterates[0]![1]!).toBeCloseTo(start[1]!, 12);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
       const last = lastIterate(r);
       expect(last[0]!).toBeCloseTo(-4, 3);
@@ -544,7 +544,7 @@ describe("draggable start point", () => {
     // to passing no start point at all.
     const coldIpm = ipm(SQUARE, Float64Array.of(1, 1), ipmOpts(undefined));
     const warmIpm = ipm(SQUARE, Float64Array.of(1, 1), ipmOpts([0, 0]));
-    expect(warmIpm.iterations).toEqual(coldIpm.iterations);
+    expect(warmIpm.iterates).toEqual(coldIpm.iterates);
     // mu and the primal residual are functions of the dual trajectory (s, y)
     expect(warmIpm.convergence).toEqual(coldIpm.convergence);
     expect(rowsOf(warmIpm)).toEqual(rowsOf(coldIpm));
@@ -559,7 +559,7 @@ describe("draggable start point", () => {
         ineq,
         startPoint: [0, 0],
       });
-      expect(warm.iterations).toEqual(cold.iterations);
+      expect(warm.iterates).toEqual(cold.iterates);
     }
   });
 
@@ -573,8 +573,8 @@ describe("draggable start point", () => {
         ineq: true,
         startPoint: start,
       });
-      expect(r.iterations[0]![0]!).toBeCloseTo(start[0]!, 12);
-      expect(r.iterations[0]![1]!).toBeCloseTo(start[1]!, 12);
+      expect(r.iterates[0]![0]!).toBeCloseTo(start[0]!, 12);
+      expect(r.iterates[0]![1]!).toBeCloseTo(start[1]!, 12);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
       const last = lastIterate(r);
       expect(last[0]!).toBeCloseTo(-4, 2);
@@ -588,8 +588,8 @@ describe("draggable start point", () => {
       ineq: false,
       startPoint: [-5.5, -4.5],
     });
-    expect(r.iterations[0]![0]!).toBeCloseTo(-5.5, 12);
-    expect(r.iterations[0]![1]!).toBeCloseTo(-4.5, 12);
+    expect(r.iterates[0]![0]!).toBeCloseTo(-5.5, 12);
+    expect(r.iterates[0]![1]!).toBeCloseTo(-4.5, 12);
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const last = lastIterate(r);
     expect(last[0]!).toBeCloseTo(-4, 2);
@@ -603,7 +603,7 @@ describe("draggable start point", () => {
       halpern: true,
       startPoint: [-5, -5],
     });
-    expect(r.iterations[0]![0]!).toBeCloseTo(-5, 12);
+    expect(r.iterates[0]![0]!).toBeCloseTo(-5, 12);
     expect(footerOf(r).startsWith("Converged")).toBe(true);
   });
 
@@ -616,7 +616,7 @@ describe("draggable start point", () => {
     expect(r.status).toBe("optimal");
     expect(phase1Count(r)).toBe(0);
     expect(r.log[0]!.header).toContain("warm start");
-    const first = r.iterations[0]!;
+    const first = r.iterates[0]!;
     expect(first[0]!).toBeCloseTo(-6, 6);
     expect(first[1]!).toBeCloseTo(-6, 6);
     const last = lastIterate(r);

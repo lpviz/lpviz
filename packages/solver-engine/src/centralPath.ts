@@ -3,7 +3,7 @@ import { solveDenseSystem } from "@lpviz/math/lapack";
 import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
-import { coordinateHeaders, fmtCoordinates, fmtExp, fmtExpUnsigned, formatMilliseconds, logColumnWidths, padLeft, padRight } from "./fmt";
+import { coordinateHeaders, fmtCoordinates, fmtExp, fmtExpUnsigned, formatMilliseconds, logColumnWidths } from "./fmt";
 import { MAX_PATH_POINTS } from "./limits";
 import type { SolverResult } from "./result";
 
@@ -17,7 +17,8 @@ const MAX_NEWTON_ITERATIONS = 2000;
 // the barrier parameter runs down a log-spaced ladder from 10^3 to 10^-5
 const BARRIER_PARAM_START = 3.0;
 const BARRIER_PARAM_END = -5.0;
-const ITERATION_COLUMN_WIDTH = 4;
+// the path's points are numbered in a column of their own, narrower and left-aligned
+const PATH_INDEX_WIDTH = 4;
 
 export interface CentralPathOptions {
   /** how many points of the path to trace, one per barrier parameter */
@@ -53,7 +54,7 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
   }
 
   const widths = logColumnWidths(n);
-  const header = `  ${padRight("Iter", ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(n)} ${padLeft("Obj", widths.measure)} ${padLeft("µ", widths.measure)}  \n`;
+  const header = `  ${"Iter".padEnd(PATH_INDEX_WIDTH)} ${coordinateHeaders(n)} ${"Obj".padStart(widths.measure)} ${"µ".padStart(widths.measure)}  \n`;
   const points: Float64Array[] = [];
   const barrierTerms: number[] = [];
   const rows: string[] = [];
@@ -64,17 +65,17 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
     if (!point) continue;
 
     const linearObjective = dot(c, point);
-    points.push(point.slice());
+    points.push(point);
     // the barrier's share of the objective: what the 3D view lifts this iterate by
     barrierTerms.push(barrier.value(mu, point) - linearObjective);
     rows.push(
-      `  ${padRight(String(points.length), ITERATION_COLUMN_WIDTH)} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(linearObjective, widths.measure, 1)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`,
+      `  ${String(points.length).padEnd(PATH_INDEX_WIDTH)} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(linearObjective, widths.measure, 1)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`,
     );
     current = point;
   }
 
   const footer = `Traced central path in ${formatMilliseconds(performance.now() - startTime)}`;
-  return { iterations: points, convergence: barrierTerms, log: [{ header, rows, footer }] };
+  return { iterates: points, convergence: barrierTerms, log: [{ header, rows, footer }] };
 }
 
 // A supplied point is checked, not trusted; without one, a two-variable problem starts from the
@@ -148,7 +149,7 @@ class BarrierProblem {
     return dot(c, point) + mu * logBarrier;
   }
 
-  /** The maximizer for `mu`, by Newton steps from `x0`; null when the steps fail to converge. */
+  /** The maximizer for `mu`, by Newton steps from `x0`, as a fresh array; null when the steps fail to converge. */
   centralPoint(mu: number, x0: Float64Array): Float64Array | null {
     const { gradient, step } = this;
     const point = Float64Array.from(x0);
@@ -159,7 +160,7 @@ class BarrierProblem {
       const decrement = dot(gradient, step);
       const current = this.value(mu, point);
       if (infinityNorm(gradient) < NEWTON_GRADIENT_TOLERANCE || decrement <= NEWTON_DECREMENT_RELATIVE_TOLERANCE * (1 + Math.abs(current))) {
-        return Float64Array.from(point);
+        return point;
       }
 
       const stepSize = this.lineSearch(mu, point, current, decrement);

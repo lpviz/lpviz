@@ -44,7 +44,7 @@ export type PackedLogSection = Omit<LogSection, "rows"> & { rows: string[] | Pac
 export type SolverWireSuccess = {
   id: number;
   success: true;
-  iterations: Float64Array;
+  iterates: Float64Array;
   stride: number;
   lift?: Float64Array | undefined;
   log: PackedLogSection[];
@@ -72,7 +72,7 @@ export type ResultLogSection = Omit<LogSection, "rows"> & { rows: ResultRowsView
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.
 export type SolverResultView = {
-  iterations: IteratePath;
+  iterates: IteratePath;
   log: ResultLogSection[];
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;

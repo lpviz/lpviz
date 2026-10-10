@@ -28,7 +28,7 @@ export interface LogSection {
 export type SolverLog = LogSection[];
 
 export interface SolverResult {
-  iterations: Float64Array[];
+  iterates: Float64Array[];
   log: SolverLog;
   /**
    * The height the 3D view lifts each iterate above the floor: the solver's stopping measure (pdhg
@@ -51,17 +51,17 @@ export interface SolverResult {
 
 /** The lockstep record of a run: one point, one log row and one convergence measure per iterate. */
 export class NumericTrace {
-  readonly iterations: Float64Array[] = [];
+  readonly iterates: Float64Array[] = [];
   readonly rows: NumericRow[] = [];
   readonly convergence: number[] = [];
 
   get count(): number {
-    return this.iterations.length;
+    return this.iterates.length;
   }
 
   record(point: Float64Array, objective: number, infeasibility: number, convergence: number): void {
-    this.rows.push({ iteration: this.iterations.length + 1, point, objective, infeasibility, convergence });
-    this.iterations.push(point);
+    this.rows.push({ iteration: this.iterates.length + 1, point, objective, infeasibility, convergence });
+    this.iterates.push(point);
     this.convergence.push(convergence);
   }
 
@@ -72,6 +72,6 @@ export class NumericTrace {
   }
 
   result(header: string, footer: string, extras: Partial<SolverResult> = {}): SolverResult {
-    return { iterations: this.iterations, convergence: this.convergence, log: [{ header, rows: this.rows, footer }], ...extras };
+    return { iterates: this.iterates, convergence: this.convergence, log: [{ header, rows: this.rows, footer }], ...extras };
   }
 }

@@ -74,7 +74,7 @@ function packLog(log: SolverLog): PackedLogSection[] {
 export function packSolverResponse(id: number, request: SolverWorkerPayload, result: SolverResult): { wire: SolverWireSuccess; transfer: ArrayBuffer[] } {
   const { convergence, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = result;
   const stride = request.objective.length;
-  const { points, lift } = packIterations(result.iterations, stride, convergence ? liftOf(request.solver, convergence) : null);
+  const { points, lift } = packIterations(result.iterates, stride, convergence ? liftOf(request.solver, convergence) : null);
   const log = packLog(result.log);
   const transfer: ArrayBufferLike[] = [points.buffer];
   if (lift) transfer.push(lift.buffer);
@@ -88,7 +88,7 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   if (localizingSetOffsets?.length) transfer.push(localizingSetOffsets.buffer);
   // none of these arrays is ever backed by a SharedArrayBuffer
   return {
-    wire: { id, success: true, iterations: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets },
+    wire: { id, success: true, iterates: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets },
     transfer: transfer as ArrayBuffer[],
   };
 }
@@ -120,11 +120,11 @@ function unpackSection({ header, rows, notes, footer }: PackedLogSection): Resul
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
-  const { id, iterations, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
+  const { id, iterates, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
   const result: SolverResultView = {
     // the packed iterations are already a flat block in one transferred buffer, so the iterate
     // path is that buffer verbatim: no per-iterate object exists on this side
-    iterations: { points: iterations, count: Math.floor(iterations.length / stride), stride, lift: lift ?? null },
+    iterates: { points: iterates, count: Math.floor(iterates.length / stride), stride, lift: lift ?? null },
     log: log.map(unpackSection),
     phases,
     restartIndices,

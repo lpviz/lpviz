@@ -4,12 +4,12 @@ import { getState, setState, type State } from "@/features/core/store";
 import { EMPTY_ITERATE_PATH, type IteratePath } from "./solverState";
 import type { SolverResultView } from "./types";
 
-type IterateResult = Pick<SolverResultView, "iterations" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets">;
+type IterateResult = Pick<SolverResultView, "iterates" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets">;
 
 // The flat path and phase/restart arrays are never mutated after creation
 // (replay grows a fresh IteratePath over the same shared buffer), so the
 // "original" fields can share them instead of deep-copying.
-function iteratePatch({ iterations: path, phases, restartIndices, ellipsoids, localizingSets }: IterateResult): Partial<State> {
+function iteratePatch({ iterates: path, phases, restartIndices, ellipsoids, localizingSets }: IterateResult): Partial<State> {
   return {
     originalIteratePath: path,
     iteratePath: path,
@@ -26,14 +26,14 @@ function iteratePatch({ iterations: path, phases, restartIndices, ellipsoids, lo
 export function setIterateResult(result: IterateResult): void {
   const state = getState();
   const patch = iteratePatch(result);
-  if (state.traceEnabled && result.iterations.count > 0) {
-    patch.traceBuffer = appendedTraceBuffer(state, result.iterations);
+  if (state.traceEnabled && result.iterates.count > 0) {
+    patch.traceBuffer = appendedTraceBuffer(state, result.iterates);
   }
   setState(patch);
 }
 
 export function clearIterateState(): void {
-  setState({ ...iteratePatch({ iterations: EMPTY_ITERATE_PATH }), highlightIteratePathIndex: null });
+  setState({ ...iteratePatch({ iterates: EMPTY_ITERATE_PATH }), highlightIteratePathIndex: null });
 }
 
 // the newest `capacity` entries of a trace buffer (the buffer itself when it fits)
