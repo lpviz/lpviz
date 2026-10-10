@@ -2,9 +2,10 @@ import { getState, type State } from "@/features/core/store";
 import { nearestPolytopeVertex } from "@/features/polytope-editor/editorState";
 import type { SolverMode } from "@/features/solver/solverState";
 import { hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
-import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
+import { messageBlocks } from "@/features/solver/resultPresenter";
+import type { Problem, ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
-import { hasConstraints } from "@lpviz/polytope/polytope";
+import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 
 // What each solver mode needs from the problem: the reason it cannot run, as the result panel
 // shows it, or the request the worker runs.
@@ -14,13 +15,11 @@ export type SolverControl = {
   buildRequest: (state: State) => SolverWorkerPayload | null;
 };
 
-// the objective vector + constraints guard common to every buildRequest
-function objectiveBase(state: State) {
+// the problem every request carries and the region it came from, or null while the drawing has
+// no region or no objective
+function solvableProblem(state: State): { polytope: Polytope; problem: Problem } | null {
   if (!state.objectiveVector || !hasConstraints(state.polytope)) return null;
-  return {
-    constraints: state.polytope.constraints,
-    objective: Float64Array.from(state.objectiveVector),
-  };
+  return { polytope: state.polytope, problem: { constraints: state.polytope.constraints, objective: Float64Array.from(state.objectiveVector) } };
 }
 
 // The points the ellipsoid family builds its initial localization around. A
@@ -41,51 +40,35 @@ function startPointPayload(state: State): { startPoint?: Vec } {
   return point ? { startPoint: point } : {};
 }
 
-const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
-  type: "blocks",
-  blocks: [
-    { className: "iterate-header", text: header },
-    { className: "iterate-item-nohover", text: message },
-  ],
-});
-
-const emptyRegionBlock =
-  (message: string): SolverControl["getRunBlock"] =>
-  (s) =>
-    isEmptyRegion(s) ? messageBlocks("No valid region", message) : null;
+const emptyRegionBlock = (message: string): ResultRenderPayload => messageBlocks("No valid region", message);
+const unboundedObjectiveBlock = messageBlocks(
+  "Solver unavailable",
+  "Central Path is disabled when the objective points in an unbounded direction. Select IPM, PDHG, or Simplex to see how they handle this unbounded problem.",
+);
 
 export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
   central: {
-    getRunBlock: (s) => {
-      if (!hasConstraints(s.polytope)) return null;
-      if (s.polytope.kind === "empty") return messageBlocks("No valid region", "Central Path requires a feasible region.");
-      if (hasUnboundedObjectiveDirection(s))
-        return messageBlocks(
-          "Solver unavailable",
-          "Central Path is disabled when the objective points in an unbounded direction. Select IPM, PDHG, or Simplex to see how they handle this unbounded problem.",
-        );
-      return null;
-    },
+    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Central Path requires a feasible region.") : hasUnboundedObjectiveDirection(s) ? unboundedObjectiveBlock : null),
     buildRequest: (s) => {
-      const base = objectiveBase(s);
-      if (!base || !hasConstraints(s.polytope)) return null;
+      const solvable = solvableProblem(s);
+      if (!solvable) return null;
       return {
         solver: "central",
-        vertices: s.polytope.vertices,
-        ...base,
+        vertices: solvable.polytope.vertices,
+        ...solvable.problem,
         niter: Math.max(1, s.solverSettings.centralPathIter || 1),
       };
     },
   },
   ipm: {
-    getRunBlock: emptyRegionBlock("IPM requires a feasible region."),
+    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
     buildRequest: (s) => {
-      const base = objectiveBase(s);
-      if (!base) return null;
+      const solvable = solvableProblem(s);
+      if (!solvable) return null;
       const ss = s.solverSettings;
       return {
         solver: "ipm",
-        ...base,
+        ...solvable.problem,
         ...startPointPayload(s),
         alphaMax: ss.alphaMax,
         correctorThreshold: ss.correctorThreshold,
@@ -94,16 +77,16 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     },
   },
   simplex: {
-    getRunBlock: emptyRegionBlock("Simplex requires a valid feasible region."),
+    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Simplex requires a valid feasible region.") : null),
     buildRequest: (s) => {
-      const base = objectiveBase(s);
-      if (!base) return null;
+      const solvable = solvableProblem(s);
+      if (!solvable) return null;
       // Simplex consumes the start as a vertex (the marker snaps to one);
       // dual mode has no safe start-point interpretation and ignores it.
       const snapped = !s.solverSettings.simplexDualMode && s.solverStartPoint ? nearestPolytopeVertex(s, s.solverStartPoint) : null;
       return {
         solver: "simplex",
-        ...base,
+        ...solvable.problem,
         ...(snapped ? { startVertex: snapped } : {}),
         dual: s.solverSettings.simplexDualMode,
         enteringRule: s.solverSettings.simplexEnteringRule,
@@ -112,16 +95,16 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     },
   },
   ellipsoid: {
-    getRunBlock: emptyRegionBlock("The ellipsoid method requires a feasible region."),
+    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("The ellipsoid method requires a feasible region.") : null),
     buildRequest: (s) => {
-      const base = objectiveBase(s);
-      if (!base || !hasConstraints(s.polytope)) return null;
+      const solvable = solvableProblem(s);
+      if (!solvable) return null;
       const ss = s.solverSettings;
       return {
         solver: "ellipsoid",
         // the drawn region bounds the initial ellipsoid (or box)
         vertices: regionBoundingVertices(s),
-        ...base,
+        ...solvable.problem,
         maxit: Math.max(1, ss.maxitEllipsoid || 1),
         deepCuts: ss.ellipsoidDeepCuts,
         rayShoot: ss.ellipsoidRayShoot,
@@ -133,12 +116,12 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
   pdhg: {
     getRunBlock: () => null,
     buildRequest: (s) => {
-      const base = objectiveBase(s);
-      if (!base) return null;
+      const solvable = solvableProblem(s);
+      if (!solvable) return null;
       const ss = s.solverSettings;
       return {
         solver: "pdhg",
-        ...base,
+        ...solvable.problem,
         ...startPointPayload(s),
         ineq: ss.pdhgIneqMode,
         halpern: ss.pdhgHalpernMode,

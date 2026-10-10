@@ -39,19 +39,28 @@ export type EditorTransition =
       objectiveVector: Vec;
     };
 
-export function getEditorContext(state: State) {
-  const phase = computeDrawingPhase(state);
-  const session =
-    phase === "empty" || phase === "sketching_polytope"
-      ? { kind: "drafting" as const }
-      : phase === "awaiting_objective" || phase === "objective_preview"
-        ? { kind: "selecting-objective" as const }
-        : state.completionMode === "closed"
-          ? { kind: "editing-closed" as const }
-          : state.completionMode === "open"
-            ? { kind: "editing-open" as const }
-            : { kind: "drafting" as const };
+type EditorSession = { kind: "drafting" | "selecting-objective" | "editing-closed" | "editing-open" };
 
+// What the editor is doing with the drawing: sketching it, placing its objective, or editing a
+// finished region (whose kind decides which edits apply).
+function sessionOf(state: State): EditorSession {
+  switch (computeDrawingPhase(state)) {
+    case "empty":
+    case "sketching_polytope":
+      return { kind: "drafting" };
+    case "awaiting_objective":
+    case "objective_preview":
+      return { kind: "selecting-objective" };
+    case "ready_for_solvers":
+      return { kind: state.completionMode === "open" ? "editing-open" : "editing-closed" };
+  }
+}
+
+// a finished region on these vertices, with its interior point at their centroid
+const closedOn = (vertices: Vec[]) => ({ vertices, interiorPoint: centroid(vertices), completionMode: "closed" as const });
+
+export function getEditorContext(state: State) {
+  const session = sessionOf(state);
   const isDraggingGeometry = state.editorInteraction.kind === "dragging" && state.editorInteraction.target.kind !== "objective";
   // while its geometry is dragged an open chain is edited as drawn, not as the hull it closed into
   const derived = session.kind === "editing-open" && !isDraggingGeometry ? derivedClosure(state) : null;
@@ -68,48 +77,20 @@ export function getEditorContext(state: State) {
 
 export function computeEditorRegionForState(state: State): EditorRegionResult {
   const { geometry, isDraggingGeometry } = getEditorContext(state);
-  const sourceVertices = geometry.isDerivedClosed ? geometry.vertices : state.vertices;
   const sourceMode: CompletionMode = geometry.isDerivedClosed ? "closed" : state.completionMode;
 
-  const isConvex = sourceMode === "open" ? isConvexChain(sourceVertices) : isConvexPolygon(sourceVertices);
-  if (!isConvex) {
-    return { status: "nonconvex" };
-  }
+  const isConvex = sourceMode === "open" ? isConvexChain(geometry.vertices) : isConvexPolygon(geometry.vertices);
+  if (!isConvex) return { status: "nonconvex" };
 
   // a draft is derived as if closed so the fill preview and the panel show the polygon so far
-  const region = derivePolytope(sourceVertices, sourceMode !== "open");
+  const region = derivePolytope(geometry.vertices, sourceMode !== "open");
 
-  if (geometry.isDerivedClosed) {
-    return {
-      status: "ready",
-      polytope: region,
-      promotion: {
-        vertices: geometry.vertices,
-        interiorPoint: centroid(geometry.vertices),
-        completionMode: "closed",
-      },
-    };
-  }
+  if (geometry.isDerivedClosed) return { status: "ready", polytope: region, promotion: closedOn(geometry.vertices) };
 
-  const shouldPromoteOpenRegion = sourceMode === "open" && !isDraggingGeometry && region.kind === "bounded" && region.vertices.length >= 3;
-
-  if (!shouldPromoteOpenRegion) {
-    return {
-      status: "ready",
-      polytope: region,
-      promotion: null,
-    };
-  }
-
-  return {
-    status: "ready",
-    polytope: derivePolytope(region.vertices, true),
-    promotion: {
-      vertices: region.vertices,
-      interiorPoint: centroid(region.vertices),
-      completionMode: "closed",
-    },
-  };
+  // an open chain whose region came out bounded is promoted to the polygon it closed into
+  const promoteOpenRegion = sourceMode === "open" && !isDraggingGeometry && region.kind === "bounded" && region.vertices.length >= 3;
+  if (!promoteOpenRegion) return { status: "ready", polytope: region, promotion: null };
+  return { status: "ready", polytope: derivePolytope(region.vertices, true), promotion: closedOn(region.vertices) };
 }
 
 // Every edit is its own undoable step (closing included; otherwise undo jumps
@@ -118,6 +99,7 @@ const edit = (vertices: Vec[], completionMode: CompletionMode, interiorPoint: Ve
   kind: "edit",
   result: { vertices, completionMode, interiorPoint },
 });
+const closeOn = (vertices: Vec[]): EditorTransition => ({ kind: "edit", result: closedOn(vertices) });
 
 export function getEditorTransition(
   state: State,
@@ -147,9 +129,7 @@ export function getEditorTransition(
         // closeThreshold is the world-space equivalent of a fixed pixel hit radius, so closing on
         // the first vertex stays equally easy at any zoom (it is otherwise a tiny target when
         // zoomed out, e.g. on mobile)
-        if (vecDistance(action.point, state.vertices[0]!) < action.closeThreshold) {
-          return edit(state.vertices, "closed", centroid(state.vertices));
-        }
+        if (vecDistance(action.point, state.vertices[0]!) < action.closeThreshold) return closeOn(state.vertices);
 
         if (polygonContains(state.vertices, action.point)) {
           return edit(state.vertices, "closed", action.point);
@@ -190,9 +170,7 @@ export function getEditorTransition(
       // The polygon stays closed, minus the vertex: dropping a vertex of a
       // convex polygon keeps it convex, so there is nothing to reject. A
       // triangle has nothing left to close and goes back to drafting.
-      if (closed && nextVertices.length >= 3) {
-        return edit(nextVertices, "closed", centroid(nextVertices));
-      }
+      if (closed && nextVertices.length >= 3) return closeOn(nextVertices);
 
       return edit(nextVertices, closed || session.kind === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
     }
@@ -215,7 +193,7 @@ export function getEditorTransition(
       const nextVertices = displayVertices.slice();
       nextVertices.splice(action.edgeIndex + 1, 0, [start[0] + t * dx, start[1] + t * dy]);
 
-      return isDerivedClosed ? edit(nextVertices, "closed", centroid(nextVertices)) : edit(nextVertices, state.completionMode, state.interiorPoint);
+      return isDerivedClosed ? closeOn(nextVertices) : edit(nextVertices, state.completionMode, state.interiorPoint);
     }
     case "insert-boundary-ray-point": {
       if (context.session.kind !== "editing-open") {
@@ -244,11 +222,7 @@ export function getEditorTransition(
       }
 
       const hull = convexHull(displayVertices);
-      if (hull.length < 3) {
-        return { kind: "noop" };
-      }
-
-      return edit(hull, "closed", centroid(hull));
+      return hull.length < 3 ? { kind: "noop" } : closeOn(hull);
     }
   }
 }

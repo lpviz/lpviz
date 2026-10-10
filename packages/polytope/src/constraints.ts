@@ -2,6 +2,9 @@ import { centroid, turn } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { variableName } from "@lpviz/math/vec";
 
+/** Below this, the package treats lengths as zero and points as on a boundary. */
+export const TOLERANCE = 1e-6;
+
 function roundCoefficient(value: number): number {
   return value === Math.floor(value) ? value : parseFloat(value.toFixed(3));
 }
@@ -23,14 +26,14 @@ export function formatConstraint(constraint: Constraint): string {
 
 // Which way an open chain turns, as -1 (right), +1 (left) or 0 (collinear, or turning both
 // ways). The natural normal (A = dy, B = -dx) puts the interior on the <= side of a left-turning
-// chain. A turn counts when the sine of its angle exceeds `tol`: the raw cross product has units
+// chain. A turn counts when the sine of its angle exceeds the tolerance: the raw cross product has units
 // of length squared and would call every turn of a small chain collinear. The turn is a local
 // property, so unlike the centroid rule no single distant vertex can swing an edge outward.
-function chainTurnSign(points: readonly Vec[], tol: number): -1 | 0 | 1 {
+function chainTurnSign(points: readonly Vec[]): -1 | 0 | 1 {
   let sign: number = 0;
   for (let i = 0; i + 2 < points.length; i++) {
     const { cross, lengths } = turn(points[i]!, points[i + 1]!, points[i + 2]!);
-    if (Math.abs(cross) <= tol * lengths) {
+    if (Math.abs(cross) <= TOLERANCE * lengths) {
       continue;
     }
     const next = Math.sign(cross);
@@ -45,7 +48,7 @@ function chainTurnSign(points: readonly Vec[], tol: number): -1 | 0 | 1 {
  * region: every edge of a closed polygon, or every edge of an open chain (whose ends continue as
  * rays). An edge of zero length yields no constraint.
  */
-export function constraintsFromChain(points: readonly Vec[], closed: boolean, tol = 1e-6): Constraint[] {
+export function constraintsFromChain(points: readonly Vec[], closed: boolean): Constraint[] {
   const constraints: Constraint[] = [];
   const pointCount = points.length;
   if (pointCount < 2) {
@@ -55,7 +58,7 @@ export function constraintsFromChain(points: readonly Vec[], closed: boolean, to
   // the reference the interior side is read off when the chain has no consistent turn
   const reference = closed || pointCount >= 3 ? centroid(points) : null;
   const edgeCount = closed ? pointCount : pointCount - 1;
-  const turnSign = closed ? 0 : chainTurnSign(points, tol);
+  const turnSign = closed ? 0 : chainTurnSign(points);
 
   for (let index = 0; index < edgeCount; index++) {
     const start = points[index]!;
@@ -64,9 +67,7 @@ export function constraintsFromChain(points: readonly Vec[], closed: boolean, to
     const A = end[1] - start[1];
     const B = -(end[0] - start[0]);
     const normalLength = Math.hypot(A, B);
-    if (normalLength < tol) {
-      continue;
-    }
+    if (normalLength < TOLERANCE) continue;
 
     let normalizedA = A / normalLength;
     let normalizedB = B / normalLength;
@@ -75,7 +76,7 @@ export function constraintsFromChain(points: readonly Vec[], closed: boolean, to
     // a right-turning chain has its interior on the opposite side to the one
     // the natural normal selects; so does a chain with no consistent turn
     // when its reference point falls outside, or when it has no reference at all
-    if (turnSign < 0 || (turnSign === 0 && (!reference || normalizedA * reference[0] + normalizedB * reference[1] > normalizedC + tol))) {
+    if (turnSign < 0 || (turnSign === 0 && (!reference || normalizedA * reference[0] + normalizedB * reference[1] > normalizedC + TOLERANCE))) {
       normalizedA = -normalizedA;
       normalizedB = -normalizedB;
       normalizedC = -normalizedC;

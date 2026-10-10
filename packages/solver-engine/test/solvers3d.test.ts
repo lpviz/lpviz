@@ -41,7 +41,7 @@ describe.each([
 
   test("centralPath traces to the corner from a given interior point", () => {
     const r = centralPath([], constraints, obj, { niter: 20, interiorPoint: [0, 0, 0] });
-    expect(r.iterations.length).toBe(20);
+    expect(r.iterates.length).toBe(20);
     expect(r.convergence!.length).toBe(20);
     expectNear(lastIterate(r), optimum, 2);
   });

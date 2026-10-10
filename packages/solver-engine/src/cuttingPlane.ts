@@ -1,9 +1,8 @@
-import { type DenseMatrix, denseFromConstraints, dot, quadraticForm as denseQuadraticForm } from "@lpviz/math/blas";
+import { type DenseMatrix, dot, quadraticForm } from "@lpviz/math/blas";
 import { cholesky, invertFromCholesky, logDetFromCholesky } from "@lpviz/math/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "@lpviz/math/lp";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import { assertMaxit } from "./limits";
-import { FEASIBILITY_TOLERANCE, Incumbent, LocalizationTrace, localizationFooter, localizationLogHeader, mostViolatedConstraint, regionBoundingBox, type Termination } from "./localization";
+import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
 
 const MAX_NEWTON_STEPS = 80;
@@ -28,11 +27,7 @@ const RECESSION_TOLERANCE = 1e-9;
 export const QUERY_POINTS = ["chebyshev", "analytic", "volumetric"] as const;
 export type QueryPoint = (typeof QUERY_POINTS)[number];
 
-export interface CuttingPlaneOptions {
-  maxit: number;
-  tol: number;
-  rayShoot: boolean;
-  initialScale: number;
+export interface CuttingPlaneOptions extends LocalizationOptions {
   queryPoint: QueryPoint;
 }
 
@@ -59,18 +54,9 @@ type QueryResult = {
  * for n = 2 and as its half-spaces otherwise.
  */
 export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
-  const { maxit, tol, rayShoot, initialScale, queryPoint } = opts;
-
-  assertMaxit(maxit);
-
-  const { A, b } = denseFromConstraints(constraints);
-  const n = A.cols;
-  if (n < 2) {
-    throw new Error("The cutting-plane query points require at least two variables.");
-  }
-
-  const c = Float64Array.from({ length: n }, (_, j) => objective[j] ?? 0);
-  const { center: boxCenter, halfExtents } = regionBoundingBox(vertices, n, initialScale);
+  const run = new LocalizationRun(constraints, objective, opts, true, "The cutting-plane query points require at least two variables.");
+  const { A, b, c, n, trace, incumbent } = run;
+  const { center: boxCenter, halfExtents } = regionBoundingBox(vertices, n, opts.initialScale);
 
   // the initial localizing set: the same inflated bounding box the ellipsoid
   // method circumscribes, kept as a box here, two half-spaces per axis
@@ -92,49 +78,37 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
   // the drawn localizing set is the clipped box polygon for two variables and
   // the half-space list itself otherwise (see localizingSetStride)
   const boxPolygon = n === 2 ? [lo[0]!, lo[1]!, hi[0]!, lo[1]!, hi[0]!, hi[1]!, lo[0]!, hi[1]!] : null;
-  const trace = new LocalizationTrace(maxit, n, true);
+  const objectiveRow = Array.from(c);
 
-  const incumbent = new Incumbent(A, b, c, rayShoot);
-  let upperBound = Infinity;
-  let termination: Termination = "maxit";
-  const startTime = performance.now();
-
-  while (trace.count < maxit) {
-    const query = computeQueryPoint(queryPoint, localizing, n);
+  while (trace.count < opts.maxit) {
+    const query = computeQueryPoint(opts.queryPoint, localizing, n);
     if (!query) {
-      termination = "exhausted";
+      run.termination = "exhausted";
       break;
     }
     const point = query.point;
 
-    if (queryPoint === "volumetric" && query.leverage) {
+    if (opts.queryPoint === "volumetric" && query.leverage) {
       dropRedundantCuts(localizing, boxRowCount, query.leverage);
     }
 
-    const objectiveValue = dot(c, point);
-    const { row: worstRow, violation } = mostViolatedConstraint(A, b, point);
-    const feasible = violation <= FEASIBILITY_TOLERANCE;
-    if (feasible) incumbent.offer(point, objectiveValue);
+    const { objectiveValue, worstRow, violation, feasible } = run.query(point);
 
     // rho keeps the meaning it has for the ellipsoid method: how much better
     // than the query point anything still under consideration could be
-    const bound = solveSmallLp(Array.from(c), localizing, LP_BOUND);
+    const bound = solveSmallLp(objectiveRow, localizing, LP_BOUND);
     if (bound.status === "infeasible") {
-      termination = "exhausted";
+      run.termination = "exhausted";
       break;
     }
-    upperBound = bound.value;
+    run.upperBound = bound.value;
     const objectiveRadius = Math.max(0, bound.value - objectiveValue);
 
     // the localizing set as it stood when this point was queried: the box, cut
     // by everything learned so far
     const drawn = boxPolygon ? clippedBox(boxPolygon, localizing, boxRowCount) : localizing.flat();
     trace.recordIterate(point, query.P, objectiveValue, Math.max(0, violation), objectiveRadius, drawn);
-
-    if (feasible && incumbent.certifies(upperBound, tol)) {
-      termination = "converged";
-      break;
-    }
+    if (run.converged(feasible)) break;
 
     const cut = new Array<number>(n + 1);
     if (!feasible) {
@@ -152,16 +126,14 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
 
   // Both of these are claims of optimality, and both are wrong when the
   // objective is unbounded: nothing but the initial box stopped the method.
-  if ((termination === "converged" || termination === "exhausted") && incumbent.found && objectiveIsUnbounded(A, c)) {
-    termination = "unbounded";
+  if ((run.termination === "converged" || run.termination === "exhausted") && incumbent.found && objectiveIsUnbounded(A, c)) {
+    run.termination = "unbounded";
   }
 
-  const footer = localizationFooter(termination, trace.count, performance.now() - startTime, {
+  return run.finish({
     exhausted: incumbent.found ? ["Localizing set exhausted", "Nothing better than the incumbent remains, so it is optimal"] : ["No feasible point inside the initial box"],
     unbounded: ["Stopped on the initial box boundary", "The objective is unbounded over this region: the method only searches inside the initial box"],
   });
-  trace.closeOnIncumbent(incumbent, upperBound);
-  return trace.result(localizationLogHeader(n), footer);
 }
 
 // The box polygon clipped by every cut learned so far (the box's own rows are the polygon already).
@@ -233,7 +205,7 @@ function computeQueryPoint(kind: QueryPoint, rows: LpRow[], n: number): QueryRes
 
   const hessian = barrierHessian(rows, center, kind === "volumetric", n);
   if (!hessian) return null;
-  const P = invertSymmetric(hessian.H, n);
+  const P = invertSymmetric(hessian.metric, n);
   if (!P) return null;
 
   return { point: center, P, leverage: hessian.leverage };
@@ -287,9 +259,9 @@ function volumetricBarrier(rows: LpRow[], x: Float64Array, n: number): number {
   return logDet === null ? Infinity : 0.5 * logDet;
 }
 
-// H(x), plus (for Vaidya) each face's leverage score
-// sigma_i = a_i' H^-1 a_i / s_i^2 and the leverage-weighted matrix Q that
-// stands in for the volumetric barrier's Hessian.
+// The barrier's metric at x: H(x) itself for the analytic center; for Vaidya each face's leverage
+// score sigma_i = a_i' H^-1 a_i / s_i^2 and the leverage-weighted matrix Q that stands in for the
+// volumetric barrier's Hessian.
 function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean, n: number) {
   const slacks = slacksOf(rows, x, n);
   if (!slacks) return null;
@@ -300,18 +272,18 @@ function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean, n: nu
 
   const leverage = new Float64Array(rows.length);
   for (let i = 0; i < rows.length; i++) {
-    leverage[i] = quadraticForm(inverse, rows[i]!, n) / (slacks[i]! * slacks[i]!);
+    leverage[i] = fastQuadraticForm(inverse, rows[i]!, n) / (slacks[i]! * slacks[i]!);
   }
-  if (!weighted) return { H, leverage, slacks };
-  return { H: weightedGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), leverage, slacks };
+  if (!weighted) return { metric: H, leverage, slacks };
+  return { metric: weightedGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), leverage, slacks };
 }
 
 // a' M a for symmetric M; the two-variable form is kept verbatim so those results stay bit-identical
-function quadraticForm(M: Float64Array, a: LpRow, n: number): number {
+function fastQuadraticForm(M: Float64Array, a: LpRow, n: number): number {
   if (n === 2) {
     return M[0]! * a[0]! * a[0]! + 2 * M[1]! * a[0]! * a[1]! + M[3]! * a[1]! * a[1]!;
   }
-  return denseQuadraticForm(M, a, n);
+  return quadraticForm(M, a, n);
 }
 
 // log det H for symmetric positive definite H, or null otherwise.
@@ -389,7 +361,7 @@ function barrierCenter(rows: LpRow[], start: Float64Array, volumetric: boolean, 
     (x) => {
       const hessian = barrierHessian(rows, x, volumetric, n);
       if (!hessian) return null;
-      const inverse = invertSymmetric(hessian.H, n);
+      const inverse = invertSymmetric(hessian.metric, n);
       if (!inverse) return null;
       const gradient = new Float64Array(n);
       for (let i = 0; i < rows.length; i++) {

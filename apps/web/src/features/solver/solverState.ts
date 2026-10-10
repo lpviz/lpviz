@@ -25,9 +25,9 @@ export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
 // Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
 // scrolled into view; plain arrays satisfy this shape.
-type VirtualRowBlocks = {
+export type LazyList<T> = {
   length: number;
-  at(index: number): ResultTextBlock | undefined;
+  at(index: number): T | undefined;
 };
 
 // Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
@@ -131,7 +131,7 @@ export type SolverState = {
   resultVirtualHeader: string | null;
   resultVirtualFooter: string | null;
   resultVirtualShowEmpty: boolean;
-  resultVirtualRows: VirtualRowBlocks;
+  resultVirtualRows: LazyList<ResultTextBlock>;
   resultMaxLineChars: number;
 
   solverMode: SolverMode;
@@ -217,10 +217,6 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
   traceEnabled: () => TRACE_DIRTY,
 };
 
-// Solver default start: IPM/PDHG begin at the origin, and Phase-1 simplex's
-// first displayed iterate is the origin too (all structural variables start
-// nonbasic), so one marker default is truthful for all three.
-
 /** Whether the draggable start marker applies to the current solver/problem. */
 function solverStartPointApplies(state: EditorState & SolverState): boolean {
   if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return false;
@@ -232,8 +228,10 @@ function solverStartPointApplies(state: EditorState & SolverState): boolean {
 
 /**
  * The marker position to draw: the dragged point (snapped to the nearest region vertex in simplex
- * mode, which is how simplex consumes it), or the solver default when nothing has been dragged yet.
- * Null when hidden.
+ * mode, which is how simplex consumes it), or the solver default when nothing has been dragged
+ * yet. The default is the origin for all three: IPM and PDHG begin there, and Phase-1 simplex's
+ * first displayed iterate is the origin too (all structural variables start nonbasic). Null when
+ * hidden.
  */
 export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
   if (!solverStartPointApplies(state)) return null;

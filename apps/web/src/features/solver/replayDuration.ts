@@ -14,10 +14,9 @@ export function clampReplayDurationMs(durationMs: number): number {
   return Math.min(MAX_REPLAY_DURATION_MS, Math.max(MIN_REPLAY_DURATION_MS, durationMs));
 }
 
-// Move one rung. A value that is not itself a rung (an out-of-range stored
-// setting, or the hidden speed slider's old 1..100 range) snaps to the nearest
-// rung first, so the first press always lands on the ladder instead of
-// drifting alongside it.
+// Move one rung. A value that is not itself a rung (a stored setting from a link or an older
+// version) snaps to the nearest rung first, so the first press always lands on the ladder instead
+// of drifting alongside it.
 export function stepReplayDurationMs(durationMs: number, direction: 1 | -1): number {
   const current = clampReplayDurationMs(durationMs);
   let nearest = 0;

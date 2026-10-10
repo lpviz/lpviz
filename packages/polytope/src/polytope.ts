@@ -1,13 +1,8 @@
 import type { Ray } from "@lpviz/math/bounds";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "./constraints";
-import { classifyPolytope, verticesFromConstraints } from "./halfSpaces";
+import { classifyPolytope, type PolytopeKind, verticesFromConstraints } from "./halfSpaces";
 import { buildOpenBoundaryRays, hasOpenBoundaryClosure } from "./openChain";
-
-// What a drawing's constraints bound: "bounded" and "unbounded" have feasible points (the latter
-// recedes in some direction), "empty" has none, and "degenerate" is a region with no interior to
-// speak of — nothing drawn yet, or feasible points that do not span a polygon.
-export type PolytopeKind = "bounded" | "unbounded" | "empty" | "degenerate";
 
 /** The feasible region of the drawn problem: its constraints, their vertices, and the open chain's rays. */
 export interface Polytope {

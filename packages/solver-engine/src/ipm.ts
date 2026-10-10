@@ -69,7 +69,6 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   const ds = new Float64Array(m);
   const dy = new Float64Array(m);
 
-  let iteration = 0;
   let converged = false;
   let failureMessage: string | null = null;
   const startTime = performance.now();
@@ -83,7 +82,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
     }
   };
 
-  while (++iteration <= maxit) {
+  while (trace.count < maxit) {
     matVec(A, x, ax);
     transposedMatVec(A, y, aty);
 

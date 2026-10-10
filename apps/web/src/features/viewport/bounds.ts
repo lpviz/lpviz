@@ -16,10 +16,8 @@ type ZoomFitInputs = {
   objectiveHidden: boolean;
 };
 
-// Accumulates min/max in a single pass with no intermediate arrays: the old
-// per-point {x, y} objects plus Math.min(...spread) over every iterate both
-// allocated heavily and, above ~125k z values (V8's argument limit), threw a
-// RangeError that broke zoom-to-fit outright at high solver iteration counts.
+// One pass over every drawn point with no intermediate arrays: a path can hold 100k iterates,
+// more than Math.min(...spread) accepts.
 export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePath, traceBuffer, objectiveVector, currentObjective, objectiveHidden }: ZoomFitInputs) {
   let minX = Infinity;
   let maxX = -Infinity;
@@ -55,13 +53,7 @@ export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePat
     }
   };
 
-  for (const vertex of vertices) {
-    if (!vertex) {
-      valid = false;
-      break;
-    }
-    addPoint(vertex[0], vertex[1]);
-  }
+  for (const vertex of vertices) addPoint(vertex[0], vertex[1]);
   addPath(iteratePath);
   addPath(originalIteratePath);
   for (const traceEntry of traceBuffer) {

@@ -35,11 +35,9 @@ export type RotationController = {
   rearm: () => void;
 };
 
-// Owns the objective-rotation loop: a frame-paced RAF driver that, while
-// `rotateObjectiveMode` is set, steps the objective by one angle increment and
-// re-solves — at most one solve in flight at a time. Extracted from
-// solverActions so the loop's timing + single-flight + cancellation logic lives
-// in one testable place instead of six module-scoped variables.
+// The objective-rotation loop: a frame-paced RAF driver that, while `rotateObjectiveMode` is
+// set, steps the objective by one angle increment and re-solves, with at most one solve in
+// flight at a time.
 export function createRotationController({ solve, syncTraceCapacity }: { solve: () => Promise<void>; syncTraceCapacity: () => void }): RotationController {
   let rafId: number | null = null;
   let lastFrameTime: number | null = null;

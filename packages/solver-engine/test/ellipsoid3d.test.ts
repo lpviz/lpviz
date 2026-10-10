@@ -24,7 +24,7 @@ describe("ellipsoid family in three variables", () => {
         expect(satisfiesAll(planes, last)).toBe(true);
         expect(objectiveValue(c, last)).toBeCloseTo(bruteForceOptimum(c, vertices), 3);
         // packed layout: centre (3) + upper triangle of P (6)
-        expect(r.ellipsoids!.length).toBe(r.iterations.length * ellipsoidStride(3));
+        expect(r.ellipsoids!.length).toBe(r.iterates.length * ellipsoidStride(3));
         expect(rowsOf(r)[0]!.point.length).toBe(3);
         expect(r.log[0]!.header).toContain(" z ");
       }
@@ -57,7 +57,7 @@ describe("ellipsoid family in three variables", () => {
     expect(ellipsoidStride(2)).toBe(5);
     expect(localizingSetStride(2)).toBe(2);
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), { ...shared, deepCuts: true });
-    expect(r.ellipsoids!.length).toBe(r.iterations.length * 5);
+    expect(r.ellipsoids!.length).toBe(r.iterates.length * 5);
     expect(rowsOf(r)[0]!.point.length).toBe(2);
     const q = cuttingPlane(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), { ...shared, queryPoint: "analytic" });
     expect(q.localizingSetPoints!.length).toBe(q.localizingSetOffsets![q.localizingSetOffsets!.length - 1]! * 2);

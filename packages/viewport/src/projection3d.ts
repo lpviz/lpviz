@@ -37,9 +37,9 @@ const projectionPlane = new Plane();
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
 
-// The package's one scratch camera, posed from the snapshot; every reader
-// configures it first and nothing relies on its state across calls.
-// Defaults to the package's scratch camera; callers that own a camera pass it and the Vector3 that should hold the target.
+// Poses a camera from the snapshot: by default the package's one scratch camera, which every
+// reader configures first and nothing relies on across calls; a caller that owns a camera passes
+// it and the Vector3 that should hold the target.
 export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderSnapshot, camera = projectionCamera, target = projectionTarget): PerspectiveCamera {
   camera.fov = snapshot.perspective.fov;
   camera.aspect = snapshot.perspective.aspect;
@@ -53,7 +53,7 @@ export function configurePerspectiveCameraFromSnapshot(snapshot: ViewportRenderS
   return camera;
 }
 
-const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DPointerOptions): PointXY => {
+function clamp3DInteractionPoint(point: PointXY, snapshot: ViewportRenderSnapshot, rect: ViewportRect, options: Viewport3DPointerOptions): PointXY {
   if (!options.interacting) {
     return point;
   }
@@ -72,7 +72,7 @@ const clamp3DInteractionPoint = (point: PointXY, snapshot: ViewportRenderSnapsho
     x: Math.max(snapshot.target.x - bound, Math.min(snapshot.target.x + bound, point.x)),
     y: Math.max(snapshot.target.y - bound, Math.min(snapshot.target.y + bound, point.y)),
   };
-};
+}
 
 export function projectWorldPosition3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, position: PointXYZ): PointXY {
   configurePerspectiveCameraFromSnapshot(snapshot);

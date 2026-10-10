@@ -1,4 +1,4 @@
-import type { HandleUndoRedo, SaveHistory } from "@/features/history/historyService";
+import type { HistoryService } from "@/features/history/historyService";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 // The editor's pointer and keyboard behaviour as the gesture layer sees it: one implementation per
@@ -21,9 +21,10 @@ export type EditorTools = {
 
 export type EditorToolsDeps = {
   viewportApi: ViewportApi;
-  saveHistory: SaveHistory;
-  sendPolytope: () => void;
-  handleUndoRedo: HandleUndoRedo;
+  saveHistory: HistoryService["save"];
+  /** re-derive the polytope from the drawing and re-solve */
+  derivePolytope: () => void;
+  handleUndoRedo: HistoryService["handleUndoRedo"];
   /** Re-solve the active solver after the start marker moved or reset. */
   onSolverStartMoved: () => void;
   showReplayDuration: (durationMs: number) => void;

@@ -4,23 +4,27 @@
 
 import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import type { PolytopeKind } from "./polytope";
+import { TOLERANCE } from "./constraints";
 
-const TOLERANCE = 1e-6;
+// What a drawing's constraints bound: "bounded" and "unbounded" have feasible points (the latter
+// recedes in some direction), "empty" has none, and "degenerate" is a region with no interior to
+// speak of — nothing drawn yet, or feasible points that do not span a polygon.
+export type PolytopeKind = "bounded" | "unbounded" | "empty" | "degenerate";
 
-function satisfiesAll(point: Vec, constraints: readonly Constraint[], tol: number): boolean {
-  return constraints.every(([A, B, C]) => A * point[0] + B * point[1] <= C + tol);
+/** Whether the point lies in every constraint's half-plane, boundary included. */
+export function satisfiesAll(point: Vec, constraints: readonly Constraint[]): boolean {
+  return constraints.every(([A, B, C]) => A * point[0] + B * point[1] <= C + TOLERANCE);
 }
 
-// Where two constraint boundaries cross, or null when they are parallel within tol.
-function intersectBoundaries([A1, B1, C1]: Constraint, [A2, B2, C2]: Constraint, tol: number): Vec | null {
+// Where two constraint boundaries cross, or null when they are parallel.
+function intersectBoundaries([A1, B1, C1]: Constraint, [A2, B2, C2]: Constraint): Vec | null {
   const det = A1 * B2 - A2 * B1;
-  if (Math.abs(det) < tol) return null;
+  if (Math.abs(det) < TOLERANCE) return null;
   return [(C1 * B2 - C2 * B1) / det, (A1 * C2 - A2 * C1) / det];
 }
 
 /** A point satisfying every constraint, or null when there is none (or no constraint). */
-function findFeasiblePoint(constraints: readonly Constraint[], tol = TOLERANCE): Vec | null {
+function findFeasiblePoint(constraints: readonly Constraint[]): Vec | null {
   if (constraints.length === 0) {
     return null;
   }
@@ -34,27 +38,23 @@ function findFeasiblePoint(constraints: readonly Constraint[], tol = TOLERANCE):
     candidates.push(basePoint);
     for (const step of [1, 10, 100]) candidates.push([basePoint[0] - A * step, basePoint[1] - B * step]);
     for (let j = i + 1; j < constraints.length; j++) {
-      const point = intersectBoundaries(constraints[i]!, constraints[j]!, tol);
+      const point = intersectBoundaries(constraints[i]!, constraints[j]!);
       if (point) candidates.push(point);
     }
   }
 
   for (const candidate of candidates) {
-    if (satisfiesAll(candidate, constraints, tol)) {
-      return candidate;
-    }
+    if (satisfiesAll(candidate, constraints)) return candidate;
   }
 
   return null;
 }
 
 /** A point strictly inside every constraint, or null. */
-export function findStrictFeasiblePoint(constraints: readonly Constraint[], tol = TOLERANCE): Vec | null {
-  const feasiblePoint = findFeasiblePoint(constraints, tol);
-  if (!feasiblePoint) {
-    return null;
-  }
-  const strictlyInside = (p: Vec) => constraints.every(([A, B, C]) => A * p[0] + B * p[1] < C - tol);
+export function findStrictFeasiblePoint(constraints: readonly Constraint[]): Vec | null {
+  const feasiblePoint = findFeasiblePoint(constraints);
+  if (!feasiblePoint) return null;
+  const strictlyInside = (p: Vec) => constraints.every(([A, B, C]) => A * p[0] + B * p[1] < C - TOLERANCE);
   if (strictlyInside(feasiblePoint)) {
     return feasiblePoint;
   }
@@ -76,11 +76,11 @@ export function findStrictFeasiblePoint(constraints: readonly Constraint[], tol 
 
 // The unit directions along each constraint boundary, both ways; every
 // extreme ray of the recession cone {d : A·d <= 0} lies along one of them.
-function boundaryDirections(constraints: readonly Constraint[], tol: number): Vec[] {
+function boundaryDirections(constraints: readonly Constraint[]): Vec[] {
   const directions: Vec[] = [];
   for (const [A, B] of constraints) {
     const norm = Math.hypot(A, B);
-    if (norm <= tol) continue;
+    if (norm <= TOLERANCE) continue;
     directions.push([-B / norm, A / norm], [B / norm, -A / norm]);
   }
   return directions;
@@ -88,8 +88,8 @@ function boundaryDirections(constraints: readonly Constraint[], tol: number): Ve
 
 // The recession cone of a planar region is nontrivial iff one of its boundary
 // directions satisfies every constraint.
-function hasNontrivialRecessionDirection(constraints: readonly Constraint[], tol: number): boolean {
-  return boundaryDirections(constraints, tol).some(([dx, dy]) => constraints.every(([A2, B2]) => A2 * dx + B2 * dy <= tol));
+function hasNontrivialRecessionDirection(constraints: readonly Constraint[]): boolean {
+  return boundaryDirections(constraints).some(([dx, dy]) => constraints.every(([A2, B2]) => A2 * dx + B2 * dy <= TOLERANCE));
 }
 
 /**
@@ -105,7 +105,7 @@ export function classifyPolytope(constraints: readonly Constraint[], vertices: r
   }
   if (closedChain) {
     if (vertices.length >= 3) {
-      return hasNontrivialRecessionDirection(constraints, TOLERANCE) ? "unbounded" : "bounded";
+      return hasNontrivialRecessionDirection(constraints) ? "unbounded" : "bounded";
     }
     return findFeasiblePoint(constraints) ? "degenerate" : "empty";
   }
@@ -114,20 +114,20 @@ export function classifyPolytope(constraints: readonly Constraint[], vertices: r
 }
 
 /** The vertices of the region, counterclockwise about their centroid. */
-export function verticesFromConstraints(constraints: readonly Constraint[], tol = TOLERANCE): Vec[] {
+export function verticesFromConstraints(constraints: readonly Constraint[]): Vec[] {
   const intersections: Vec[] = [];
   const n = constraints.length;
 
   for (let i = 0; i < n - 1; i++) {
     for (let j = i + 1; j < n; j++) {
-      const point = intersectBoundaries(constraints[i]!, constraints[j]!, tol);
-      if (point && satisfiesAll(point, constraints, tol)) intersections.push(point);
+      const point = intersectBoundaries(constraints[i]!, constraints[j]!);
+      if (point && satisfiesAll(point, constraints)) intersections.push(point);
     }
   }
 
   const unique: Vec[] = [];
   intersections.forEach(([x, y]) => {
-    const existing = unique.find(([ux, uy]) => Math.hypot(ux - x, uy - y) < tol);
+    const existing = unique.find(([ux, uy]) => Math.hypot(ux - x, uy - y) < TOLERANCE);
     if (!existing) unique.push([x, y]);
   });
 
@@ -143,19 +143,15 @@ export function verticesFromConstraints(constraints: readonly Constraint[], tol 
 }
 
 /** Whether maximizing `objective` over the region has no optimum: the region recedes along a direction the objective improves on. */
-export function isObjectiveDirectionUnbounded(constraints: readonly Constraint[], objective: Vec, tol = TOLERANCE): boolean {
-  if (constraints.length === 0) {
-    return false;
-  }
+export function isObjectiveDirectionUnbounded(constraints: readonly Constraint[], objective: Vec): boolean {
+  if (constraints.length === 0) return false;
 
   const [cx, cy] = objective;
   const objectiveNorm = Math.hypot(cx, cy);
-  if (objectiveNorm <= tol) {
-    return false;
-  }
+  if (objectiveNorm <= TOLERANCE) return false;
 
-  const candidateDirections = boundaryDirections(constraints, tol);
+  const candidateDirections = boundaryDirections(constraints);
   candidateDirections.push([cx / objectiveNorm, cy / objectiveNorm]);
-  // `!(… <= tol)` rather than `> tol` so a NaN dot still falls through to the constraint test
-  return candidateDirections.some(([dx, dy]) => !(cx * dx + cy * dy <= tol) && constraints.every(([A, B]) => A * dx + B * dy <= tol));
+  // `!(… <= TOLERANCE)` rather than `> TOLERANCE` so a NaN dot still falls through to the constraint test
+  return candidateDirections.some(([dx, dy]) => !(cx * dx + cy * dy <= TOLERANCE) && constraints.every(([A, B]) => A * dx + B * dy <= TOLERANCE));
 }

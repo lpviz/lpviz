@@ -20,7 +20,7 @@ import type { EditorToolsDeps } from "./editorTools";
 type ApplyEditorTransition = (transition: EditorTransition) => void;
 
 // Every accepted edit is its own undoable step; the derived polytope is cleared for the re-derive.
-function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope }: Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
+function createEditorTransitionApplier({ viewportApi, saveHistory, derivePolytope }: Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "derivePolytope">): ApplyEditorTransition {
   return (transition) => {
     if (transition.kind === "reject-nonconvex") {
       // The problem panel's message slot (the same one that shows "Nonconvex");
@@ -32,7 +32,7 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
     if (transition.kind === "edit") {
       saveHistory();
       setState({ ...transition.result, polytope: null, inequalitiesMessage: null, highlightIndex: null });
-      sendPolytope();
+      derivePolytope();
       updatePanControls(viewportApi);
       return;
     }
@@ -40,7 +40,7 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
     if (transition.kind === "select-objective") {
       saveHistory();
       setState({ objectiveVector: transition.objectiveVector });
-      sendPolytope();
+      derivePolytope();
       updatePanControls(viewportApi);
     }
   };

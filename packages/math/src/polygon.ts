@@ -4,6 +4,10 @@ import type { Vec } from "./types";
 
 const FULL_TURN = 2 * Math.PI;
 const TURNING_TOLERANCE = 1e-6;
+// the cross product below which three points are collinear
+const CONVEXITY_TOLERANCE = 1e-9;
+// the area below which a polygon is flat
+const AREA_TOLERANCE = 1e-12;
 
 /** The turn at `p1` between the edges p0→p1 and p1→p2: their cross product, dot product and lengths. */
 export function turn(p0: Vec, p1: Vec, p2: Vec) {
@@ -42,13 +46,13 @@ function isConvexSequence(points: readonly Vec[], closed: boolean, tol: number):
 }
 
 /** A polyline that is part of the boundary of some convex polygon. */
-export function isConvexChain(points: readonly Vec[], tol = 1e-9): boolean {
-  return isConvexSequence(points, false, tol);
+export function isConvexChain(points: readonly Vec[]): boolean {
+  return isConvexSequence(points, false, CONVEXITY_TOLERANCE);
 }
 
 /** A closed polygon that is convex (and therefore simple). */
-export function isConvexPolygon(points: readonly Vec[], tol = 1e-9): boolean {
-  return isConvexSequence(points, true, tol);
+export function isConvexPolygon(points: readonly Vec[]): boolean {
+  return isConvexSequence(points, true, CONVEXITY_TOLERANCE);
 }
 
 /** The mean of the points, coordinate by coordinate. */
@@ -62,7 +66,7 @@ export function centroid(points: readonly Vec[]): Vec {
   return sums.map((sum) => sum / points.length) as Vec;
 }
 
-export function signedArea(points: readonly Vec[], tol = 1e-12): number {
+export function signedArea(points: readonly Vec[]): number {
   if (points.length < 3) return 0;
 
   let area = 0;
@@ -73,7 +77,7 @@ export function signedArea(points: readonly Vec[], tol = 1e-12): number {
   }
 
   const normalizedArea = area / 2;
-  return Math.abs(normalizedArea) <= tol ? 0 : normalizedArea;
+  return Math.abs(normalizedArea) <= AREA_TOLERANCE ? 0 : normalizedArea;
 }
 
 /** Whether `point` lies inside the polygon `points` (false for fewer than three points). */
