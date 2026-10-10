@@ -9,5 +9,5 @@ export type AppContext = {
     history: HistoryService;
     polytope: PolytopeService;
   };
-  layout: Pick<Layout, "getSidebarWidth" | "getViewportSidebarWidth" | "isMobileLayout" | "onResizeStart">;
+  layout: Pick<Layout, "getViewportSidebarWidth" | "onResizeStart">;
 };

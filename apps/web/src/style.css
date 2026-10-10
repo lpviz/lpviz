@@ -67,8 +67,18 @@ body {
     Problem Gallery
     ================================ */
 .problem-gallery {
+  /* the strip's geometry: an item, the gap between items, the open strip's height, and the width
+     the items need (the count comes from the gallery) against the width the canvas allows, which
+     keeps clear of the toolbar at the right and, the strip being centred, as much at the left */
+  --item-width: 84px;
+  --item-gap: 8px;
+  --gallery-expanded-height: 96px;
+  --strip-width: calc(var(--gallery-items) * var(--item-width) + (var(--gallery-items) - 1) * var(--item-gap) + 16px);
+  --strip-max: calc(100vw - var(--sidebar-width) - 120px);
   position: fixed;
   top: 0;
+  /* centred over the canvas, beside the sidebar */
+  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
   z-index: 90;
   display: block;
   width: 44px;
@@ -91,8 +101,8 @@ body {
 }
 
 .problem-gallery.is-expanded {
-  width: var(--problem-gallery-expanded-width);
-  height: var(--problem-gallery-expanded-height, 96px);
+  width: min(var(--strip-width), var(--strip-max));
+  height: var(--gallery-expanded-height);
   background: rgba(250, 250, 250, 0.92);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
 }
@@ -146,7 +156,7 @@ body {
   display: flex;
   align-items: flex-start;
   max-width: inherit;
-  gap: 8px;
+  gap: var(--item-gap);
   padding: 8px;
   padding-top: 22px;
   overflow-x: auto;
@@ -176,8 +186,8 @@ body {
   display: grid;
   grid-template-rows: 36px 13px;
   place-items: center;
-  flex: 0 0 84px;
-  width: 84px;
+  flex: 0 0 var(--item-width);
+  width: var(--item-width);
   height: 64px;
   box-sizing: border-box;
   padding: 4px 6px;
@@ -230,7 +240,7 @@ body {
   position: fixed;
   top: 0;
   left: 0;
-  width: 450px;
+  width: var(--sidebar-width, 450px);
   height: 100%;
   box-sizing: border-box;
   background-color: rgba(240, 240, 240, 1);
@@ -280,7 +290,7 @@ body {
 #sidebarHandle {
   position: fixed;
   top: 0;
-  left: 450px;
+  left: var(--sidebar-width, 450px);
   width: 5px;
   height: 100%;
   cursor: ew-resize;
@@ -915,25 +925,20 @@ body {
   }
 
   .problem-gallery {
+    --item-width: 76px;
+    --item-gap: 6px;
+    --gallery-expanded-height: 88px;
     top: env(safe-area-inset-top, 0);
-  }
-
-  .problem-gallery.is-expanded {
-    width: min(var(--problem-gallery-expanded-width), calc(100vw - 24px));
-    height: 88px;
   }
 
   .problem-gallery__items {
     height: 88px;
     padding: 6px;
     padding-top: 20px;
-    gap: 6px;
   }
 
   .problem-gallery__item {
     grid-template-rows: 32px 12px;
-    flex-basis: 76px;
-    width: 76px;
     height: 58px;
     padding: 3px 5px;
     font-size: 0.62rem;
@@ -948,7 +953,7 @@ body {
     top: auto;
     bottom: 0;
     left: 0;
-    width: 100vw !important;
+    width: 100vw;
     height: var(--mobile-sidebar-height, 42dvh);
     border-right: 0;
     border-top: 1px solid #bbb;
@@ -1039,7 +1044,7 @@ body {
   #sidebarHandle {
     top: auto;
     bottom: var(--mobile-sidebar-height, 42dvh);
-    left: 0 !important;
+    left: 0;
     width: 100vw;
     height: 12px;
     cursor: ns-resize;

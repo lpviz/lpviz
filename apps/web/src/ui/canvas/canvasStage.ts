@@ -37,7 +37,7 @@ export function createCanvasStage(parent: HTMLElement) {
       showReplayDuration: replayDuration.show,
       finishOpenRegion: ctx.actions.finishOpenRegion,
     });
-    const gallery = mountProblemGallery(main, ctx);
+    const gallery = mountProblemGallery(main, ctx.actions);
     const toolbar = mountToolbar(main, ctx.actions);
     const help = mountHelpButton(main, viewport);
     const handle = el("div", {
@@ -52,12 +52,6 @@ export function createCanvasStage(parent: HTMLElement) {
       },
     });
     main.append(handle);
-    const updateLayout = () => {
-      handle.style.left = ctx.layout.isMobileLayout() ? "0" : `${ctx.layout.getSidebarWidth()}px`;
-      gallery.updateLayout();
-    };
-    updateLayout();
-    ctx.actions.setSidebarWidth(ctx.layout.getViewportSidebarWidth());
     destroyChrome = () => {
       detachShortcuts();
       detachInteractions();
@@ -66,7 +60,6 @@ export function createCanvasStage(parent: HTMLElement) {
       help.destroy();
       replayDuration.destroy();
     };
-    return { updateLayout };
   };
 
   return {
