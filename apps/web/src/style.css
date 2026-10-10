@@ -57,6 +57,10 @@ body {
   height: 100%;
   outline: none;
   touch-action: none;
+  /* a long press is a press, not a selection or a callout */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* ================================
