@@ -1,4 +1,5 @@
-import type { DrawingPhase } from "@/features/polytope-editor/editorState";
+import type { State } from "@/features/core/store";
+import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
 import { hasCoarsePointer } from "@/ui/pointer";
 
@@ -15,8 +16,9 @@ const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
       { label: "Insert a vertex", desc: "double-click an edge", touch: "double-tap an edge" },
       { label: "Move a vertex", desc: "drag it" },
       { label: "Move a constraint", desc: "drag its edge line" },
-      { label: "Delete a vertex", desc: "right-click it", touch: null },
-      { label: "Finish the region", desc: "press <kbd>Enter</kbd>", touch: { label: "Close the region", desc: "tap the first vertex" } },
+      { label: "Delete a vertex", desc: "right-click it", touch: "press and hold it" },
+      { label: "Close the region", desc: "click the first vertex", touch: "tap the first vertex" },
+      { label: "Leave it open", desc: "press <kbd>Enter</kbd>", touch: "tap <strong>leave it open</strong> in the console" },
     ],
   ],
   [
@@ -36,7 +38,7 @@ const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
       { label: "Animation length", desc: "press <kbd>+</kbd> / <kbd>-</kbd>", touch: null },
       { label: "Keep a trace", desc: "toggle the <strong>Trace</strong> box" },
       { label: "Tune a solver", desc: "adjust its sliders" },
-      { label: "Move the start", desc: "drag the gray ring; right-click it to reset", touch: "drag the gray ring" },
+      { label: "Move the start", desc: "drag the gray ring; right-click it to reset", touch: "drag the gray ring; press and hold it to reset" },
     ],
   ],
   [
@@ -100,18 +102,35 @@ export function usageTipsList(): HTMLDivElement {
   return list;
 }
 
-// the hint per drawing phase, for a pointer that clicks and a finger that taps
-const DRAWING_HINTS: Record<DrawingPhase, [click: string, tap: string]> = {
+// the hint per drawing phase, for a pointer that clicks and a finger that taps; sketching has its own
+const DRAWING_HINTS: Record<Exclude<DrawingPhase, "sketching_polytope">, [click: string, tap: string]> = {
   empty: ["Click the grid to add vertices.", "Tap the grid to add vertices."],
-  sketching_polytope: ["Keep clicking to add vertices — click the first one or press Enter to close.", "Keep tapping to add vertices — tap the first one to close."],
   awaiting_objective: ["Click anywhere to set the objective direction.", "Tap anywhere to set the objective direction."],
   objective_preview: ["Click to lock in the objective direction.", "Tap to lock in the objective direction."],
   ready_for_solvers: ["Pick a solver above to solve.", "Pick a solver above to solve."],
 };
 
-/** Single contextual line shown in the sidebar terminal before any result. */
-export function usageHint(phase: DrawingPhase): HTMLDivElement {
-  return el("div", { id: "usageHint", text: DRAWING_HINTS[phase][hasCoarsePointer() ? 1 : 0] });
+// The sketching hint grows with the drawing: leaving the region open takes two vertices, closing
+// it three. Enter leaves it open; a finger, which has no Enter, gets a link that does the same.
+function sketchingHint(vertexCount: number, touch: boolean, finishOpenRegion: () => void): (string | Node)[] {
+  const add = touch ? "Keep tapping to add vertices" : "Keep clicking to add vertices";
+  if (vertexCount < 2) return [`${add}.`];
+  const close = touch ? "tap the first one to close" : "click the first one to close";
+  const lead = vertexCount < 3 ? `${add}, or ` : `${add} — ${close}, or `;
+  if (!touch) return [`${lead}press Enter to leave it open.`];
+  const link = el("button", { className: "usage-hint__link", text: "leave it open", attrs: { type: "button" } });
+  link.addEventListener("click", finishOpenRegion);
+  // the full stop stays with the link rather than wrapping onto a line of its own
+  return [lead, el("span", { className: "usage-hint__action" }, [link, document.createTextNode(".")])];
+}
+
+/** The contextual line shown in the sidebar terminal before any result, worded for the primary input. */
+export function usageHint(state: State, finishOpenRegion: () => void): HTMLDivElement {
+  const touch = hasCoarsePointer();
+  const phase = computeDrawingPhase(state);
+  const hint = el("div", { id: "usageHint" });
+  hint.append(...(phase === "sketching_polytope" ? sketchingHint(state.vertices.length, touch, finishOpenRegion) : [DRAWING_HINTS[phase][touch ? 1 : 0]]));
+  return hint;
 }
 
 /** The advice under the hint on a phone or a touch-only device (the stylesheet shows it there). */

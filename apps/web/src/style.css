@@ -371,6 +371,24 @@ body {
   padding: 14px 10px;
 }
 
+/* the hint's one action: a link in its running text, not one of the sidebar's buttons */
+#sidebar #usageHint .usage-hint__link {
+  all: unset;
+  color: #fff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+#sidebar #usageHint .usage-hint__link:focus-visible {
+  outline: 1px solid #fff;
+  outline-offset: 2px;
+}
+
+.usage-hint__action {
+  white-space: nowrap;
+}
+
 /* under the hint, for a phone-sized portrait window or a touch-only device */
 .desktop-note {
   display: none;

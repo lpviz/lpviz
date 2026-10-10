@@ -1,4 +1,5 @@
-import { createDragActions, updatePanControls } from "./canvasDragActions";
+import { updatePanControls } from "@/features/polytope-editor/editorActions";
+import { createDragActions } from "./canvasDragActions";
 import { createEditActions } from "./canvasEditActions";
 import type { EditorTools, EditorToolsDeps } from "./editorTools";
 
