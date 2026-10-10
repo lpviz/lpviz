@@ -1,5 +1,5 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { DEFAULT_Z_SCALE, getState, setState } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
@@ -11,8 +11,8 @@ import {
   worldDistanceForPixels,
 } from "@/features/polytope-editor/hitTesting";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
-import type { ViewportApi } from "@/features/viewport/runtime";
 import { nearestEdge } from "@lpviz/math/polygon";
+import { clampZScale, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 import type { EditorToolsDeps } from "./editorTools";
@@ -32,7 +32,6 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
     if (transition.kind === "edit") {
       saveHistory();
       setState({ ...transition.result, polytope: null, inequalitiesMessage: null, highlightIndex: null });
-      viewportApi.draw();
       sendPolytope();
       updatePanControls(viewportApi);
       return;
@@ -42,7 +41,6 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
       saveHistory();
       setState({ objectiveVector: transition.objectiveVector });
       sendPolytope();
-      viewportApi.draw();
       updatePanControls(viewportApi);
     }
   };
@@ -69,7 +67,6 @@ function createPointerEditActions(
       swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
-      viewportApi.draw();
       return;
     }
 
@@ -117,7 +114,7 @@ function createPointerEditActions(
       }
     }
 
-    const rayIndex = findBoundaryRayNearPoint(viewportApi, logicalMouse);
+    const rayIndex = findBoundaryRayNearPoint(viewportApi, state, logicalMouse);
     if (rayIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-boundary-ray-point",
@@ -154,7 +151,7 @@ function createPointerEditActions(
 }
 
 // shift+wheel in 3D scales the z axis
-const createWheelHandler = (viewportApi: ViewportApi) => (event: WheelEvent) => {
+const handleWheel = (event: WheelEvent) => {
   const { is3DMode, isTransitioning3D, zScale } = getState();
   if (!is3DMode || isTransitioning3D || !event.shiftKey) return;
 
@@ -165,9 +162,7 @@ const createWheelHandler = (viewportApi: ViewportApi) => (event: WheelEvent) => 
   if (dominantDelta === 0) return;
 
   const effectiveScale = (zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
-  const clampedScale = Math.max(0.01, Math.min(100, effectiveScale));
-  setState({ zScale: clampedScale });
-  viewportApi.draw();
+  setState({ zScale: clampZScale(effectiveScale) });
 };
 
 const isTextEntryTarget = (target: EventTarget | null) =>
@@ -222,7 +217,6 @@ function createKeyDownHandler(
     if (event.key.toLowerCase() === "h") {
       const { objectiveHidden } = getState();
       setState({ objectiveHidden: !objectiveHidden });
-      viewportApi.draw();
     }
     // "=" and "_" are the unshifted/shifted twins of "+" and "-", so both
     // layouts of each key work. Checked after the modifier guard above so
@@ -245,7 +239,7 @@ export function createEditActions(deps: EditorToolsDeps) {
   const applyEditorTransition = createEditorTransitionApplier(deps);
   return {
     ...createPointerEditActions(deps, applyEditorTransition),
-    handleWheel: createWheelHandler(deps.viewportApi),
+    handleWheel,
     handleKeyDown: createKeyDownHandler(deps, applyEditorTransition),
   };
 }

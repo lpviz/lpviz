@@ -1,5 +1,4 @@
 import type { PointXYZ } from "@lpviz/math/types";
-import type { ViewportTransitionDirection } from "@lpviz/viewport/transition";
 import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 import { WORLD_ANCHORED_DIRTY, type ViewportDirtyFlags } from "./dirtyFlags";
 
@@ -9,13 +8,11 @@ export type ViewportState = {
   viewAngle: PointXYZ;
   zScale: number;
   isTransitioning3D: boolean;
-  transitionStartTime: number;
-  transition3DStartAngles: PointXYZ;
-  transition3DEndAngles: PointXYZ;
-  transitionDirection: ViewportTransitionDirection | null;
-  transitionProgress: number;
   isNavigatingViewport: boolean;
 };
+
+/** Whether the view shows depth: it is in 3D, or on its way in or out. */
+export const showsDepth = (state: Pick<ViewportState, "is3DMode" | "isTransitioning3D">): boolean => state.is3DMode || state.isTransitioning3D;
 
 // The fields a reset leaves alone: the 3D view and its transition, which the transition
 // controller owns (a reset in 3D mode asks it to return to 2D), plus viewport navigation, which
@@ -33,11 +30,6 @@ export function initialViewportRuntimeState(): ViewportRuntimeState {
     is3DMode: false,
     viewAngle: { ...DEFAULT_VIEW_ANGLE },
     isTransitioning3D: false,
-    transitionStartTime: 0,
-    transition3DStartAngles: { x: 0, y: 0, z: 0 },
-    transition3DEndAngles: { ...DEFAULT_VIEW_ANGLE },
-    transitionDirection: null,
-    transitionProgress: 0,
     isNavigatingViewport: false,
   };
 }

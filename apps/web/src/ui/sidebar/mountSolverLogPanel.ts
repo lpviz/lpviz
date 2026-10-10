@@ -1,5 +1,6 @@
 import type { AppContext } from "@/app/appContext";
-import { computeDrawingPhase, getState, on, type State } from "@/features/core/store";
+import { getState, on, type State } from "@/features/core/store";
+import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
 import { usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SOLVER_SETTINGS, type SolverSettings } from "../core/store";
+import { DEFAULT_SOLVER_SETTINGS, type SolverSettings } from "../solver/solverState";
 import { applySharedSettings, collectShareSettings, type ShareSettings } from "./sharedState";
 
 // Share links are the app's only untrusted input: a hand-edited link must be

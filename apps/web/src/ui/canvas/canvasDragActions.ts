@@ -1,6 +1,7 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type HistoryEntry, type State } from "@/features/core/store";
-import { captureHistoryEntry } from "@/features/history/historyState";
+import { getState, setState, type State } from "@/features/core/store";
+import { computeDrawingPhase, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
+import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
@@ -20,7 +21,7 @@ export const updatePanControls = (viewportApi: ViewportApi) => {
   viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
 };
 
-const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, viewportApi: ViewportApi, sendPolytope: () => void) => {
+const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, sendPolytope: () => void) => {
   const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
   let operation: ConstraintDragTarget["operation"];
 
@@ -54,24 +55,22 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, v
     },
   });
   sendPolytope();
-  viewportApi.draw();
 };
 
 // moves whatever the drag holds (a vertex, a constraint, the start marker or
 // the objective) to the pointer's logical position
-const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { viewportApi, sendPolytope, onSolverStartMoved }: Omit<DragActionDeps, "saveHistory">) => {
+const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { sendPolytope, onSolverStartMoved }: Pick<DragActionDeps, "sendPolytope" | "onSolverStartMoved">) => {
   if (dragTarget.kind === "point") {
     const pointIndex = dragTarget.index;
     setState({
       vertices: getState().vertices.map((v, i) => (i === pointIndex ? logicalCoords : v)),
     });
     sendPolytope();
-    viewportApi.draw();
     return;
   }
 
   if (dragTarget.kind === "constraint") {
-    applyConstraintDrag(dragTarget, logicalCoords, viewportApi, sendPolytope);
+    applyConstraintDrag(dragTarget, logicalCoords, sendPolytope);
     return;
   }
 
@@ -83,26 +82,17 @@ const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { viewportA
       solverStartPoint: off ? [logicalCoords[0] + off[0], logicalCoords[1] + off[1]] : logicalCoords,
     });
     onSolverStartMoved();
-    viewportApi.draw();
     return;
   }
 
   setState({ objectiveVector: logicalCoords });
   sendPolytope();
-  viewportApi.draw();
 };
 
-const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec, viewportApi: ViewportApi) => {
-  if (phase === "empty" || phase === "sketching_polytope") {
-    setCurrentMouse(logicalCoords);
-    viewportApi.draw();
-    return;
-  }
-
-  if (phase === "awaiting_objective" || phase === "objective_preview") {
-    setState({ currentObjective: logicalCoords });
-    viewportApi.draw();
-  }
+// the sketch cursor while drafting, the objective preview while placing the objective
+const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec) => {
+  if (phase === "empty" || phase === "sketching_polytope") setCurrentMouse(logicalCoords);
+  else if (phase === "awaiting_objective" || phase === "objective_preview") setState({ currentObjective: logicalCoords });
 };
 
 // The drag lifecycle: start (hit test + pending-drag), move (threshold, then
@@ -194,7 +184,7 @@ export function createDragActions(deps: DragActionDeps) {
       return;
     }
 
-    updatePointerPreview(phaseSnapshot, logicalCoords, viewportApi);
+    updatePointerPreview(phaseSnapshot, logicalCoords);
   };
 
   const handleDragEnd = () => {

@@ -4,26 +4,6 @@ import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverR
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
-// The slices' public surface, re-exported so importers keep one module to reach for.
-export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
-export type { HistoryEntry } from "@/features/history/historyState";
-export { COMPLETION_MODES, computeDrawingPhase, nearestPolytopeVertex, type CompletionMode, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
-export {
-  DEFAULT_SOLVER_SETTINGS,
-  displayedSolverStartPoint,
-  iterateHeight,
-  MAX_TRACE_POINT_SPRITES,
-  QUERY_POINTS,
-  SOLVER_MODES,
-  type EllipsoidPath,
-  type EllipsoidQueryPoint,
-  type IteratePath,
-  type LocalizingSetPath,
-  type SolverMode,
-  type SolverSettings,
-} from "@/features/solver/solverState";
-export type { Dimension } from "@lpviz/math/vec";
-
 type StateChangeMeta = {
   viewportDirty?: ViewportDirtyFlags;
 };

@@ -1,4 +1,6 @@
-import { getState, nearestPolytopeVertex, type SolverMode, type State } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import { nearestPolytopeVertex } from "@/features/polytope-editor/editorState";
+import type { SolverMode } from "@/features/solver/solverState";
 import { hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
 import type { ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";

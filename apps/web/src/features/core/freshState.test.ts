@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SOLVER_SETTINGS, freshState, getState, setState } from "./store";
+import { DEFAULT_SOLVER_SETTINGS } from "@/features/solver/solverState";
+import { freshState, getState, setState } from "./store";
 
 // A reset applies freshState() over whatever the store holds. These pin what
 // that must restore, and what it must leave to the viewport.
@@ -8,21 +9,7 @@ describe("freshState", () => {
     const fresh = Object.keys(freshState()).sort();
     const all = Object.keys(getState()).sort();
     const leftOut = all.filter((key) => !fresh.includes(key));
-    expect(leftOut.sort()).toEqual(
-      [
-        "dimension",
-        "is3DMode",
-        "isNavigatingViewport",
-        "isTransitioning3D",
-        "maxTraceCount",
-        "transition3DEndAngles",
-        "transition3DStartAngles",
-        "transitionDirection",
-        "transitionProgress",
-        "transitionStartTime",
-        "viewAngle",
-      ].sort(),
-    );
+    expect(leftOut.sort()).toEqual(["dimension", "is3DMode", "isNavigatingViewport", "isTransitioning3D", "maxTraceCount", "viewAngle"].sort());
   });
 
   test("restores a worked-on store to its starting values", () => {

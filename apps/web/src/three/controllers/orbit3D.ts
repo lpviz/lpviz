@@ -1,4 +1,4 @@
-import { getViewport3DControlsConfig, subscribeViewport3DControlsConfig } from "@/features/viewport/runtime/controls3d";
+import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewport/runtime/controls3d";
 import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
@@ -36,7 +36,7 @@ type ActiveDrag = {
 // when they own the view and re-poses the camera from a snapshot when asked. Returns the detach.
 export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCamera, /** the point the camera looks at, shared with the camera controller */ target: Vector3): () => void {
   const canvas = sceneManager.renderer.domElement;
-  let config = getViewport3DControlsConfig();
+  let config = get3DControlsConfig();
   let syncToken = -1;
   let activeDrag: ActiveDrag | null = null;
   let activePointerId: number | null = null;
@@ -305,10 +305,11 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
     sceneManager.invalidate({ layers: false });
   };
 
-  const unsubscribe = subscribeViewport3DControlsConfig(() => {
-    config = getViewport3DControlsConfig();
+  const subscriptions = new AbortController();
+  subscribe3DControlsConfig(() => {
+    config = get3DControlsConfig();
     applyConfig();
-  });
+  }, subscriptions.signal);
   const removeListeners = addListeners([
     [canvas, "mousedown", handleMouseDown],
     [canvas, "pointerdown", handlePointerDown],
@@ -327,7 +328,7 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
   applyConfig();
 
   return () => {
-    unsubscribe();
+    subscriptions.abort();
     removeListeners();
     activeDrag = null;
     clearActivePointer();

@@ -5,11 +5,10 @@ import type { ReplayController } from "@/features/solver/replayController";
 import { renderPayload, type ResultPresenter } from "@/features/solver/resultPresenter";
 import { activeSolverControl } from "@/features/solver/solverControls";
 import { runSolverWorker } from "@/features/solver/workerClient";
-import type { ViewportApi } from "@/features/viewport/runtime";
 
 // One solve at a time reaches the store: every request carries a generation
 // and a reply from an invalidated generation is dropped.
-export function createSolveRunner({ getViewportApi, presenter, replay }: { getViewportApi: () => ViewportApi | null; presenter: ResultPresenter; replay: ReplayController }) {
+export function createSolveRunner({ presenter, replay }: { presenter: ResultPresenter; replay: ReplayController }) {
   let requestGeneration = 0;
 
   const clearComputedState = () => {
@@ -23,8 +22,6 @@ export function createSolveRunner({ getViewportApi, presenter, replay }: { getVi
 
   // Solve the current problem with the selected solver, or show why it cannot be solved.
   const solve = async () => {
-    const viewportApi = getViewportApi();
-    if (!viewportApi) return;
     // Before anything reads or clears the iterate state: a replay running over
     // a path this call is about to replace (or clear, on the not-ready paths
     // below) would keep drawing its scratch copy of the old one.
@@ -52,7 +49,6 @@ export function createSolveRunner({ getViewportApi, presenter, replay }: { getVi
       if (generation !== requestGeneration) return;
       setIterateResult(result);
       presenter.render(renderPayload(result.log));
-      viewportApi.draw();
     } catch (error) {
       if (generation !== requestGeneration) return;
       presenter.renderError(error instanceof Error ? error.message : String(error));

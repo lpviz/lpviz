@@ -1,5 +1,6 @@
 import type { AppContext } from "@/app/appContext";
-import { getState, on, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
+import { getState, on, type State } from "@/features/core/store";
+import type { SolverMode, SolverSettings } from "@/features/solver/solverState";
 import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
 import { el } from "@/ui/dom";
 import { buildSolverSection, type SettingsSync } from "./solverSections";

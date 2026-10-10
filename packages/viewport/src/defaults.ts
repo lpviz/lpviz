@@ -2,6 +2,8 @@ import type { PointXYZ } from "@lpviz/math/types";
 
 export const DEFAULT_VIEW_ANGLE: PointXYZ = { x: -1.15, y: 0.4, z: 0 };
 export const DEFAULT_Z_SCALE = 0.1;
+/** the z-scale range a wheel or a share link may ask for */
+export const clampZScale = (value: number): number => Math.max(0.01, Math.min(100, value));
 /** pixels per world unit at scale factor 1 */
 export const DEFAULT_GRID_SPACING = 20;
 /** pixels kept clear around content fitted to the viewport */

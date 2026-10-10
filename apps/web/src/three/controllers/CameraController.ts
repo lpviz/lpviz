@@ -1,4 +1,4 @@
-import { getViewportRenderSnapshot, subscribeFullViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { getViewportRenderSnapshot, subscribeViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
@@ -14,7 +14,7 @@ export class CameraController {
   // The point the perspective camera looks at, which the orbit controls move too. NaN until the
   // first snapshot is applied, so nothing matches it before then.
   readonly perspectiveTarget = new Vector3(NaN, NaN, NaN);
-  private unsubscribe: () => void;
+  private subscriptions = new AbortController();
   private pendingSnapshot = false;
 
   constructor(private sceneManager: SceneManager) {
@@ -23,10 +23,10 @@ export class CameraController {
     this.ortho.position.set(0, 0, 10);
     this.ortho.lookAt(0, 0, 0);
 
-    this.unsubscribe = subscribeFullViewportRenderSnapshot(() => {
+    subscribeViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;
       this.sceneManager.invalidate({ layers: false });
-    });
+    }, this.subscriptions.signal);
 
     this.applySnapshot();
     this.sceneManager.addTick(this.tick);
@@ -79,7 +79,7 @@ export class CameraController {
   }
 
   dispose(): void {
-    this.unsubscribe();
+    this.subscriptions.abort();
     this.sceneManager.removeTick(this.tick);
   }
 }

@@ -1,4 +1,4 @@
-import { MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
@@ -7,6 +7,8 @@ import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 const TRACE_POINT_PIXEL_SIZE = 6;
+// a path with more iterates than this is sampled, so the cloud stays this big per trace
+const MAX_TRACE_POINT_SPRITES = 1200;
 
 type TraceEntry = State["traceBuffer"][number];
 

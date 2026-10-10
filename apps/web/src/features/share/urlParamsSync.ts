@@ -1,8 +1,8 @@
-import { getState, setState, type SolverMode } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
 import { applySharedSettings, buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
-import type { SolverSettingUpdater } from "@/features/solver/solverState";
+import type { SolverActions } from "@/features/solver/solverActions";
 import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
@@ -12,13 +12,7 @@ export function applyUrlParamsOnce({
   invalidatePendingSolveResults,
   setActiveSolverMode,
   sendPolytope,
-}: {
-  viewportApi: ViewportApi;
-  updateSolverSetting: SolverSettingUpdater;
-  invalidatePendingSolveResults: () => void;
-  setActiveSolverMode: (mode: SolverMode, solve?: boolean) => void;
-  sendPolytope: () => void;
-}) {
+}: Pick<SolverActions, "updateSolverSetting" | "invalidatePendingSolveResults" | "setActiveSolverMode"> & { viewportApi: ViewportApi; sendPolytope: () => void }) {
   const params = new URLSearchParams(window.location.search);
   const applySharedState = (sharedState: SharedAppState) => {
     const { dimension } = getState();
@@ -33,10 +27,7 @@ export function applyUrlParamsOnce({
     const regionFinished = state.completionMode !== "draft";
     setActiveSolverMode(state.solverMode);
     if (regionFinished) sendPolytope();
-    if (sharedState.is3DMode === true && !state.is3DMode) {
-      viewportApi.start3DTransition(true);
-    }
-    viewportApi.draw();
+    if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);
   };
   if (!params.has("s")) return;
   try {

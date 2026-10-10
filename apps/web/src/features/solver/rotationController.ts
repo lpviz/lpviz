@@ -40,7 +40,7 @@ export type RotationController = {
 // re-solves — at most one solve in flight at a time. Extracted from
 // solverActions so the loop's timing + single-flight + cancellation logic lives
 // in one testable place instead of six module-scoped variables.
-export function createRotationController(deps: { solve: () => Promise<void>; syncTraceCapacity: () => void; hasCanvas: () => boolean }): RotationController {
+export function createRotationController({ solve, syncTraceCapacity }: { solve: () => Promise<void>; syncTraceCapacity: () => void }): RotationController {
   let rafId: number | null = null;
   let lastFrameTime: number | null = null;
   let elapsedMs = 0;
@@ -72,21 +72,19 @@ export function createRotationController(deps: { solve: () => Promise<void>; syn
   };
 
   const step = async () => {
-    if (!deps.hasCanvas()) return;
     const state = getState();
-    if (!state.rotateObjectiveMode || inFlight) return;
+    if (!state.rotateObjectiveMode || inFlight || !state.objectiveVector) return;
     inFlight = true;
     const mySession = session;
-    if (!state.objectiveVector) return;
-    const step = rotateObjective(state.objectiveVector, objectiveAngleStep(state.solverSettings), direction, state.polytope);
-    direction = step.direction;
+    const turned = rotateObjective(state.objectiveVector, objectiveAngleStep(state.solverSettings), direction, state.polytope);
+    direction = turned.direction;
     setState({
-      objectiveVector: step.next,
+      objectiveVector: turned.next,
       highlightIteratePathIndex: null,
     });
-    if (getState().traceEnabled) deps.syncTraceCapacity();
+    if (getState().traceEnabled) syncTraceCapacity();
     try {
-      await deps.solve();
+      await solve();
     } finally {
       if (mySession === session) {
         inFlight = false;

@@ -1,4 +1,4 @@
-import { getViewportTransitionConfig, subscribeViewportTransitionConfig } from "@/features/viewport/runtime/transitionConfig";
+import { getTransitionConfig, subscribeTransitionConfig } from "@/features/viewport/runtime/transitionConfig";
 import type { SceneManager } from "../SceneManager";
 
 const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -6,16 +6,16 @@ const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2
 // Drives the 2D/3D transition the viewport runtime configures: each frame maps the wall clock
 // onto its eased progress and hands it to the runtime, which publishes the snapshot for it.
 export class TransitionController {
-  private unsubscribe: () => void;
+  private subscriptions = new AbortController();
   private completedRunId: number | null = null;
-  private config = getViewportTransitionConfig();
+  private config = getTransitionConfig();
 
   constructor(private sceneManager: SceneManager) {
-    this.unsubscribe = subscribeViewportTransitionConfig(() => {
-      this.config = getViewportTransitionConfig();
+    subscribeTransitionConfig(() => {
+      this.config = getTransitionConfig();
       if (!this.config.active) this.completedRunId = null;
       this.sceneManager.invalidate();
-    });
+    }, this.subscriptions.signal);
     this.sceneManager.addTick(this.tick);
     if (this.config.active) this.sceneManager.invalidate();
   }
@@ -27,7 +27,7 @@ export class TransitionController {
     const duration = Math.max(1, config.duration);
     const elapsed = performance.now() - config.startTime;
     const progress = Math.max(0, Math.min(elapsed / duration, 1));
-    config.onFrame?.(progress, easeInOutCubic(progress));
+    config.onFrame?.(easeInOutCubic(progress));
 
     if (progress < 1) {
       this.sceneManager.invalidate();
@@ -39,7 +39,7 @@ export class TransitionController {
   };
 
   dispose(): void {
-    this.unsubscribe();
+    this.subscriptions.abort();
     this.sceneManager.removeTick(this.tick);
   }
 }

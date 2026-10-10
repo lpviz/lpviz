@@ -1,7 +1,6 @@
 import { getState, setState } from "@/features/core/store";
 import { formatVirtualResultRow } from "@/features/solver/resultPacking";
 import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
-import type { ViewportApi } from "@/features/viewport/runtime";
 
 // While the objective rotates the log is re-rendered on every step, so it shows
 // a window of this many rows instead of the whole run: the first rows, a gap
@@ -67,12 +66,9 @@ export type ResultPresenter = {
   restoreFullVirtualResult: () => void;
 };
 
-// Owns how a solver result becomes result-panel store state: virtual-vs-blocks
-// shaping, the widest-line measurement, the rotation row cap, and the
-// defer-while-navigating buffer. Extracted from solverActions so the
-// render/applyRender/pendingRender/lastVirtualResult tangle lives behind a small
-// interface instead of four closures sharing two mutable locals.
-export function createResultPresenter(deps: { getViewportApi: () => ViewportApi | null }): ResultPresenter {
+// How a solver result becomes result-panel store state: virtual-vs-blocks shaping, the
+// widest-line measurement, the rotation row cap, and the defer-while-navigating buffer.
+export function createResultPresenter(): ResultPresenter {
   let lastVirtualResult: VirtualResultPayload | null = null;
   let pendingRender: {
     payload: ResultRenderPayload;
@@ -80,7 +76,6 @@ export function createResultPresenter(deps: { getViewportApi: () => ViewportApi 
   } | null = null;
 
   const applyRender = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
-    const cm = deps.getViewportApi();
     const limitVirtualRows = options.limitVirtualRows ?? getState().rotateObjectiveMode;
     if (payload.type === "virtual") {
       const rows = payload.rows;
@@ -121,7 +116,6 @@ export function createResultPresenter(deps: { getViewportApi: () => ViewportApi 
         highlightIteratePathIndex: null,
       });
     }
-    cm?.draw();
   };
   // the only writer besides clearResult: a deferred render is flushed with the
   // payload recorded here, so applyRender need not set it again
@@ -129,7 +123,6 @@ export function createResultPresenter(deps: { getViewportApi: () => ViewportApi 
     lastVirtualResult = payload.type === "virtual" ? payload : null;
     if (getState().isNavigatingViewport) {
       pendingRender = { payload, options };
-      deps.getViewportApi()?.draw();
       return;
     }
     pendingRender = null;
@@ -153,7 +146,6 @@ export function createResultPresenter(deps: { getViewportApi: () => ViewportApi 
       lastVirtualResult = null;
       pendingRender = null;
       setState({ resultDisplayMode: "usage", resultBlocks: null, ...noVirtualRows(), resultMaxLineChars: 0, highlightIteratePathIndex: null });
-      deps.getViewportApi()?.draw();
     },
     restoreFullVirtualResult: () => {
       if (lastVirtualResult) render(lastVirtualResult, { limitVirtualRows: false });
