@@ -154,7 +154,7 @@ export function getEditorTransition(
       if (!isConvexChain(state.vertices)) {
         return {
           kind: "reject-nonconvex",
-          reason: "This open region is nonconvex. Please adjust the vertices before pressing Enter.",
+          reason: "This open region is nonconvex. Adjust the vertices before leaving it open.",
         };
       }
 

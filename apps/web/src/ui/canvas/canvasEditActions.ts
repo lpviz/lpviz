@@ -1,5 +1,5 @@
-import { setCurrentMouse } from "@/features/core/currentMouse";
 import { getState, setState } from "@/features/core/store";
+import { createEditorActions } from "@/features/polytope-editor/editorActions";
 import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
@@ -13,38 +13,10 @@ import {
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import { nearestEdge } from "@lpviz/math/polygon";
 import { clampZScale, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
-import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 import type { EditorToolsDeps } from "./editorTools";
 
 type ApplyEditorTransition = (transition: EditorTransition) => void;
-
-// Every accepted edit is its own undoable step; the derived polytope is cleared for the re-derive.
-function createEditorTransitionApplier({ viewportApi, saveHistory, derivePolytope }: Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "derivePolytope">): ApplyEditorTransition {
-  return (transition) => {
-    if (transition.kind === "reject-nonconvex") {
-      // The problem panel's message slot (the same one that shows "Nonconvex");
-      // the next accepted edit clears it. No blocking dialog.
-      setState({ inequalitiesMessage: transition.reason });
-      return;
-    }
-
-    if (transition.kind === "edit") {
-      saveHistory();
-      setState({ ...transition.result, polytope: null, inequalitiesMessage: null, highlightIndex: null });
-      derivePolytope();
-      updatePanControls(viewportApi);
-      return;
-    }
-
-    if (transition.kind === "select-objective") {
-      saveHistory();
-      setState({ objectiveVector: transition.objectiveVector });
-      derivePolytope();
-      updatePanControls(viewportApi);
-    }
-  };
-}
 
 // click, double-click and context-menu edits
 function createPointerEditActions(
@@ -169,20 +141,7 @@ const handleWheel = (event: WheelEvent) => {
 const isTextEntryTarget = (target: EventTarget | null) =>
   target instanceof HTMLElement && (target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
 
-function createKeyDownHandler(
-  { viewportApi, handleUndoRedo, showReplayDuration }: Pick<EditorToolsDeps, "viewportApi" | "handleUndoRedo" | "showReplayDuration">,
-  applyEditorTransition: ApplyEditorTransition,
-) {
-  const finishOpenRegion = () => {
-    // finish-open yields noop, reject-nonconvex or edit; only an edit clears
-    // the sketch cursor and hands the canvas back to panning
-    const finishResult = getEditorTransition(getState(), { kind: "finish-open" });
-    applyEditorTransition(finishResult);
-    if (finishResult.kind !== "edit") return;
-    setCurrentMouse(null);
-    viewportApi.set2DPanEnabled(true);
-  };
-
+function createKeyDownHandler({ handleUndoRedo, showReplayDuration }: Pick<EditorToolsDeps, "handleUndoRedo" | "showReplayDuration">, finishOpenRegion: () => void) {
   // "+" lengthens the replay, "-" shortens it; the readout shows on every press, including one
   // that hits an end of the range, so the keys never feel dead
   const adjustReplayDuration = (direction: 1 | -1) => {
@@ -233,14 +192,13 @@ function createKeyDownHandler(
   };
 }
 
-// The editor's non-drag actions: applying editor transitions, the click /
-// double-click / context-menu edits, the z-scale wheel and the keyboard
-// shortcuts.
+// The editor's non-drag actions: the click / double-click / context-menu edits, the z-scale
+// wheel and the keyboard shortcuts, over the editor's transition applier.
 export function createEditActions(deps: EditorToolsDeps) {
-  const applyEditorTransition = createEditorTransitionApplier(deps);
+  const { apply, finishOpenRegion } = createEditorActions(deps);
   return {
-    ...createPointerEditActions(deps, applyEditorTransition),
+    ...createPointerEditActions(deps, apply),
     handleWheel,
-    handleKeyDown: createKeyDownHandler(deps, applyEditorTransition),
+    handleKeyDown: createKeyDownHandler(deps, finishOpenRegion),
   };
 }

@@ -2,8 +2,8 @@ import { setCurrentMouse } from "@/features/core/currentMouse";
 import { getState, setState, type State } from "@/features/core/store";
 import { computeDrawingPhase, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
+import { updatePanControls } from "@/features/polytope-editor/editorActions";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
-import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 import type { Vec } from "@lpviz/math/types";
 import type { EditorToolsDeps } from "./editorTools";
@@ -16,10 +16,6 @@ const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteractio
 };
 
 type DragActionDeps = Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "derivePolytope" | "onSolverStartMoved">;
-
-export const updatePanControls = (viewportApi: ViewportApi) => {
-  viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
-};
 
 const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, derivePolytope: () => void) => {
   const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];

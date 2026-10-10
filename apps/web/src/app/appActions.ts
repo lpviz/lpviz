@@ -1,6 +1,7 @@
 import { freshState, getState, on, setState } from "@/features/core/store";
 import type { SolverMode } from "@/features/solver/solverState";
 import type { HistoryService } from "@/features/history/historyService";
+import { createEditorActions } from "@/features/polytope-editor/editorActions";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
@@ -20,6 +21,8 @@ export type AppActions = Pick<
   reset: () => void;
   setActiveSolverMode: (mode: SolverMode) => void;
   loadGalleryProblem: (problem: GalleryProblem) => void;
+  /** finish the drafted region as an open one, as Enter does; the console's link, for a finger */
+  finishOpenRegion: () => void;
   zoomToFit: () => void;
   resetView: () => void;
   toggle3D: () => void;
@@ -130,6 +133,10 @@ export function createAppActions({
       viewportApi?.set2DPanEnabled(true);
       polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());
+    },
+    finishOpenRegion: () => {
+      const viewportApi = getViewportApi();
+      if (viewportApi) createEditorActions({ viewportApi, saveHistory: history.save, derivePolytope: polytope.derive }).finishOpenRegion();
     },
 
     // ---- the view ----
