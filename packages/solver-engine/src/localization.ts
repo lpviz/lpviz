@@ -175,7 +175,7 @@ type TerminationLines = Partial<Record<Termination, [lead: string, explanation?:
 // other stops name the method's localizing set.
 function localizationFooter(termination: Termination, iterationCount: number, solveTime: number, stops: TerminationLines) {
   const [lead, explanation] = stops[termination] ?? ["Did not converge"];
-  return `${solveFooter(termination === "converged", iterationCount, solveTime, lead)}\n${explanation ? `${explanation}\n` : ""}`;
+  return `${solveFooter(termination === "converged", iterationCount, solveTime, lead)}${explanation ? `\n${explanation}` : ""}`;
 }
 
 /**

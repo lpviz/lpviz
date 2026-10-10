@@ -148,7 +148,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   }
 
   const solveTime = performance.now() - startTime;
-  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, trace.count, solveTime, "Stopped")}\n` : `${solveFooter(converged, trace.count, solveTime)}\n`;
+  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, trace.count, solveTime, "Stopped")}` : solveFooter(converged, trace.count, solveTime);
   return trace.result(numericLogHeader(n, "µ"), footer);
 }
 

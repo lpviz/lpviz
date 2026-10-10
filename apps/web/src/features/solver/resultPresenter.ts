@@ -11,18 +11,21 @@ const ROTATE_TAIL_ROWS = 8;
 
 type RenderOptions = { limitVirtualRows?: boolean };
 
+// Log text ends without a newline: the panel renders it with the line breaks kept, so a trailing
+// one would be a blank line.
+const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
+
 // A one-section log is a single run and scrolls as a virtual list; a log with
 // several sections is a phased run (simplex), small enough to render as blocks.
 export function renderPayload(log: ResultLogSection[]): ResultRenderPayload {
   const [section] = log;
   if (section && log.length === 1) {
-    return { type: "virtual", header: section.header, rows: section.rows, footer: section.footer ?? "" };
+    return { type: "virtual", header: normalizeLog(section.header), rows: section.rows, footer: normalizeLog(section.footer ?? "") };
   }
   return { type: "blocks", blocks: phaseBlocks(log) };
 }
 
 function phaseBlocks(log: ResultLogSection[]): ResultTextBlock[] {
-  const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
   const createBlock = (className: ResultTextBlock["className"], text: string, index?: number): ResultTextBlock => ({
     className,
     text: normalizeLog(text),
