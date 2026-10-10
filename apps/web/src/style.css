@@ -972,8 +972,23 @@ body {
     padding: 0 8px 10px;
   }
 
+  /* in the canvas's free corner, above the sidebar; the panel opens as a sheet over the canvas */
   #helpControl {
-    display: none;
+    --help-size: 40px;
+    right: 8px;
+    bottom: calc(var(--mobile-sidebar-height, 42dvh) + 8px);
+  }
+
+  #helpButton {
+    padding: 8px;
+    font-size: 1.25rem;
+  }
+
+  #helpPanel {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - var(--mobile-sidebar-height, 42dvh) - var(--help-size) - 28px);
+    margin-bottom: 8px;
+    padding: 12px 14px;
   }
 
   .controlPanel {
