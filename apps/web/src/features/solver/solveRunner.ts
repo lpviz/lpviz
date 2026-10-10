@@ -11,13 +11,15 @@ import { runSolverWorker } from "@/features/solver/workerClient";
 export function createSolveRunner({ presenter, replay }: { presenter: ResultPresenter; replay: ReplayController }) {
   let requestGeneration = 0;
 
+  const invalidatePending = () => {
+    requestGeneration++;
+  };
+  // the cleared state must stay cleared: a solve in flight would repopulate it
   const clearComputedState = () => {
+    invalidatePending();
     clearIterateState();
     resetTraceState();
     presenter.clearResult();
-  };
-  const invalidatePending = () => {
-    requestGeneration++;
   };
 
   // Solve the current problem with the selected solver, or show why it cannot be solved.
@@ -55,5 +57,5 @@ export function createSolveRunner({ presenter, replay }: { presenter: ResultPres
     }
   };
 
-  return { solve, invalidatePending, clearComputedState };
+  return { solve, clearComputedState };
 }

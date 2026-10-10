@@ -1,17 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_SOLVER_SETTINGS, type SolverSettings } from "../solver/solverState";
-import { applySharedSettings, collectShareSettings, type ShareSettings } from "./sharedState";
+import { collectShareSettings, type ShareSettings, validSharedSettings } from "./sharedState";
 
 // Share links are the app's only untrusted input: a hand-edited link must be
 // able to neither blank a <select> nor throw inside the settings panel's store
 // subscriber, so only values of the default's shape reach the store.
-function applied(settings: ShareSettings) {
-  const out: Record<string, unknown> = {};
-  applySharedSettings(settings, (key, value) => {
-    out[key] = value;
-  });
-  return out;
-}
+const applied = validSharedSettings;
 
 const untrusted = (value: unknown) => value as ShareSettings;
 

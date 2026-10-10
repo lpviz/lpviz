@@ -9,15 +9,16 @@ import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverS
 
 export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;
-  setActiveSolverMode: (mode: SolverMode, solveNow?: boolean) => void;
+  /** switch solvers and solve, unless the objective is rotating (its next step solves) */
+  setActiveSolverMode: (mode: SolverMode) => void;
   setTraceEnabled: (enabled: boolean) => void;
   startRotation: () => void;
   /** stop the objective rotation and any replay */
   stopMotion: () => void;
   toggleReplay: () => void;
   recomputeIfModeActive: (mode: SolverMode) => void;
-  invalidatePendingSolveResults: () => void;
   handleProblemChange: () => void;
+  /** drop the iterates, the trace and the result, and any solve in flight */
   clearComputedState: () => void;
   setConstraintHighlight: (index: number | null) => void;
   setIterateHighlight: (index: number | null) => void;
@@ -36,13 +37,12 @@ export function createSolverActions(): SolverActions {
   const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
 
   const replay = createReplayController({ isIterateHoverActive: () => iterateHoverActive });
-  const { solve, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ presenter, replay });
+  const { solve, clearComputedState } = createSolveRunner({ presenter, replay });
   const rotation = createRotationController({ solve, syncTraceCapacity });
   const stopMotion = () => {
     const s = getState();
     const wasRotating = s.rotateObjectiveMode;
     if (!wasRotating && !s.replayActive) return;
-    invalidatePendingSolveResults();
     replay.cancel();
     rotation.cancel();
     setState({
@@ -54,7 +54,6 @@ export function createSolverActions(): SolverActions {
   const handleProblemChange = () => {
     const s = getState();
     if (!isReadyForSolvers(s)) {
-      invalidatePendingSolveResults();
       stopMotion();
       clearComputedState();
       return;
@@ -84,11 +83,10 @@ export function createSolverActions(): SolverActions {
   const recomputeIfModeActive = (mode: SolverMode) => {
     if (!getState().rotateObjectiveMode && getState().solverMode === mode) void solve();
   };
-  const setActiveSolverMode = (mode: SolverMode, solveNow = false) => {
-    invalidatePendingSolveResults();
+  const setActiveSolverMode = (mode: SolverMode) => {
     if (getState().solverMode !== mode) resetTraceState();
     setState({ solverMode: mode });
-    if (solveNow && !getState().rotateObjectiveMode) void solve();
+    if (!getState().rotateObjectiveMode) void solve();
   };
   const setConstraintHighlight = (index: number | null) => setState({ highlightIndex: index });
   const setIterateHighlight = (index: number | null) => {
@@ -113,7 +111,6 @@ export function createSolverActions(): SolverActions {
     stopMotion,
     toggleReplay: replay.toggle,
     recomputeIfModeActive,
-    invalidatePendingSolveResults,
     handleProblemChange,
     clearComputedState,
     setConstraintHighlight,
