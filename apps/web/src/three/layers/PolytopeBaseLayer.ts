@@ -16,10 +16,10 @@ import type { LayerPlacement } from "../Layer";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
-const POLY_LINE_THICKNESS = 2;
+export const POLYTOPE_EDGE_THICKNESS = 2;
 const EPS = 1e-10;
 
-const fillMaterial = (color: string) =>
+const translucentFill = (color: string) =>
   new MeshBasicMaterial({
     color,
     transparent: true,
@@ -91,7 +91,6 @@ type PolytopeRenderResult = {
 
 function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): PolytopeRenderResult {
   const { completionMode, highlightIndex, polytope } = state;
-  const regionFinished = completionMode !== "draft";
   const derived = derivedClosure(state);
   const hasDerived = derived !== null;
   const displayVertices: Vec[] = derived ?? state.vertices;
@@ -117,10 +116,10 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
   const normalSegments: number[] = [];
   const highlightSegments: number[] = [];
 
-  const edgeCount = regionFinished ? Math.max(0, displayVertices.length - (isClosedRegion ? 0 : 1)) : Math.max(0, displayVertices.length - 1);
+  // a closed polygon has as many edges as vertices; a draft or an open chain one fewer
+  const edgeCount = Math.max(0, displayVertices.length - (isClosedRegion ? 0 : 1));
   for (let i = 0; i < edgeCount; i++) {
     const ni = (i + 1) % displayVertices.length;
-    if (!isClosedRegion && ni >= displayVertices.length) break;
     const s = displayVertices[i]!;
     const e = displayVertices[ni]!;
     const highlighted = !hasDerived && highlightIndex === i;
@@ -146,34 +145,21 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
 }
 
 export class PolytopeBaseLayer extends LayerBase {
-  readonly object3D: Group;
+  readonly object3D = new Group();
   override readonly invalidationKeys = ["polytope"] as const;
-  private fillMesh: Mesh;
-  private fillMatNormal: MeshBasicMaterial;
-  private fillMatHighlight: MeshBasicMaterial;
-  private normalEdges: LineSegments2;
-  private highlightEdges: LineSegments2;
+  private readonly fillMaterial = translucentFill(PALETTE.polytopeFill);
+  // a nonconvex drawing is filled in the accent colour, so the rejection is visible
+  private readonly nonconvexFillMaterial = translucentFill(PALETTE.accent);
+  private readonly fillMesh = new Mesh(undefined, this.fillMaterial);
+  private readonly normalEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.polytopeOutline, POLYTOPE_EDGE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+  private readonly highlightEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.accent, POLYTOPE_EDGE_THICKNESS, false)), RENDER_ORDER.polyEdges);
 
   constructor() {
     super();
-    const fMatN = fillMaterial(PALETTE.polytopeFill);
-    const fMatH = fillMaterial(PALETTE.accent);
-    const mesh = new Mesh(undefined, fMatN);
-    mesh.renderOrder = RENDER_ORDER.polytopeFill;
-    mesh.frustumCulled = false;
-    mesh.visible = false;
-
-    const nEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.polytopeOutline, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
-    const hEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.accent, POLY_LINE_THICKNESS, false)), RENDER_ORDER.polyEdges);
-
-    const edgeGroup = new Group();
-    edgeGroup.add(nEdges, hEdges);
-    this.object3D = edgeGroup;
-    this.fillMesh = mesh;
-    this.fillMatNormal = fMatN;
-    this.fillMatHighlight = fMatH;
-    this.normalEdges = nEdges;
-    this.highlightEdges = hEdges;
+    this.fillMesh.renderOrder = RENDER_ORDER.polytopeFill;
+    this.fillMesh.frustumCulled = false;
+    this.fillMesh.visible = false;
+    this.object3D.add(this.normalEdges, this.highlightEdges);
   }
 
   // the fill renders in the transparent pass, under everything drawn on the floor; the edges above it
@@ -202,9 +188,12 @@ export class PolytopeBaseLayer extends LayerBase {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    const visible = state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
-    if (!visible) this.fillMesh.visible = false;
-    return visible;
+    return state.vertices.length > 0 && rendersPlanarDrawing(state, snap);
+  }
+
+  protected override hide(): void {
+    super.hide();
+    this.fillMesh.visible = false;
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
@@ -216,7 +205,7 @@ export class PolytopeBaseLayer extends LayerBase {
       // free the previous fill's GL buffers before the geometry is replaced
       this.fillMesh.geometry.dispose();
       this.fillMesh.geometry = new ShapeGeometry(buildShapeFromVertices(result.fillVertices));
-      this.fillMesh.material = result.isNonconvex ? this.fillMatHighlight : this.fillMatNormal;
+      this.fillMesh.material = result.isNonconvex ? this.nonconvexFillMaterial : this.fillMaterial;
       this.fillMesh.visible = true;
     } else {
       this.fillMesh.visible = false;
@@ -230,7 +219,7 @@ export class PolytopeBaseLayer extends LayerBase {
       segs.visible = segments.length >= 6;
       if (segs.visible) {
         replaceLinePositions(segs.geometry, segments);
-        segs.material = lineDepthMaterial(color, POLY_LINE_THICKNESS, is3D);
+        segs.material = lineDepthMaterial(color, POLYTOPE_EDGE_THICKNESS, is3D);
       }
     }
   }
@@ -238,8 +227,8 @@ export class PolytopeBaseLayer extends LayerBase {
   dispose(): void {
     this.normalEdges.geometry.dispose();
     this.highlightEdges.geometry.dispose();
-    this.fillMatNormal.dispose();
-    this.fillMatHighlight.dispose();
+    this.fillMaterial.dispose();
+    this.nonconvexFillMaterial.dispose();
     this.fillMesh.geometry.dispose();
   }
 }

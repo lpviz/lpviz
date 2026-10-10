@@ -3,7 +3,7 @@ import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewp
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
 import type { ViewportRect } from "@lpviz/viewport/snapshot";
-import { addListeners, getTouchCenter, getTouchDistance } from "./pointerEvents";
+import { addListeners, getTouchCenter, getTouchDistance } from "./controlEvents";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
 

@@ -1,4 +1,4 @@
-import { CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, ShaderMaterial } from "three";
+import { CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, ShaderMaterial, type Texture } from "three";
 
 // Rendering translucent strokes onto a transparent black target yields
 // premultiplied alpha, so the composite uses (ONE, ONE_MINUS_SRC_ALPHA).
@@ -17,22 +17,36 @@ void main() {
 
 // A size x size quad that composites an offscreen target onto the canvas;
 // the vertex shader decides where it lands (world-anchored or full-screen).
-export function makeCompositeQuad(vertexShader: string, size: number): { mesh: Mesh; material: ShaderMaterial } {
-  const material = new ShaderMaterial({
-    glslVersion: GLSL3,
-    vertexShader,
-    fragmentShader: QUAD_FRAGMENT_SHADER,
-    uniforms: { map: { value: null } },
-    transparent: true,
-    depthTest: false,
-    depthWrite: false,
-    blending: CustomBlending,
-    blendSrc: OneFactor,
-    blendDst: OneMinusSrcAlphaFactor,
-  });
-  const mesh = new Mesh(new PlaneGeometry(size, size), material);
-  mesh.frustumCulled = false;
-  return { mesh, material };
+export class CompositeQuad {
+  readonly mesh: Mesh;
+  private readonly material: ShaderMaterial;
+
+  constructor(vertexShader: string, size: number) {
+    this.material = new ShaderMaterial({
+      glslVersion: GLSL3,
+      vertexShader,
+      fragmentShader: QUAD_FRAGMENT_SHADER,
+      uniforms: { map: { value: null } },
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      blending: CustomBlending,
+      blendSrc: OneFactor,
+      blendDst: OneMinusSrcAlphaFactor,
+    });
+    this.mesh = new Mesh(new PlaneGeometry(size, size), this.material);
+    this.mesh.frustumCulled = false;
+  }
+
+  /** The target texture the quad composites, or null between targets. */
+  setMap(texture: Texture | null): void {
+    this.material.uniforms.map!.value = texture;
+  }
+
+  dispose(): void {
+    this.mesh.geometry.dispose();
+    this.material.dispose();
+  }
 }
 
 // Demand-driven rendering: a moving view needs one more frame once it settles

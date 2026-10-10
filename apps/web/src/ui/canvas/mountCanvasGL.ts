@@ -1,7 +1,7 @@
 import type { ViewportBridge } from "@/features/viewport/types";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
-import { OrbitController } from "@/three/controllers/OrbitController";
+import { attachOrbit3D } from "@/three/controllers/orbit3D";
 import { attachPanZoom2D } from "@/three/controllers/panZoom2D";
 import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
@@ -24,13 +24,13 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
   canvas.className = "canvas-stage__gl-canvas";
   canvas.tabIndex = 0;
   parent.append(canvas);
-  const mgr = new SceneManager(canvas, { dpr: [1, 2] });
+  const mgr = new SceneManager(canvas);
+  // the transition's tick runs before the camera's, so a frame it publishes is posed the same frame
   const transitionCtl = new TransitionController(mgr);
-  mgr.addTick(() => transitionCtl.tick());
   const cameraCtl = new CameraController(mgr);
   // the 2D listeners register before the 3D ones on the same targets
   const detachPanZoom2D = attachPanZoom2D(canvas);
-  const orbit = new OrbitController(mgr, cameraCtl.perspective, cameraCtl.perspectiveTarget);
+  const detachOrbit3D = attachOrbit3D(mgr, cameraCtl.perspective, cameraCtl.perspectiveTarget);
   const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),
@@ -48,16 +48,15 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
     createIterateStarLayer(),
     new SolverStartLayer(),
   ];
-  for (const l of layers) mgr.addLayer(l);
+  for (const layer of layers) mgr.addLayer(layer);
   onBridgeReady({
     getCanvasElement: () => canvas,
     getCanvasRect: () => canvas.getBoundingClientRect(),
     invalidate: (options) => mgr.invalidate(options),
   });
-  mgr.start();
   return {
     destroy: () => {
-      orbit.dispose();
+      detachOrbit3D();
       detachPanZoom2D();
       cameraCtl.dispose();
       transitionCtl.dispose();

@@ -3,10 +3,9 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
-import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { iteratePosition } from "../helpers/iteratePositions";
+import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { applyHugeBounds } from "../helpers/hugeBounds";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
@@ -109,9 +108,8 @@ export class EllipsoidLayer extends ZScaledLayer {
 
   constructor() {
     super();
-    const geometry = new LineSegmentsGeometry();
+    const geometry = lineGeometry();
     geometry.setPositions(buildUnitCirclePositions());
-    applyHugeBounds(geometry);
     this.geometry = geometry;
 
     this.polygon = setupLine(new LineSegments2(lineGeometry(), polygonMaterial(false)), RENDER_ORDER.ellipsoid);
@@ -151,8 +149,7 @@ export class EllipsoidLayer extends ZScaledLayer {
     for (let j = 0; j < this.indices.length; j++) {
       const index = this.indices[j]!;
       const segments = this.slots[used]!;
-      const iterate = iteratePosition(state.iteratePath, index);
-      if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterate?.[2] ?? 0)) {
+      if (!writeEllipseMatrix(this.matrix, ellipsoids, index, iterateHeightOrFloor(state.iteratePath, index))) {
         continue;
       }
       segments.matrix.copy(this.matrix);
@@ -167,17 +164,16 @@ export class EllipsoidLayer extends ZScaledLayer {
 
     // The localizing polyhedron is shown only for a hovered (or replayed) iterate: one per trail
     // slot buries the picture, so it reads as an inspection tool instead.
-    this.showLocalizingSet(state, snap.mode === "3d");
+    this.showLocalizingSet(state, is3D);
   }
 
-  private showLocalizingSet(raw: State, is3D: boolean): void {
-    const index = raw.highlightIteratePathIndex;
+  private showLocalizingSet(state: State, is3D: boolean): void {
+    const index = state.highlightIteratePathIndex;
     if (index === null) {
       this.polygon.visible = false;
       return;
     }
-    const iterate = iteratePosition(raw.iteratePath, index);
-    const written = this.writePolygon(raw.iterateLocalizingSets, index, iterate?.[2] ?? 0);
+    const written = this.writePolygon(state.iterateLocalizingSets, index, iterateHeightOrFloor(state.iteratePath, index));
     if (written === 0) {
       this.polygon.visible = false;
       return;

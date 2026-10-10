@@ -4,7 +4,6 @@ import { Group } from "three";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { stampTraceSequence } from "../helpers/traceSequence";
 import { PALETTE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
@@ -44,7 +43,7 @@ export class TraceLineLayer extends ZScaledLayer {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
+    return state.traceEnabled && state.traceBuffer.length > 0 && super.visibleIn(state, snap);
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
@@ -78,7 +77,6 @@ export class TraceLineLayer extends ZScaledLayer {
       ribbon.mesh.visible = true;
       this.assigned.set(entry, ribbon);
     }
-    for (const ribbon of freed) ribbon.mesh.visible = false;
 
     if (modeChanged) {
       for (const ribbon of this.assigned.values()) ribbon.setDepth(is3D);

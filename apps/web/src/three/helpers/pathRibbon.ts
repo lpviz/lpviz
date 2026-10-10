@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, NearestFilter, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
+import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
 import { applyHugeBounds } from "./hugeBounds";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
@@ -15,7 +15,7 @@ const TEX_WIDTH_MASK = TEX_WIDTH - 1;
 const TEX_WIDTH_SHIFT = 12;
 
 // Shared by reference across every ribbon material; updated on resize via
-// tickSharedLineMaterialResolutions (CSS pixels, matching LineMaterial).
+// setSharedLineResolution (CSS pixels, matching LineMaterial).
 const sharedResolution = new Vector2(1, 1);
 export function setPathRibbonResolution(width: number, height: number): void {
   sharedResolution.set(width, height);
@@ -133,11 +133,8 @@ function ensureTexture(texture: DataTexture | null, rows: number, type: typeof F
   if (texture && texture.image.height >= rows) return texture;
   texture?.dispose();
   const length = TEX_WIDTH * rows * 4;
-  const next = new DataTexture(type === FloatType ? new Float32Array(length) : new Uint8Array(length), TEX_WIDTH, rows, RGBAFormat, type);
-  next.minFilter = NearestFilter;
-  next.magFilter = NearestFilter;
-  next.generateMipmaps = false;
-  return next;
+  // a DataTexture samples nearest and never mipmaps by default, as a lookup table should
+  return new DataTexture(type === FloatType ? new Float32Array(length) : new Uint8Array(length), TEX_WIDTH, rows, RGBAFormat, type);
 }
 
 // bound when a ribbon has no per-point colors, keeping a single program

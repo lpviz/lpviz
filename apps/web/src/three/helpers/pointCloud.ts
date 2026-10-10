@@ -47,10 +47,6 @@ export class PointCloud {
     this.points.visible = false;
   }
 
-  hide(): void {
-    this.points.visible = false;
-  }
-
   draw(count: number, writePositions: (out: Float32Array) => void, writeColors?: ((out: Float32Array) => void) | null): void {
     if (count === 0) {
       this.points.visible = false;

@@ -1,14 +1,13 @@
 import { getViewportRenderSnapshot, subscribeFullViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
+import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
 import type { SceneManager } from "../SceneManager";
 
 const EPS = 1e-9;
 
-// a plain {x, y, z} copy, as the viewport runtime's pose/snapshot types want
-export const xyz = ({ x, y, z }: { x: number; y: number; z: number }) => ({ x, y, z });
-
-type PerspectiveProjection = { fov: number; aspect: number; near: number; far: number };
-
+// Poses the two cameras from the render snapshot, one frame after it is published, and tells the
+// scene which one to render with.
 export class CameraController {
   private ortho = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
   readonly perspective = new PerspectiveCamera(45, 1, 0.1, 10000);
@@ -17,9 +16,6 @@ export class CameraController {
   readonly perspectiveTarget = new Vector3(NaN, NaN, NaN);
   private unsubscribe: () => void;
   private pendingSnapshot = false;
-  // tracked apart from the camera's own fields, which the orbit controls also
-  // write when they sync from their config
-  private lastPerspectiveProjection: PerspectiveProjection | null = null;
 
   constructor(private sceneManager: SceneManager) {
     // every 2D snapshot looks straight down from z = 10 with +y up, so the
@@ -37,9 +33,7 @@ export class CameraController {
   }
 
   private tick = (): void => {
-    if (!this.pendingSnapshot) {
-      return;
-    }
+    if (!this.pendingSnapshot) return;
     this.pendingSnapshot = false;
     this.applySnapshot();
   };
@@ -59,37 +53,25 @@ export class CameraController {
       return;
     }
 
-    if (this.perspectiveAlreadyMatchesSnapshot()) {
-      return;
-    }
-
-    const { fov, aspect, near, far, position, up } = snap.perspective;
-    const last = this.lastPerspectiveProjection;
-    if (!last || last.fov !== fov || last.aspect !== aspect || last.near !== near || last.far !== far) {
-      this.lastPerspectiveProjection = { fov, aspect, near, far };
-      Object.assign(this.perspective, this.lastPerspectiveProjection).updateProjectionMatrix();
-    }
-    this.perspective.position.copy(position);
-    this.perspective.up.copy(up);
-    this.perspectiveTarget.set(snap.target.x, snap.target.y, snap.target.z);
-    this.perspective.lookAt(this.perspectiveTarget);
-    this.perspective.updateMatrixWorld();
+    // the orbit controls pose this camera too; a snapshot that echoes their pose changes nothing
+    if (this.perspectiveMatches(snap)) return;
+    configurePerspectiveCameraFromSnapshot(snap, this.perspective, this.perspectiveTarget);
   }
 
-  private perspectiveAlreadyMatchesSnapshot(): boolean {
-    const snap = getViewportRenderSnapshot();
+  private perspectiveMatches(snap: ViewportRenderSnapshot): boolean {
+    const camera = this.perspective;
     const target = this.perspectiveTarget;
     return (
-      nearlyEqual(this.perspective.fov, snap.perspective.fov) &&
-      nearlyEqual(this.perspective.aspect, snap.perspective.aspect) &&
-      nearlyEqual(this.perspective.near, snap.perspective.near) &&
-      nearlyEqual(this.perspective.far, snap.perspective.far) &&
-      nearlyEqual(this.perspective.position.x, snap.perspective.position.x) &&
-      nearlyEqual(this.perspective.position.y, snap.perspective.position.y) &&
-      nearlyEqual(this.perspective.position.z, snap.perspective.position.z) &&
-      nearlyEqual(this.perspective.up.x, snap.perspective.up.x) &&
-      nearlyEqual(this.perspective.up.y, snap.perspective.up.y) &&
-      nearlyEqual(this.perspective.up.z, snap.perspective.up.z) &&
+      nearlyEqual(camera.fov, snap.perspective.fov) &&
+      nearlyEqual(camera.aspect, snap.perspective.aspect) &&
+      nearlyEqual(camera.near, snap.perspective.near) &&
+      nearlyEqual(camera.far, snap.perspective.far) &&
+      nearlyEqual(camera.position.x, snap.perspective.position.x) &&
+      nearlyEqual(camera.position.y, snap.perspective.position.y) &&
+      nearlyEqual(camera.position.z, snap.perspective.position.z) &&
+      nearlyEqual(camera.up.x, snap.perspective.up.x) &&
+      nearlyEqual(camera.up.y, snap.perspective.up.y) &&
+      nearlyEqual(camera.up.z, snap.perspective.up.z) &&
       nearlyEqual(target.x, snap.target.x) &&
       nearlyEqual(target.y, snap.target.y) &&
       nearlyEqual(target.z, snap.target.z)

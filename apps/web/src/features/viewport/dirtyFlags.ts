@@ -22,3 +22,6 @@ export const ALL_VIEWPORT_DIRTY: ViewportDirtyFlags = {
 
 // The layers anchored in world space, whose drawn heights follow the z scale and the 2D/3D transition.
 export const WORLD_ANCHORED_DIRTY: ViewportDirtyFlags = { polytope: true, objective: true, trace: true, iterate: true };
+
+/** What an invalidate asks for: a layer update (every layer, or those the flags name) and a frame. */
+export type ViewportInvalidation = { layers?: boolean; viewportDirty?: ViewportDirtyFlags | undefined };

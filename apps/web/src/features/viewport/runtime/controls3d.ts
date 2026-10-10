@@ -2,8 +2,6 @@ import { createSignal } from "@/features/core/signal";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
-export type { ViewportPerspectivePose };
-
 type Viewport3DControlsConfig = {
   enabled: boolean;
   blocked: boolean;

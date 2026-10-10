@@ -1,6 +1,6 @@
 import { displayedSolverStartPoint, type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { iteratePosition } from "../helpers/iteratePositions";
+import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
@@ -54,7 +54,6 @@ export class SolverStartLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    const first = iteratePosition(state.iteratePath, 0);
-    this.draw(1, (pos) => pos.set([point[0], point[1], first?.[2] ?? 0]));
+    this.draw(1, (pos) => pos.set([point[0], point[1], iterateHeightOrFloor(state.iteratePath, 0)]));
   }
 }

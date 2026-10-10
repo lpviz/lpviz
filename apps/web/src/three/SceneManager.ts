@@ -1,14 +1,18 @@
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState } from "@/features/core/store";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags, ViewportInvalidation } from "@/features/viewport/dirtyFlags";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer } from "three";
-import { tickSharedLineMaterialResolutions } from "./helpers/sharedLineMaterials";
+import { setSharedLineResolution } from "./helpers/sharedLineMaterials";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
 import { Trace3DCompositor } from "./Trace3DCompositor";
 import { TraceCache } from "./TraceCache";
 
 type Size = { width: number; height: number; dpr: number };
+
+// the device pixel ratio the canvas renders at: never below 1, and capped so retina
+// displays do not quadruple the fill cost
+const clampDpr = () => Math.min(2, Math.max(1, window.devicePixelRatio));
 
 export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
@@ -30,11 +34,10 @@ export class SceneManager {
   private disposed = false;
   private ticks = new Set<() => void>();
 
-  private _size: Size = { width: 0, height: 0, dpr: 1 };
+  private size: Size = { width: 0, height: 0, dpr: 1 };
 
-  constructor(canvas: HTMLCanvasElement, options: { dpr: [number, number] }) {
-    const [minDpr, maxDpr] = options.dpr;
-    const dpr = Math.min(maxDpr, Math.max(minDpr, window.devicePixelRatio));
+  constructor(canvas: HTMLCanvasElement) {
+    const dpr = clampDpr();
 
     this.renderer = new WebGLRenderer({
       canvas,
@@ -46,14 +49,10 @@ export class SceneManager {
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(dpr);
 
-    this._size = {
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
-      dpr,
-    };
-    this.renderer.setSize(this._size.width, this._size.height, false);
+    this.size = { width: canvas.clientWidth, height: canvas.clientHeight, dpr };
+    this.renderer.setSize(this.size.width, this.size.height, false);
     // screen-space line widths need the CSS resolution before the first render
-    tickSharedLineMaterialResolutions(this._size.width, this._size.height);
+    setSharedLineResolution(this.size.width, this.size.height);
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -74,19 +73,13 @@ export class SceneManager {
   }
 
   private setSize(width: number, height: number): void {
-    const dpr = Math.min(2, Math.max(1, window.devicePixelRatio));
-    if (this._size.width === width && this._size.height === height && this._size.dpr === dpr) {
-      return;
-    }
-    this._size = { width, height, dpr };
+    const dpr = clampDpr();
+    if (this.size.width === width && this.size.height === height && this.size.dpr === dpr) return;
+    this.size = { width, height, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
-    tickSharedLineMaterialResolutions(width, height);
+    setSharedLineResolution(width, height);
     this.invalidate();
-  }
-
-  start(): void {
-    this.scheduleFrame();
   }
 
   private scheduleFrame(): void {
@@ -131,7 +124,8 @@ export class SceneManager {
     }
   };
 
-  invalidate(options: { layers?: boolean; viewportDirty?: ViewportDirtyFlags | undefined } = {}): void {
+  // Asks for a frame; the first one starts the demand-driven loop.
+  invalidate(options: ViewportInvalidation = {}): void {
     if (options.layers ?? true) {
       if (options.viewportDirty && Object.keys(options.viewportDirty).length) {
         if (this.layersDirty !== "all") {
