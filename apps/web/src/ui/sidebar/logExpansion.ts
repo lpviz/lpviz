@@ -21,7 +21,7 @@
 
 import { getState, on } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
-import { COARSE_POINTER_QUERY } from "@/ui/pointer";
+import { COARSE_POINTER_QUERY, prefersReducedMotion } from "@/ui/media";
 
 const LINE_HEIGHT_PX = 16;
 const PAGE_FRACTION = 0.8;
@@ -33,7 +33,6 @@ const OVERFLOW_SLACK_PX = 1;
 // scrollTop cannot strand the gesture
 const SCROLL_END_SLACK_PX = 1;
 const TERMINALS = "#terminal-container, #terminal-container2";
-const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 // Whether the wheel lands inside a terminal that can still scroll in this
 // direction, in which case the terminal keeps the gesture.
@@ -142,7 +141,7 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
 
   // the sidebar follows the drawing on a touch device (see the header); the expansion is applied
   // first so the log's top can reach the sidebar's
-  const scrollBehavior = (): ScrollBehavior => (window.matchMedia(REDUCED_MOTION_QUERY).matches ? "auto" : "smooth");
+  const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? "auto" : "smooth");
   let lastPhase: DrawingPhase | null = null;
   const followDrawing = () => {
     const phase = computeDrawingPhase(getState());

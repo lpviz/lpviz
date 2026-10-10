@@ -10,7 +10,7 @@ import {
   worldDistanceForPixels,
 } from "@/features/polytope-editor/hitTesting";
 import { swallow } from "@/ui/dom";
-import { hasCoarsePointer } from "@/ui/pointer";
+import { hasCoarsePointer } from "@/ui/media";
 import { nearestEdge } from "@lpviz/math/polygon";
 import type { EditorToolsDeps } from "./editorTools";
 

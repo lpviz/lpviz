@@ -1,7 +1,7 @@
 import type { State } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
-import { hasCoarsePointer } from "@/ui/pointer";
+import { hasCoarsePointer } from "@/ui/media";
 
 // A tip's label and description for a mouse and keyboard; the description is HTML (inline
 // <kbd>/<strong>) and is assigned via innerHTML. `touch` is the finger's version: a description,

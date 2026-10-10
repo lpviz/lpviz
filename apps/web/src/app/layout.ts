@@ -1,7 +1,7 @@
 import type { AppActions } from "@/app/appActions";
+import { MOBILE_LAYOUT_QUERY } from "@/ui/media";
 
 const DEFAULT_SIDEBAR_WIDTH = 450;
-const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
 
 export type Layout = ReturnType<typeof createLayout>;
 

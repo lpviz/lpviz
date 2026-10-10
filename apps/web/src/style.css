@@ -1,3 +1,7 @@
+/* lpviz's stylesheet, in the page's order: the globals and the primitives (buttons, range
+   sliders) first, then the sidebar from top to bottom, then the canvas stage and what floats over
+   it, and the phone layout last, so that its overrides win. */
+
 /* ================================
   App Global
   ================================ */
@@ -24,6 +28,13 @@ body {
   font-size: 1rem;
 }
 
+/* the form controls use the page's font (the UA gives them its own) */
+button,
+input,
+select {
+  font-family: inherit;
+}
+
 .is-hidden {
   display: none !important;
 }
@@ -38,199 +49,155 @@ body {
 }
 
 /* ================================
-    Canvas Area
+    Buttons
     ================================ */
-.canvas-stage__viewport {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
+/* the sidebar's buttons are raised, and pressed down while active or disabled */
+#sidebar button {
+  margin-top: 10px;
+  padding: 6px 16px;
+  font-size: 0.9rem;
+  background-color: #fafafa;
+  color: #333;
+  border: 1px solid #333;
+  border-radius: 4px;
+  box-shadow:
+    0 4px 0 #333,
+    0 4px 8px rgba(0, 0, 0, 0.1);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.canvas-stage__viewport > * {
-  position: absolute;
-  inset: 0;
+#sidebar button:hover:not(:disabled):not(.button-active) {
+  background-color: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow:
+    0 6px 0 #333,
+    0 6px 10px rgba(0, 0, 0, 0.15);
 }
 
-.canvas-stage__gl-canvas {
-  display: block;
-  width: 100%;
-  height: 100%;
-  outline: none;
-  touch-action: none;
-  /* a long press is a press, not a selection or a callout */
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-touch-callout: none;
+#sidebar button:active:not(:disabled) {
+  background-color: #e0e0e0;
+  transform: translateY(2px);
+  box-shadow:
+    0 2px 0 #333,
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#sidebar button:disabled,
+#sidebar button.button-active {
+  background-color: #fafafa;
+  color: #333;
+  border-color: #333;
+  transform: translateY(2px);
+  box-shadow:
+    0 2px 0 #333,
+    0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#sidebar button:disabled {
+  cursor: not-allowed;
+}
+
+/* the canvas's buttons are flat: the toolbar, the help and the gallery's items */
+#zoomControls button,
+#helpButton,
+.problem-gallery__item {
+  background-color: #fafafa;
+  color: #333;
+  border: 1px solid #333;
+  border-radius: 4px;
 }
 
 /* ================================
-    Problem Gallery
+    Range sliders
     ================================ */
-.problem-gallery {
-  /* the strip's geometry: an item, the gap between items, the open strip's height, and the width
-     the items need (the count comes from the gallery) against the width the canvas allows, which
-     keeps clear of the toolbar at the right and, the strip being centred, as much at the left */
-  --item-width: 84px;
-  --item-gap: 8px;
-  --gallery-expanded-height: 96px;
-  --strip-width: calc(var(--gallery-items) * var(--item-width) + (var(--gallery-items) - 1) * var(--item-gap) + 16px);
-  --strip-max: calc(100vw - var(--sidebar-width) - 120px);
-  position: fixed;
-  top: 0;
-  /* centred over the canvas, beside the sidebar */
-  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
-  z-index: 90;
-  display: block;
-  width: 44px;
-  height: 28px;
-  overflow: hidden;
-  box-sizing: border-box;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  background: rgba(250, 250, 250, 0.94);
-  border: 1px solid #333;
-  border-top: 0;
-  border-radius: 0 0 8px 8px;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
-  transform-origin: top center;
-  transition:
-    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    height 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
-    background-color 180ms ease,
-    box-shadow 180ms ease;
-}
-
-.problem-gallery.is-expanded {
-  width: min(var(--strip-width), var(--strip-max));
-  height: var(--gallery-expanded-height);
-  background: rgba(250, 250, 250, 0.92);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
-}
-
-.problem-gallery__toggle {
-  position: absolute;
-  top: 0;
-  left: 0;
-  z-index: 1;
-  display: grid;
-  place-items: center;
-  width: 44px;
-  height: 28px;
-  padding: 0;
-  font-family: "JuliaMono", monospace;
-  font-size: 1rem;
-  line-height: 1;
-  color: #333;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  cursor: pointer;
-  transition:
-    background-color 180ms ease,
-    transform 180ms ease;
-}
-
-.problem-gallery.is-expanded .problem-gallery__toggle {
+/* every horizontal slider (dom.ts's range()); the vertical z-scale slider has its own rules. The
+   webkit and moz track and thumb rules are written twice because one unsupported vendor
+   pseudo-element voids a whole selector list. */
+.range {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  height: 18px;
-}
-
-.problem-gallery__chevron {
-  display: block;
-  width: 12px;
-  height: 8px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  transform-origin: center;
-  transition: transform 180ms ease;
-}
-
-.problem-gallery.is-expanded .problem-gallery__chevron {
-  transform: scaleY(-1);
-}
-
-.problem-gallery__items {
-  display: flex;
-  align-items: flex-start;
-  max-width: inherit;
-  gap: var(--item-gap);
-  padding: 8px;
-  padding-top: 22px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  box-sizing: border-box;
-  height: 96px;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateX(-18px);
+  height: 6px;
+  background: #ddd;
+  border-radius: 4px;
   transition:
-    opacity 150ms ease 80ms,
-    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
-  scrollbar-width: none;
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+  outline: none;
 }
 
-.problem-gallery__items::-webkit-scrollbar {
-  display: none;
-}
-
-.problem-gallery.is-expanded .problem-gallery__items {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translateX(0);
-}
-
-.problem-gallery__item {
-  display: grid;
-  grid-template-rows: 36px 13px;
-  place-items: center;
-  flex: 0 0 var(--item-width);
-  width: var(--item-width);
-  height: 64px;
-  box-sizing: border-box;
-  padding: 4px 6px;
-  margin: 0;
-  font-family: "JuliaMono", monospace;
-  font-size: 0.68rem;
-  line-height: 1;
-  color: #333;
-  background: #fafafa;
+.range::-webkit-slider-runnable-track {
+  height: 6px;
+  background: #ddd;
   border: 1px solid #333;
   border-radius: 4px;
-  cursor: pointer;
 }
 
-.problem-gallery__item:hover,
-.problem-gallery__item:focus-visible {
+/* a log-scale slider marks its decades on the track */
+.range.log-slider {
+  --ticks:
+    linear-gradient(90deg, transparent calc(20% - 1px), #333 calc(20% - 1px) calc(20% + 1px), transparent calc(20% + 1px)),
+    linear-gradient(90deg, transparent calc(40% - 1px), #333 calc(40% - 1px) calc(40% + 1px), transparent calc(40% + 1px)),
+    linear-gradient(90deg, transparent calc(60% - 1px), #333 calc(60% - 1px) calc(60% + 1px), transparent calc(60% + 1px)),
+    linear-gradient(90deg, transparent calc(80% - 1px), #333 calc(80% - 1px) calc(80% + 1px), transparent calc(80% + 1px));
+}
+
+.range.log-slider::-webkit-slider-runnable-track {
+  background: var(--ticks), #ddd;
+}
+
+.range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 10px;
+  height: 20px;
+  background: #fafafa;
+  border: 1px solid #333;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease;
+  margin-top: -7px;
+}
+
+.range:hover::-webkit-slider-thumb,
+.range:focus::-webkit-slider-thumb {
   background: #f0f0f0;
 }
 
-.problem-gallery__thumb {
-  width: 54px;
-  height: 36px;
+.range:active::-webkit-slider-thumb {
+  background: #e0e0e0;
 }
 
-.problem-gallery__thumb polygon {
-  fill: rgba(76, 175, 80, 0.16);
-  stroke: #333;
-  stroke-width: 1.5;
+.range::-moz-range-track {
+  height: 6px;
+  background: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
 }
 
-.problem-gallery__thumb line {
-  stroke: #c0392b;
-  stroke-width: 2;
-  stroke-linecap: round;
+.range.log-slider::-moz-range-track {
+  background: var(--ticks), #ddd;
 }
 
-/* the random item: two shape layers crossfade as it reshuffles */
-.problem-gallery__shape {
-  transition: opacity 260ms ease;
+.range::-moz-range-thumb {
+  width: 10px;
+  height: 20px;
+  background: #fafafa;
+  border: 1px solid #333;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease;
 }
 
-.problem-gallery__shape.is-faded {
-  opacity: 0;
+.range:hover::-moz-range-thumb,
+.range:focus::-moz-range-thumb {
+  background: #f0f0f0;
+}
+
+.range:active::-moz-range-thumb {
+  background: #e0e0e0;
 }
 
 /* ================================
@@ -297,6 +264,195 @@ body {
   touch-action: none;
   z-index: 20;
   background: rgba(0, 0, 0, 0.1);
+}
+
+/* ================================
+    Sidebar Control Panels
+    ================================ */
+.controlPanel {
+  background-color: #fafafa;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 15px;
+  padding-top: 0;
+  margin: 15px 0;
+}
+
+.controlPanel.header {
+  padding-top: 13px;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.controlPanel.controlPanel--compact {
+  margin-top: 5px;
+  margin-bottom: 20px;
+}
+
+.controlPanel .button-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  font-size: 0.9rem;
+}
+
+.controlPanel .settings-section {
+  margin-top: 1.5em;
+}
+
+.controlPanel .label-centered {
+  display: block;
+  text-align: center;
+  margin-bottom: 0.5em;
+}
+
+.controlPanel label {
+  font-size: 1rem;
+  color: #333;
+  display: block;
+  margin-bottom: 5px;
+}
+
+.controlPanel .settings-select-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 6px;
+  margin-top: 10px;
+}
+
+.controlPanel .settings-select-grid label,
+.controlPanel .settings-select-grid select {
+  margin: 0;
+}
+
+.controlPanel .range {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.controlPanel .log-slider-control {
+  margin-top: 8px;
+}
+
+.controlPanel .log-slider-scale {
+  position: relative;
+  height: 1em;
+  margin-top: -2px;
+  margin-bottom: 10px;
+  color: #555;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.controlPanel .log-slider-scale span {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.controlPanel .log-slider-scale span:nth-child(1) {
+  left: 0;
+  transform: none;
+}
+
+.controlPanel .log-slider-scale span:nth-child(2) {
+  left: 20%;
+}
+
+.controlPanel .log-slider-scale span:nth-child(3) {
+  left: 40%;
+}
+
+.controlPanel .log-slider-scale span:nth-child(4) {
+  left: 60%;
+}
+
+.controlPanel .log-slider-scale span:nth-child(5) {
+  left: 80%;
+}
+
+.controlPanel .log-slider-scale span:nth-child(6) {
+  right: 0;
+  transform: none;
+}
+
+.controlPanel .settings-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.controlPanel .settings-checkbox-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 0;
+}
+
+/* an option that does not apply to the current selection stays visible, so its
+   absence from the run is legible rather than mysterious */
+.controlPanel .settings-checkbox-row label.is-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.controlPanel select {
+  font: inherit;
+  font-size: 0.95rem;
+  width: 100%;
+  margin-top: 5px;
+  margin-bottom: 10px;
+  padding: 4px 6px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #bbb;
+  border-radius: 4px;
+}
+
+/* label and control side by side, for controls narrow enough to share a line */
+.controlPanel .settings-inline-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.controlPanel .settings-inline-row label {
+  margin-bottom: 0;
+  white-space: nowrap;
+}
+
+.controlPanel .settings-inline-row select {
+  width: auto;
+  margin: 0;
+}
+
+.objective-rotation {
+  margin-top: 1em;
+}
+
+.objective-rotation .rotation-layout {
+  display: flex;
+  gap: 1em;
+  align-items: flex-start;
+}
+
+.objective-rotation .rotation-column {
+  flex: 1;
+}
+
+.objective-rotation .rotation-checkbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 /* ================================
@@ -535,64 +691,193 @@ body {
 }
 
 /* ================================
-    Shared Button Styles
+    Canvas Area
     ================================ */
-#sidebar button,
-#zoomControls button {
-  margin-top: 10px;
-  padding: 6px 16px;
-  font-family: "JuliaMono", monospace;
-  font-size: 0.9rem;
-  background-color: #fafafa;
-  color: #333;
+.canvas-stage__viewport {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+
+.canvas-stage__viewport > * {
+  position: absolute;
+  inset: 0;
+}
+
+.canvas-stage__gl-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+  touch-action: none;
+  /* a long press is a press, not a selection or a callout */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* ================================
+    Problem Gallery
+    ================================ */
+.problem-gallery {
+  /* the strip's geometry: an item, the gap between items, the open strip's height, and the width
+     the items need (the count comes from the gallery) against the width the canvas allows, which
+     keeps clear of the toolbar at the right and, the strip being centred, as much at the left */
+  --item-width: 84px;
+  --item-gap: 8px;
+  --gallery-expanded-height: 96px;
+  --strip-width: calc(var(--gallery-items) * var(--item-width) + (var(--gallery-items) - 1) * var(--item-gap) + 16px);
+  --strip-max: calc(100vw - var(--sidebar-width) - 120px);
+  position: fixed;
+  top: 0;
+  /* centred over the canvas, beside the sidebar */
+  left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
+  z-index: 90;
+  display: block;
+  width: 44px;
+  height: 28px;
+  overflow: hidden;
+  box-sizing: border-box;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  background: rgba(250, 250, 250, 0.94);
   border: 1px solid #333;
-  border-radius: 4px;
-  box-shadow:
-    0 4px 0 #333,
-    0 4px 8px rgba(0, 0, 0, 0.1);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+  transform-origin: top center;
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    background-color 0.2s ease;
+    width 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    background-color 180ms ease,
+    box-shadow 180ms ease;
 }
 
-#sidebar button:hover:not(:disabled):not(.button-active),
-#zoomControls button:hover:not(:disabled):not(.button-active) {
-  background-color: #f0f0f0;
-  transform: translateY(-2px);
-  box-shadow:
-    0 6px 0 #333,
-    0 6px 10px rgba(0, 0, 0, 0.15);
+.problem-gallery.is-expanded {
+  width: min(var(--strip-width), var(--strip-max));
+  height: var(--gallery-expanded-height);
+  background: rgba(250, 250, 250, 0.92);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
 }
 
-#sidebar button:active:not(:disabled),
-#zoomControls button:active:not(:disabled) {
-  background-color: #e0e0e0;
-  transform: translateY(2px);
-  box-shadow:
-    0 2px 0 #333,
-    0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-#sidebar button:disabled {
-  background-color: #fafafa;
+.problem-gallery__toggle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 28px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
   color: #333;
-  border-color: #333;
-  transform: translateY(2px);
-  box-shadow:
-    0 2px 0 #333,
-    0 2px 4px rgba(0, 0, 0, 0.1);
-  cursor: not-allowed;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    transform 180ms ease;
 }
 
-#sidebar button.button-active {
-  background-color: #fafafa;
-  color: #333;
-  border-color: #333;
-  transform: translateY(2px);
-  box-shadow:
-    0 2px 0 #333,
-    0 2px 4px rgba(0, 0, 0, 0.1);
+.problem-gallery.is-expanded .problem-gallery__toggle {
+  width: 100%;
+  height: 18px;
+}
+
+.problem-gallery__chevron {
+  display: block;
+  width: 12px;
+  height: 8px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform-origin: center;
+  transition: transform 180ms ease;
+}
+
+.problem-gallery.is-expanded .problem-gallery__chevron {
+  transform: scaleY(-1);
+}
+
+.problem-gallery__items {
+  display: flex;
+  align-items: flex-start;
+  max-width: inherit;
+  gap: var(--item-gap);
+  padding: 8px;
+  padding-top: 22px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-sizing: border-box;
+  height: 96px;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(-18px);
+  transition:
+    opacity 150ms ease 80ms,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  scrollbar-width: none;
+}
+
+.problem-gallery__items::-webkit-scrollbar {
+  display: none;
+}
+
+.problem-gallery.is-expanded .problem-gallery__items {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.problem-gallery__item {
+  display: grid;
+  grid-template-rows: 36px 13px;
+  place-items: center;
+  flex: 0 0 var(--item-width);
+  width: var(--item-width);
+  height: 64px;
+  box-sizing: border-box;
+  padding: 4px 6px;
+  margin: 0;
+  font-size: 0.68rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.problem-gallery__item:hover,
+.problem-gallery__item:focus-visible {
+  background: #f0f0f0;
+}
+
+.problem-gallery__thumb {
+  width: 54px;
+  height: 36px;
+}
+
+.problem-gallery__thumb polygon {
+  fill: rgba(76, 175, 80, 0.16);
+  stroke: #333;
+  stroke-width: 1.5;
+}
+
+.problem-gallery__thumb line {
+  stroke: #c0392b;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+/* the random item: two shape layers crossfade as it reshuffles */
+.problem-gallery__shape {
+  transition: opacity 260ms ease;
+}
+
+.problem-gallery__shape.is-faded {
+  opacity: 0;
 }
 
 /* ================================
@@ -616,15 +901,7 @@ body {
   height: var(--zoom-control-size);
   box-sizing: border-box;
   padding: 10px;
-  box-shadow: none;
-  margin-top: 0;
-}
-
-#zoomControls button:hover:not(:disabled):not(.button-active),
-#zoomControls button:active:not(:disabled):not(.button-active) {
-  background-color: #fafafa;
-  transform: none;
-  box-shadow: none;
+  font-size: 0.9rem;
 }
 
 #shareButton {
@@ -636,13 +913,6 @@ body {
 #toggle3DButton.button-active {
   background-color: #4caf50;
   color: white;
-}
-
-#toggle3DButton.button-active:hover {
-  background-color: #4caf50;
-  color: white;
-  box-shadow: none;
-  transform: none;
 }
 
 /* ================================
@@ -687,6 +957,89 @@ body {
   outline: none;
 }
 
+#zScaleSlider::-webkit-slider-runnable-track {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6px;
+  background: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
+}
+
+#zScaleSlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 10px;
+  background: #fafafa;
+  border: 1px solid #333;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease;
+  margin-left: -7px;
+}
+
+#zScaleSlider::-webkit-slider-thumb:hover,
+#zScaleSlider::-webkit-slider-thumb:focus {
+  background: #f0f0f0;
+}
+
+#zScaleSlider::-webkit-slider-thumb:active {
+  background: #e0e0e0;
+}
+
+#zScaleSlider::-moz-range-track {
+  width: 6px;
+  height: 80px;
+  background: #ddd;
+  border: 1px solid #333;
+  border-radius: 4px;
+}
+
+#zScaleSlider::-moz-range-thumb {
+  width: 20px;
+  height: 10px;
+  background: #fafafa;
+  border: 1px solid #333;
+  border-radius: 2px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.2s ease;
+  margin-left: -7px;
+}
+
+#zScaleSlider::-moz-range-thumb:hover,
+#zScaleSlider::-moz-range-thumb:focus {
+  background: #f0f0f0;
+}
+
+#zScaleSlider::-moz-range-thumb:active {
+  background: #e0e0e0;
+}
+
+@supports not (-moz-appearance: none) {
+  @media screen and (-webkit-min-device-pixel-ratio: 0) {
+    #zScaleSlider {
+      width: 80px;
+      height: 80px;
+      transform: rotate(270deg);
+      transform-origin: center;
+      writing-mode: horizontal-tb;
+      background: transparent;
+    }
+
+    #zScaleSlider::-webkit-slider-runnable-track {
+      width: 100%;
+      height: 6px;
+    }
+
+    #zScaleSlider::-webkit-slider-thumb {
+      margin-left: 0;
+      transform: rotate(270deg);
+      margin-top: -3px;
+    }
+  }
+}
+
 /* ================================
     Help Button (bottom right)
     ================================ */
@@ -718,14 +1071,9 @@ body {
   height: var(--help-size);
   box-sizing: border-box;
   padding: 10px;
-  font-family: "JuliaMono", monospace;
   font-size: 1.5rem;
   font-weight: bold;
   line-height: 1;
-  background-color: #fafafa;
-  color: #333;
-  border: 1px solid #333;
-  border-radius: 4px;
   cursor: pointer;
   pointer-events: auto;
   transition: background-color 0.2s ease;
@@ -775,7 +1123,6 @@ body {
 }
 
 .help-panel__title {
-  font-family: "JuliaMono", monospace;
   font-size: 1.05rem;
   font-weight: bold;
   color: #1a1a1a;
@@ -789,7 +1136,6 @@ body {
   margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid #e6e6e6;
-  font-family: "JuliaMono", monospace;
   font-size: 0.85rem;
   color: #1a1a1a;
   text-decoration: none;
@@ -873,7 +1219,6 @@ body {
   align-items: baseline;
   gap: 12px;
   padding: 14px 22px;
-  font-family: "JuliaMono", monospace;
   background-color: rgba(252, 252, 252, 0.97);
   border: 1px solid #333;
   border-radius: 10px;
@@ -1023,14 +1368,8 @@ body {
     padding: 12px 14px;
   }
 
-  .controlPanel {
-    padding: 10px;
-    margin: 8px 0;
-    text-align: center;
-  }
-
+  .controlPanel,
   .controlPanel .settings-section {
-    margin-top: 1em;
     text-align: center;
   }
 
@@ -1085,376 +1424,6 @@ body {
     margin-top: 4px;
     padding: 4px;
   }
-
-  #zScaleSlider {
-    height: 64px;
-  }
-}
-
-#zScaleSlider::-webkit-slider-runnable-track {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 6px;
-  background: #ddd;
-  border: 1px solid #333;
-  border-radius: 4px;
-}
-
-#zScaleSlider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 20px;
-  height: 10px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-  margin-left: -7px;
-}
-
-#zScaleSlider::-webkit-slider-thumb:hover,
-#zScaleSlider::-webkit-slider-thumb:focus {
-  background: #f0f0f0;
-}
-
-#zScaleSlider::-webkit-slider-thumb:active {
-  background: #e0e0e0;
-}
-
-#zScaleSlider::-moz-range-track {
-  width: 6px;
-  height: 80px;
-  background: #ddd;
-  border: 1px solid #333;
-  border-radius: 4px;
-}
-
-#zScaleSlider::-moz-range-thumb {
-  width: 20px;
-  height: 10px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-  margin-left: -7px;
-}
-
-#zScaleSlider::-moz-range-thumb:hover,
-#zScaleSlider::-moz-range-thumb:focus {
-  background: #f0f0f0;
-}
-
-#zScaleSlider::-moz-range-thumb:active {
-  background: #e0e0e0;
-}
-
-@supports not (-moz-appearance: none) {
-  @media screen and (-webkit-min-device-pixel-ratio: 0) {
-    #zScaleSlider {
-      width: 80px;
-      height: 80px;
-      transform: rotate(270deg);
-      transform-origin: center;
-      writing-mode: horizontal-tb;
-      background: transparent;
-    }
-
-    #zScaleSlider::-webkit-slider-runnable-track {
-      width: 100%;
-      height: 6px;
-    }
-
-    #zScaleSlider::-webkit-slider-thumb {
-      margin-left: 0;
-      transform: rotate(270deg);
-      margin-top: -3px;
-    }
-  }
-}
-
-/* ================================
-    Horizontal slider style
-    ================================ */
-input[type="range"]:not(#zScaleSlider) {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 6px;
-  background: #ddd;
-  border-radius: 4px;
-  transition:
-    background 0.2s ease,
-    box-shadow 0.2s ease;
-  outline: none;
-}
-
-input[type="range"]:not(#zScaleSlider)::-webkit-slider-runnable-track {
-  height: 6px;
-  background: #ddd;
-  border: 1px solid #333;
-  border-radius: 4px;
-}
-
-input[type="range"].log-slider:not(#zScaleSlider)::-webkit-slider-runnable-track {
-  background:
-    linear-gradient(90deg, transparent calc(20% - 1px), #333 calc(20% - 1px) calc(20% + 1px), transparent calc(20% + 1px)),
-    linear-gradient(90deg, transparent calc(40% - 1px), #333 calc(40% - 1px) calc(40% + 1px), transparent calc(40% + 1px)),
-    linear-gradient(90deg, transparent calc(60% - 1px), #333 calc(60% - 1px) calc(60% + 1px), transparent calc(60% + 1px)),
-    linear-gradient(90deg, transparent calc(80% - 1px), #333 calc(80% - 1px) calc(80% + 1px), transparent calc(80% + 1px)), #ddd;
-}
-
-input[type="range"]:not(#zScaleSlider)::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 10px;
-  height: 20px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-  margin-top: -7px;
-}
-
-input[type="range"]:not(#zScaleSlider):hover::-webkit-slider-thumb,
-input[type="range"]:not(#zScaleSlider):focus::-webkit-slider-thumb {
-  background: #f0f0f0;
-}
-
-input[type="range"]:not(#zScaleSlider):active::-webkit-slider-thumb {
-  background: #e0e0e0;
-}
-
-input[type="range"]:not(#zScaleSlider)::-moz-range-track {
-  height: 6px;
-  background: #ddd;
-  border: 1px solid #333;
-  border-radius: 4px;
-}
-
-input[type="range"].log-slider:not(#zScaleSlider)::-moz-range-track {
-  background:
-    linear-gradient(90deg, transparent calc(20% - 1px), #333 calc(20% - 1px) calc(20% + 1px), transparent calc(20% + 1px)),
-    linear-gradient(90deg, transparent calc(40% - 1px), #333 calc(40% - 1px) calc(40% + 1px), transparent calc(40% + 1px)),
-    linear-gradient(90deg, transparent calc(60% - 1px), #333 calc(60% - 1px) calc(60% + 1px), transparent calc(60% + 1px)),
-    linear-gradient(90deg, transparent calc(80% - 1px), #333 calc(80% - 1px) calc(80% + 1px), transparent calc(80% + 1px)), #ddd;
-}
-
-input[type="range"]:not(#zScaleSlider)::-moz-range-thumb {
-  width: 10px;
-  height: 20px;
-  background: #fafafa;
-  border: 1px solid #333;
-  border-radius: 2px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transition: background 0.2s ease;
-}
-
-input[type="range"]:not(#zScaleSlider):hover::-moz-range-thumb,
-input[type="range"]:not(#zScaleSlider):focus::-moz-range-thumb {
-  background: #f0f0f0;
-}
-
-input[type="range"]:not(#zScaleSlider):active::-moz-range-thumb {
-  background: #e0e0e0;
-}
-
-/* ================================
-    Sidebar Control Panels
-    ================================ */
-.controlPanel {
-  background-color: #fafafa;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 15px;
-  padding-top: 0;
-  margin: 15px 0;
-}
-
-.controlPanel.header {
-  padding-top: 13px;
-  margin-top: 0;
-  margin-bottom: 0;
-}
-
-.controlPanel.controlPanel--compact {
-  margin-top: 5px;
-  margin-bottom: 20px;
-}
-
-.controlPanel .button-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  justify-content: center;
-  font-size: 0.9rem;
-}
-
-.controlPanel .settings-section {
-  display: none;
-  margin-top: 1.5em;
-}
-
-.controlPanel .label-centered {
-  display: block;
-  text-align: center;
-  margin-bottom: 0.5em;
-}
-
-.controlPanel label {
-  font-family: "JuliaMono", monospace;
-  font-size: 1rem;
-  color: #333;
-  display: block;
-  margin-bottom: 5px;
-}
-
-.controlPanel .settings-select-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  column-gap: 8px;
-  row-gap: 6px;
-  margin-top: 10px;
-}
-
-.controlPanel .settings-select-grid label,
-.controlPanel .settings-select-grid select {
-  margin: 0;
-}
-
-.controlPanel input[type="range"] {
-  margin-top: 10px;
-  margin-bottom: 10px;
-  width: 100%;
-}
-
-.controlPanel .log-slider-control {
-  margin-top: 8px;
-}
-
-.controlPanel .log-slider {
-  margin-bottom: 4px;
-}
-
-.controlPanel .log-slider-scale {
-  position: relative;
-  height: 1em;
-  margin-top: -2px;
-  margin-bottom: 10px;
-  color: #555;
-  font-family: "JuliaMono", monospace;
-  font-size: 0.7rem;
-  line-height: 1;
-}
-
-.controlPanel .log-slider-scale span {
-  position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-.controlPanel .log-slider-scale span:nth-child(1) {
-  left: 0;
-  transform: none;
-}
-
-.controlPanel .log-slider-scale span:nth-child(2) {
-  left: 20%;
-}
-
-.controlPanel .log-slider-scale span:nth-child(3) {
-  left: 40%;
-}
-
-.controlPanel .log-slider-scale span:nth-child(4) {
-  left: 60%;
-}
-
-.controlPanel .log-slider-scale span:nth-child(5) {
-  left: 80%;
-}
-
-.controlPanel .log-slider-scale span:nth-child(6) {
-  right: 0;
-  transform: none;
-}
-
-.controlPanel .settings-checkbox-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.controlPanel .settings-checkbox-row label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 0;
-}
-
-/* an option that does not apply to the current selection stays visible, so its
-   absence from the run is legible rather than mysterious */
-.controlPanel .settings-checkbox-row label.is-disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.controlPanel select {
-  font: inherit;
-  font-family: "JuliaMono", monospace;
-  font-size: 0.95rem;
-  width: 100%;
-  margin-top: 5px;
-  margin-bottom: 10px;
-  padding: 4px 6px;
-  color: #333;
-  background: #fff;
-  border: 1px solid #bbb;
-  border-radius: 4px;
-}
-
-/* label and control side by side, for controls narrow enough to share a line */
-.controlPanel .settings-inline-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.controlPanel .settings-inline-row label {
-  margin-bottom: 0;
-  white-space: nowrap;
-}
-
-.controlPanel .settings-inline-row select {
-  width: auto;
-  margin: 0;
-}
-
-.objective-rotation {
-  margin-top: 1em;
-}
-
-.objective-rotation .rotation-layout {
-  display: flex;
-  gap: 1em;
-  align-items: flex-start;
-}
-
-.objective-rotation .rotation-column {
-  flex: 1;
-}
-
-.objective-rotation .rotation-checkbox {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }
 
 /* ================================

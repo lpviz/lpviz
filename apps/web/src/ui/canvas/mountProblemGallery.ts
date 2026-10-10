@@ -1,6 +1,7 @@
 import type { AppActions } from "@/app/appActions";
 import { GALLERY_PROBLEMS, randomConvexPolygonPreview, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
 import { el } from "@/ui/dom";
+import { prefersReducedMotion } from "@/ui/media";
 import { boundsOf } from "@lpviz/math/vec";
 
 // the strip opens by itself after this long, unless the person clicks first
@@ -26,7 +27,6 @@ const shapeMarkup = (shape: Shape) => `<polygon points="${pointsAttribute(shape)
 // not at all under prefers-reduced-motion.
 function createReshuffle(button: HTMLButtonElement) {
   const layers = button.querySelectorAll<SVGGElement>(".problem-gallery__shape");
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let front = 0;
   let timer: number | null = null;
   const reshuffle = () => {
@@ -42,7 +42,7 @@ function createReshuffle(button: HTMLButtonElement) {
   };
   const setRunning = (running: boolean) => {
     stop();
-    if (running && !reducedMotion.matches && document.visibilityState === "visible") {
+    if (running && !prefersReducedMotion() && document.visibilityState === "visible") {
       timer = window.setInterval(reshuffle, RESHUFFLE_MS);
     }
   };

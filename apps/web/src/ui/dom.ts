@@ -29,9 +29,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, options: ElOpt
 
 export const button = (text: string, onClick: () => void, options: Pick<ElOptions<"button">, "id" | "className" | "attrs"> = {}) => el("button", { ...options, text, on: { click: onClick } });
 
-// A range input; onInput receives the slider's string value on every input event.
+// A horizontal range input (the stylesheet's `.range`); onInput receives the slider's string
+// value on every input event.
 export function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
   return el("input", {
+    className: "range",
     attrs: { type: "range", id, min, max, step, autocomplete: "off" },
     on: {
       input() {
