@@ -11,19 +11,19 @@ export type PointCloudStyle = {
   vertexColors: boolean;
 };
 
-// Every point sprite in the app: a fixed screen-size, depth-ignoring sprite
-// whose shape is an alpha map (see sharedTextures.ts).
+// Every point sprite in the app: a fixed screen-size, depth-ignoring sprite whose shape is an
+// alpha map (see sharedTextures.ts). Blended, not alpha-tested: the map's soft edge is what keeps
+// a small disc round, and a cutoff would turn it into a staircase.
 const spriteMaterial = (style: PointCloudStyle, color: string, vertexColors: boolean) =>
   new PointsMaterial({
     color,
     size: style.pixelSize,
     sizeAttenuation: false,
-    transparent: (style.opacity ?? 1) < 1,
+    transparent: true,
     opacity: style.opacity ?? 1,
     depthTest: false,
     depthWrite: false,
     alphaMap: style.texture,
-    alphaTest: 0.2,
     vertexColors,
   });
 
