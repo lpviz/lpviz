@@ -21,7 +21,8 @@ export function boot(root: HTMLElement) {
   const ctx: AppContext = { actions, services: { history, polytope }, layout };
 
   const sidebar = mountSidebar(root, ctx);
-  layout.attach({ sidebar, stage: stage.mountChrome(ctx) });
+  stage.mountChrome(ctx);
+  layout.attach();
   applyUrlParamsOnce({ viewportApi: stage.viewportApi, derivePolytope: polytope.derive });
 
   return {

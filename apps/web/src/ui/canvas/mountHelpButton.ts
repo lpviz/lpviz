@@ -28,6 +28,12 @@ export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
       "aria-expanded": "false",
     },
     text: "?",
+    on: {
+      click: (e) => {
+        e.stopPropagation();
+        setOpen(!open);
+      },
+    },
   });
 
   let open = false;
@@ -44,11 +50,6 @@ export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
   // a cancelled touch gets no synthetic click: that click is hit-tested afresh after the lift,
   // by which time the backdrop is gone and the canvas would take it as a tap
   backdrop.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
-
-  button.addEventListener("click", (e) => {
-    e.stopPropagation();
-    setOpen(!open);
-  });
 
   // a press outside the popover or Escape closes it
   const listeners = new AbortController();

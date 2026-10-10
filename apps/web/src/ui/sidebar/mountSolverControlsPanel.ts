@@ -1,8 +1,9 @@
 import type { AppContext } from "@/app/appContext";
-import { getState, on, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
 import { SOLVER_LABELS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
 import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
-import { el } from "@/ui/dom";
+import { button, el } from "@/ui/dom";
+import { renderOn } from "@/ui/renderOn";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
 
 export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
@@ -13,8 +14,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const buttons = new Map<SolverMode, HTMLButtonElement>();
   // the panel's order, the general-purpose solvers first
   for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const) {
-    const b = el("button", { id: `${mode}Button`, text: SOLVER_LABELS[mode] });
-    b.addEventListener("click", () => ctx.actions.setActiveSolverMode(mode));
+    const b = button(SOLVER_LABELS[mode], () => ctx.actions.setActiveSolverMode(mode), { id: `${mode}Button` });
     buttons.set(mode, b);
     buttonGroup.append(b);
   }
@@ -52,12 +52,10 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     syncSettings(s.solverSettings);
   }
 
-  render(getState());
-  const controller = new AbortController();
-  on(["solverMode", "solverSettings", "polytope", "vertices", "completionMode", "objectiveVector", "currentObjective"], () => render(getState()), controller.signal);
+  const stopRender = renderOn(["solverMode", "solverSettings", "polytope", "vertices", "completionMode", "objectiveVector", "currentObjective"], render);
   return {
     destroy: () => {
-      controller.abort();
+      stopRender();
       root.remove();
     },
   };

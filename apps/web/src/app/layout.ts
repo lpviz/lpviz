@@ -1,29 +1,29 @@
 import type { AppActions } from "@/app/appActions";
+import { MOBILE_LAYOUT_QUERY } from "@/ui/media";
 
 const DEFAULT_SIDEBAR_WIDTH = 450;
-const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
-
-type Resizable = { sidebar: { updateWidth: (width: number) => void }; stage: { updateLayout: () => void } };
 
 export type Layout = ReturnType<typeof createLayout>;
 
-// Sidebar geometry: its desktop width, its mobile height, the mobile/desktop
-// switch, and the handle drag that resizes it. `attach` wires the mounted
-// sidebar and stage plus the window listeners; `destroy` removes them.
+// Sidebar geometry: its desktop width, its mobile height, the mobile/desktop switch, and the
+// handle drag that resizes it. The stylesheet lays the sidebar, its handle and the gallery out
+// from two root variables; the viewport runtime is told the width the sidebar takes from it.
+// `attach` installs the window listeners; `destroy` removes them.
 export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setSidebarWidth">) {
   let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   let mobileSidebarHeight = Math.round(window.innerHeight * 0.42);
   const mobileQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);
   let mobileLayout = mobileQuery.matches;
-  let mounted: Resizable | null = null;
 
   const getViewportSidebarWidth = () => (mobileLayout ? 0 : sidebarWidth);
-  const applyLayoutMode = () => {
+  const applyGeometry = () => {
     mobileLayout = mobileQuery.matches;
     root.classList.toggle("mobile-layout", mobileLayout);
     root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
+    root.style.setProperty("--sidebar-width", `${getViewportSidebarWidth()}px`);
+    viewport.setSidebarWidth(getViewportSidebarWidth());
   };
-  applyLayoutMode();
+  applyGeometry();
 
   // the window listeners of an in-progress sidebar resize, so destroy() can
   // remove them if teardown happens mid-drag
@@ -58,33 +58,23 @@ export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setS
 
   const applyHeight = (event: PointerEvent) => {
     mobileSidebarHeight = Math.max(180, Math.min(window.innerHeight * 0.72, window.innerHeight - event.clientY));
-    root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
-    viewport.setSidebarWidth(0);
-    mounted?.stage.updateLayout();
+    applyGeometry();
   };
   const applyWidth = (event: PointerEvent) => {
     sidebarWidth = Math.max(260, Math.min(window.innerWidth - 240, event.clientX));
-    mounted?.sidebar.updateWidth(sidebarWidth);
-    viewport.setSidebarWidth(getViewportSidebarWidth());
-    mounted?.stage.updateLayout();
+    applyGeometry();
   };
-  const onResizeStart = (startEvent: PointerEvent) =>
-    mobileLayout ? trackPointerDrag(startEvent, applyHeight, () => viewport.setSidebarWidth(0)) : trackPointerDrag(startEvent, applyWidth, () => viewport.setSidebarWidth(getViewportSidebarWidth()));
+  const onResizeStart = (startEvent: PointerEvent) => trackPointerDrag(startEvent, mobileLayout ? applyHeight : applyWidth, applyGeometry);
 
   const onResize = () => {
     mobileSidebarHeight = Math.min(mobileSidebarHeight, window.innerHeight * 0.72);
-    applyLayoutMode();
-    viewport.setSidebarWidth(getViewportSidebarWidth());
-    mounted?.stage.updateLayout();
+    applyGeometry();
   };
 
   return {
-    getSidebarWidth: () => sidebarWidth,
     getViewportSidebarWidth,
-    isMobileLayout: () => mobileLayout,
     onResizeStart,
-    attach: (resizable: Resizable) => {
-      mounted = resizable;
+    attach: () => {
       window.addEventListener("resize", onResize);
       mobileQuery.addEventListener("change", onResize);
     },

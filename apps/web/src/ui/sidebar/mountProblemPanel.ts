@@ -1,6 +1,7 @@
 import type { AppContext } from "@/app/appContext";
-import { getState, on, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
 import { el } from "@/ui/dom";
+import { renderOn } from "@/ui/renderOn";
 import { NULL_STATE_LOGO_SVG } from "@/ui/logo";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
 import { formatConstraint } from "@lpviz/polytope/constraints";
@@ -27,17 +28,19 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
   const maximize = el("div", { id: "maximize", text: "maximize" });
   const objective = el("div", { id: "objectiveDisplay" });
   const subjectTo = el("div", { id: "subjectTo", text: "subject to" });
-  const inequalities = el("div", { id: "inequalities" });
-  topResult.append(nullState, maximize, objective, subjectTo, inequalities);
   // delegated hover handlers: rows are rebuilt on every polytope change, so
   // per-row listeners would be re-created each time
-  inequalities.addEventListener("mouseover", (e) => {
-    const row = (e.target as HTMLElement).closest<HTMLElement>(".inequality-item");
-    if (row?.dataset.index !== undefined) {
-      ctx.actions.setConstraintHighlight(Number(row.dataset.index));
-    }
+  const inequalities = el("div", {
+    id: "inequalities",
+    on: {
+      mouseover: (e) => {
+        const row = (e.target as HTMLElement).closest<HTMLElement>(".inequality-item");
+        if (row?.dataset.index !== undefined) ctx.actions.setConstraintHighlight(Number(row.dataset.index));
+      },
+      mouseleave: () => ctx.actions.setConstraintHighlight(null),
+    },
   });
-  inequalities.addEventListener("mouseleave", () => ctx.actions.setConstraintHighlight(null));
+  topResult.append(nullState, maximize, objective, subjectTo, inequalities);
   frame.append(topResult, el("div", { id: "terminal-window" }));
   parent.append(frame);
   let lastItemsKey: unknown[] | null = null;
@@ -75,12 +78,10 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
       );
     });
   }
-  render(getState());
-  const controller = new AbortController();
-  on(["completionMode", "objectiveVector", "currentObjective", "vertices", "polytope", "inequalitiesMessage"], () => render(getState()), controller.signal);
+  const stopRender = renderOn(["completionMode", "objectiveVector", "currentObjective", "vertices", "polytope", "inequalitiesMessage"], render);
   return {
     destroy: () => {
-      controller.abort();
+      stopRender();
       frame.remove();
     },
   };

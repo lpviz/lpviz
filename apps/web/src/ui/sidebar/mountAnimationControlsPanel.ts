@@ -1,52 +1,23 @@
 import type { AppContext } from "@/app/appContext";
-import { getState, on, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
-import { checkbox, el, range } from "@/ui/dom";
+import { button, checkbox, el, range } from "@/ui/dom";
+import { renderOn } from "@/ui/renderOn";
 
 export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
   parent.append(root);
-  const animate = el("button", { text: "Animate" });
-  animate.addEventListener("click", () => ctx.actions.toggleReplay());
-  const start = el("button", {
-    id: "startRotateObjectiveButton",
-    text: "Rotate Objective",
-  });
-  start.addEventListener("click", () => ctx.actions.startRotation());
-  const stop = el("button", { text: "Stop Rotation" });
-  stop.addEventListener("click", () => ctx.actions.stopMotion());
+  const animate = button("Animate", () => ctx.actions.toggleReplay());
+  const start = button("Rotate Objective", () => ctx.actions.startRotation());
+  const stop = button("Stop Rotation", () => ctx.actions.stopMotion());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation is-hidden" });
   const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
   const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
   const trace = checkbox("traceCheckbox", (enabled) => ctx.actions.setTraceEnabled(enabled));
+  const column = (className: string, text: string, control: HTMLInputElement) => el("div", { className }, [el("label", { className: "label-centered", attrs: { for: control.id }, text }), control]);
   rot.append(
-    el("div", { className: "rotation-layout" }, [
-      el("div", { className: "rotation-column" }, [
-        el("label", {
-          className: "label-centered",
-          attrs: { for: "objectiveAngleStepSlider" },
-          text: "Angle Step",
-        }),
-        angle,
-      ]),
-      el("div", { className: "rotation-column" }, [
-        el("label", {
-          className: "label-centered",
-          attrs: { for: "objectiveRotationSpeedSlider" },
-          text: "Rotation Speed",
-        }),
-        speed,
-      ]),
-      el("div", { className: "rotation-checkbox" }, [
-        el("label", {
-          className: "label-centered",
-          attrs: { for: "traceCheckbox" },
-          text: "Trace",
-        }),
-        trace,
-      ]),
-    ]),
+    el("div", { className: "rotation-layout" }, [column("rotation-column", "Angle Step", angle), column("rotation-column", "Rotation Speed", speed), column("rotation-checkbox", "Trace", trace)]),
   );
   root.append(rot);
   function render(s: State) {
@@ -66,12 +37,10 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
     angle.value = String(s.solverSettings.objectiveAngleStep);
     speed.value = String(s.solverSettings.objectiveRotationSpeed);
   }
-  render(getState());
-  const controller = new AbortController();
-  on(["polytope", "originalIteratePath", "objectiveVector", "rotateObjectiveMode", "replayActive", "traceEnabled", "solverSettings"], () => render(getState()), controller.signal);
+  const stopRender = renderOn(["polytope", "originalIteratePath", "objectiveVector", "rotateObjectiveMode", "replayActive", "traceEnabled", "solverSettings"], render);
   return {
     destroy: () => {
-      controller.abort();
+      stopRender();
       root.remove();
     },
   };

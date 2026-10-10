@@ -13,7 +13,6 @@ const GITHUB_ICON =
 export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   const header = el("header");
   const sidebar = el("div", { id: "sidebar" });
-  sidebar.style.width = `${ctx.layout.getSidebarWidth()}px`;
   const content = el("div", { id: "sidebarContent" });
   const github = el("a", {
     className: "github-link",
@@ -41,9 +40,6 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   const gutterObserver = new ResizeObserver(syncScrollbarGutter);
   gutterObserver.observe(content);
   return {
-    updateWidth: (w: number) => {
-      sidebar.style.width = `${w}px`;
-    },
     destroy: () => {
       gutterObserver.disconnect();
       logExpansion.destroy();

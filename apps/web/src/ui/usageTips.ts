@@ -1,7 +1,7 @@
 import type { State } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
-import { hasCoarsePointer } from "@/ui/pointer";
+import { hasCoarsePointer } from "@/ui/media";
 
 // A tip's label and description for a mouse and keyboard; the description is HTML (inline
 // <kbd>/<strong>) and is assigned via innerHTML. `touch` is the finger's version: a description,
@@ -118,8 +118,7 @@ function sketchingHint(vertexCount: number, touch: boolean, finishOpenRegion: ()
   const close = touch ? "tap the first one to close" : "click the first one to close";
   const lead = vertexCount < 3 ? `${add}, or ` : `${add} — ${close}, or `;
   if (!touch) return [`${lead}press Enter to leave it open.`];
-  const link = el("button", { className: "usage-hint__link", text: "leave it open", attrs: { type: "button" } });
-  link.addEventListener("click", finishOpenRegion);
+  const link = el("button", { className: "usage-hint__link", text: "leave it open", attrs: { type: "button" }, on: { click: finishOpenRegion } });
   // the full stop stays with the link rather than wrapping onto a line of its own
   return [lead, el("span", { className: "usage-hint__action" }, [link, document.createTextNode(".")])];
 }

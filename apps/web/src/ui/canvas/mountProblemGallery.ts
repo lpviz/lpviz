@@ -1,17 +1,12 @@
-import type { AppContext } from "@/app/appContext";
+import type { AppActions } from "@/app/appActions";
 import { GALLERY_PROBLEMS, randomConvexPolygonPreview, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
 import { el } from "@/ui/dom";
+import { prefersReducedMotion } from "@/ui/media";
 import { boundsOf } from "@lpviz/math/vec";
 
 // the strip opens by itself after this long, unless the person clicks first
 const IDLE = 3000;
-const ITEM_W = 84;
-const GAP = 8;
-const CHROME = 16;
-// the open strip's height, also handed to the viewport as the top inset
-// zoom-to-fit must keep the region clear of (the CSS reads it as a variable)
-const EXPANDED_H = 96;
-// breathing room between the strip's bottom edge and the fitted region
+// breathing room between the open strip's bottom edge and the region zoom-to-fit keeps clear of it
 const INSET_GAP = 8;
 // how often the random item's thumbnail changes shape while the strip is open
 const RESHUFFLE_MS = 1000;
@@ -32,7 +27,6 @@ const shapeMarkup = (shape: Shape) => `<polygon points="${pointsAttribute(shape)
 // not at all under prefers-reduced-motion.
 function createReshuffle(button: HTMLButtonElement) {
   const layers = button.querySelectorAll<SVGGElement>(".problem-gallery__shape");
-  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
   let front = 0;
   let timer: number | null = null;
   const reshuffle = () => {
@@ -48,18 +42,20 @@ function createReshuffle(button: HTMLButtonElement) {
   };
   const setRunning = (running: boolean) => {
     stop();
-    if (running && !reducedMotion.matches && document.visibilityState === "visible") {
+    if (running && !prefersReducedMotion() && document.visibilityState === "visible") {
       timer = window.setInterval(reshuffle, RESHUFFLE_MS);
     }
   };
   return { setRunning, stop };
 }
-export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
+export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppActions, "loadGalleryProblem" | "setTopInset">) {
   let expanded = false;
   const root = el("div", {
     className: "problem-gallery",
     attrs: { "aria-label": "Problem gallery" },
   });
+  // the stylesheet lays the strip out; the item count is the one number it cannot know
+  root.style.setProperty("--gallery-items", String(GALLERY_PROBLEMS.length));
   parent.append(root);
   const toggle = el("button", {
     className: "problem-gallery__toggle",
@@ -69,6 +65,14 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
       "aria-expanded": "false",
     },
     html: '<svg class="problem-gallery__chevron" viewBox="0 0 12 8" aria-hidden="true"><polyline points="1 1 6 6 11 1" /></svg>',
+    on: {
+      click: (e) => {
+        e.stopPropagation();
+        disarmAutoOpen();
+        expanded = !expanded;
+        render();
+      },
+    },
   });
   const items = el("div", {
     className: "problem-gallery__items",
@@ -83,25 +87,22 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
       html: p.isRandom
         ? `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true"><g class="problem-gallery__shape">${shapeMarkup(p)}</g><g class="problem-gallery__shape is-faded"></g></svg><span>${p.name}</span>`
         : `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true">${shapeMarkup(p)}</svg><span>${p.name}</span>`,
+      on: {
+        click: () => {
+          // the random item rolls a fresh problem each time
+          const problem = p.isRandom ? requestRandomConvexPolygonProblem() : p;
+          if (problem) actions.loadGalleryProblem(problem);
+        },
+      },
     });
     if (p.isRandom) reshuffles.push(createReshuffle(b));
-    b.addEventListener("click", () => {
-      if (p.isRandom) {
-        const generated = requestRandomConvexPolygonProblem();
-        if (generated) ctx.actions.loadGalleryProblem(generated);
-        return;
-      }
-      ctx.actions.loadGalleryProblem(p);
-    });
     items.append(b);
   }
+  // the open strip's height is the stylesheet's (it differs by layout); zoom-to-fit keeps clear of it
+  const expandedHeight = () => parseFloat(getComputedStyle(root).getPropertyValue("--gallery-expanded-height")) || 0;
   const render = () => {
-    const sw = ctx.layout.getViewportSidebarWidth();
-    root.className = `problem-gallery ${expanded ? "is-expanded" : ""}`.trim();
-    root.style.left = `calc(${sw}px + (100vw - ${sw}px) / 2)`;
-    root.style.setProperty("--problem-gallery-expanded-width", `min(${GALLERY_PROBLEMS.length * ITEM_W + Math.max(0, GALLERY_PROBLEMS.length - 1) * GAP + CHROME}px, calc(100vw - ${sw}px - 120px))`);
-    root.style.setProperty("--problem-gallery-expanded-height", `${EXPANDED_H}px`);
-    ctx.actions.setTopInset(expanded ? EXPANDED_H + INSET_GAP : 0);
+    root.classList.toggle("is-expanded", expanded);
+    actions.setTopInset(expanded ? expandedHeight() + INSET_GAP : 0);
     toggle.setAttribute("aria-expanded", String(expanded));
     items.setAttribute("aria-hidden", String(!expanded));
     for (const r of reshuffles) r.setRunning(expanded);
@@ -128,15 +129,8 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     document.removeEventListener("click", firstClick);
   }
   document.addEventListener("click", firstClick);
-  toggle.addEventListener("click", (e) => {
-    e.stopPropagation();
-    disarmAutoOpen();
-    expanded = !expanded;
-    render();
-  });
   render();
   return {
-    updateLayout: render,
     destroy: () => {
       disarmAutoOpen();
       for (const r of reshuffles) r.stop();
