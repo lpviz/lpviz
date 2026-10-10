@@ -1,10 +1,8 @@
 import { nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
 import { hasFeasibleRegion, isReadyForSolvers } from "@/features/problem/selectors";
-import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
+import { DEFAULT_SOLVER_SETTINGS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
 import type { Vec } from "@lpviz/math/types";
 import { zeroVec } from "@lpviz/math/vec";
-import type { QueryPoint } from "@lpviz/solver-engine/cuttingPlane";
-import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
 type ResultTextBlockClassName = "iterate-header" | "iterate-item" | "iterate-item-nohover" | "iterate-footer";
@@ -14,14 +12,6 @@ export type ResultTextBlock = {
   text: string;
   index?: number | undefined;
 };
-
-// Index order is the share link's wire identity (compactUrl): only ever append.
-export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
-export type SolverMode = (typeof SOLVER_MODES)[number];
-// Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
-// method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
-export const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
-export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
 // Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
 // scrolled into view; plain arrays satisfy this shape.
@@ -77,60 +67,6 @@ export interface LocalizingSetPath {
   count: number;
   stride: number;
 }
-
-export type SolverSettings = {
-  alphaMax: number;
-  correctorThreshold: number;
-  maxitIPM: number;
-  simplexDualMode: boolean;
-  simplexEnteringRule: EnteringRule;
-  simplexLeavingRule: LeavingRule;
-  pdhgEta: number;
-  pdhgTau: number;
-  maxitPDHG: number;
-  pdhgIneqMode: boolean;
-  pdhgHalpernMode: boolean;
-  pdhgColorByBasis: boolean;
-  centralPathIter: number;
-  maxitEllipsoid: number;
-  ellipsoidDeepCuts: boolean;
-  ellipsoidRayShoot: boolean;
-  ellipsoidQueryPoint: EllipsoidQueryPoint;
-  ellipsoidInitialScale: number;
-  objectiveAngleStep: number;
-  objectiveRotationSpeed: number;
-  // Total wall-clock length of an "Animate" replay in milliseconds, not a per-step delay despite
-  // the name: the replay maps elapsed time onto the whole iterate path (see replayController).
-  // Adjusted with the +/- keys.
-  replaySpeed: number;
-};
-
-export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
-
-// exported so share links can omit any setting still at its default
-export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
-  alphaMax: 0.1,
-  correctorThreshold: 0.9,
-  maxitIPM: 1000,
-  simplexDualMode: false,
-  simplexEnteringRule: "first",
-  simplexLeavingRule: "first",
-  pdhgEta: 0.25,
-  pdhgTau: 0.25,
-  maxitPDHG: 1000,
-  pdhgIneqMode: true,
-  pdhgHalpernMode: false,
-  pdhgColorByBasis: false,
-  centralPathIter: 75,
-  maxitEllipsoid: 500,
-  ellipsoidDeepCuts: true,
-  ellipsoidRayShoot: true,
-  ellipsoidQueryPoint: "ellipsoid",
-  ellipsoidInitialScale: 1.5,
-  objectiveAngleStep: 0.1,
-  objectiveRotationSpeed: 1,
-  replaySpeed: DEFAULT_REPLAY_DURATION_MS,
-};
 
 // The solver's slice of the store: the result panel, the solve and its iterates, and the trace.
 export type SolverState = {
@@ -213,30 +149,32 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
   traceEnabled: () => TRACE_DIRTY,
 };
 
-/** Whether the draggable start marker applies to the current solver/problem. */
-function solverStartPointApplies(state: EditorState & SolverState): boolean {
-  if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return false;
-  if (state.solverMode === "ipm" || state.solverMode === "pdhg") return true;
-  // dual simplex has no safe start-point interpretation: a primal point only
-  // determines a dual-feasible basis when it is already optimal
-  return state.solverMode === "simplex" && !state.solverSettings.simplexDualMode;
-}
+// What the draggable start marker means to each solver: nothing (it finds its own start), any
+// point, or the region vertex nearest the point (a simplex iterate is a vertex). Dual simplex has
+// no safe start-point interpretation: a primal point only determines a dual-feasible basis when it
+// is already optimal.
+const START_POINT: Record<SolverMode, (settings: SolverSettings) => "none" | "free" | "vertex"> = {
+  central: () => "none",
+  ellipsoid: () => "none",
+  ipm: () => "free",
+  pdhg: () => "free",
+  simplex: (settings) => (settings.simplexDualMode ? "none" : "vertex"),
+};
 
 /**
- * The marker position to draw: the dragged point (snapped to the nearest region vertex in simplex
- * mode, which is how simplex consumes it), or the solver default when nothing has been dragged
- * yet. The default is the origin for all three: IPM and PDHG begin there, and Phase-1 simplex's
- * first displayed iterate is the origin too (all structural variables start nonbasic). Null when
- * hidden.
+ * The start the solver would use: the dragged point (snapped to the nearest region vertex when the
+ * solver walks vertices), or the solver default when nothing has been dragged yet. The default is
+ * the origin for all three: IPM and PDHG begin there, and Phase-1 simplex's first displayed
+ * iterate is the origin too (all structural variables start nonbasic). Null when the solver finds
+ * its own start or the problem is not solvable, which is when the marker is hidden.
  */
 export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
-  if (!solverStartPointApplies(state)) return null;
+  if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return null;
+  const meaning = START_POINT[state.solverMode](state.solverSettings);
+  if (meaning === "none") return null;
   const point = state.solverStartPoint;
   if (!point) return zeroVec(state.dimension);
-  if (state.solverMode === "simplex") {
-    return nearestPolytopeVertex(state, point) ?? point;
-  }
-  return point;
+  return meaning === "vertex" ? (nearestPolytopeVertex(state, point) ?? point) : point;
 }
 
 // The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the

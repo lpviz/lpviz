@@ -1,4 +1,5 @@
-import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LazyList, LocalizingSetPath, ResultTextBlock } from "./solverState";
+import type { EllipsoidQueryPoint } from "./solverSettings";
+import type { EllipsoidPath, IteratePath, LazyList, LocalizingSetPath, ResultTextBlock } from "./solverState";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";

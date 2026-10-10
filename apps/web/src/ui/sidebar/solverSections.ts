@@ -1,4 +1,4 @@
-import type { EllipsoidQueryPoint, SolverMode } from "@/features/solver/solverState";
+import type { EllipsoidQueryPoint, SolverMode } from "@/features/solver/solverSettings";
 import { ENTERING_RULES, LEAVING_RULES, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
 import { checkboxRow, fixed, group, labeledSelect, maxitSlider, numberSlider, type SectionContext, type SettingControl } from "./solverSettingControls";
 

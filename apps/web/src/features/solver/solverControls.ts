@@ -1,8 +1,8 @@
 import { getState, type State } from "@/features/core/store";
-import { nearestPolytopeVertex } from "@/features/polytope-editor/editorState";
-import type { SolverMode } from "@/features/solver/solverState";
 import { hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
 import { messageBlocks } from "@/features/solver/resultPresenter";
+import type { SolverMode } from "@/features/solver/solverSettings";
+import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { Problem, ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
@@ -33,12 +33,12 @@ function regionBoundingVertices(state: State): Vec[] {
   return vertices.length > 0 ? vertices : state.vertices;
 }
 
-// The dragged start point as a solver payload, or absent when never set (the
-// solvers then keep their exact legacy initialization).
-function startPointPayload(state: State): { startPoint?: Vec } {
-  const point = state.solverStartPoint;
-  return point ? { startPoint: point } : {};
-}
+// The start the user dragged, as the solver takes it (see displayedSolverStartPoint), or null when
+// never dragged: the solvers then keep their exact legacy initialization.
+const requestedStartPoint = (state: State): Vec | null => (state.solverStartPoint ? displayedSolverStartPoint(state) : null);
+
+// a slider at 0 (or cleared) still runs one iteration
+const iterations = (count: number) => Math.max(1, count || 1);
 
 const emptyRegionBlock = (message: string): ResultRenderPayload => messageBlocks("No valid region", message);
 const unboundedObjectiveBlock = messageBlocks(
@@ -56,7 +56,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         solver: "central",
         vertices: solvable.polytope.vertices,
         ...solvable.problem,
-        niter: Math.max(1, s.solverSettings.centralPathIter || 1),
+        niter: iterations(s.solverSettings.centralPathIter),
       };
     },
   },
@@ -66,13 +66,14 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
       const ss = s.solverSettings;
+      const startPoint = requestedStartPoint(s);
       return {
         solver: "ipm",
         ...solvable.problem,
-        ...startPointPayload(s),
+        ...(startPoint ? { startPoint } : {}),
         alphaMax: ss.alphaMax,
         correctorThreshold: ss.correctorThreshold,
-        maxit: Math.max(1, ss.maxitIPM || 1),
+        maxit: iterations(ss.maxitIPM),
       };
     },
   },
@@ -81,13 +82,12 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
-      // Simplex consumes the start as a vertex (the marker snaps to one);
-      // dual mode has no safe start-point interpretation and ignores it.
-      const snapped = !s.solverSettings.simplexDualMode && s.solverStartPoint ? nearestPolytopeVertex(s, s.solverStartPoint) : null;
+      // simplex consumes the start as a vertex (the marker snaps to one); dual mode ignores it
+      const startVertex = requestedStartPoint(s);
       return {
         solver: "simplex",
         ...solvable.problem,
-        ...(snapped ? { startVertex: snapped } : {}),
+        ...(startVertex ? { startVertex } : {}),
         dual: s.solverSettings.simplexDualMode,
         enteringRule: s.solverSettings.simplexEnteringRule,
         leavingRule: s.solverSettings.simplexLeavingRule,
@@ -105,7 +105,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         // the drawn region bounds the initial ellipsoid (or box)
         vertices: regionBoundingVertices(s),
         ...solvable.problem,
-        maxit: Math.max(1, ss.maxitEllipsoid || 1),
+        maxit: iterations(ss.maxitEllipsoid),
         deepCuts: ss.ellipsoidDeepCuts,
         rayShoot: ss.ellipsoidRayShoot,
         queryPoint: ss.ellipsoidQueryPoint,
@@ -119,13 +119,14 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
       const ss = s.solverSettings;
+      const startPoint = requestedStartPoint(s);
       return {
         solver: "pdhg",
         ...solvable.problem,
-        ...startPointPayload(s),
+        ...(startPoint ? { startPoint } : {}),
         ineq: ss.pdhgIneqMode,
         halpern: ss.pdhgHalpernMode,
-        maxit: Math.max(1, ss.maxitPDHG || 1),
+        maxit: iterations(ss.maxitPDHG),
         eta: ss.pdhgEta,
         tau: ss.pdhgTau,
         colorByBasis: ss.pdhgColorByBasis,
