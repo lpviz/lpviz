@@ -4,16 +4,11 @@ import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverR
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
-type StateChangeMeta = {
-  viewportDirty?: ViewportDirtyFlags;
-};
-
 export type State = EditorState & SolverState & HistoryState & ViewportState;
 
 // Which render layers a change to each store field repaints: the slices' tables merged. setState
-// derives `viewportDirty` from the changed fields; the derivation is additive (unioned with
-// explicitly passed flags, it can only add, never drop) and fields absent here (pure UI/solver-config
-// state, history) repaint nothing.
+// derives the repaint from the changed fields; fields absent here (pure UI/solver-config state,
+// history) repaint nothing.
 const FIELD_DIRTY: Partial<Record<keyof State, (s: State) => ViewportDirtyFlags>> = {
   ...EDITOR_DIRTY,
   ...SOLVER_DIRTY,
@@ -56,11 +51,11 @@ const initialState: State = {
 type Listener = () => void;
 
 type StateValues<K extends keyof State> = { [P in K]: State[P] };
-type MetaListener = (meta?: StateChangeMeta) => void;
+type DirtyListener = (flags: ViewportDirtyFlags) => void;
 
 let values: State = initialState;
 const listeners = new Map<keyof State, Listener[]>();
-const metaListeners: MetaListener[] = [];
+const dirtyListeners: DirtyListener[] = [];
 let pending: Listener[] = [];
 
 export function getState(): Readonly<State> {
@@ -75,7 +70,7 @@ function flush(): void {
   }
 }
 
-export function setState(partial: Partial<State>, meta?: StateChangeMeta): void {
+export function setState(partial: Partial<State>): void {
   const changedKeys: (keyof State)[] = [];
   let nextValues: State | null = null;
 
@@ -88,29 +83,20 @@ export function setState(partial: Partial<State>, meta?: StateChangeMeta): void 
     changedKeys.push(key);
   }
 
-  if (nextValues) {
-    values = nextValues;
-    for (const key of changedKeys) {
-      const ls = listeners.get(key);
-      if (!ls) continue;
-      for (let i = 0; i < ls.length; i++) ls[i]!();
-    }
-    flush();
+  if (!nextValues) return;
+  values = nextValues;
+  for (const key of changedKeys) {
+    const ls = listeners.get(key);
+    if (!ls) continue;
+    for (let i = 0; i < ls.length; i++) ls[i]!();
   }
+  flush();
 
-  // viewportDirty is the union of what the changed fields imply and anything
-  // the caller passed explicitly (see FIELD_DIRTY)
-  const derived = nextValues ? deriveViewportDirty(values, changedKeys) : null;
-  if (meta === undefined && derived === null) return;
-  let merged: StateChangeMeta = meta ?? {};
-  if (derived !== null) {
-    merged = {
-      ...merged,
-      viewportDirty: { ...merged.viewportDirty, ...derived },
-    };
-  }
-  const metaBatch = metaListeners.slice();
-  for (let i = 0; i < metaBatch.length; i++) metaBatch[i]!(merged);
+  // what the changed fields repaint (see FIELD_DIRTY), after every field listener has run
+  const dirty = deriveViewportDirty(values, changedKeys);
+  if (dirty === null) return;
+  const batch = dirtyListeners.slice();
+  for (let i = 0; i < batch.length; i++) batch[i]!(dirty);
 }
 
 export function on<K extends keyof State>(keys: readonly K[], fn: (values: StateValues<K>) => void, signal: AbortSignal): void {
@@ -150,14 +136,15 @@ export function on<K extends keyof State>(keys: readonly K[], fn: (values: State
   );
 }
 
-export function onMeta(fn: MetaListener, signal: AbortSignal): void {
+/** The render layers a patch repaints, as derived from the fields it changed. */
+export function onViewportDirty(fn: DirtyListener, signal: AbortSignal): void {
   if (signal.aborted) return;
-  metaListeners.push(fn);
+  dirtyListeners.push(fn);
   signal.addEventListener(
     "abort",
     () => {
-      const index = metaListeners.indexOf(fn);
-      if (index >= 0) metaListeners.splice(index, 1);
+      const index = dirtyListeners.indexOf(fn);
+      if (index >= 0) dirtyListeners.splice(index, 1);
     },
     { once: true },
   );

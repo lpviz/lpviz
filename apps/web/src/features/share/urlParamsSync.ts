@@ -2,7 +2,6 @@ import { getState, setState } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
 import { buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
-import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 export function applyUrlParamsOnce({ viewportApi, derivePolytope }: { viewportApi: ViewportApi; derivePolytope: () => void }) {
@@ -13,7 +12,7 @@ export function applyUrlParamsOnce({ viewportApi, derivePolytope }: { viewportAp
       setState({ inequalitiesMessage: `This link holds a ${sharedState.dimension}-variable problem; this editor draws ${current.dimension}-variable ones.` });
       return;
     }
-    setState({ ...buildSharedStatePatch(sharedState, current), inequalitiesMessage: null, highlightIndex: null }, { viewportDirty: ALL_VIEWPORT_DIRTY });
+    setState({ ...buildSharedStatePatch(sharedState, current), inequalitiesMessage: null, highlightIndex: null });
     const state = getState();
     if (state.completionMode !== "draft") derivePolytope();
     if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);

@@ -25,7 +25,7 @@ export class CameraController {
 
     subscribeViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;
-      this.sceneManager.invalidate({ layers: false });
+      this.sceneManager.invalidate("frame");
     }, this.subscriptions.signal);
 
     this.applySnapshot();

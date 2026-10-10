@@ -1,5 +1,6 @@
 // Which render layers a change repaints. setState derives a set from the fields a patch changes
-// (see the slices' *_DIRTY tables), callers add to it, and the scene repaints just those layers.
+// (see the slices' *_DIRTY tables) and a snapshot change names its own (see snapshotDirty); the
+// scene repaints just those layers.
 export type ViewportDirtyFlags = Partial<{
   grid: boolean;
   polytope: boolean;
@@ -9,8 +10,7 @@ export type ViewportDirtyFlags = Partial<{
   iterate: boolean;
 }>;
 
-// Repaint everything — for whole-problem swaps (gallery load, shared-state
-// import) and mode switches where deriving per-field flags would be noise.
+// Repaint everything: a snapshot change that re-poses every layer.
 export const ALL_VIEWPORT_DIRTY: ViewportDirtyFlags = {
   grid: true,
   polytope: true,
@@ -23,5 +23,5 @@ export const ALL_VIEWPORT_DIRTY: ViewportDirtyFlags = {
 // The layers anchored in world space, whose drawn heights follow the z scale and the 2D/3D transition.
 export const WORLD_ANCHORED_DIRTY: ViewportDirtyFlags = { polytope: true, objective: true, trace: true, iterate: true };
 
-/** What an invalidate asks for: a layer update (every layer, or those the flags name) and a frame. */
-export type ViewportInvalidation = { layers?: boolean; viewportDirty?: ViewportDirtyFlags | undefined };
+/** What an invalidate asks for: a frame with the layers as they are, every layer rebuilt, or the layers the flags name rebuilt. */
+export type Repaint = "frame" | "all" | ViewportDirtyFlags;

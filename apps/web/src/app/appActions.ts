@@ -5,7 +5,6 @@ import type { PolytopeService } from "@/features/polytope-editor/polytopeService
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
-import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
@@ -100,7 +99,7 @@ export function createAppActions({
       // In place rather than by reloading the page, so it works offline.
       solver.stopMotion();
       solver.clearComputedState();
-      setState(freshState(), { viewportDirty: ALL_VIEWPORT_DIRTY });
+      setState(freshState());
       // pan is enabled on an empty canvas; the first vertex placed turns it
       // off until the region is finished
       viewportApi.set2DPanEnabled(true);
@@ -111,26 +110,23 @@ export function createAppActions({
     loadGalleryProblem: (problem) => {
       history.save();
       solver.stopMotion();
-      setState(
-        {
-          vertices: problem.vertices.map((v) => [...v]),
-          completionMode: "closed",
-          interiorPoint: [...problem.interiorPoint],
-          polytope: null,
-          inequalitiesMessage: null,
-          objectiveVector: [...problem.objectiveVector],
-          currentObjective: null,
-          highlightIndex: null,
-          highlightIteratePathIndex: null,
-          editorInteraction: { kind: "idle" },
-          lastCompletedInteraction: "none",
-          rotateObjectiveMode: false,
-          // any in-flight replay was already stopped by stopMotion() above;
-          // clearing `replayActive` here without cancelling its RAF loop would
-          // leave the loop running against the freshly loaded problem
-        },
-        { viewportDirty: ALL_VIEWPORT_DIRTY },
-      );
+      setState({
+        vertices: problem.vertices.map((v) => [...v]),
+        completionMode: "closed",
+        interiorPoint: [...problem.interiorPoint],
+        polytope: null,
+        inequalitiesMessage: null,
+        objectiveVector: [...problem.objectiveVector],
+        currentObjective: null,
+        highlightIndex: null,
+        highlightIteratePathIndex: null,
+        editorInteraction: { kind: "idle" },
+        lastCompletedInteraction: "none",
+        rotateObjectiveMode: false,
+        // any in-flight replay was already stopped by stopMotion() above;
+        // clearing `replayActive` here without cancelling its RAF loop would
+        // leave the loop running against the freshly loaded problem
+      });
       viewportApi.set2DPanEnabled(true);
       polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());

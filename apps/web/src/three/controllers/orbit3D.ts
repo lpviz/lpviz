@@ -282,7 +282,7 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
     if (syncToken === config.syncToken) return;
     syncToken = config.syncToken;
     configurePerspectiveCameraFromSnapshot(config.snapshot, camera, target);
-    sceneManager.invalidate({ layers: false });
+    sceneManager.invalidate("frame");
   };
 
   const subscriptions = new AbortController();

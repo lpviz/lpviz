@@ -48,13 +48,15 @@ describe("deriveViewportDirty (field -> layers)", () => {
     expect(deriveViewportDirty(st({ isTransitioning3D: true }), ["currentObjective"])).toEqual({ polytope: true, objective: true });
   });
 
-  test("zScale repaints every world-anchored layer", () => {
-    expect(deriveViewportDirty(st({}), ["zScale"])).toEqual({
-      polytope: true,
-      objective: true,
-      trace: true,
-      iterate: true,
-    });
+  test("zScale, and entering or leaving 3D, repaint every world-anchored layer", () => {
+    for (const key of ["zScale", "is3DMode", "isTransitioning3D"] as const) {
+      expect(deriveViewportDirty(st({}), [key])).toEqual({
+        polytope: true,
+        objective: true,
+        trace: true,
+        iterate: true,
+      });
+    }
   });
 
   test("union of multiple changed fields", () => {

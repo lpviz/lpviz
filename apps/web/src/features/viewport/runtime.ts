@@ -1,4 +1,4 @@
-import { getState, on, onMeta, setState } from "@/features/core/store";
+import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "@lpviz/viewport/defaults";
@@ -15,7 +15,6 @@ import {
   getMaxPerspectiveDistance3D,
   getViewAngleFromSnapshot3D,
 } from "@lpviz/viewport/view3d";
-import { WORLD_ANCHORED_DIRTY } from "./dirtyFlags";
 import { get2DControlsConfig, reset2DControlsConfig, set2DControlsConfig, type Controls2DConfig } from "./runtime/controls2d";
 import { reset3DControlsConfig, set3DControlsConfig } from "./runtime/controls3d";
 import { getViewportRenderSnapshot, resetViewportRenderSnapshot, setViewportRenderSnapshot } from "./runtime/snapshot";
@@ -90,8 +89,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     const previousSnapshot = getViewportRenderSnapshot();
     setViewportRenderSnapshot(snapshot);
     const viewportDirty = getSnapshotViewportDirtyFlags(previousSnapshot, snapshot);
-    const hasLayerDirty = Object.keys(viewportDirty).length > 0;
-    viewportBridge.invalidate({ layers: hasLayerDirty, viewportDirty: hasLayerDirty ? viewportDirty : undefined });
+    viewportBridge.invalidate(Object.keys(viewportDirty).length > 0 ? viewportDirty : "frame");
   };
 
   // ---- the 2D controls ----
@@ -183,7 +181,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     rebuild3DSnapshot(pose);
     if (Math.abs(ownedSnapshot.scaleFactor - previousScaleFactor) > 1e-6) {
       // the objective head keeps a constant screen size, so a zoom redraws it
-      viewportBridge.invalidate({ viewportDirty: { objective: true } });
+      viewportBridge.invalidate({ objective: true });
     }
     if (controls3DActive && options.syncControls) publish3DControlsConfig({ syncFromSnapshot: true });
     publishSnapshot(ownedSnapshot);
@@ -234,7 +232,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     const plan = buildViewportTransitionPlan({ snapshot: baseSnapshot, targetMode, viewAngle });
     transitionPlan = plan;
     transitionProgress = 0;
-    setState({ isTransitioning3D: true, is3DMode: targetMode, viewAngle: { ...plan.startAngles } }, { viewportDirty: WORLD_ANCHORED_DIRTY });
+    setState({ isTransitioning3D: true, is3DMode: targetMode, viewAngle: { ...plan.startAngles } });
     publishSnapshot(renderTransitionFrame(plan, 0).snapshot);
 
     transitionRun += 1;
@@ -258,7 +256,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
         // store subscription sees the transition inactive and activates the
         // 2D/3D controls without an extra RAF delay.
         transitionPlan = null;
-        if (completed) setState({ isTransitioning3D: false, viewAngle: { ...completed.endAngles } }, { viewportDirty: WORLD_ANCHORED_DIRTY });
+        if (completed) setState({ isTransitioning3D: false, viewAngle: { ...completed.endAngles } });
         resetTransitionConfig();
         publishSnapshot(liveSnapshot());
       },
@@ -331,10 +329,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     },
     subscriptions.signal,
   );
-  onMeta((meta) => {
-    const viewportDirty = meta?.viewportDirty;
-    if (viewportDirty && Object.keys(viewportDirty).length > 0) viewportBridge.invalidate({ viewportDirty });
-  }, subscriptions.signal);
+  onViewportDirty((viewportDirty) => viewportBridge.invalidate(viewportDirty), subscriptions.signal);
 
   return {
     setSidebarWidth: (width) => {
