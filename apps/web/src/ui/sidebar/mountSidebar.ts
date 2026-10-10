@@ -13,23 +13,22 @@ const GITHUB_ICON =
 export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   const header = el("header");
   const sidebar = el("div", { id: "sidebar" });
-  sidebar.style.width = `${ctx.getSidebarWidth()}px`;
+  sidebar.style.width = `${ctx.layout.getSidebarWidth()}px`;
   const content = el("div", { id: "sidebarContent" });
   const github = el("a", {
     className: "github-link",
     attrs: { href: "https://github.com/lpviz/lpviz", target: "_blank", rel: "noreferrer", "aria-label": "GitHub Repository for lpviz" },
     html: GITHUB_ICON,
   });
-  const title = el("div", { className: "header controlPanel" }, [el("h1", { text: "lpviz" }), github]);
+  const brand = el("div", { className: "header controlPanel" }, [el("h1", { text: "lpviz" }), github]);
   const ui = el("div", { id: "uiContainer" });
-  content.append(title, ui);
+  content.append(brand, ui);
   sidebar.append(content);
   header.append(sidebar);
   parent.append(header);
-  const children = [mountProblemPanel(ui, ctx), mountSolverControlsPanel(ui, ctx), mountAnimationControlsPanel(ui, ctx)];
-  children.push(mountSolverLogPanel(ui, ctx));
-  const logPanel = ui.querySelector<HTMLElement>("#terminal-container");
-  const logExpansion = logPanel ? createSidebarLogExpansion({ sidebar, content, logPanel }) : null;
+  const panels = [mountProblemPanel(ui, ctx), mountSolverControlsPanel(ui, ctx), mountAnimationControlsPanel(ui, ctx)];
+  const log = mountSolverLogPanel(ui, ctx);
+  const logExpansion = createSidebarLogExpansion({ sidebar, content, logPanel: log.root });
   // The width a classic scrollbar takes inside the scroll column, which the
   // stylesheet trades the column's side padding against (see #sidebarContent).
   // Overlay scrollbars measure 0. Re-measured whenever the column is resized,
@@ -46,8 +45,8 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
     },
     destroy: () => {
       gutterObserver.disconnect();
-      logExpansion?.destroy();
-      for (const c of children) c.destroy();
+      logExpansion.destroy();
+      for (const panel of [...panels, log]) panel.destroy();
       header.remove();
     },
   };

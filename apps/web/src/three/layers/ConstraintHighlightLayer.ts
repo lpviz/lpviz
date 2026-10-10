@@ -1,48 +1,18 @@
 import type { State } from "@/features/core/store";
-import { UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type BoundingBox } from "@lpviz/math/bounds";
 import type { Constraint, PointXY } from "@lpviz/math/types";
 import { hasConstraints } from "@lpviz/polytope/polytope";
-import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/projection3d";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
-import { CLIP_MARGIN_UNITS, visibleBounds2D } from "../helpers/visibleBounds";
+import { visibleBounds } from "../helpers/visibleBounds";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
 const CONSTRAINT_LINE_THICKNESS = 2;
 const EPS = 1e-10;
-
-function getVisibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
-  if (snap.mode === "2d") {
-    return visibleBounds2D(snap);
-  }
-  const rect = {
-    width: Math.max(1, snap.width),
-    height: Math.max(1, snap.height),
-  };
-  const screenPoints = [
-    { x: 0, y: 0 },
-    { x: rect.width / 2, y: 0 },
-    { x: rect.width, y: 0 },
-    { x: 0, y: rect.height / 2 },
-    { x: rect.width, y: rect.height / 2 },
-    { x: 0, y: rect.height },
-    { x: rect.width / 2, y: rect.height },
-    { x: rect.width, y: rect.height },
-  ];
-  const pts = screenPoints.map((p) => projectCanvasPointToWorldPlane(snap, rect, p, 0)).filter((p): p is PointXY => p !== null);
-  if (pts.length === 0) return UNBOUNDED_CLIP_BOUNDS;
-  return {
-    minX: Math.min(...pts.map((p) => p.x)) - CLIP_MARGIN_UNITS,
-    maxX: Math.max(...pts.map((p) => p.x)) + CLIP_MARGIN_UNITS,
-    minY: Math.min(...pts.map((p) => p.y)) - CLIP_MARGIN_UNITS,
-    maxY: Math.max(...pts.map((p) => p.y)) + CLIP_MARGIN_UNITS,
-  };
-}
 
 function clipLineToBounds(line: Constraint, b: BoundingBox): [PointXY, PointXY] | null {
   const [A, B, C] = line;
@@ -85,7 +55,7 @@ export class ConstraintHighlightLayer extends LayerBase {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return state.completionMode !== "draft" && state.highlightIndex !== null && hasConstraints(state.polytope) && rendersPlanarDrawing(snap.mode, state);
+    return state.completionMode !== "draft" && state.highlightIndex !== null && hasConstraints(state.polytope) && rendersPlanarDrawing(state, snap);
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
@@ -95,7 +65,7 @@ export class ConstraintHighlightLayer extends LayerBase {
       return;
     }
 
-    const clipped = clipLineToBounds(line, getVisibleBounds(snap));
+    const clipped = clipLineToBounds(line, visibleBounds(snap));
     if (!clipped) {
       this.object3D.visible = false;
       return;

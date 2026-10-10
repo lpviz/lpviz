@@ -3,6 +3,9 @@
 // (the markup between <article> and the pager); render.ts wraps it in the shared
 // head, nav, pager, footer and JSON-LD.
 
+// the title and description a social card shows
+type SocialCard = { title: string; description: string };
+
 export interface DocsPage {
   /** URL segment under /docs/ and the body fragment's file name; "index" is the overview at /docs/. */
   slug: string;
@@ -12,8 +15,8 @@ export interface DocsPage {
   pager: string;
   title: string;
   description: string;
-  og: { title: string; description: string };
-  twitter: { title: string; description: string };
+  og: SocialCard;
+  twitter: SocialCard;
   /** schema.org name and description: a TechArticle, or the CollectionPage for the overview. */
   schema: { name: string; description: string };
 }

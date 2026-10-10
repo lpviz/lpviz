@@ -1,7 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
-import { renderNullStateLogo } from "@/ui/logo";
+import { NULL_STATE_LOGO_SVG } from "@/ui/logo";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
 import { formatConstraint } from "@lpviz/polytope/constraints";
 
@@ -23,11 +23,7 @@ function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): stri
 export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
   const frame = el("div", { id: "terminal-container2" });
   const topResult = el("div", { id: "topResult" });
-  const nullState = el("div", {
-    id: "nullStateMessage",
-    attrs: { role: "img", "aria-label": "lpviz logo" },
-  });
-  renderNullStateLogo(nullState);
+  const nullState = el("div", { id: "nullStateMessage", attrs: { role: "img", "aria-label": "lpviz logo" }, html: NULL_STATE_LOGO_SVG });
   const maximize = el("div", { id: "maximize", text: "maximize" });
   const objective = el("div", { id: "objectiveDisplay" });
   const subjectTo = el("div", { id: "subjectTo", text: "subject to" });
@@ -44,6 +40,7 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
   inequalities.addEventListener("mouseleave", () => ctx.actions.setConstraintHighlight(null));
   frame.append(topResult, el("div", { id: "terminal-window" }));
   parent.append(frame);
+  let lastItemsKey: unknown[] | null = null;
   function render(state: State) {
     const objectiveActive = hasObjective(state);
     nullState.style.display = state.vertices.length === 0 && state.objectiveVector === null && state.currentObjective === null ? "" : "none";
@@ -55,9 +52,8 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
     // objective-only updates (every rotation step) must not rebuild the
     // constraint rows; rebuild only when their source actually changed
     const itemsKey: unknown[] = [state.polytope?.constraints, state.completionMode, state.inequalitiesMessage];
-    if (lastItemsKey && itemsKey.every((value, i) => Object.is(value, lastItemsKey![i]))) {
-      return;
-    }
+    const previousKey = lastItemsKey;
+    if (previousKey && itemsKey.every((value, i) => Object.is(value, previousKey[i]))) return;
     lastItemsKey = itemsKey;
 
     inequalities.replaceChildren();
@@ -79,12 +75,10 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
       );
     });
   }
-  let lastItemsKey: unknown[] | null = null;
   render(getState());
   const controller = new AbortController();
   on(["completionMode", "objectiveVector", "currentObjective", "vertices", "polytope", "inequalitiesMessage"], () => render(getState()), controller.signal);
   return {
-    topResult,
     destroy: () => {
       controller.abort();
       frame.remove();

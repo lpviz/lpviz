@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import type { Camera, Material, Mesh, ShaderMaterial, WebGLRenderer } from "three";
+import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
-import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
+import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
 // Motion-time compositor for the trace-constraints pass in 3D mode.
 //
@@ -37,7 +37,7 @@ export class Trace3DCompositor {
   private renderTarget: WebGLRenderTarget | null = null;
   private quadScene = new Scene();
   private quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
-  private material: ShaderMaterial;
+  private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
   private materialScratch: Material[] = [];
   private lastViewKey = "";
   private lastViewChangeAt = -Infinity;
@@ -45,9 +45,7 @@ export class Trace3DCompositor {
 
   constructor(requestFrame: () => void) {
     this.settle = new SettleTimer(requestFrame, VIEW_SETTLE_MS);
-    const { mesh, material } = makeCompositeQuad(QUAD_VERTEX_SHADER, 2);
-    this.material = material;
-    this.quadScene.add(mesh);
+    this.quadScene.add(this.quad.mesh);
   }
 
   // Returns the composite quad scene when the pass should go through the
@@ -85,7 +83,7 @@ export class Trace3DCompositor {
         depthBuffer: true,
         stencilBuffer: false,
       });
-      this.material.uniforms.map!.value = this.renderTarget.texture;
+      this.quad.setMap(this.renderTarget.texture);
     }
 
     const previousTarget = renderer.getRenderTarget();
@@ -128,15 +126,12 @@ export class Trace3DCompositor {
     if (!this.renderTarget) return;
     this.renderTarget.dispose();
     this.renderTarget = null;
-    this.material.uniforms.map!.value = null;
+    this.quad.setMap(null);
   }
 
   dispose(): void {
     this.settle.dispose();
     this.releaseTarget();
-    this.quadScene.children.forEach((child) => {
-      (child as Mesh).geometry?.dispose();
-    });
-    this.material.dispose();
+    this.quad.dispose();
   }
 }

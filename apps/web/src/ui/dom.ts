@@ -1,7 +1,6 @@
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
-  // `html` is parsed into the element after its attributes are set and before
-  // `children` are appended, the order every former `.innerHTML =` site used
+  // `html` is parsed into the element after its attributes are set and before `children` are appended
   options: { className?: string; text?: string; html?: string; attrs?: Record<string, string>; id?: string | undefined } = {},
   children: Node[] = [],
 ): HTMLElementTagNameMap[K] {
@@ -19,5 +18,11 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 export function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {
   const i = el("input", { attrs: { type: "range", id, min, max, step, autocomplete: "off" } });
   i.addEventListener("input", () => onInput(i.value));
+  return i;
+}
+
+export function checkbox(id: string, onChange: (v: boolean) => void) {
+  const i = el("input", { attrs: { type: "checkbox", id } });
+  i.addEventListener("change", () => onChange(i.checked));
   return i;
 }

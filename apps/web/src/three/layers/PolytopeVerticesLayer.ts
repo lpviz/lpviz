@@ -26,7 +26,7 @@ export class PolytopeVerticesLayer extends LayerBase {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return state.vertices.length > 0 && rendersPlanarDrawing(snap.mode, state);
+    return state.vertices.length > 0 && rendersPlanarDrawing(state, snap);
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {

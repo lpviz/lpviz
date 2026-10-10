@@ -25,7 +25,7 @@ type EditorEditResult = {
   interiorPoint: Vec | null;
 };
 
-type EditorTransition =
+export type EditorTransition =
   | { kind: "noop" }
   // the action that produced the rejection knows why; the reason travels with
   // the transition so callers don't each hardcode (and risk drifting) a message
@@ -122,7 +122,7 @@ const edit = (vertices: Vec[], completionMode: CompletionMode, interiorPoint: Ve
 export function getEditorTransition(
   state: State,
   action:
-    | { kind: "click"; point: Vec; closeThreshold?: number }
+    | { kind: "click"; point: Vec; closeThreshold: number }
     | { kind: "finish-open" }
     | { kind: "delete-vertex"; deleteIndex: number }
     | { kind: "insert-edge-point"; edgeIndex: number; point: Vec }
@@ -144,12 +144,10 @@ export function getEditorTransition(
       }
 
       if (state.vertices.length >= 3) {
-        // closeThreshold is supplied by the canvas caller as the world-space
-        // equivalent of a fixed pixel hit radius, so closing on the first
-        // vertex stays equally easy at any zoom (it is otherwise a tiny target
-        // when zoomed out, e.g. on mobile). Defaults to a world distance.
-        const closeThreshold = action.closeThreshold ?? 0.5;
-        if (vecDistance(action.point, state.vertices[0]!) < closeThreshold) {
+        // closeThreshold is the world-space equivalent of a fixed pixel hit radius, so closing on
+        // the first vertex stays equally easy at any zoom (it is otherwise a tiny target when
+        // zoomed out, e.g. on mobile)
+        if (vecDistance(action.point, state.vertices[0]!) < action.closeThreshold) {
           return edit(state.vertices, "closed", centroid(state.vertices));
         }
 

@@ -28,7 +28,7 @@ export type DragTarget =
       grabOffset?: Vec;
       viewAnchor3D?: PointXYZ | undefined;
     };
-export type EditorInteractionState =
+type EditorInteractionState =
   | { kind: "idle" }
   | {
       kind: "pending-drag";

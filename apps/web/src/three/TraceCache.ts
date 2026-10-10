@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
-import type { Mesh, ShaderMaterial, WebGLRenderer } from "three";
+import type { Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
 import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
-import { makeCompositeQuad, SettleTimer } from "./helpers/traceComposite";
+import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
 // World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
@@ -64,10 +64,8 @@ export class TraceCache {
   private trailingTarget: WebGLRenderTarget | null = null;
   private cacheCamera = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
   private quadScene = new Scene();
-  private quad: Mesh;
-  private quadMaterial: ShaderMaterial;
-  private trailingQuad: Mesh;
-  private trailingMaterial: ShaderMaterial;
+  private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
+  private trailingQuad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
   private fullRebuildNeeded = true;
   // live chunks with seq in [bakeStart, bakedEnd) are baked into the main
   // target; live chunks below bakeStart render through the trailing target
@@ -100,14 +98,8 @@ export class TraceCache {
 
   constructor(requestFrame: () => void) {
     this.settle = new SettleTimer(requestFrame, Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2));
-    const main = makeCompositeQuad(QUAD_VERTEX_SHADER, 1);
-    this.quad = main.mesh;
-    this.quadMaterial = main.material;
-    const trailing = makeCompositeQuad(QUAD_VERTEX_SHADER, 1);
-    this.trailingQuad = trailing.mesh;
-    this.trailingMaterial = trailing.material;
-    this.trailingQuad.renderOrder = 1;
-    this.quadScene.add(this.quad, this.trailingQuad);
+    this.trailingQuad.mesh.renderOrder = 1;
+    this.quadScene.add(this.quad.mesh, this.trailingQuad.mesh);
   }
 
   markContentDirty(): void {
@@ -138,8 +130,8 @@ export class TraceCache {
     });
     if (live.length === 0) {
       this.fullRebuildNeeded = true;
-      this.quad.visible = false;
-      this.trailingQuad.visible = false;
+      this.quad.mesh.visible = false;
+      this.trailingQuad.mesh.visible = false;
       this.releaseTrailingTarget();
       return null;
     }
@@ -260,13 +252,13 @@ export class TraceCache {
       if (trailingDirty || !this.trailingTarget || minSeq !== this.trailingStart || this.bakeStart !== this.trailingEnd) {
         this.renderTrailing(renderer, traceLinesScene, minSeq, this.bakeStart);
       }
-      this.trailingQuad.visible = true;
+      this.trailingQuad.mesh.visible = true;
     } else {
-      this.trailingQuad.visible = false;
+      this.trailingQuad.mesh.visible = false;
       if (!evicting) this.releaseTrailingTarget();
     }
 
-    this.quad.visible = this.bakedEnd > this.bakeStart;
+    this.quad.mesh.visible = this.bakedEnd > this.bakeStart;
     return this.quadScene;
   }
 
@@ -309,20 +301,20 @@ export class TraceCache {
       // dominated steady-state cost on slower GL stacks; aliasing on the oldest translucent
       // chunks is not discernible
       this.trailingTarget = new WebGLRenderTarget(this.cachedPixelWidth, this.cachedPixelHeight, { samples: 0, depthBuffer: false, stencilBuffer: false });
-      this.trailingMaterial.uniforms.map!.value = this.trailingTarget.texture;
+      this.trailingQuad.setMap(this.trailingTarget.texture);
     }
     this.renderSeqRange(renderer, traceLinesScene, this.trailingTarget, startSeq, endSeq, true);
     this.trailingStart = startSeq;
     this.trailingEnd = endSeq;
-    this.trailingQuad.position.copy(this.quad.position);
-    this.trailingQuad.scale.copy(this.quad.scale);
+    this.trailingQuad.mesh.position.copy(this.quad.mesh.position);
+    this.trailingQuad.mesh.scale.copy(this.quad.mesh.scale);
   }
 
   private releaseTrailingTarget(): void {
     if (!this.trailingTarget) return;
     this.trailingTarget.dispose();
     this.trailingTarget = null;
-    this.trailingMaterial.uniforms.map!.value = null;
+    this.trailingQuad.setMap(null);
   }
 
   private recache(renderer: WebGLRenderer, traceLinesScene: Scene, view: ViewParams, degrade: boolean): void {
@@ -337,7 +329,7 @@ export class TraceCache {
         depthBuffer: false,
         stencilBuffer: false,
       });
-      this.quadMaterial.uniforms.map!.value = this.renderTarget.texture;
+      this.quad.setMap(this.renderTarget.texture);
     }
     this.degraded = samples === 0;
 
@@ -363,8 +355,8 @@ export class TraceCache {
     this.cachedPixelHeight = view.pixelHeight;
     this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, this.bakeStart, this.bakedEnd, true);
 
-    this.quad.position.set(view.centerX, view.centerY, 0);
-    this.quad.scale.set(halfWidth * 2, halfHeight * 2, 1);
+    this.quad.mesh.position.set(view.centerX, view.centerY, 0);
+    this.quad.mesh.scale.set(halfWidth * 2, halfHeight * 2, 1);
 
     this.cachedUnitsPerPixel = view.unitsPerPixel;
     this.cachedCenterX = view.centerX;
@@ -379,9 +371,7 @@ export class TraceCache {
     this.renderTarget?.dispose();
     this.renderTarget = null;
     this.releaseTrailingTarget();
-    this.quad.geometry.dispose();
-    this.quadMaterial.dispose();
-    this.trailingQuad.geometry.dispose();
-    this.trailingMaterial.dispose();
+    this.quad.dispose();
+    this.trailingQuad.dispose();
   }
 }

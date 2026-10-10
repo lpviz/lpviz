@@ -3,7 +3,6 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { isUnboundedDirection } from "@/features/problem/selectors";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
@@ -22,7 +21,7 @@ export class ObjectiveLayer extends LayerBase {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return !state.objectiveHidden && shouldRenderSnapshotMode(snap.mode, state);
+    return !state.objectiveHidden && super.visibleIn(state, snap);
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {

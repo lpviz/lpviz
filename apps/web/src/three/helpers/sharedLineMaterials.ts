@@ -10,7 +10,7 @@ const materialCache = new Map<string, LineMaterial>();
 // wants: 2D paints in draw order (no depth), 3D depth-tests so the floor
 // occludes correctly. One instance per distinct parameter set, shared by
 // every object that asks for it.
-export function lineDepthMaterial(color: string | number, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
+export function lineDepthMaterial(color: string, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
   const key = `${color}|${linewidth}|${is3D}|${opacity}`;
   let mat = materialCache.get(key);
   if (!mat) {
@@ -20,15 +20,16 @@ export function lineDepthMaterial(color: string | number, linewidth: number, is3
   return mat;
 }
 
-let _lastW = 0;
-let _lastH = 0;
+let lastWidth = 0;
+let lastHeight = 0;
 
-export function tickSharedLineMaterialResolutions(w: number, h: number): void {
-  if (w === _lastW && h === _lastH) return;
-  _lastW = w;
-  _lastH = h;
-  materialCache.forEach((mat) => mat.resolution.set(w, h));
-  setPathRibbonResolution(w, h);
+// The CSS resolution every screen-space line width is computed against; set on resize.
+export function setSharedLineResolution(width: number, height: number): void {
+  if (width === lastWidth && height === lastHeight) return;
+  lastWidth = width;
+  lastHeight = height;
+  materialCache.forEach((mat) => mat.resolution.set(width, height));
+  setPathRibbonResolution(width, height);
 }
 
 export function lineGeometry(): LineSegmentsGeometry {

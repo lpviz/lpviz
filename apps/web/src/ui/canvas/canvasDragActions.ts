@@ -1,5 +1,5 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type EditorInteractionState, type HistoryEntry, type State } from "@/features/core/store";
+import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type HistoryEntry, type State } from "@/features/core/store";
 import { captureHistoryEntry } from "@/features/history/historyState";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
@@ -133,11 +133,6 @@ export function createDragActions(deps: DragActionDeps) {
     requestAnimationFrame(restoreViewportControls);
   };
 
-  const applyDraggingInteraction = (interaction: Extract<EditorInteractionState, { kind: "dragging" }>, logicalCoords: Vec) => {
-    persistPendingDragHistory();
-    applyDragTarget(interaction.target, logicalCoords, deps);
-  };
-
   const handleDragStart = (clientX: number, clientY: number): boolean => {
     const state = getState();
     const target = getDragStartTarget(viewportApi, state, clientX, clientY);
@@ -194,7 +189,8 @@ export function createDragActions(deps: DragActionDeps) {
     const interaction = state.editorInteraction;
 
     if (interaction.kind === "dragging") {
-      applyDraggingInteraction(interaction, logicalCoords);
+      persistPendingDragHistory();
+      applyDragTarget(interaction.target, logicalCoords, deps);
       return;
     }
 

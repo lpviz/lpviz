@@ -1,9 +1,8 @@
 import { getState, type State } from "@/features/core/store";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
-import { shouldRenderSnapshotMode } from "../../helpers/sceneVisibility";
+import { viewShowsMode } from "../../helpers/sceneVisibility";
 import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 
 // Template-method base for data-driven layers: a subclass declares the inputs whose reference
@@ -15,7 +14,7 @@ import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass: RenderPassName = "foreground";
-  abstract readonly invalidationKeys: readonly (keyof ViewportDirtyFlags)[];
+  abstract readonly invalidationKeys: Layer["invalidationKeys"];
 
   private deps: readonly unknown[] | null = null;
 
@@ -28,7 +27,7 @@ export abstract class LayerBase implements Layer {
     const snap = getViewportRenderSnapshot();
     this.everyFrame(state, snap);
     if (!this.visibleIn(state, snap)) {
-      this.object3D.visible = false;
+      this.hide();
       this.deps = null;
       return;
     }
@@ -38,9 +37,13 @@ export abstract class LayerBase implements Layer {
     this.rebuild(state, snap);
   }
 
-  /** Whether the view shows the layer at all; by default while the snapshot's mode and the store agree. */
+  /** Whether the view shows the layer at all; by default whenever the view shows the snapshot's mode. */
   protected visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return shouldRenderSnapshotMode(snap.mode, state);
+    return viewShowsMode(state, snap);
+  }
+  /** Take everything the layer draws off screen; a layer with more than `object3D` extends this. */
+  protected hide(): void {
+    this.object3D.visible = false;
   }
   /** Inputs compared with Object.is; a change triggers `rebuild`. */
   protected abstract dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[];

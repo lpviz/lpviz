@@ -7,12 +7,14 @@ import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
+export const ITERATE_POINT_PIXEL_SIZE = 8;
+
 // The solved iterate path as a point cloud, optionally colored by solver phase.
 export class IteratePointsLayer extends PointCloudLayer {
   constructor() {
     super({
       color: PALETTE.iterate,
-      pixelSize: 8,
+      pixelSize: ITERATE_POINT_PIXEL_SIZE,
       texture: SHARED_CIRCLE_TEXTURE,
       renderOrder: RENDER_ORDER.iteratePoints,
       renderPass: "trace",

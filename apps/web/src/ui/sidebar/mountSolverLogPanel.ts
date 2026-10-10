@@ -2,9 +2,8 @@ import type { AppContext } from "@/app/appContext";
 import { computeDrawingPhase, getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { usageHint } from "@/ui/usageTips";
-import { blocksContainer } from "./solverLogBlocks";
 import { createSolverLogHover } from "./solverLogHover";
-import { createResultFit, mountVirtualRows, observeResultSize } from "./solverLogVirtualRows";
+import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
 
 export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   const frame = el("div", { id: "terminal-container" });
@@ -29,7 +28,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
       return;
     }
     if (s.resultDisplayMode === "blocks" && s.resultBlocks) {
-      result.append(blocksContainer(s.resultBlocks));
+      result.append(el("div", {}, s.resultBlocks.map(rowEl)));
       return;
     }
     if (s.resultDisplayMode === "virtual") {
@@ -54,10 +53,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
             text: "No iterations available.",
           }),
         );
-      else
-        mountVirtualRows(sc, s.resultVirtualRows, result, (refill) => {
-          refillVirtualWindow = refill;
-        });
+      else refillVirtualWindow = mountVirtualRows(sc, s.resultVirtualRows, result);
     }
     hover.scheduleHoverSync();
   }
@@ -86,6 +82,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     controller.signal,
   );
   return {
+    root: frame,
     destroy: () => {
       controller.abort();
       sizeObserver.disconnect();

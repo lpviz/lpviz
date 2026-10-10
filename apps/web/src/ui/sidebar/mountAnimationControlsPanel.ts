@@ -1,7 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
-import { el, range } from "@/ui/dom";
+import { checkbox, el, range } from "@/ui/dom";
 
 export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
@@ -19,10 +19,7 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
   const rot = el("div", { className: "objective-rotation is-hidden" });
   const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
   const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
-  const trace = el("input", {
-    attrs: { type: "checkbox", id: "traceCheckbox" },
-  });
-  trace.addEventListener("change", () => ctx.actions.setTraceEnabled(trace.checked));
+  const trace = checkbox("traceCheckbox", (enabled) => ctx.actions.setTraceEnabled(enabled));
   rot.append(
     el("div", { className: "rotation-layout" }, [
       el("div", { className: "rotation-column" }, [

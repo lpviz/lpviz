@@ -8,7 +8,7 @@ import { mountProblemGallery } from "@/ui/canvas/mountProblemGallery";
 import { mountReplayDurationOverlay } from "@/ui/canvas/mountReplayDurationOverlay";
 import { el } from "@/ui/dom";
 
-export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeStart: (event: PointerEvent) => void) {
+export function mountCanvasStage(parent: HTMLElement, ctx: AppContext) {
   const main = el("main", { className: "canvas-stage" });
   const viewport = el("div", { className: "canvas-stage__viewport" });
   main.append(viewport);
@@ -38,7 +38,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
             onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
             showReplayDuration: replayDuration.show,
           });
-          ctx.actions.syncViewportLayout(ctx.getViewportSidebarWidth());
+          ctx.actions.syncViewportLayout(ctx.layout.getViewportSidebarWidth());
           runtime.draw();
         })
         .catch((e) => console.error("Failed to initialize viewport", e));
@@ -75,8 +75,8 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
     () => ctx.actions.share(),
     "shareButton",
   );
-  const zc = el("div", { id: "zScaleSliderContainer" });
-  const zs = el("input", {
+  const zScaleControl = el("div", { id: "zScaleSliderContainer" });
+  const zScaleSlider = el("input", {
     attrs: {
       type: "range",
       id: "zScaleSlider",
@@ -87,10 +87,10 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
       title: "Adjust Z-axis scale",
     },
   });
-  const zv = el("div", { id: "zScaleValue" });
-  zs.addEventListener("input", () => ctx.actions.setZScale(parseFloat(zs.value)));
-  zc.append(el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }), zs, zv);
-  zoom.append(home, fit, reset, toggle3d, share, zc);
+  const zScaleValue = el("div", { id: "zScaleValue" });
+  zScaleSlider.addEventListener("input", () => ctx.actions.setZScale(parseFloat(zScaleSlider.value)));
+  zScaleControl.append(el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }), zScaleSlider, zScaleValue);
+  zoom.append(home, fit, reset, toggle3d, share, zScaleControl);
   main.append(zoom);
   const help = mountHelpButton(main);
   const handle = el("div", { id: "sidebarHandle" });
@@ -98,19 +98,18 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext, onResizeS
     if (!e.isPrimary || e.button !== 0) return;
     e.preventDefault();
     handle.setPointerCapture(e.pointerId);
-    onResizeStart(e);
+    ctx.layout.onResizeStart(e);
   });
   main.append(handle);
   function render() {
     const { is3DMode, zScale } = getState();
     toggle3d.className = is3DMode ? "button-active" : "";
     toggle3d.textContent = is3DMode ? "2D" : "3D";
-    zs.value = String(zScale);
-    zv.textContent = zScale.toFixed(2);
-    zc.className = is3DMode ? "" : "is-hidden";
-    const sw = ctx.getSidebarWidth();
-    handle.style.left = ctx.isMobileLayout() ? "0" : `${sw}px`;
-    gallery.update();
+    zScaleSlider.value = String(zScale);
+    zScaleValue.textContent = zScale.toFixed(2);
+    zScaleControl.className = is3DMode ? "" : "is-hidden";
+    handle.style.left = ctx.layout.isMobileLayout() ? "0" : `${ctx.layout.getSidebarWidth()}px`;
+    gallery.updateLayout();
   }
   render();
   const controller = new AbortController();

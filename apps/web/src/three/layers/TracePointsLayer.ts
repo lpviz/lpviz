@@ -2,7 +2,6 @@ import { MAX_TRACE_POINT_SPRITES, type State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { shouldRenderSnapshotMode } from "../helpers/sceneVisibility";
 import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
@@ -56,7 +55,7 @@ export class TracePointsLayer extends PointCloudLayer {
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
-    return state.traceEnabled && state.traceBuffer.length > 0 && shouldRenderSnapshotMode(snap.mode, state);
+    return state.traceEnabled && state.traceBuffer.length > 0 && super.visibleIn(state, snap);
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {

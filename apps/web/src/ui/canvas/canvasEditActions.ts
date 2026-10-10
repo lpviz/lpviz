@@ -1,6 +1,6 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
 import { DEFAULT_Z_SCALE, getState, setState } from "@/features/core/store";
-import { getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
+import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
   findBoundaryRayNearPoint,
@@ -13,29 +13,14 @@ import {
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { nearestEdge } from "@lpviz/math/polygon";
-import type { Vec } from "@lpviz/math/types";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 import type { EditorToolsDeps } from "./editorTools";
 
-type ApplyEditorTransition = (transition: ReturnType<typeof getEditorTransition>) => void;
+type ApplyEditorTransition = (transition: EditorTransition) => void;
 
+// Every accepted edit is its own undoable step; the derived polytope is cleared for the re-derive.
 function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope }: Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "sendPolytope">): ApplyEditorTransition {
-  const commitEdit = (result: { vertices: Vec[]; completionMode: "draft" | "open" | "closed"; interiorPoint: Vec | null }) => {
-    saveHistory();
-    setState({
-      vertices: result.vertices,
-      completionMode: result.completionMode,
-      interiorPoint: result.interiorPoint,
-      polytope: null,
-      inequalitiesMessage: null,
-      highlightIndex: null,
-    });
-    viewportApi.draw();
-    sendPolytope();
-    updatePanControls(viewportApi);
-  };
-
   return (transition) => {
     if (transition.kind === "reject-nonconvex") {
       // The problem panel's message slot (the same one that shows "Nonconvex");
@@ -45,7 +30,11 @@ function createEditorTransitionApplier({ viewportApi, saveHistory, sendPolytope 
     }
 
     if (transition.kind === "edit") {
-      commitEdit(transition.result);
+      saveHistory();
+      setState({ ...transition.result, polytope: null, inequalitiesMessage: null, highlightIndex: null });
+      viewportApi.draw();
+      sendPolytope();
+      updatePanControls(viewportApi);
       return;
     }
 
@@ -154,21 +143,11 @@ function createPointerEditActions(
       return;
     }
 
+    // a click only sketches or places the objective; editing a finished region is drags and double-clicks
     const { session } = getEditorContext(state);
-    const drawingPhase = session.kind === "drafting";
-    const objectivePhase = session.kind === "selecting-objective";
-    if (state.is3DMode && !drawingPhase && !objectivePhase) return;
-
-    if (drawingPhase || objectivePhase) {
-      const point = getLogicalFromClient(viewportApi, event.clientX, event.clientY);
-      applyEditorTransition(
-        getEditorTransition(state, {
-          kind: "click",
-          point,
-          closeThreshold: worldDistanceForPixels(viewportApi, point, CLOSE_HIT_RADIUS_PX),
-        }),
-      );
-    }
+    if (session.kind !== "drafting" && session.kind !== "selecting-objective") return;
+    const point = getLogicalFromClient(viewportApi, event.clientX, event.clientY);
+    applyEditorTransition(getEditorTransition(state, { kind: "click", point, closeThreshold: worldDistanceForPixels(viewportApi, point, CLOSE_HIT_RADIUS_PX) }));
   };
 
   return { handleContextMenu, handleDoubleClickAt, handleClick };

@@ -1,9 +1,9 @@
 import type { SolverSettings } from "@/features/core/store";
-import { el, range } from "@/ui/dom";
+import { checkbox, el, range } from "@/ui/dom";
 
-const MAXIT_LOG_MIN = 0,
-  MAXIT_LOG_MAX = 5,
-  MAXIT_LOG_STEP = 0.01;
+const MAXIT_LOG_MIN = 0;
+const MAXIT_LOG_MAX = 5;
+const MAXIT_LOG_STEP = 0.01;
 const maxitToSliderValue = (value: number) => Math.min(MAXIT_LOG_MAX, Math.max(MAXIT_LOG_MIN, Math.log10(Math.max(1, value))));
 const sliderValueToMaxit = (value: string) => Math.max(1, Math.round(10 ** parseFloat(value)));
 const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
@@ -11,8 +11,7 @@ const fmt = (value: number) => NUMBER_FORMAT.format(value);
 export const fixed = (digits: number) => (value: number) => value.toFixed(digits);
 
 export type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
-type MaxitSettingKey = Extract<keyof SolverSettings, "maxitIPM" | "maxitPDHG" | "maxitEllipsoid">;
-type SettingField = HTMLInputElement | HTMLSelectElement;
+type MaxitSettingKey = Extract<keyof SolverSettings, `maxit${string}`>;
 type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: string; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
 // writes one setting, then re-solves if the section's solver is the active one
 type SettingUpdater = <K extends keyof SolverSettings>(key: K) => (v: SolverSettings[K]) => void;
@@ -22,24 +21,25 @@ export type SectionContext = { st: SolverSettings; set: SettingUpdater };
 /** One control of a solver section: the nodes it adds and how it follows the settings. */
 export type SettingControl = { nodes: Node[]; sync: (settings: SolverSettings) => void };
 
-export function checkbox(id: string, onChange: (v: boolean) => void) {
-  const i = el("input", { attrs: { type: "checkbox", id } });
-  i.addEventListener("change", () => onChange(i.checked));
-  return i;
-}
-export function select<T extends string>(id: string, options: readonly (readonly [T, string])[], onChange: (v: T) => void) {
-  const s = el(
-    "select",
-    { attrs: { id, autocomplete: "off" } },
-    options.map(([value, label]) => el("option", { attrs: { value }, text: label })),
-  );
-  s.addEventListener("change", () => onChange(s.value as T));
-  return s;
+/** Follow a setting without fighting the person typing in the field. */
+function setInputValue(input: HTMLInputElement | HTMLSelectElement, value: string) {
+  if (document.activeElement !== input) input.value = value;
 }
 
-/** Follow a setting without fighting the person typing in the field. */
-export function setInputValue(input: SettingField, value: string) {
-  if (document.activeElement !== input) input.value = value;
+/** The controls laid out together in one `<div class="{className}">`. */
+export function group(className: string, controls: SettingControl[]): SettingControl {
+  return {
+    nodes: [
+      el(
+        "div",
+        { className },
+        controls.flatMap((control) => control.nodes),
+      ),
+    ],
+    sync: (next) => {
+      for (const control of controls) control.sync(next);
+    },
+  };
 }
 
 // A slider (id `<key>Slider`) with a live readout: <label>text " " <span></label>,
@@ -94,6 +94,18 @@ export function checkboxRow(
       }
     },
   };
+}
+
+// A <label> and the <select> (id `key`) it names, for the caller to lay out.
+export function labeledSelect<K extends SettingKeys<string>>({ st, set }: SectionContext, key: K, label: string, options: readonly (readonly [SolverSettings[K], string])[]): SettingControl {
+  const input = el(
+    "select",
+    { attrs: { id: key, autocomplete: "off" } },
+    options.map(([value, text]) => el("option", { attrs: { value }, text })),
+  );
+  input.addEventListener("change", () => set(key)(input.value as SolverSettings[K]));
+  input.value = st[key];
+  return { nodes: [el("label", { attrs: { for: key }, text: label }), input], sync: (next) => setInputValue(input, next[key]) };
 }
 
 // A log-scale slider for an iteration cap, with the decades marked under it.

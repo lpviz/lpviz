@@ -6,6 +6,7 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import { SHARED_CIRCLE_TEXTURE, SHARED_STAR_TEXTURE } from "../helpers/sharedTextures";
 import type { RenderPassName } from "../Layer";
 import { PALETTE } from "../palette";
+import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 type IterateMarkerConfig = {
@@ -22,16 +23,21 @@ type IterateMarkerConfig = {
 // One sprite at a single iterate of the path: the star on the optimum and the hover highlight
 // differ only in texture, size, pass and which index they pick.
 class IterateMarkerLayer extends PointCloudLayer {
-  constructor(private readonly config: IterateMarkerConfig) {
-    super({ ...config, color: PALETTE.iterateMarker, invalidationKeys: ["iterate"], vertexColors: false });
+  private readonly selectIndex: IterateMarkerConfig["selectIndex"];
+  private readonly selectorDeps: IterateMarkerConfig["selectorDeps"];
+
+  constructor({ selectIndex, selectorDeps, ...style }: IterateMarkerConfig) {
+    super({ ...style, color: PALETTE.iterateMarker, invalidationKeys: ["iterate"], vertexColors: false });
+    this.selectIndex = selectIndex;
+    this.selectorDeps = selectorDeps;
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [...this.config.selectorDeps(state), state.iteratePath, snap.mode];
+    return [...this.selectorDeps(state), state.iteratePath, snap.mode];
   }
 
   protected rebuild(state: State): void {
-    const index = this.config.selectIndex(state);
+    const index = this.selectIndex(state);
     const xyz = index === null ? null : iteratePosition(state.iteratePath, index);
     if (!xyz) {
       this.hide();
@@ -46,7 +52,7 @@ class IterateMarkerLayer extends PointCloudLayer {
 // drawn out to.
 export const createIterateHighlightLayer = () =>
   new IterateMarkerLayer({
-    pixelSize: 8 * 2,
+    pixelSize: ITERATE_POINT_PIXEL_SIZE * 2,
     texture: SHARED_CIRCLE_TEXTURE,
     renderOrder: RENDER_ORDER.iterateHighlight,
     renderPass: "trace",
