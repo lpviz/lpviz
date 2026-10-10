@@ -36,25 +36,32 @@ export function mountHelpButton(parent: HTMLElement) {
     setOpen(!open);
   });
 
-  const onDocPointerDown = (e: PointerEvent) => {
-    if (open && !container.contains(e.target as Node)) setOpen(false);
-  };
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (open && e.key === "Escape") {
-      setOpen(false);
-      button.focus();
-    }
-  };
-  document.addEventListener("pointerdown", onDocPointerDown);
-  document.addEventListener("keydown", onKeyDown);
+  // a press outside the popover or Escape closes it
+  const listeners = new AbortController();
+  document.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (open && !container.contains(e.target as Node)) setOpen(false);
+    },
+    { signal: listeners.signal },
+  );
+  document.addEventListener(
+    "keydown",
+    (e) => {
+      if (open && e.key === "Escape") {
+        setOpen(false);
+        button.focus();
+      }
+    },
+    { signal: listeners.signal },
+  );
 
   container.append(panel, button);
   parent.append(container);
 
   return {
     destroy: () => {
-      document.removeEventListener("pointerdown", onDocPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
+      listeners.abort();
       container.remove();
     },
   };

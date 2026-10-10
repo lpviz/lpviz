@@ -5,6 +5,8 @@ const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
 
 type Resizable = { sidebar: { updateWidth: (width: number) => void }; stage: { updateLayout: () => void } };
 
+export type Layout = ReturnType<typeof createLayout>;
+
 // Sidebar geometry: its desktop width, its mobile height, the mobile/desktop
 // switch, and the handle drag that resizes it. `attach` wires the mounted
 // sidebar and stage plus the window listeners; `destroy` removes them.
@@ -23,33 +25,35 @@ export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setS
   };
   applyLayoutMode();
 
-  // tracks the window listeners of an in-progress sidebar resize so destroy()
-  // can remove them if teardown happens mid-drag
-  let activeResizeCleanup: (() => void) | null = null;
+  // the window listeners of an in-progress sidebar resize, so destroy() can
+  // remove them if teardown happens mid-drag
+  let activeResize: AbortController | null = null;
 
   // Follows one pointer from `startEvent` until it lifts: `apply` sees the
   // start event and every move, `onUp` runs once after the listeners are gone.
   const trackPointerDrag = (startEvent: PointerEvent, apply: (event: PointerEvent) => void, onUp: () => void) => {
     apply(startEvent);
-    const move = (event: PointerEvent) => {
-      if (event.pointerId !== startEvent.pointerId) return;
-      apply(event);
-    };
+    const listeners = new AbortController();
+    const { signal } = listeners;
     const stop = () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", up);
-      window.removeEventListener("pointercancel", up);
-      activeResizeCleanup = null;
+      listeners.abort();
+      activeResize = null;
     };
     const up = (event: PointerEvent) => {
       if (event.pointerId !== startEvent.pointerId) return;
       stop();
       onUp();
     };
-    activeResizeCleanup = stop;
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", up);
-    window.addEventListener("pointercancel", up);
+    activeResize = listeners;
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        if (event.pointerId === startEvent.pointerId) apply(event);
+      },
+      { signal },
+    );
+    window.addEventListener("pointerup", up, { signal });
+    window.addEventListener("pointercancel", up, { signal });
   };
 
   const applyHeight = (event: PointerEvent) => {
@@ -87,7 +91,7 @@ export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setS
       mobileQuery.addEventListener("change", onResize);
     },
     destroy: () => {
-      activeResizeCleanup?.();
+      activeResize?.abort();
       window.removeEventListener("resize", onResize);
       mobileQuery.removeEventListener("change", onResize);
     },

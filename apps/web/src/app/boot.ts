@@ -3,7 +3,7 @@ import type { AppContext } from "@/app/appContext";
 import { createLayout, DEFAULT_SIDEBAR_WIDTH } from "@/app/layout";
 import { createHistoryService } from "@/features/history/historyService";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
-import { createShareService } from "@/features/share/shareService";
+import { shareLink } from "@/features/share/shareService";
 import { applyUrlParamsOnce } from "@/features/share/urlParamsSync";
 import { createSolverActions } from "@/features/solver/solverActions";
 import type { ViewportRuntime } from "@/features/viewport/runtime";
@@ -23,8 +23,7 @@ export function boot(root: HTMLElement) {
 
   const solver = createSolverActions(() => viewportApi);
   const polytope = createPolytopeService(solver.handleProblemChange);
-  const share = createShareService();
-  const actions = createAppActions({ solver, share, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
+  const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
   const layout = createLayout(root, actions);
 
   const setViewportApi = (runtime: ViewportRuntime | null) => {
@@ -41,20 +40,10 @@ export function boot(root: HTMLElement) {
     }
   };
 
-  const ctx: AppContext = {
-    actions,
-    services: { history, polytope },
-
-    getViewportApi: () => viewportApi,
-    setViewportApi,
-
-    getSidebarWidth: layout.getSidebarWidth,
-    getViewportSidebarWidth: layout.getViewportSidebarWidth,
-    isMobileLayout: layout.isMobileLayout,
-  };
+  const ctx: AppContext = { actions, services: { history, polytope }, layout, getViewportApi: () => viewportApi, setViewportApi };
 
   const sidebar = mountSidebar(root, ctx);
-  const stage = mountCanvasStage(root, ctx, layout.onResizeStart);
+  const stage = mountCanvasStage(root, ctx);
   layout.attach({ sidebar, stage });
 
   return {

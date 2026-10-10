@@ -1,6 +1,8 @@
 import type { State } from "@/features/core/store";
+import type { ResultTextBlock } from "@/features/solver/types";
 import { el } from "@/ui/dom";
-import { rowEl } from "./solverLogBlocks";
+
+export const rowEl = (block: ResultTextBlock) => el("div", { className: block.className, text: block.text, attrs: block.index !== undefined ? { "data-index": String(block.index) } : {} });
 
 // The font is sized so the widest line fits the panel: the stylesheet's size, the monospace
 // glyph width as a fraction of it, and the range the fit may land in.
@@ -52,14 +54,14 @@ export function createResultFit(result: HTMLElement) {
 // spacer divs holding the scroll height. Materializing every row (100k at
 // max solver settings) costs seconds of main-thread time per render.
 const VIRTUAL_OVERSCAN_ROWS = 20;
-// `setRefill` receives the window refill once the rows are mounted, so a
-// panel that changes height can re-window without a full re-render.
-export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRows"], result: HTMLElement, setRefill: (refill: () => void) => void) {
+// Returns the window refill (null without rows), so a panel that changes
+// height can re-window without a full re-render.
+export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRows"], result: HTMLElement): (() => void) | null {
   const topSpacer = el("div");
   const rowsEl = el("div", { className: "iterate-rows" });
   const bottomSpacer = el("div");
   sc.append(el("div", { className: "iterate-virtual-wrapper" }, [topSpacer, rowsEl, bottomSpacer]));
-  if (blocks.length === 0) return;
+  if (blocks.length === 0) return null;
 
   let rowHeight = 0;
   let windowStart = -1;
@@ -88,8 +90,6 @@ export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRo
     rowsEl.replaceChildren(fragment);
   };
 
-  setRefill(fillWindow);
-
   let scrollRafId: number | null = null;
   sc.addEventListener(
     "scroll",
@@ -103,6 +103,7 @@ export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRo
     { passive: true },
   );
   fillWindow();
+  return fillWindow;
 }
 
 // The panel is resized independently of its contents (sidebar handle, log

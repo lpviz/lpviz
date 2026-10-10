@@ -7,15 +7,7 @@ import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 // The slices' public surface, re-exported so importers keep one module to reach for.
 export { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 export type { HistoryEntry } from "@/features/history/historyState";
-export {
-  COMPLETION_MODES,
-  computeDrawingPhase,
-  nearestPolytopeVertex,
-  type CompletionMode,
-  type DragTarget,
-  type DrawingPhase,
-  type EditorInteractionState,
-} from "@/features/polytope-editor/editorState";
+export { COMPLETION_MODES, computeDrawingPhase, nearestPolytopeVertex, type CompletionMode, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
 export {
   DEFAULT_SOLVER_SETTINGS,
   displayedSolverStartPoint,

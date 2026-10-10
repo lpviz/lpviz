@@ -60,7 +60,7 @@ export function createAppActions({
   initialSidebarWidth,
 }: {
   solver: SolverActions;
-  share: { share: () => void };
+  share: () => void;
   history: HistoryService;
   polytope: PolytopeService;
   getViewportApi: () => ViewportRuntime | null;
@@ -75,10 +75,21 @@ export function createAppActions({
     const state = getState();
     if (viewportApi && !state.isTransitioning3D) viewportApi.start3DTransition(!state.is3DMode);
   };
+  // an unbounded open region is fitted to its clip box; the gallery strip, when open, is kept clear
+  const zoomToFit = () => {
+    const viewportApi = getViewportApi();
+    if (!viewportApi) return;
+    const state = getState();
+    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
+    const zoomFit = collectZoomFitBounds(state);
+    if (!zoomFit && !isOpenUnbounded) return;
+    viewportApi.zoomToFit(isOpenUnbounded ? viewportApi.getUnboundedClipBounds() : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
+    viewportApi.setSidebarWidth(sidebarWidth);
+  };
 
   return {
     ...pick(solver, "setConstraintHighlight", "setIterateHighlight", "updateSolverSetting", "recomputeIfModeActive", "setTraceEnabled", "toggleReplay", "startRotation", "stopMotion"),
-    share: share.share,
+    share,
     reset: () => {
       if (!window.confirm("Reset lpviz? This clears the drawing and every setting.")) return;
       const viewportApi = getViewportApi();
@@ -159,16 +170,4 @@ export function createAppActions({
       viewportApi.draw();
     },
   };
-
-  // an unbounded open region is fitted to its clip box; the gallery strip, when open, is kept clear
-  function zoomToFit() {
-    const viewportApi = getViewportApi();
-    if (!viewportApi) return;
-    const state = getState();
-    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
-    const zoomFit = collectZoomFitBounds(state);
-    if (!zoomFit && !isOpenUnbounded) return;
-    viewportApi.zoomToFit(isOpenUnbounded ? viewportApi.getUnboundedClipBounds() : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
-    viewportApi.setSidebarWidth(sidebarWidth);
-  }
 }

@@ -26,8 +26,4 @@ const GLYPHS = NULL_STATE_LOGO_LINES.map((line, row) =>
     .map((glyph, column) => (glyph === " " ? "" : `<text x="${column * CHAR_ADVANCE}" y="${FONT_SIZE + row * LINE_HEIGHT}">${glyph}</text>`))
     .join(""),
 ).join("");
-const NULL_STATE_LOGO_SVG = `<svg viewBox="0 0 ${NULL_STATE_LOGO_VIEWBOX_WIDTH} ${NULL_STATE_LOGO_VIEWBOX_HEIGHT}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="null-state-logo"><g font-family="JuliaMono, monospace" font-size="${FONT_SIZE}" font-weight="300" fill="currentColor">${GLYPHS}</g></svg>`;
-
-export function renderNullStateLogo(container: HTMLElement) {
-  container.innerHTML = NULL_STATE_LOGO_SVG;
-}
+export const NULL_STATE_LOGO_SVG = `<svg viewBox="0 0 ${NULL_STATE_LOGO_VIEWBOX_WIDTH} ${NULL_STATE_LOGO_VIEWBOX_HEIGHT}" preserveAspectRatio="xMidYMid meet" aria-hidden="true" class="null-state-logo"><g font-family="JuliaMono, monospace" font-size="${FONT_SIZE}" font-weight="300" fill="currentColor">${GLYPHS}</g></svg>`;

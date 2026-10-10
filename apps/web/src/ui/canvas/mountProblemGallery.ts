@@ -3,15 +3,16 @@ import { GALLERY_PROBLEMS, randomConvexPolygonPreview, requestRandomConvexPolygo
 import { el } from "@/ui/dom";
 import { boundsOf } from "@lpviz/math/vec";
 
-const IDLE = 3000,
-  ITEM_W = 84,
-  GAP = 8,
-  CHROME = 16,
-  // the open strip's height, also handed to the viewport as the top inset
-  // zoom-to-fit must keep the region clear of (the CSS reads it as a variable)
-  EXPANDED_H = 96,
-  // breathing room between the strip's bottom edge and the fitted region
-  INSET_GAP = 8;
+// the strip opens by itself after this long, unless the person clicks first
+const IDLE = 3000;
+const ITEM_W = 84;
+const GAP = 8;
+const CHROME = 16;
+// the open strip's height, also handed to the viewport as the top inset
+// zoom-to-fit must keep the region clear of (the CSS reads it as a variable)
+const EXPANDED_H = 96;
+// breathing room between the strip's bottom edge and the fitted region
+const INSET_GAP = 8;
 // how often the random item's thumbnail changes shape while the strip is open
 const RESHUFFLE_MS = 1000;
 type Shape = Pick<GalleryProblem, "vertices" | "objectiveVector">;
@@ -95,7 +96,7 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     items.append(b);
   }
   const render = () => {
-    const sw = ctx.getViewportSidebarWidth();
+    const sw = ctx.layout.getViewportSidebarWidth();
     root.className = `problem-gallery ${expanded ? "is-expanded" : ""}`.trim();
     root.style.left = `calc(${sw}px + (100vw - ${sw}px) / 2)`;
     root.style.setProperty("--problem-gallery-expanded-width", `min(${GALLERY_PROBLEMS.length * ITEM_W + Math.max(0, GALLERY_PROBLEMS.length - 1) * GAP + CHROME}px, calc(100vw - ${sw}px - 120px))`);
@@ -109,40 +110,37 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     for (const r of reshuffles) r.setRunning(expanded);
   };
   document.addEventListener("visibilitychange", onVisibility);
-  let timer: number | null = window.setTimeout(() => {
-    timer = null;
+  // the auto-open: a timer that opens the strip, cancelled by the first click anywhere
+  let autoOpen: number | null = window.setTimeout(() => {
+    autoOpen = null;
+    disarmAutoOpen();
     expanded = true;
-    document.removeEventListener("click", firstClick);
     render();
   }, IDLE);
-  const clearTimer = () => {
-    if (timer !== null) {
-      clearTimeout(timer);
-      timer = null;
-    }
-  };
   function firstClick() {
+    disarmAutoOpen();
     expanded = false;
-    clearTimer();
-    document.removeEventListener("click", firstClick);
     render();
+  }
+  function disarmAutoOpen() {
+    if (autoOpen !== null) clearTimeout(autoOpen);
+    autoOpen = null;
+    document.removeEventListener("click", firstClick);
   }
   document.addEventListener("click", firstClick);
   toggle.addEventListener("click", (e) => {
     e.stopPropagation();
-    clearTimer();
-    document.removeEventListener("click", firstClick);
+    disarmAutoOpen();
     expanded = !expanded;
     render();
   });
   render();
   return {
-    update: render,
+    updateLayout: render,
     destroy: () => {
-      clearTimer();
+      disarmAutoOpen();
       for (const r of reshuffles) r.stop();
       document.removeEventListener("visibilitychange", onVisibility);
-      document.removeEventListener("click", firstClick);
       root.remove();
     },
   };

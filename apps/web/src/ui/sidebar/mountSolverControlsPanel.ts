@@ -28,20 +28,18 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   let renderedMode: SolverMode | null = null;
   let syncSettings: SettingsSync = () => {};
 
-  // every control writes its setting, then re-solves if its solver is the active one
-  const set =
-    (mode: SolverMode) =>
-    <K extends keyof SolverSettings>(key: K) =>
-    (v: SolverSettings[K]) => {
-      ctx.actions.updateSolverSetting(key, v);
-      ctx.actions.recomputeIfModeActive(mode);
-    };
-
   function buildSettings(mode: SolverMode, st: SolverSettings): SettingsSync {
     settings.replaceChildren();
     const sec = el("div", { className: "settings-section is-block" });
     settings.append(sec);
-    return buildSolverSection(mode, sec, { st, set: set(mode) });
+    // every control writes its setting, then re-solves if its solver is the active one
+    return buildSolverSection(mode, sec, {
+      st,
+      set: (key) => (v) => {
+        ctx.actions.updateSolverSetting(key, v);
+        ctx.actions.recomputeIfModeActive(mode);
+      },
+    });
   }
 
   function render(s: State) {

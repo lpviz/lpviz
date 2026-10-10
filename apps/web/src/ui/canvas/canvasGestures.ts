@@ -14,20 +14,14 @@ export const swallow = (event: Event) => {
 type CanvasGestureHandlers = Omit<EditorTools, "cleanup">;
 
 type TapState = {
-  lastTap: {
-    time: number;
-    clientX: number;
-    clientY: number;
-  } | null;
+  lastTap: { time: number; clientX: number; clientY: number } | null;
   suppressClickUntil: number;
 };
 
+// where a pen or touch gesture began, and whether it has since drifted far
+// enough to be a drag rather than a tap
 type GestureStart = { clientX: number; clientY: number; moved: boolean };
 
-type BindEvent = (target: EventTarget, eventName: string, handler: (event: never) => void, options?: boolean | AddEventListenerOptions) => void;
-
-// pen and touch share the same "has this gesture drifted far enough to be a
-// drag rather than a tap" test, latched onto the gesture's start record
 const markIfMovedBeyondTap = (start: GestureStart, clientX: number, clientY: number) => {
   start.moved = start.moved || Math.hypot(clientX - start.clientX, clientY - start.clientY) > DOUBLE_TAP_RADIUS_PX;
 };
@@ -35,33 +29,26 @@ const markIfMovedBeyondTap = (start: GestureStart, clientX: number, clientY: num
 // The pointer-type-agnostic bridge from a normalized start/move/release to the
 // editor's drag handlers, plus tap and double-tap detection.
 function createPointerBridge(canvas: HTMLCanvasElement, handlers: CanvasGestureHandlers, taps: TapState) {
-  const handlePointerRelease = (event: MouseEvent | TouchEvent | PointerEvent) => {
+  const handlePointerRelease = (event: Event) => {
     if (getState().isTransitioning3D) return;
-
-    const interactionBeforeEnd = getState();
+    const wasInteracting = getState().editorInteraction.kind !== "idle";
     handlers.handleDragEnd();
-    if (interactionBeforeEnd.editorInteraction.kind !== "idle") swallow(event);
+    if (wasInteracting) swallow(event);
   };
 
-  const stopBlockedPointerEvent = (event: MouseEvent | TouchEvent | PointerEvent) => {
-    if (getState().editorInteraction.kind !== "idle") swallow(event);
-  };
-
-  const handlePointerStart = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
+  const handlePointerStart = (clientX: number, clientY: number, event: Event) => {
     if (getState().isTransitioning3D) return;
     if (handlers.handleDragStart(clientX, clientY)) swallow(event);
   };
 
-  const handlePointerMove = (clientX: number, clientY: number, event: MouseEvent | TouchEvent | PointerEvent) => {
+  const handlePointerMove = (clientX: number, clientY: number, event: Event) => {
     const state = getState();
-    if (state.isTransitioning3D || (state.isNavigatingViewport && state.editorInteraction.kind === "idle")) {
-      return;
-    }
+    if (state.isTransitioning3D || (state.isNavigatingViewport && state.editorInteraction.kind === "idle")) return;
     handlers.handleDragMove(clientX, clientY);
-    stopBlockedPointerEvent(event);
+    if (getState().editorInteraction.kind !== "idle") swallow(event);
   };
 
-  const handleWindowPointerEnd = (event: MouseEvent | TouchEvent | PointerEvent) => {
+  const handleWindowPointerEnd = (event: Event) => {
     if (event.target === canvas) return;
     if (getState().editorInteraction.kind === "idle") return;
     handlePointerRelease(event);
@@ -75,18 +62,16 @@ function createPointerBridge(canvas: HTMLCanvasElement, handlers: CanvasGestureH
       handlers.handleDoubleClickAt(clientX, clientY);
       return true;
     }
-
     taps.lastTap = { time: now, clientX, clientY };
     return false;
   };
 
   // The shared tail of a pen pointerup and a touchend: only a gesture that neither drifted nor
   // dragged is tested for a double tap, and the event is swallowed when it was one.
-  const endTapGesture = (event: PointerEvent | TouchEvent, started: { moved: boolean } | null, forget: () => void, at: { clientX: number; clientY: number } | undefined) => {
-    const interactionBeforeEnd = getState().editorInteraction;
+  const endTapGesture = (event: Event, started: GestureStart | null, at: { clientX: number; clientY: number } | undefined) => {
+    const wasDragging = getState().editorInteraction.kind === "dragging";
     handlePointerRelease(event);
-    forget();
-    if (!at || !started || started.moved || interactionBeforeEnd.kind === "dragging") return;
+    if (!at || !started || started.moved || wasDragging) return;
     if (registerTap(at.clientX, at.clientY)) swallow(event);
   };
 
@@ -95,55 +80,35 @@ function createPointerBridge(canvas: HTMLCanvasElement, handlers: CanvasGestureH
 
 type PointerBridge = ReturnType<typeof createPointerBridge>;
 
-function bindMouseListeners(bindEvent: BindEvent, canvas: HTMLCanvasElement, bridge: PointerBridge) {
-  bindEvent(
-    canvas,
+function bindMouse(canvas: HTMLCanvasElement, bridge: PointerBridge, signal: AbortSignal) {
+  const capture = { capture: true, signal };
+  canvas.addEventListener(
     "mousedown",
-    (event: MouseEvent) => {
+    (event) => {
       if (event.button !== 0) return;
       bridge.handlePointerStart(event.clientX, event.clientY, event);
     },
-    { capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
-    "mousemove",
-    (event: MouseEvent) => {
-      bridge.handlePointerMove(event.clientX, event.clientY, event);
-    },
-    { capture: true },
-  );
-  bindEvent(
-    canvas,
+  canvas.addEventListener("mousemove", (event) => bridge.handlePointerMove(event.clientX, event.clientY, event), capture);
+  canvas.addEventListener(
     "mouseup",
-    (event: MouseEvent) => {
+    (event) => {
       if (event.button !== 0) return;
       bridge.handlePointerRelease(event);
     },
-    { capture: true },
+    capture,
   );
 }
 
-function bindPenListeners(bindEvent: BindEvent, canvas: HTMLCanvasElement, bridge: PointerBridge) {
-  let activePenStart: {
-    pointerId: number;
-    clientX: number;
-    clientY: number;
-    moved: boolean;
-  } | null = null;
-  bindEvent(
-    canvas,
+function bindPen(canvas: HTMLCanvasElement, bridge: PointerBridge, signal: AbortSignal) {
+  const capture = { capture: true, signal };
+  let activePenStart: (GestureStart & { pointerId: number }) | null = null;
+  canvas.addEventListener(
     "pointerdown",
-    (event: PointerEvent) => {
-      if (event.pointerType !== "pen" || !event.isPrimary || event.button !== 0) {
-        return;
-      }
-      activePenStart = {
-        pointerId: event.pointerId,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        moved: false,
-      };
+    (event) => {
+      if (event.pointerType !== "pen" || !event.isPrimary || event.button !== 0) return;
+      activePenStart = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, moved: false };
       // Without capture, lifting the pen outside the canvas delivers
       // pointerup elsewhere (and preventDefault suppresses the compat
       // mouseup fallback), leaving the editor stuck in "dragging".
@@ -154,125 +119,100 @@ function bindPenListeners(bindEvent: BindEvent, canvas: HTMLCanvasElement, bridg
       }
       bridge.handlePointerStart(event.clientX, event.clientY, event);
     },
-    { capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
+  canvas.addEventListener(
     "pointermove",
-    (event: PointerEvent) => {
-      if (event.pointerType !== "pen" || !activePenStart || activePenStart.pointerId !== event.pointerId) {
-        return;
-      }
+    (event) => {
+      if (event.pointerType !== "pen" || activePenStart?.pointerId !== event.pointerId) return;
       markIfMovedBeyondTap(activePenStart, event.clientX, event.clientY);
       bridge.handlePointerMove(event.clientX, event.clientY, event);
     },
-    { capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
+  canvas.addEventListener(
     "pointerup",
-    (event: PointerEvent) => {
-      if (event.pointerType !== "pen" || !activePenStart || activePenStart.pointerId !== event.pointerId) {
-        return;
-      }
-      bridge.endTapGesture(event, activePenStart, () => (activePenStart = null), event);
+    (event) => {
+      if (event.pointerType !== "pen" || activePenStart?.pointerId !== event.pointerId) return;
+      const started = activePenStart;
+      activePenStart = null;
+      bridge.endTapGesture(event, started, event);
     },
-    { capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
+  canvas.addEventListener(
     "pointercancel",
-    (event: PointerEvent) => {
-      if (activePenStart?.pointerId === event.pointerId) {
-        // end the drag like pointerup would, or the editor stays "dragging"
-        // with the viewport controls blocked
-        bridge.handlePointerRelease(event);
-        activePenStart = null;
-      }
+    (event) => {
+      if (activePenStart?.pointerId !== event.pointerId) return;
+      // end the drag like pointerup would, or the editor stays "dragging"
+      // with the viewport controls blocked
+      bridge.handlePointerRelease(event);
+      activePenStart = null;
     },
-    { capture: true },
+    capture,
   );
 }
 
-function bindTouchListeners(bindEvent: BindEvent, canvas: HTMLCanvasElement, bridge: PointerBridge) {
-  let activeTouchStart: {
-    clientX: number;
-    clientY: number;
-    moved: boolean;
-  } | null = null;
-  bindEvent(
-    canvas,
+function bindTouch(canvas: HTMLCanvasElement, bridge: PointerBridge, signal: AbortSignal) {
+  const capture = { capture: true, passive: false, signal };
+  let activeTouchStart: GestureStart | null = null;
+  canvas.addEventListener(
     "touchstart",
-    (event: TouchEvent) => {
+    (event) => {
       if (event.touches.length !== 1) return;
       const touch = event.touches[0]!;
-      activeTouchStart = {
-        clientX: touch.clientX,
-        clientY: touch.clientY,
-        moved: false,
-      };
+      activeTouchStart = { clientX: touch.clientX, clientY: touch.clientY, moved: false };
       bridge.handlePointerStart(touch.clientX, touch.clientY, event);
     },
-    { passive: false, capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
+  canvas.addEventListener(
     "touchmove",
-    (event: TouchEvent) => {
+    (event) => {
       if (event.touches.length !== 1) return;
       const touch = event.touches[0]!;
-      if (activeTouchStart) {
-        markIfMovedBeyondTap(activeTouchStart, touch.clientX, touch.clientY);
-      }
+      if (activeTouchStart) markIfMovedBeyondTap(activeTouchStart, touch.clientX, touch.clientY);
       bridge.handlePointerMove(touch.clientX, touch.clientY, event);
     },
-    { passive: false, capture: true },
+    capture,
   );
-  bindEvent(
-    canvas,
+  canvas.addEventListener(
     "touchend",
-    (event: TouchEvent) => {
-      bridge.endTapGesture(event, activeTouchStart, () => (activeTouchStart = null), event.changedTouches[0]);
+    (event) => {
+      const started = activeTouchStart;
+      activeTouchStart = null;
+      bridge.endTapGesture(event, started, event.changedTouches[0]);
     },
-    { passive: false, capture: true },
+    capture,
   );
 }
 
 // Registers every listener (mouse, pen, touch, then window release/keyboard,
 // then wheel/contextmenu/dblclick/click) and returns the detach.
 function attachGestureListeners(canvas: HTMLCanvasElement, handlers: CanvasGestureHandlers, taps: TapState) {
-  const cleanupHandlers: Array<() => void> = [];
-
-  const bindEvent: BindEvent = (target, eventName, handler, options) => {
-    const listener = handler as EventListener;
-    target.addEventListener(eventName, listener, options);
-    cleanupHandlers.push(() => target.removeEventListener(eventName, listener, options));
-  };
-
+  const listeners = new AbortController();
+  const { signal } = listeners;
   const bridge = createPointerBridge(canvas, handlers, taps);
 
-  bindMouseListeners(bindEvent, canvas, bridge);
-  bindPenListeners(bindEvent, canvas, bridge);
-  bindTouchListeners(bindEvent, canvas, bridge);
-  bindEvent(
-    window,
+  bindMouse(canvas, bridge, signal);
+  bindPen(canvas, bridge, signal);
+  bindTouch(canvas, bridge, signal);
+  window.addEventListener(
     "mouseup",
-    (event: MouseEvent) => {
+    (event) => {
       if (event.button !== 0) return;
       bridge.handleWindowPointerEnd(event);
     },
-    { capture: true },
+    { capture: true, signal },
   );
-  bindEvent(window, "touchend", (event: TouchEvent) => bridge.handleWindowPointerEnd(event), { passive: false, capture: true });
-  bindEvent(window, "keydown", handlers.handleKeyDown, { capture: true });
-  bindEvent(canvas, "wheel", handlers.handleWheel, { passive: false, capture: true });
-  bindEvent(canvas, "contextmenu", handlers.handleContextMenu, { capture: true });
-  bindEvent(canvas, "dblclick", (event: MouseEvent) => handlers.handleDoubleClickAt(event.clientX, event.clientY));
-  bindEvent(canvas, "click", handlers.handleClick);
+  window.addEventListener("touchend", (event) => bridge.handleWindowPointerEnd(event), { capture: true, passive: false, signal });
+  window.addEventListener("keydown", handlers.handleKeyDown, { capture: true, signal });
+  canvas.addEventListener("wheel", handlers.handleWheel, { capture: true, passive: false, signal });
+  canvas.addEventListener("contextmenu", handlers.handleContextMenu, { capture: true, signal });
+  canvas.addEventListener("dblclick", (event) => handlers.handleDoubleClickAt(event.clientX, event.clientY), { signal });
+  canvas.addEventListener("click", handlers.handleClick, { signal });
 
-  return () => {
-    while (cleanupHandlers.length > 0) cleanupHandlers.pop()?.();
-  };
+  return () => listeners.abort();
 }
 
 // Pointer-gesture normalization for the canvas. Two phases: the tap state is

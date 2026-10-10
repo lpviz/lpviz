@@ -52,6 +52,7 @@ describe("getEditorTransition: click", () => {
     const t = getEditorTransition(st({}), {
       kind: "click",
       point: [1, 2],
+      closeThreshold: 0.5,
     });
     expect(t).toEqual({
       kind: "edit",
@@ -67,6 +68,7 @@ describe("getEditorTransition: click", () => {
     const t = getEditorTransition(st({ vertices: TRI }), {
       kind: "click",
       point: [0.2, 0.1],
+      closeThreshold: 0.5,
     });
     expect(t.kind).toBe("edit");
     if (t.kind !== "edit") throw new Error();
@@ -78,6 +80,7 @@ describe("getEditorTransition: click", () => {
     const t = getEditorTransition(st({ vertices: TRI }), {
       kind: "click",
       point: [2.5, 1],
+      closeThreshold: 0.5,
     });
     expect(t.kind).toBe("edit");
     if (t.kind !== "edit") throw new Error();
@@ -89,6 +92,7 @@ describe("getEditorTransition: click", () => {
     const t = getEditorTransition(st({ vertices: [...TRI] }), {
       kind: "click",
       point: [-1, -1],
+      closeThreshold: 0.5,
     });
     expect(t.kind).toBe("reject-nonconvex");
     // the reason now travels with the transition (callers no longer hardcode it)
@@ -96,7 +100,7 @@ describe("getEditorTransition: click", () => {
   });
 
   test("click while selecting objective picks the objective", () => {
-    const t = getEditorTransition(st({ vertices: TRI, completionMode: "closed" }), { kind: "click", point: [3, 2] });
+    const t = getEditorTransition(st({ vertices: TRI, completionMode: "closed" }), { kind: "click", point: [3, 2], closeThreshold: 0.5 });
     expect(t).toEqual({
       kind: "select-objective",
       objectiveVector: [3, 2],
@@ -110,7 +114,7 @@ describe("getEditorTransition: click", () => {
         completionMode: "closed",
         objectiveVector: [1, 0],
       }),
-      { kind: "click", point: [9, 9] },
+      { kind: "click", point: [9, 9], closeThreshold: 0.5 },
     );
     expect(t.kind).toBe("noop");
   });
