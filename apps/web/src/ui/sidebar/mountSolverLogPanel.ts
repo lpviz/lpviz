@@ -1,6 +1,7 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
+import { renderOn } from "@/ui/renderOn";
 import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
 import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
@@ -39,30 +40,30 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     else refillVirtualWindow = mountVirtualRows(sc, view.rows, result);
     hover.scheduleHoverSync();
   }
-  render(getState());
+  const stopRender = renderOn(["result"], render);
 
   const sizeObserver = observeResultSize(result, {
     onWidthChange: () => render(getState()),
     onHeightChange: () => refillVirtualWindow?.(),
   });
 
-  const controller = new AbortController();
-  on(["result"], () => render(getState()), controller.signal);
   // The placeholder hint reflects the current drawing phase, so refresh it as
   // the user sketches — but only while the panel is showing that hint, never
   // while a (potentially huge) solver result is mounted.
+  const hintSync = new AbortController();
   on(
     ["vertices", "completionMode", "objectiveVector", "currentObjective"],
     () => {
       const s = getState();
       if (s.result.kind === "usage") render(s);
     },
-    controller.signal,
+    hintSync.signal,
   );
   return {
     root: frame,
     destroy: () => {
-      controller.abort();
+      hintSync.abort();
+      stopRender();
       sizeObserver.disconnect();
       hover.clearHoverState();
       frame.remove();

@@ -69,6 +69,14 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
       "aria-expanded": "false",
     },
     html: '<svg class="problem-gallery__chevron" viewBox="0 0 12 8" aria-hidden="true"><polyline points="1 1 6 6 11 1" /></svg>',
+    on: {
+      click: (e) => {
+        e.stopPropagation();
+        disarmAutoOpen();
+        expanded = !expanded;
+        render();
+      },
+    },
   });
   const items = el("div", {
     className: "problem-gallery__items",
@@ -83,16 +91,15 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
       html: p.isRandom
         ? `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true"><g class="problem-gallery__shape">${shapeMarkup(p)}</g><g class="problem-gallery__shape is-faded"></g></svg><span>${p.name}</span>`
         : `<svg class="problem-gallery__thumb" viewBox="0 0 60 44" aria-hidden="true">${shapeMarkup(p)}</svg><span>${p.name}</span>`,
+      on: {
+        click: () => {
+          // the random item rolls a fresh problem each time
+          const problem = p.isRandom ? requestRandomConvexPolygonProblem() : p;
+          if (problem) ctx.actions.loadGalleryProblem(problem);
+        },
+      },
     });
     if (p.isRandom) reshuffles.push(createReshuffle(b));
-    b.addEventListener("click", () => {
-      if (p.isRandom) {
-        const generated = requestRandomConvexPolygonProblem();
-        if (generated) ctx.actions.loadGalleryProblem(generated);
-        return;
-      }
-      ctx.actions.loadGalleryProblem(p);
-    });
     items.append(b);
   }
   const render = () => {
@@ -128,12 +135,6 @@ export function mountProblemGallery(parent: HTMLElement, ctx: AppContext) {
     document.removeEventListener("click", firstClick);
   }
   document.addEventListener("click", firstClick);
-  toggle.addEventListener("click", (e) => {
-    e.stopPropagation();
-    disarmAutoOpen();
-    expanded = !expanded;
-    render();
-  });
   render();
   return {
     updateLayout: render,
