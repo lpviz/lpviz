@@ -696,6 +696,13 @@ body {
   pointer-events: none;
 }
 
+/* over the canvas (in the viewport's stack, under the fixed sidebar and toolbar) while the help
+   is open, so the press that dismisses it places no vertex */
+#helpBackdrop {
+  z-index: 1;
+  touch-action: manipulation;
+}
+
 #helpButton {
   width: var(--help-size);
   height: var(--help-size);
@@ -990,11 +997,12 @@ body {
     padding: 0 8px 10px;
   }
 
-  /* in the canvas's free corner, above the sidebar; the panel opens as a sheet over the canvas */
+  /* in the canvas's free corner, above the sidebar and its 12px drag handle; the panel opens as
+     a sheet over the canvas */
   #helpControl {
     --help-size: 40px;
     right: 8px;
-    bottom: calc(var(--mobile-sidebar-height, 42dvh) + 8px);
+    bottom: calc(var(--mobile-sidebar-height, 42dvh) + 20px);
   }
 
   #helpButton {
@@ -1004,7 +1012,8 @@ body {
 
   #helpPanel {
     width: calc(100vw - 16px);
-    max-height: calc(100dvh - var(--mobile-sidebar-height, 42dvh) - var(--help-size) - 28px);
+    /* the room above the button: the sidebar, the handle, the button and an 8px gap at each edge */
+    max-height: calc(100dvh - var(--mobile-sidebar-height, 42dvh) - 76px);
     margin-bottom: 8px;
     padding: 12px 14px;
   }
