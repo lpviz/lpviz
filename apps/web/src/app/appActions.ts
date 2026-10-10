@@ -57,16 +57,13 @@ export function createAppActions({
   history,
   polytope,
   getViewportApi,
-  initialSidebarWidth,
 }: {
   solver: SolverActions;
   share: () => void;
   history: HistoryService;
   polytope: PolytopeService;
   getViewportApi: () => ViewportRuntime | null;
-  initialSidebarWidth: number;
 }): AppActions {
-  let sidebarWidth = initialSidebarWidth;
   let topInset = 0;
 
   const resetView = () => getViewportApi()?.resetView();
@@ -84,7 +81,6 @@ export function createAppActions({
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
     viewportApi.zoomToFit(isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
-    viewportApi.setSidebarWidth(sidebarWidth);
   };
 
   return {
@@ -144,9 +140,6 @@ export function createAppActions({
     setTopInset: (px) => {
       topInset = Math.max(0, px);
     },
-    setSidebarWidth: (width) => {
-      sidebarWidth = width;
-      getViewportApi()?.setSidebarWidth(width);
-    },
+    setSidebarWidth: (width) => getViewportApi()?.setSidebarWidth(width),
   };
 }
