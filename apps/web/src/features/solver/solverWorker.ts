@@ -5,11 +5,11 @@ import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
 import type { SolverResult } from "@lpviz/solver-engine/result";
 import { simplex } from "@lpviz/solver-engine/simplex";
+import { SOLVER_LABELS } from "./solverSettings";
 import { packSolverResponse } from "./resultPacking";
 import type { SolverWorkerPayload, SolverWorkerRequest } from "./types";
 
 const DEFAULT_TOLERANCE = 1e-5;
-const SOLVER_NAMES = { ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", central: "Central Path", ellipsoid: "Ellipsoid" };
 
 // A request is an engine's options minus the shared tolerance (see SolverWorkerPayload), so the
 // rest of each one spreads straight into the engine.
@@ -43,7 +43,7 @@ function executeSolver(data: SolverWorkerPayload): SolverResult {
       }
     }
   } catch (error) {
-    console.error(`Error in ${SOLVER_NAMES[data.solver]} solver:`, error);
+    console.error(`Error in ${SOLVER_LABELS[data.solver]} solver:`, error);
     throw error;
   }
 }

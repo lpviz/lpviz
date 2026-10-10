@@ -1,6 +1,6 @@
 import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
-import type { SolverMode, SolverSettings } from "@/features/solver/solverState";
+import { SOLVER_LABELS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
 import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
 import { el } from "@/ui/dom";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
@@ -11,17 +11,13 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const buttonGroup = el("div", { className: "button-group" });
   root.append(buttonGroup);
   const buttons = new Map<SolverMode, HTMLButtonElement>();
-  const mkButton = (mode: SolverMode, text: string, id?: string) => {
-    const b = el("button", { id, text });
+  // the panel's order, the general-purpose solvers first
+  for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const) {
+    const b = el("button", { id: `${mode}Button`, text: SOLVER_LABELS[mode] });
     b.addEventListener("click", () => ctx.actions.setActiveSolverMode(mode));
     buttons.set(mode, b);
     buttonGroup.append(b);
-  };
-  mkButton("ipm", "IPM", "ipmButton");
-  mkButton("pdhg", "PDHG");
-  mkButton("simplex", "Simplex");
-  mkButton("ellipsoid", "Ellipsoid");
-  mkButton("central", "Central Path", "iteratePathButton");
+  }
 
   const settings = el("div");
   root.append(settings);

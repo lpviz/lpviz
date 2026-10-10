@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SOLVER_SETTINGS } from "@/features/solver/solverState";
+import { DEFAULT_SOLVER_SETTINGS } from "@/features/solver/solverSettings";
 import { freshState, getState, setState } from "./store";
 
 // A reset applies freshState() over whatever the store holds. These pin what

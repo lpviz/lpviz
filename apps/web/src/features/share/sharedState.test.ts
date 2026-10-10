@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { DEFAULT_SOLVER_SETTINGS, type SolverSettings } from "../solver/solverState";
-import { collectShareSettings, type ShareSettings, validSharedSettings } from "./sharedState";
+import { DEFAULT_SOLVER_SETTINGS, type ShareSettings, type SolverSettings } from "../solver/solverSettings";
+import { collectShareSettings, validSharedSettings } from "./sharedState";
 
 // Share links are the app's only untrusted input: a hand-edited link must be
 // able to neither blank a <select> nor throw inside the settings panel's store

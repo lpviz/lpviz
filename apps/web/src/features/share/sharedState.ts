@@ -1,27 +1,19 @@
 import type { State } from "@/features/core/store";
 import { COMPLETION_MODES, type CompletionMode } from "@/features/polytope-editor/editorState";
-import { DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type SolverMode, type SolverSettings } from "@/features/solver/solverState";
+import {
+  DEFAULT_SOLVER_SETTINGS,
+  SHARED_SETTING_KEYS,
+  SOLVER_MODES,
+  sharedSettingKeys,
+  type SharedSettingKey,
+  type ShareSettings,
+  type SolverMode,
+  type SolverSettings,
+} from "@/features/solver/solverSettings";
 import type { Vec } from "@lpviz/math/types";
 import { type Dimension, vecFrom } from "@lpviz/math/vec";
 import { clampZScale } from "@lpviz/viewport/defaults";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
-
-export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
-type SharedSettingKey = keyof ShareSettings;
-
-// shared with every solver mode, on top of the active mode's own keys
-const GLOBAL_SHARE_KEYS = ["objectiveAngleStep", "objectiveRotationSpeed"] as const;
-
-// the settings each solver mode puts in a link
-const SOLVER_SHARE_KEYS: Record<SolverMode, readonly SharedSettingKey[]> = {
-  central: ["centralPathIter"],
-  ipm: ["alphaMax", "correctorThreshold", "maxitIPM"],
-  simplex: ["simplexDualMode", "simplexEnteringRule", "simplexLeavingRule"],
-  ellipsoid: ["maxitEllipsoid", "ellipsoidDeepCuts", "ellipsoidRayShoot", "ellipsoidQueryPoint", "ellipsoidInitialScale"],
-  pdhg: ["pdhgEta", "pdhgTau", "maxitPDHG", "pdhgIneqMode", "pdhgHalpernMode", "pdhgColorByBasis"],
-};
-
-const SHARED_SETTING_KEYS: readonly SharedSettingKey[] = [...GLOBAL_SHARE_KEYS, ...Object.values(SOLVER_SHARE_KEYS).flat()];
 
 export type SharedAppState = {
   /** how many coordinates every point carries; absent in links from before the 3-variable editor (two) */
@@ -43,8 +35,7 @@ export function collectShareSettings(settings: SolverSettings, mode: SolverMode)
   const copy = <K extends SharedSettingKey>(key: K) => {
     shared[key] = settings[key];
   };
-  for (const key of GLOBAL_SHARE_KEYS) copy(key);
-  for (const key of SOLVER_SHARE_KEYS[mode]) copy(key);
+  for (const key of sharedSettingKeys(mode)) copy(key);
   return shared;
 }
 

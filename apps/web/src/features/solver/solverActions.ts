@@ -5,7 +5,7 @@ import { createReplayController } from "@/features/solver/replayController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createSolveRunner } from "@/features/solver/solveRunner";
-import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverState";
+import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverSettings";
 
 export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;

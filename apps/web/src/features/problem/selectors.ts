@@ -1,6 +1,6 @@
 import type { EditorState } from "@/features/polytope-editor/editorState";
 import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
-import type { SolverMode } from "@/features/solver/solverState";
+import type { SolverMode } from "@/features/solver/solverSettings";
 import type { Vec } from "@lpviz/math/types";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/halfSpaces";
 import { hasConstraints } from "@lpviz/polytope/polytope";

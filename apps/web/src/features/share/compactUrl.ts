@@ -1,7 +1,7 @@
 import { COMPLETION_MODES } from "@/features/polytope-editor/editorState";
-import { DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/solver/solverState";
+import { DEFAULT_SOLVER_SETTINGS, type ShareSettings, SOLVER_MODES, WIRED_SETTINGS } from "@/features/solver/solverSettings";
 import { isDimension, vecFrom } from "@lpviz/math/vec";
-import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
+import type { SharedAppState } from "@/features/share/sharedState";
 import type { Vec } from "@lpviz/math/types";
 
 // A share link gets pasted into chat, email and papers, so the payload is restricted to the
@@ -113,28 +113,13 @@ const enumeration = (key: SettingCodec["key"], values: readonly string[]): Setti
   read: (bytes, cursor) => values[readByte(bytes, cursor)],
 });
 
-// Index is the wire identity of a setting: only ever append to this list, and
-// never reorder it, or old links decode into the wrong fields.
-const SETTINGS: readonly SettingCodec[] = [
-  scaled("alphaMax", 1e4),
-  scaled("correctorThreshold", 1e4),
-  int("maxitIPM"),
-  bool("simplexDualMode"),
-  scaled("pdhgEta", 1e4),
-  scaled("pdhgTau", 1e4),
-  int("maxitPDHG"),
-  bool("pdhgIneqMode"),
-  bool("pdhgHalpernMode"),
-  bool("pdhgColorByBasis"),
-  int("centralPathIter"),
-  int("maxitEllipsoid"),
-  bool("ellipsoidDeepCuts"),
-  bool("ellipsoidRayShoot"),
-  enumeration("ellipsoidQueryPoint", QUERY_POINTS),
-  scaled("ellipsoidInitialScale", 1e4),
-  scaled("objectiveAngleStep", 1e4),
-  scaled("objectiveRotationSpeed", 1e4),
-];
+// The settings by wire slot (the index here is the slot, see SOLVER_SETTING_SPECS): the slot is a
+// setting's identity on the wire, so old links keep decoding into the right fields.
+const SETTINGS: readonly SettingCodec[] = WIRED_SETTINGS.map(({ key, wire: { codec } }) => {
+  if (codec === "bool") return bool(key);
+  if (codec === "int") return int(key);
+  return "scaled" in codec ? scaled(key, codec.scaled) : enumeration(key, codec.enumeration);
+});
 
 // ─── encode / decode ────────────────────────────────────────────────────────
 
