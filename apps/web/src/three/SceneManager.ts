@@ -10,9 +10,11 @@ import { TraceCache } from "./TraceCache";
 
 type Size = { width: number; height: number; dpr: number };
 
-// the device pixel ratio the canvas renders at: never below 1, and capped so retina
-// displays do not quadruple the fill cost
-const clampDpr = () => Math.min(2, Math.max(1, window.devicePixelRatio));
+// The device pixel ratio the canvas renders at: never below 1, and capped at a phone's 3 so an
+// outlier display cannot multiply the fill cost without bound. Below the cap the canvas is
+// pixel-aligned with the screen; above it the browser would stretch the buffer.
+const MAX_DPR = 3;
+const clampDpr = () => Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio));
 
 export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
