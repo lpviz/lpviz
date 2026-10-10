@@ -15,7 +15,7 @@ const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
       { label: "Insert a vertex", desc: "double-click an edge", touch: "double-tap an edge" },
       { label: "Move a vertex", desc: "drag it" },
       { label: "Move a constraint", desc: "drag its edge line" },
-      { label: "Delete a vertex", desc: "right-click it", touch: null },
+      { label: "Delete a vertex", desc: "right-click it", touch: "press and hold it" },
       { label: "Finish the region", desc: "press <kbd>Enter</kbd>", touch: { label: "Close the region", desc: "tap the first vertex" } },
     ],
   ],
@@ -36,7 +36,7 @@ const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
       { label: "Animation length", desc: "press <kbd>+</kbd> / <kbd>-</kbd>", touch: null },
       { label: "Keep a trace", desc: "toggle the <strong>Trace</strong> box" },
       { label: "Tune a solver", desc: "adjust its sliders" },
-      { label: "Move the start", desc: "drag the gray ring; right-click it to reset", touch: "drag the gray ring" },
+      { label: "Move the start", desc: "drag the gray ring; right-click it to reset", touch: "drag the gray ring; press and hold it to reset" },
     ],
   ],
   [

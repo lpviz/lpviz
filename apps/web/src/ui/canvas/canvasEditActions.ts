@@ -58,7 +58,7 @@ function createPointerEditActions(
 
   const handleContextMenu = (event: MouseEvent) => {
     const state = getState();
-    if (state.isTransitioning3D) return;
+    if (state.isTransitioning3D) return false;
 
     const local = getLocalFromClient(viewportApi, event.clientX, event.clientY);
 
@@ -67,14 +67,14 @@ function createPointerEditActions(
       swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
-      return;
+      return true;
     }
 
     const {
       geometry: { vertices: displayVertices },
     } = getEditorContext(state);
     const deleteIndex = findVertexNearLocalPoint(viewportApi, local.x, local.y, displayVertices);
-    if (deleteIndex === -1) return;
+    if (deleteIndex === -1) return false;
 
     swallow(event);
     const deletion = getEditorTransition(state, {
@@ -82,6 +82,7 @@ function createPointerEditActions(
       deleteIndex,
     });
     applyEditorTransition(deletion);
+    return true;
   };
 
   const handleDoubleClickAt = (clientX: number, clientY: number) => {

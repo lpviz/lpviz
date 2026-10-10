@@ -12,7 +12,8 @@ export type EditorTools = {
   handleDragEnd: () => void;
   handleClick: (event: MouseEvent) => void;
   handleDoubleClickAt: (clientX: number, clientY: number) => void;
-  handleContextMenu: (event: MouseEvent) => void;
+  /** The right-click (or press-and-hold) edit; true when something under the pointer was acted on. */
+  handleContextMenu: (event: MouseEvent) => boolean;
   handleWheel: (event: WheelEvent) => void;
   handleKeyDown: (event: KeyboardEvent) => void;
   /** Drop any interaction in progress: the canvas is going away. */
