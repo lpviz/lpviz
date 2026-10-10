@@ -24,6 +24,9 @@ const OVERFLOW_SLACK_PX = 1;
 // scrollTop cannot strand the gesture
 const SCROLL_END_SLACK_PX = 1;
 const TERMINALS = "#terminal-container, #terminal-container2";
+// A touch device has no wheel to grow the log with, so there the log is as tall as the sidebar
+// from the start: scrolling past the controls reads it, and the handle resizes both at once.
+const COARSE_POINTER_QUERY = "(hover: none) and (pointer: coarse)";
 
 // Whether the wheel lands inside a terminal that can still scroll in this
 // direction, in which case the terminal keeps the gesture.
@@ -58,6 +61,7 @@ function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
 
 export function createSidebarLogExpansion({ sidebar, content, logPanel }: { sidebar: HTMLElement; content: HTMLElement; logPanel: HTMLElement }) {
   let expansion = 0;
+  const coarsePointer = window.matchMedia(COARSE_POINTER_QUERY);
 
   // Everything stacked above the log panel, which is also how far the log can
   // grow (at the limit the controls are scrolled off). Measured in content
@@ -65,12 +69,13 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
   const roomAbove = () => logPanel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
 
   const applyExpansion = () => {
-    if (expansion <= 0) {
+    const applied = coarsePointer.matches ? roomAbove() : expansion;
+    if (applied <= 0) {
       logPanel.style.minHeight = "";
       return;
     }
     const fitted = content.clientHeight - roomAbove();
-    logPanel.style.minHeight = `${Math.max(0, fitted) + expansion}px`;
+    logPanel.style.minHeight = `${Math.max(0, fitted) + applied}px`;
   };
 
   const onWheel = (event: WheelEvent) => {
@@ -113,6 +118,10 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
   // The room above changes with the window and the active solver's settings;
   // re-clamp rather than leave the log taller than there is room for.
   const observer = new ResizeObserver(() => {
+    if (coarsePointer.matches) {
+      applyExpansion();
+      return;
+    }
     if (expansion === 0) return;
     const clamped = Math.min(expansion, Math.max(0, roomAbove()));
     if (clamped === expansion) return;
@@ -120,10 +129,12 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     applyExpansion();
   });
   observer.observe(content);
+  coarsePointer.addEventListener("change", applyExpansion);
 
   return {
     destroy: () => {
       sidebar.removeEventListener("wheel", onWheel);
+      coarsePointer.removeEventListener("change", applyExpansion);
       observer.disconnect();
       logPanel.style.minHeight = "";
     },
