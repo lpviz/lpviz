@@ -371,6 +371,22 @@ body {
   padding: 14px 10px;
 }
 
+/* under the hint, for a phone-sized portrait window or a touch-only device */
+.desktop-note {
+  display: none;
+  margin: 0;
+  padding: 0 10px 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #9a9a9a;
+}
+
+@media (max-width: 700px) and (orientation: portrait), (hover: none) and (pointer: coarse) {
+  .desktop-note {
+    display: block;
+  }
+}
+
 #maximize,
 #subjectTo {
   text-align: left;
@@ -662,6 +678,13 @@ body {
   pointer-events: none;
 }
 
+/* over the canvas (in the viewport's stack, under the fixed sidebar and toolbar) while the help
+   is open, so the press that dismisses it places no vertex */
+#helpBackdrop {
+  z-index: 1;
+  touch-action: manipulation;
+}
+
 #helpButton {
   width: var(--help-size);
   height: var(--help-size);
@@ -951,8 +974,30 @@ body {
     padding: 10px 8px;
   }
 
+  .desktop-note {
+    font-size: 0.74rem;
+    padding: 0 8px 10px;
+  }
+
+  /* in the canvas's free corner, above the sidebar and its 12px drag handle; the panel opens as
+     a sheet over the canvas */
   #helpControl {
-    display: none;
+    --help-size: 40px;
+    right: 8px;
+    bottom: calc(var(--mobile-sidebar-height, 42dvh) + 20px);
+  }
+
+  #helpButton {
+    padding: 8px;
+    font-size: 1.25rem;
+  }
+
+  #helpPanel {
+    width: calc(100vw - 16px);
+    /* the room above the button: the sidebar, the handle, the button and an 8px gap at each edge */
+    max-height: calc(100dvh - var(--mobile-sidebar-height, 42dvh) - 76px);
+    margin-bottom: 8px;
+    padding: 12px 14px;
   }
 
   .controlPanel {

@@ -91,7 +91,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext) {
   zScaleControl.append(el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }), zScaleSlider, zScaleValue);
   zoom.append(home, fit, reset, toggle3d, share, zScaleControl);
   main.append(zoom);
-  const help = mountHelpButton(main);
+  const help = mountHelpButton(main, viewport);
   const handle = el("div", { id: "sidebarHandle" });
   handle.addEventListener("pointerdown", (e) => {
     if (!e.isPrimary || e.button !== 0) return;

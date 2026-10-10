@@ -21,6 +21,7 @@
 
 import { getState, on } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
+import { COARSE_POINTER_QUERY } from "@/ui/pointer";
 
 const LINE_HEIGHT_PX = 16;
 const PAGE_FRACTION = 0.8;
@@ -32,7 +33,6 @@ const OVERFLOW_SLACK_PX = 1;
 // scrollTop cannot strand the gesture
 const SCROLL_END_SLACK_PX = 1;
 const TERMINALS = "#terminal-container, #terminal-container2";
-const COARSE_POINTER_QUERY = "(hover: none) and (pointer: coarse)";
 const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 // Whether the wheel lands inside a terminal that can still scroll in this
