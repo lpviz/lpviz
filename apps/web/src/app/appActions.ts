@@ -1,25 +1,32 @@
 import { freshState, getState, on, setState } from "@/features/core/store";
-import type { SolverMode } from "@/features/solver/solverState";
 import type { HistoryService } from "@/features/history/historyService";
 import { finishOpenRegion } from "@/features/polytope-editor/editorActions";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
-import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
-// The action table the UI panels call: the solver actions they use directly, the view actions,
-// and the app-level composites.
-export type AppActions = Pick<
-  SolverActions,
-  "setConstraintHighlight" | "setIterateHighlight" | "updateSolverSetting" | "recomputeIfModeActive" | "setTraceEnabled" | "toggleReplay" | "startRotation" | "stopMotion"
-> & {
+// the solver actions the UI panels call directly
+const SOLVER_ACTION_KEYS = [
+  "setActiveSolverMode",
+  "setConstraintHighlight",
+  "setIterateHighlight",
+  "updateSolverSetting",
+  "recomputeIfModeActive",
+  "setTraceEnabled",
+  "toggleReplay",
+  "startRotation",
+  "stopMotion",
+] as const;
+
+// The action table the UI panels call: the solver actions above, the view actions, and the
+// app-level composites.
+export type AppActions = Pick<SolverActions, (typeof SOLVER_ACTION_KEYS)[number]> & {
   share: () => void;
   /** back to an empty canvas, with every setting at its default, after the person confirms */
   reset: () => void;
-  setActiveSolverMode: (mode: SolverMode) => void;
   loadGalleryProblem: (problem: GalleryProblem) => void;
   /** finish the drafted region as an open one, as Enter does; the console's link, for a finger */
   finishOpenRegion: () => void;
@@ -85,15 +92,14 @@ export function createAppActions({
   };
 
   return {
-    ...pick(solver, "setConstraintHighlight", "setIterateHighlight", "updateSolverSetting", "recomputeIfModeActive", "setTraceEnabled", "toggleReplay", "startRotation", "stopMotion"),
+    ...pick(solver, ...SOLVER_ACTION_KEYS),
     share,
     reset: () => {
       if (!window.confirm("Reset lpviz? This clears the drawing and every setting.")) return;
       // In place rather than by reloading the page, so it works offline.
-      solver.invalidatePendingSolveResults();
       solver.stopMotion();
       solver.clearComputedState();
-      setState(freshState(), { viewportDirty: ALL_VIEWPORT_DIRTY });
+      setState(freshState());
       // pan is enabled on an empty canvas; the first vertex placed turns it
       // off until the region is finished
       viewportApi.set2DPanEnabled(true);
@@ -101,31 +107,26 @@ export function createAppActions({
       if (is3DMode && !isTransitioning3D) toggle3D();
       afterViewTransition(resetView);
     },
-    setActiveSolverMode: (mode) => solver.setActiveSolverMode(mode, true),
     loadGalleryProblem: (problem) => {
       history.save();
-      solver.invalidatePendingSolveResults();
       solver.stopMotion();
-      setState(
-        {
-          vertices: problem.vertices.map((v) => [...v]),
-          completionMode: "closed",
-          interiorPoint: [...problem.interiorPoint],
-          polytope: null,
-          inequalitiesMessage: null,
-          objectiveVector: [...problem.objectiveVector],
-          currentObjective: null,
-          highlightIndex: null,
-          highlightIteratePathIndex: null,
-          editorInteraction: { kind: "idle" },
-          lastCompletedInteraction: "none",
-          rotateObjectiveMode: false,
-          // any in-flight replay was already stopped by stopMotion() above;
-          // clearing `replayActive` here without cancelling its RAF loop would
-          // leave the loop running against the freshly loaded problem
-        },
-        { viewportDirty: ALL_VIEWPORT_DIRTY },
-      );
+      setState({
+        vertices: problem.vertices.map((v) => [...v]),
+        completionMode: "closed",
+        interiorPoint: [...problem.interiorPoint],
+        polytope: null,
+        inequalitiesMessage: null,
+        objectiveVector: [...problem.objectiveVector],
+        currentObjective: null,
+        highlightIndex: null,
+        highlightIteratePathIndex: null,
+        editorInteraction: { kind: "idle" },
+        lastCompletedInteraction: "none",
+        rotateObjectiveMode: false,
+        // any in-flight replay was already stopped by stopMotion() above;
+        // clearing `replayActive` here without cancelling its RAF loop would
+        // leave the loop running against the freshly loaded problem
+      });
       viewportApi.set2DPanEnabled(true);
       polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());

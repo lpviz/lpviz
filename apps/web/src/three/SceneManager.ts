@@ -1,6 +1,6 @@
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState } from "@/features/core/store";
-import type { ViewportDirtyFlags, ViewportInvalidation } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer } from "three";
 import { setSharedLineResolution } from "./helpers/sharedLineMaterials";
@@ -24,8 +24,8 @@ export class SceneManager {
   // a world-anchored accumulation cache (so neither camera motion nor a trace
   // append re-renders baked chunks); while the 3D view is in motion a
   // single-sample offscreen composite instead of the MSAA canvas.
-  private traceCache = new TraceCache(() => this.invalidate({ layers: false }));
-  private trace3D = new Trace3DCompositor(() => this.invalidate({ layers: false }));
+  private traceCache = new TraceCache(() => this.invalidate("frame"));
+  private trace3D = new Trace3DCompositor(() => this.invalidate("frame"));
 
   private camera: Camera | null = null;
   private dirty = true;
@@ -68,7 +68,7 @@ export class SceneManager {
     // the sketch cursor moves the rubber band while a region is being drawn
     subscribeCurrentMouse(() => {
       const state = getState();
-      if (state.completionMode === "draft" && state.vertices.length > 0) this.invalidate({ viewportDirty: { polytope: true } });
+      if (state.completionMode === "draft" && state.vertices.length > 0) this.invalidate({ polytope: true });
     }, this.subscriptions.signal);
   }
 
@@ -125,22 +125,15 @@ export class SceneManager {
   };
 
   // Asks for a frame; the first one starts the demand-driven loop.
-  invalidate(options: ViewportInvalidation = {}): void {
-    if (options.layers ?? true) {
-      if (options.viewportDirty && Object.keys(options.viewportDirty).length) {
-        if (this.layersDirty !== "all") {
-          this.layersDirty = {
-            ...this.layersDirty,
-            ...options.viewportDirty,
-          };
-        }
-        // trace appends/evictions are detected by TraceCache itself via the
-        // chunk sequence numbers, so trace/iterate dirt needs no cache flush
-      } else {
-        this.layersDirty = "all";
-        // a flagless invalidate (e.g. layer-content change) must drop the bake
-        this.traceCache.markContentDirty();
-      }
+  invalidate(repaint: Repaint = "all"): void {
+    if (repaint === "all") {
+      this.layersDirty = "all";
+      // a whole rebuild (e.g. a layer-content change) must drop the bake
+      this.traceCache.markContentDirty();
+    } else if (repaint !== "frame" && this.layersDirty !== "all") {
+      // trace appends/evictions are detected by TraceCache itself via the
+      // chunk sequence numbers, so trace/iterate dirt needs no cache flush
+      this.layersDirty = { ...this.layersDirty, ...repaint };
     }
     this.dirty = true;
     this.scheduleFrame();

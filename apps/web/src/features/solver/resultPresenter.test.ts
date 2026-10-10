@@ -27,10 +27,12 @@ const run = (count: number): VirtualResultPayload => ({
 // viewport stars — and every shown row must keep its own index for hovering.
 describe("rotation row window", () => {
   const presenter = createResultPresenter();
-  const shown = () => {
-    const rows = getState().resultVirtualRows;
-    return Array.from({ length: rows.length }, (_, i) => rows.at(i)!);
+  const rows = () => {
+    const view = getState().result;
+    if (view.kind !== "virtual") throw new Error(`expected a virtual result, got ${view.kind}`);
+    return view.rows;
   };
+  const shown = () => Array.from({ length: rows().length }, (_, i) => rows().at(i)!);
   const indices = () => shown().map((block) => block.index);
 
   test("a short run is shown whole", () => {
@@ -53,7 +55,7 @@ describe("rotation row window", () => {
   test("the whole run comes back once the limit is lifted", () => {
     presenter.render(run(50), { limitVirtualRows: true });
     presenter.render(run(50), { limitVirtualRows: false });
-    expect(getState().resultVirtualRows.length).toBe(50);
+    expect(rows().length).toBe(50);
     expect(indices()[49]).toBe(49);
   });
 });

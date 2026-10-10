@@ -1,5 +1,6 @@
 import { getState, setState } from "@/features/core/store";
 import { formatVirtualResultRow } from "@/features/solver/resultPacking";
+import type { ResultView } from "@/features/solver/solverState";
 import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
 
 // While the objective rotates the log is re-rendered on every step, so it shows
@@ -52,8 +53,7 @@ const createVirtualBlock = (row: VirtualResultRow, index: number): ResultTextBlo
   index,
 });
 const createResultBlock = (className: ResultTextBlock["className"], text: string): ResultTextBlock => ({ className, text });
-// fresh per call: resultVirtualRows must be a new array so the store sees a change
-const noVirtualRows = () => ({ resultVirtualHeader: null, resultVirtualFooter: null, resultVirtualShowEmpty: false, resultVirtualRows: [] });
+const USAGE: ResultView = { kind: "usage" };
 
 /** A two-line result: a header and the one line under it (why a solver did not run, or its error). */
 export const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
@@ -62,8 +62,8 @@ export const messageBlocks = (header: string, message: string): ResultRenderPayl
 });
 
 export type ResultPresenter = {
-  // push a solver result into the store's result-display fields (deferred while
-  // the viewport is mid-navigation; see render)
+  // push a solver result into the store's result view (deferred while the
+  // viewport is mid-navigation; see render)
   render: (payload: ResultRenderPayload, options?: RenderOptions) => void;
   // render a solver failure as a two-line block result
   renderError: (message: string) => void;
@@ -75,7 +75,7 @@ export type ResultPresenter = {
   restoreFullVirtualResult: () => void;
 };
 
-// How a solver result becomes result-panel store state: virtual-vs-blocks shaping, the
+// How a solver result becomes the store's result view: virtual-vs-blocks shaping, the
 // widest-line measurement, the rotation row cap, and the defer-while-navigating buffer.
 export function createResultPresenter(): ResultPresenter {
   let lastVirtualResult: VirtualResultPayload | null = null;
@@ -83,6 +83,8 @@ export function createResultPresenter(): ResultPresenter {
     payload: ResultRenderPayload;
     options: RenderOptions;
   } | null = null;
+
+  const show = (result: ResultView) => setState({ result, highlightIteratePathIndex: null });
 
   const applyRender = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
     const limitVirtualRows = options.limitVirtualRows ?? getState().rotateObjectiveMode;
@@ -106,24 +108,15 @@ export function createResultPresenter(): ResultPresenter {
       // Rows are fixed-width; sampling three avoids formatting all of them
       // (100k at max settings) just to measure the widest line.
       const sampleBlocks = rowCount > 0 ? [blockAt(0), blockAt(rowCount >> 1), blockAt(rowCount - 1)] : [];
-      setState({
-        resultDisplayMode: "virtual",
-        resultBlocks: null,
-        resultVirtualHeader: payload.header || "",
-        resultVirtualFooter: payload.footer ?? null,
-        resultVirtualShowEmpty: rowCount === 0,
-        resultVirtualRows: { length: rowCount, at: blockAt },
-        resultMaxLineChars: getMaxLineChars([payload.header || "", ...(payload.footer ? [payload.footer] : []), ...sampleBlocks.flatMap((block) => (block ? [block.text] : []))]),
-        highlightIteratePathIndex: null,
+      show({
+        kind: "virtual",
+        header: payload.header || "",
+        footer: payload.footer ?? null,
+        rows: { length: rowCount, at: blockAt },
+        maxLineChars: getMaxLineChars([payload.header || "", ...(payload.footer ? [payload.footer] : []), ...sampleBlocks.flatMap((block) => (block ? [block.text] : []))]),
       });
     } else {
-      setState({
-        resultDisplayMode: "blocks",
-        resultBlocks: payload.blocks,
-        ...noVirtualRows(),
-        resultMaxLineChars: getMaxLineChars(payload.blocks.map((b) => b.text)),
-        highlightIteratePathIndex: null,
-      });
+      show({ kind: "blocks", blocks: payload.blocks, maxLineChars: getMaxLineChars(payload.blocks.map((b) => b.text)) });
     }
   };
   // lastVirtualResult is the latest virtual payload, which restoreFullVirtualResult re-renders
@@ -150,7 +143,7 @@ export function createResultPresenter(): ResultPresenter {
     clearResult: () => {
       lastVirtualResult = null;
       pendingRender = null;
-      setState({ resultDisplayMode: "usage", resultBlocks: null, ...noVirtualRows(), resultMaxLineChars: 0, highlightIteratePathIndex: null });
+      show(USAGE);
     },
     restoreFullVirtualResult: () => {
       if (lastVirtualResult) render(lastVirtualResult, { limitVirtualRows: false });

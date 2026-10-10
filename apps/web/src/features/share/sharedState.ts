@@ -1,6 +1,6 @@
 import type { State } from "@/features/core/store";
 import { COMPLETION_MODES, type CompletionMode } from "@/features/polytope-editor/editorState";
-import { DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type SolverMode, type SolverSettings, type SolverSettingUpdater } from "@/features/solver/solverState";
+import { DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type SolverMode, type SolverSettings } from "@/features/solver/solverState";
 import type { Vec } from "@lpviz/math/types";
 import { type Dimension, vecFrom } from "@lpviz/math/vec";
 import { clampZScale } from "@lpviz/viewport/defaults";
@@ -59,12 +59,15 @@ function isValidSharedSetting<K extends SharedSettingKey>(key: K, value: unknown
   return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
 }
 
-/** Push every valid shared setting into the store; unknown keys and malformed values are ignored. */
-export function applySharedSettings(settings: ShareSettings, update: SolverSettingUpdater): void {
-  for (const key of SHARED_SETTING_KEYS) {
+/** The shared settings worth keeping: unknown keys and malformed values are dropped. */
+export function validSharedSettings(settings: ShareSettings): ShareSettings {
+  const valid: ShareSettings = {};
+  const keep = <K extends SharedSettingKey>(key: K) => {
     const value: unknown = settings[key];
-    if (isValidSharedSetting(key, value)) update(key, value);
-  }
+    if (isValidSharedSetting(key, value)) valid[key] = value;
+  };
+  for (const key of SHARED_SETTING_KEYS) keep(key);
+  return valid;
 }
 
 // A point is kept only when it has the problem's dimension and finite coordinates, whether it
@@ -76,7 +79,8 @@ function finiteVec(value: unknown, dimension: Dimension): Vec | null {
   return vecFrom(coords);
 }
 
-export function buildSharedStatePatch(sharedState: SharedAppState, dimension: Dimension): Partial<State> {
+/** The store patch a link applies, over the current settings (a link carries only some). */
+export function buildSharedStatePatch(sharedState: SharedAppState, { dimension, solverSettings }: Pick<State, "dimension" | "solverSettings">): Partial<State> {
   const mappedVertices = Array.isArray(sharedState.vertices) ? sharedState.vertices.map((vertex) => finiteVec(vertex, dimension)).filter((vertex): vertex is Vec => vertex !== null) : [];
   const completionMode =
     sharedState.completionMode !== undefined && COMPLETION_MODES.includes(sharedState.completionMode) ? sharedState.completionMode : mappedVertices.length > 2 ? "closed" : "draft";
@@ -87,6 +91,7 @@ export function buildSharedStatePatch(sharedState: SharedAppState, dimension: Di
     completionMode,
     objectiveVector: finiteVec(sharedState.objective, dimension),
     solverMode,
+    solverSettings: { ...solverSettings, ...validSharedSettings(sharedState.settings ?? {}) },
     // always written, so loading a link clears a start point left over from
     // whatever the user was doing before
     solverStartPoint: finiteVec(sharedState.solverStartPoint, dimension),

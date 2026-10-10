@@ -22,13 +22,7 @@ export function boot(root: HTMLElement) {
 
   const sidebar = mountSidebar(root, ctx);
   layout.attach({ sidebar, stage: stage.mountChrome(ctx) });
-  applyUrlParamsOnce({
-    viewportApi: stage.viewportApi,
-    updateSolverSetting: solver.updateSolverSetting,
-    invalidatePendingSolveResults: solver.invalidatePendingSolveResults,
-    setActiveSolverMode: solver.setActiveSolverMode,
-    derivePolytope: polytope.derive,
-  });
+  applyUrlParamsOnce({ viewportApi: stage.viewportApi, derivePolytope: polytope.derive });
 
   return {
     destroy: () => {

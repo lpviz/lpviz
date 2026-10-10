@@ -52,7 +52,7 @@ export function mountCanvasGL(parent: HTMLElement) {
   const bridge: ViewportBridge = {
     getCanvasElement: () => canvas,
     getCanvasRect: () => canvas.getBoundingClientRect(),
-    invalidate: (options) => mgr.invalidate(options),
+    invalidate: (repaint) => mgr.invalidate(repaint),
   };
   return {
     bridge,

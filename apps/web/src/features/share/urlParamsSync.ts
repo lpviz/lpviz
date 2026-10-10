@@ -1,32 +1,20 @@
 import { getState, setState } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
-import { applySharedSettings, buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
-import type { SolverActions } from "@/features/solver/solverActions";
-import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
+import { buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
-export function applyUrlParamsOnce({
-  viewportApi,
-  updateSolverSetting,
-  invalidatePendingSolveResults,
-  setActiveSolverMode,
-  derivePolytope,
-}: Pick<SolverActions, "updateSolverSetting" | "invalidatePendingSolveResults" | "setActiveSolverMode"> & { viewportApi: ViewportApi; derivePolytope: () => void }) {
+export function applyUrlParamsOnce({ viewportApi, derivePolytope }: { viewportApi: ViewportApi; derivePolytope: () => void }) {
   const params = new URLSearchParams(window.location.search);
   const applySharedState = (sharedState: SharedAppState) => {
-    const { dimension } = getState();
-    if (sharedState.dimension !== undefined && sharedState.dimension !== dimension) {
-      setState({ inequalitiesMessage: `This link holds a ${sharedState.dimension}-variable problem; this editor draws ${dimension}-variable ones.` });
+    const current = getState();
+    if (sharedState.dimension !== undefined && sharedState.dimension !== current.dimension) {
+      setState({ inequalitiesMessage: `This link holds a ${sharedState.dimension}-variable problem; this editor draws ${current.dimension}-variable ones.` });
       return;
     }
-    invalidatePendingSolveResults();
-    setState({ ...buildSharedStatePatch(sharedState, dimension), inequalitiesMessage: null, highlightIndex: null }, { viewportDirty: ALL_VIEWPORT_DIRTY });
-    applySharedSettings(sharedState.settings ?? {}, updateSolverSetting);
+    setState({ ...buildSharedStatePatch(sharedState, current), inequalitiesMessage: null, highlightIndex: null });
     const state = getState();
-    const regionFinished = state.completionMode !== "draft";
-    setActiveSolverMode(state.solverMode);
-    if (regionFinished) derivePolytope();
+    if (state.completionMode !== "draft") derivePolytope();
     if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);
   };
   if (!params.has("s")) return;

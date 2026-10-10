@@ -1,4 +1,4 @@
-import type { State } from "@/features/core/store";
+import type { LazyList } from "@/features/solver/solverState";
 import type { ResultTextBlock } from "@/features/solver/types";
 import { el } from "@/ui/dom";
 
@@ -24,19 +24,19 @@ const FALLBACK_VIEW_HEIGHT_PX = 600;
 export function createResultFit(result: HTMLElement) {
   let cachedPadding: number | null = null;
   let lastFitKey = "";
-  return function fit(s: State) {
-    if (s.resultMaxLineChars > 0) {
+  return function fit(maxLineChars: number) {
+    if (maxLineChars > 0) {
       if (cachedPadding === null) {
         const containerStyle = window.getComputedStyle(result);
         cachedPadding = (parseFloat(containerStyle.paddingLeft) || 0) + (parseFloat(containerStyle.paddingRight) || 0);
       }
       const effectiveWidth = result.clientWidth - cachedPadding;
-      const fitKey = `${s.resultMaxLineChars}|${effectiveWidth}`;
+      const fitKey = `${maxLineChars}|${effectiveWidth}`;
       if (fitKey === lastFitKey) return;
       lastFitKey = fitKey;
       if (effectiveWidth > 0) {
         const targetWidth = Math.max(1, effectiveWidth - FIT_SLACK_PX);
-        const maxLineWidth = s.resultMaxLineChars * BASE_FONT_PX * GLYPH_WIDTH_EM;
+        const maxLineWidth = maxLineChars * BASE_FONT_PX * GLYPH_WIDTH_EM;
         const scale = Math.min(MAX_FIT_SCALE, Math.max(0, targetWidth / maxLineWidth));
         const fontSize = Math.min(MAX_FONT_PX, Math.max(MIN_FONT_PX, BASE_FONT_PX * scale * FIT_SHRINK));
         result.style.fontSize = `${fontSize}px`;
@@ -56,7 +56,7 @@ export function createResultFit(result: HTMLElement) {
 const VIRTUAL_OVERSCAN_ROWS = 20;
 // Returns the window refill (null without rows), so a panel that changes
 // height can re-window without a full re-render.
-export function mountVirtualRows(sc: HTMLElement, blocks: State["resultVirtualRows"], result: HTMLElement): (() => void) | null {
+export function mountVirtualRows(sc: HTMLElement, blocks: LazyList<ResultTextBlock>, result: HTMLElement): (() => void) | null {
   const topSpacer = el("div");
   const rowsEl = el("div", { className: "iterate-rows" });
   const bottomSpacer = el("div");
