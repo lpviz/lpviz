@@ -16,8 +16,6 @@ const OBJECTIVE_TIP_HIT_RADIUS_PX = 10;
 // tighter than the vertex radius: in simplex mode the marker sits on a
 // vertex, and grabbing just outside the ring must still drag the vertex
 const SOLVER_START_HIT_RADIUS_PX = 10;
-// a boundary ray is picked in world units, the one tolerance here that does not follow the zoom
-const RAY_HIT_WORLD_DISTANCE = 0.5;
 // How close, on screen, a pointer must be to an edge to pick it. Edges are
 // tested in world units, so callers convert this with worldDistanceForPixels;
 // a fixed world tolerance was hundreds of pixels wide zoomed in on a small
@@ -72,16 +70,18 @@ function getVisibleBounds(viewportApi: ViewportApi): BoundingBox {
   };
 }
 
+/** The boundary ray within an edge's screen radius of `point`, as the index into the polytope's rays. */
 export function findBoundaryRayNearPoint(viewportApi: ViewportApi, state: State, point: Vec): number | null {
   const { completionMode, polytope } = state;
   if (completionMode !== "open" || !polytope?.boundaryRays?.length) return null;
 
   const bounds = getVisibleBounds(viewportApi);
+  const tolerance = worldDistanceForPixels(viewportApi, point, EDGE_HIT_RADIUS_PX);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
     const clipped = clipRayToBoundingBox(polytope.boundaryRays[index]!, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
-    if (distanceToSegment(point, start, end) < RAY_HIT_WORLD_DISTANCE) return index;
+    if (distanceToSegment(point, start, end) < tolerance) return index;
   }
   return null;
 }
