@@ -61,13 +61,20 @@ function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState
     return false;
   };
 
-  // The end of a press: only a touch or pen press that neither drifted nor dragged is tested for
-  // a double tap, and the event is swallowed when it was one.
+  // The end of a press: only a touch or pen press that neither drifted nor dragged is a tap, and
+  // a second tap in quick succession is a double tap. A touch has no browser click (its touch
+  // events are cancelled, see attachGestureListeners), so a single touch tap is clicked here; a
+  // pen's browser click follows and is suppressed when the tap completed a double tap.
   const end = (event: PointerEvent, press: Press) => {
     const wasDragging = getState().editorInteraction.kind === "dragging";
     release(event);
     if (press.pointerType === "mouse" || press.moved || wasDragging) return;
-    if (registerTap(event.clientX, event.clientY)) swallow(event);
+    const doubled = registerTap(event.clientX, event.clientY);
+    if (press.pointerType === "touch") {
+      if (!doubled) handlers.handleClick(event);
+      return;
+    }
+    if (doubled) swallow(event);
   };
 
   return { start, move, release, end };
@@ -107,6 +114,9 @@ function attachGestureListeners(canvas: HTMLCanvasElement, handlers: CanvasGestu
         press.moved = Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) > slop;
         clicks.lastPressMoved = press.moved;
       }
+      // a finger has no hover: while nothing is being dragged, its moves preview nothing (a moved
+      // touch places no vertex, so a sketch cursor following it would be left pointing nowhere)
+      if (event.pointerType === "touch" && getState().editorInteraction.kind === "idle") return;
       bridge.move(event);
     },
     capture,
@@ -131,6 +141,10 @@ function attachGestureListeners(canvas: HTMLCanvasElement, handlers: CanvasGestu
     },
     capture,
   );
+  // Cancelling the touch events leaves the browser nothing to do with a touch on the canvas: no
+  // text selection or loupe on a long press, no double-tap zoom, no scroll, and no synthetic
+  // click (the pointer events above carry the gesture; a tap is clicked from them).
+  canvas.addEventListener("touchstart", (event) => event.preventDefault(), { passive: false, signal });
   window.addEventListener("keydown", handlers.handleKeyDown, capture);
   canvas.addEventListener("wheel", handlers.handleWheel, { capture: true, passive: false, signal });
   canvas.addEventListener("contextmenu", handlers.handleContextMenu, capture);
