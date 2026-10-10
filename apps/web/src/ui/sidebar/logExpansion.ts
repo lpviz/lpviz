@@ -15,8 +15,9 @@
 // the user cannot undo is a trap.
 //
 // A touch device has no wheel, so there the log is as tall as the sidebar from the start and the
-// sidebar follows the drawing: scrolled to the log, where the directions are, while a region is
-// being drawn, and back to the top, where the problem and the solvers are, once it is complete.
+// sidebar follows the drawing: scrolled to the log (a gutter below the sidebar's top, as at its
+// sides), where the directions are, while a region is being drawn, and back to the top, where
+// the problem and the solvers are, once it is complete.
 
 import { getState, on } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
@@ -73,6 +74,8 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
   // grow (at the limit the controls are scrolled off). Measured in content
   // space (scrollTop added back) so it does not move as the sidebar scrolls.
   const roomAbove = () => logPanel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+  // the gutter the panels keep from the sidebar's sides, kept above the log when scrolled to it
+  const gutter = () => logPanel.getBoundingClientRect().left - content.getBoundingClientRect().left;
 
   const applyExpansion = () => {
     const applied = coarsePointer.matches ? roomAbove() : expansion;
@@ -151,7 +154,7 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
       return;
     }
     applyExpansion();
-    content.scrollTo({ top: roomAbove(), behavior: scrollBehavior() });
+    content.scrollTo({ top: roomAbove() - gutter(), behavior: scrollBehavior() });
   };
   const subscriptions = new AbortController();
   on(["vertices", "completionMode", "objectiveVector", "currentObjective"], followDrawing, subscriptions.signal);
