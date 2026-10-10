@@ -2,7 +2,7 @@ import { createSignal } from "@/features/core/signal";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
 
-type Viewport3DControlsConfig = {
+type Controls3DConfig = {
   enabled: boolean;
   blocked: boolean;
   maxDistance: number;
@@ -14,8 +14,8 @@ type Viewport3DControlsConfig = {
 };
 
 export const {
-  set: setViewport3DControlsConfig,
-  reset: resetViewport3DControlsConfig,
-  subscribe: subscribeViewport3DControlsConfig,
-  get: getViewport3DControlsConfig,
-} = createSignal<Viewport3DControlsConfig>({ enabled: false, blocked: false, maxDistance: 1000, syncToken: 0, snapshot: DEFAULT_VIEWPORT_RENDER_SNAPSHOT });
+  set: set3DControlsConfig,
+  reset: reset3DControlsConfig,
+  subscribe: subscribe3DControlsConfig,
+  get: get3DControlsConfig,
+} = createSignal<Controls3DConfig>({ enabled: false, blocked: false, maxDistance: 1000, syncToken: 0, snapshot: DEFAULT_VIEWPORT_RENDER_SNAPSHOT });

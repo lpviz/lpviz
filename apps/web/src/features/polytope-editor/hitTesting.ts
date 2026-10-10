@@ -1,20 +1,23 @@
 // Which drawn thing a pointer position is on: vertices, edges, boundary rays, the objective tip
 // and the start marker, in screen or world tolerances as each one needs.
 
-import { getState, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
+import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { DragTarget } from "@/features/polytope-editor/editorState";
 import { displayedSolverStartPoint, iterateHeight } from "@/features/solver/solverState";
-
-import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
+import { showsDepth } from "@/features/viewport/viewportState";
 import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { distanceToSegment, nearestEdge } from "@lpviz/math/polygon";
 import type { Constraint, PointXY, PointXYZ, Vec } from "@lpviz/math/types";
 
-const VERTEX_HIT_RADIUS = 12;
+const VERTEX_HIT_RADIUS_PX = 12;
+const OBJECTIVE_TIP_HIT_RADIUS_PX = 10;
 // tighter than the vertex radius: in simplex mode the marker sits on a
 // vertex, and grabbing just outside the ring must still drag the vertex
-const SOLVER_START_HIT_RADIUS = 10;
+const SOLVER_START_HIT_RADIUS_PX = 10;
+// a boundary ray is picked in world units, the one tolerance here that does not follow the zoom
+const RAY_HIT_WORLD_DISTANCE = 0.5;
 // How close, on screen, a pointer must be to an edge to pick it. Edges are
 // tested in world units, so callers convert this with worldDistanceForPixels;
 // a fixed world tolerance was hundreds of pixels wide zoomed in on a small
@@ -38,7 +41,7 @@ export function getLocalFromClient(viewportApi: ViewportApi, clientX: number, cl
 export function findVertexNearLocalPoint(viewportApi: ViewportApi, localX: number, localY: number, vertices: Vec[]): number {
   return vertices.findIndex((vertex) => {
     const canvasPoint = viewportApi.toCanvasCoords(vertex[0], vertex[1]);
-    return Math.hypot(localX - canvasPoint.x, localY - canvasPoint.y) <= VERTEX_HIT_RADIUS;
+    return Math.hypot(localX - canvasPoint.x, localY - canvasPoint.y) <= VERTEX_HIT_RADIUS_PX;
   });
 }
 
@@ -67,28 +70,23 @@ function getVisibleBounds(viewportApi: ViewportApi): BoundingBox {
   };
 }
 
-export function findBoundaryRayNearPoint(viewportApi: ViewportApi, point: Vec): number | null {
-  const { completionMode, polytope } = getState();
-  if (completionMode !== "open" || !polytope?.boundaryRays?.length) {
-    return null;
-  }
+export function findBoundaryRayNearPoint(viewportApi: ViewportApi, state: State, point: Vec): number | null {
+  const { completionMode, polytope } = state;
+  if (completionMode !== "open" || !polytope?.boundaryRays?.length) return null;
 
   const bounds = getVisibleBounds(viewportApi);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
-    const ray = polytope.boundaryRays[index]!;
-    const clipped = clipRayToBoundingBox(ray, bounds);
+    const clipped = clipRayToBoundingBox(polytope.boundaryRays[index]!, bounds);
     if (!clipped) continue;
     const [start, end] = clipped;
-    if (distanceToSegment(point, start, end) < 0.5) {
-      return index;
-    }
+    if (distanceToSegment(point, start, end) < RAY_HIT_WORLD_DISTANCE) return index;
   }
   return null;
 }
 
 // the drag's anchor in 3D: the grabbed point, whose view-aligned plane catches pointer rays that miss the floor
 function getViewAnchor3D(state: State, point: Vec): PointXYZ | undefined {
-  return state.is3DMode || state.isTransitioning3D ? { x: point[0], y: point[1], z: point[2] ?? 0 } : undefined;
+  return showsDepth(state) ? { x: point[0], y: point[1], z: point[2] ?? 0 } : undefined;
 }
 
 export function getDragStartTarget(viewportApi: ViewportApi, state: State, clientX: number, clientY: number): DragTarget | null {
@@ -106,8 +104,8 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
   if (session.kind === "drafting") return vertexTarget();
 
   if (state.objectiveVector) {
-    const tip = viewportApi.getObjectiveScreenPosition(state.objectiveVector);
-    if (Math.hypot(local.x - tip.x, local.y - tip.y) < 10) {
+    const tip = viewportApi.toCanvasCoords(state.objectiveVector[0], state.objectiveVector[1]);
+    if (Math.hypot(local.x - tip.x, local.y - tip.y) < OBJECTIVE_TIP_HIT_RADIUS_PX) {
       return { kind: "objective", viewAnchor3D: getViewAnchor3D(state, state.objectiveVector) };
     }
   }
@@ -144,7 +142,7 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance, false);
     if (edgeIndex !== null) return constraintTarget({ kind: "open-vertices", vertexIndices: [edgeIndex, edgeIndex + 1] }, constraints[edgeIndex]);
 
-    const rayIndex = findBoundaryRayNearPoint(viewportApi, logicalCoords);
+    const rayIndex = findBoundaryRayNearPoint(viewportApi, state, logicalCoords);
     if (rayIndex === null) return null;
     // the first ray continues the chain's first edge, the last ray its last edge
     const last = state.vertices.length - 1;
@@ -162,7 +160,7 @@ export function solverStartNearLocalPoint(viewportApi: ViewportApi, state: State
   const { iteratePath } = state;
   const z = iteratePath.count > 0 ? iterateHeight(iteratePath, 0) : undefined;
   const screen = viewportApi.toCanvasCoords(startPoint[0], startPoint[1], z);
-  return Math.hypot(localX - screen.x, localY - screen.y) <= SOLVER_START_HIT_RADIUS ? startPoint : null;
+  return Math.hypot(localX - screen.x, localY - screen.y) <= SOLVER_START_HIT_RADIUS_PX ? startPoint : null;
 }
 
 export function exceedsDragThreshold(state: State, clientX: number, clientY: number): boolean {

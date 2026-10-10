@@ -8,7 +8,7 @@ import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
 import { projectCanvasPointToWorldPlane } from "./projection3d";
 import { getViewportSize, getViewportVisibleCenterCanvasPoint, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
-export type ViewportTransitionDirection = "to3d" | "to2d";
+type ViewportTransitionDirection = "to3d" | "to2d";
 
 export type ViewportTransitionPlan = {
   baseSnapshot: ViewportRenderSnapshot;

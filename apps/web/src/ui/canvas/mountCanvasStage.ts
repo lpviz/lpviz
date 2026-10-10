@@ -38,7 +38,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext) {
             onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
             showReplayDuration: replayDuration.show,
           });
-          ctx.actions.syncViewportLayout(ctx.layout.getViewportSidebarWidth());
+          ctx.actions.setSidebarWidth(ctx.layout.getViewportSidebarWidth());
         })
         .catch((e) => console.error("Failed to initialize viewport", e));
     },

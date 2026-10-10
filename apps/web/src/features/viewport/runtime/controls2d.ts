@@ -4,7 +4,7 @@ import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from ".
 
 // What the 2D pan/zoom controls read (see three/controllers/panZoom2D.ts): whether they own the
 // view, the state they move, the snapshot that sizes it, and where to report a move.
-export type Viewport2DControlsConfig = {
+export type Controls2DConfig = {
   enabled: boolean;
   blocked: boolean;
   panEnabled: boolean;
@@ -20,7 +20,7 @@ export const {
   reset: reset2DControlsConfig,
   subscribe: subscribe2DControlsConfig,
   get: get2DControlsConfig,
-} = createSignal<Viewport2DControlsConfig>({
+} = createSignal<Controls2DConfig>({
   enabled: false,
   blocked: false,
   panEnabled: true,

@@ -1,6 +1,5 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
 import { getState, setState } from "@/features/core/store";
-import { DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
@@ -13,6 +12,7 @@ import {
 } from "@/features/polytope-editor/hitTesting";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import { nearestEdge } from "@lpviz/math/polygon";
+import { clampZScale, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 import { updatePanControls } from "./canvasDragActions";
 import { swallow } from "./canvasGestures";
 import type { EditorToolsDeps } from "./editorTools";
@@ -114,7 +114,7 @@ function createPointerEditActions(
       }
     }
 
-    const rayIndex = findBoundaryRayNearPoint(viewportApi, logicalMouse);
+    const rayIndex = findBoundaryRayNearPoint(viewportApi, state, logicalMouse);
     if (rayIndex !== null) {
       const insertion = getEditorTransition(state, {
         kind: "insert-boundary-ray-point",
@@ -162,7 +162,7 @@ const handleWheel = (event: WheelEvent) => {
   if (dominantDelta === 0) return;
 
   const effectiveScale = (zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
-  setState({ zScale: Math.max(0.01, Math.min(100, effectiveScale)) });
+  setState({ zScale: clampZScale(effectiveScale) });
 };
 
 const isTextEntryTarget = (target: EventTarget | null) =>

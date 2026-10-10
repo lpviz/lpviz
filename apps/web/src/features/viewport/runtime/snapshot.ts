@@ -6,6 +6,6 @@ import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from ".
 export const {
   set: setViewportRenderSnapshot,
   reset: resetViewportRenderSnapshot,
-  subscribe: subscribeFullViewportRenderSnapshot,
+  subscribe: subscribeViewportRenderSnapshot,
   get: getViewportRenderSnapshot,
 } = createSignal<ViewportRenderSnapshot>(DEFAULT_VIEWPORT_RENDER_SNAPSHOT);

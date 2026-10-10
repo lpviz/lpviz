@@ -1,4 +1,4 @@
-import type { ViewportState } from "@/features/viewport/viewportState";
+import { showsDepth, type ViewportState } from "@/features/viewport/viewportState";
 import type { Constraint, PointXYZ, Vec } from "@lpviz/math/types";
 import { vecDistance, type Dimension } from "@lpviz/math/vec";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
@@ -89,8 +89,7 @@ const POLYTOPE_DIRTY: ViewportDirtyFlags = {
 };
 // the objective marker is occluded by the polytope floor in 3D, so a moved
 // objective repaints the polytope too while in (or transitioning to) 3D
-const objectiveDirty = (s: Pick<ViewportState, "is3DMode" | "isTransitioning3D">): ViewportDirtyFlags =>
-  s.is3DMode || s.isTransitioning3D ? { polytope: true, objective: true } : { objective: true };
+const objectiveDirty = (s: Pick<ViewportState, "is3DMode" | "isTransitioning3D">): ViewportDirtyFlags => (showsDepth(s) ? { polytope: true, objective: true } : { objective: true });
 
 // Which render layers a change to each editor field repaints (merged into the store's FIELD_DIRTY).
 export const EDITOR_DIRTY: Partial<Record<keyof EditorState, (s: Pick<ViewportState, "is3DMode" | "isTransitioning3D">) => ViewportDirtyFlags>> = {

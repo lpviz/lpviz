@@ -24,10 +24,11 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   };
   const canPan = () => canZoom() && get2DControlsConfig().panEnabled && getState().editorInteraction.kind === "idle";
   // a pan in progress ends the moment the controls lose the view
-  const unsubscribe = subscribe2DControlsConfig(() => {
+  const subscriptions = new AbortController();
+  subscribe2DControlsConfig(() => {
     const config = get2DControlsConfig();
     if (!config.enabled || config.blocked || !config.panEnabled) activePan = null;
-  });
+  }, subscriptions.signal);
 
   const startPan = (clientX: number, clientY: number) => {
     if (!canPan()) return false;
@@ -202,7 +203,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   ]);
 
   return () => {
-    unsubscribe();
+    subscriptions.abort();
     removeListeners();
     clearActivePointerPan();
     activePinch = null;

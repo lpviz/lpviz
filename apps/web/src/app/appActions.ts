@@ -4,7 +4,7 @@ import type { HistoryService } from "@/features/history/historyService";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
-import { collectZoomFitBounds } from "@/features/viewport/bounds";
+import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportRuntime } from "@/features/viewport/runtime";
 import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
@@ -26,9 +26,8 @@ export type AppActions = Pick<
   setZScale: (value: number) => void;
   /** pixels along the top of the canvas an overlay covers (the open gallery), which zoom-to-fit keeps clear */
   setTopInset: (px: number) => void;
+  /** the sidebar's width changed, which resized the canvas too */
   setSidebarWidth: (width: number) => void;
-  /** the sidebar's width changed in a way that resized the canvas too */
-  syncViewportLayout: (sidebarWidth: number) => void;
 };
 
 const pick = <T, K extends keyof T>(source: T, ...keys: K[]): Pick<T, K> => Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>;
@@ -84,7 +83,7 @@ export function createAppActions({
     const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
-    viewportApi.zoomToFit(isOpenUnbounded ? viewportApi.getUnboundedClipBounds() : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
+    viewportApi.zoomToFit(isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
     viewportApi.setSidebarWidth(sidebarWidth);
   };
 
@@ -147,16 +146,7 @@ export function createAppActions({
     },
     setSidebarWidth: (width) => {
       sidebarWidth = width;
-      const viewportApi = getViewportApi();
-      if (!viewportApi) return;
-      viewportApi.setSidebarWidth(width);
-    },
-    syncViewportLayout: (width) => {
-      sidebarWidth = width;
-      const viewportApi = getViewportApi();
-      if (!viewportApi) return;
-      viewportApi.setSidebarWidth(width);
-      viewportApi.updateDimensions();
+      getViewportApi()?.setSidebarWidth(width);
     },
   };
 }

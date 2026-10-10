@@ -30,7 +30,7 @@ export class SceneManager {
   private layersDirty: "all" | ViewportDirtyFlags | null = "all";
   private rafId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
-  private unsubscribeCurrentMouse: (() => void) | null = null;
+  private subscriptions = new AbortController();
   private disposed = false;
   private ticks = new Set<() => void>();
 
@@ -63,13 +63,11 @@ export class SceneManager {
     });
     this.resizeObserver.observe(canvas);
 
-    this.unsubscribeCurrentMouse = subscribeCurrentMouse(() => {
+    // the sketch cursor moves the rubber band while a region is being drawn
+    subscribeCurrentMouse(() => {
       const state = getState();
-      if (state.completionMode !== "draft" || state.vertices.length === 0) {
-        return;
-      }
-      this.invalidate({ viewportDirty: { polytope: true } });
-    });
+      if (state.completionMode === "draft" && state.vertices.length > 0) this.invalidate({ viewportDirty: { polytope: true } });
+    }, this.subscriptions.signal);
   }
 
   private setSize(width: number, height: number): void {
@@ -179,8 +177,7 @@ export class SceneManager {
 
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
-    this.unsubscribeCurrentMouse?.();
-    this.unsubscribeCurrentMouse = null;
+    this.subscriptions.abort();
 
     for (const layer of this.layers) {
       layer.dispose();

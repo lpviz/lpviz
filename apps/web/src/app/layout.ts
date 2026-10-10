@@ -10,7 +10,7 @@ export type Layout = ReturnType<typeof createLayout>;
 // Sidebar geometry: its desktop width, its mobile height, the mobile/desktop
 // switch, and the handle drag that resizes it. `attach` wires the mounted
 // sidebar and stage plus the window listeners; `destroy` removes them.
-export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setSidebarWidth" | "syncViewportLayout">) {
+export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setSidebarWidth">) {
   let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   let mobileSidebarHeight = Math.round(window.innerHeight * 0.42);
   const mobileQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -69,14 +69,12 @@ export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setS
     mounted?.stage.updateLayout();
   };
   const onResizeStart = (startEvent: PointerEvent) =>
-    mobileLayout
-      ? trackPointerDrag(startEvent, applyHeight, () => viewport.syncViewportLayout(0))
-      : trackPointerDrag(startEvent, applyWidth, () => viewport.syncViewportLayout(getViewportSidebarWidth()));
+    mobileLayout ? trackPointerDrag(startEvent, applyHeight, () => viewport.setSidebarWidth(0)) : trackPointerDrag(startEvent, applyWidth, () => viewport.setSidebarWidth(getViewportSidebarWidth()));
 
   const onResize = () => {
     mobileSidebarHeight = Math.min(mobileSidebarHeight, window.innerHeight * 0.72);
     applyLayoutMode();
-    viewport.syncViewportLayout(getViewportSidebarWidth());
+    viewport.setSidebarWidth(getViewportSidebarWidth());
     mounted?.stage.updateLayout();
   };
 

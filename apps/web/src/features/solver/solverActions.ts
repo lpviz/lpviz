@@ -9,7 +9,7 @@ import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverS
 
 export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;
-  setActiveSolverMode: (mode: SolverMode, solve?: boolean) => void;
+  setActiveSolverMode: (mode: SolverMode, solveNow?: boolean) => void;
   setTraceEnabled: (enabled: boolean) => void;
   startRotation: () => void;
   /** stop the objective rotation and any replay */
