@@ -3,7 +3,6 @@ import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { SHARED_RING_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
@@ -22,7 +21,7 @@ export class SolverStartLayer extends PointCloudLayer {
       color: PALETTE.solverStart,
       opacity: 0.9,
       pixelSize: 15,
-      texture: SHARED_RING_TEXTURE,
+      shape: "ring",
       renderOrder: RENDER_ORDER.solverStart,
       renderPass: "overlay",
       invalidationKeys: ["iterate"],

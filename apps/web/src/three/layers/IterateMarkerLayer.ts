@@ -1,9 +1,8 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import type { Texture } from "three";
 import { iteratePosition } from "../helpers/iteratePositions";
+import type { SpriteShape } from "../helpers/pointCloud";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { SHARED_CIRCLE_TEXTURE, SHARED_STAR_TEXTURE } from "../helpers/sharedTextures";
 import type { RenderPassName } from "../Layer";
 import { PALETTE } from "../palette";
 import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
@@ -11,7 +10,7 @@ import { PointCloudLayer } from "./base/PointCloudLayer";
 
 type IterateMarkerConfig = {
   pixelSize: number;
-  texture: Texture;
+  shape: SpriteShape;
   renderOrder: number;
   renderPass: RenderPassName;
   /** the iterate index to mark, or null to hide */
@@ -53,7 +52,7 @@ class IterateMarkerLayer extends PointCloudLayer {
 export const createIterateHighlightLayer = () =>
   new IterateMarkerLayer({
     pixelSize: ITERATE_POINT_PIXEL_SIZE * 2,
-    texture: SHARED_CIRCLE_TEXTURE,
+    shape: "disc",
     renderOrder: RENDER_ORDER.iterateHighlight,
     renderPass: "trace",
     selectorDeps: (state) => [state.highlightIteratePathIndex, state.replayActive],
@@ -71,7 +70,7 @@ export const createIterateHighlightLayer = () =>
 export const createIterateStarLayer = () =>
   new IterateMarkerLayer({
     pixelSize: 27,
-    texture: SHARED_STAR_TEXTURE,
+    shape: "star",
     renderOrder: RENDER_ORDER.iterateStar,
     renderPass: "overlay",
     selectorDeps: (state) => [state.replayActive],
