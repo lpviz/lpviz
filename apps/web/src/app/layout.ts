@@ -1,6 +1,6 @@
 import type { AppActions } from "@/app/appActions";
 
-export const DEFAULT_SIDEBAR_WIDTH = 450;
+const DEFAULT_SIDEBAR_WIDTH = 450;
 const MOBILE_LAYOUT_QUERY = "(max-width: 700px) and (orientation: portrait)";
 
 type Resizable = { sidebar: { updateWidth: (width: number) => void }; stage: { updateLayout: () => void } };

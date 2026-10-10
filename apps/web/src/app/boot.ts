@@ -1,6 +1,6 @@
 import { createAppActions } from "@/app/appActions";
 import type { AppContext } from "@/app/appContext";
-import { createLayout, DEFAULT_SIDEBAR_WIDTH } from "@/app/layout";
+import { createLayout } from "@/app/layout";
 import { createHistoryService } from "@/features/history/historyService";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
 import { shareLink } from "@/features/share/shareService";
@@ -19,7 +19,7 @@ export function boot(root: HTMLElement) {
   const solver = createSolverActions();
   const polytope = createPolytopeService(solver.handleProblemChange);
   const history = createHistoryService(polytope.derive);
-  const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
+  const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi });
   const layout = createLayout(root, actions);
 
   const setViewportApi = (runtime: ViewportRuntime | null) => {

@@ -21,12 +21,24 @@ export function setPathRibbonResolution(width: number, height: number): void {
   sharedResolution.set(width, height);
 }
 
-// Shared by reference across every ribbon material. The trace cache flips it on while baking
-// ribbons into its render target so they write sRGB-encoded values there (three forces
-// linearToOutputTexel to identity for render targets), making cached and direct strokes pixel-identical.
+// Shared by reference across every ribbon material: on while ribbons bake into a render target,
+// so they write sRGB-encoded values there (three forces linearToOutputTexel to identity for
+// render targets), making baked and direct strokes pixel-identical.
 const sharedCacheEncode = { value: 0 };
-export function setPathRibbonCacheEncode(enabled: boolean): void {
-  sharedCacheEncode.value = enabled ? 1 : 0;
+
+/**
+ * Run `render` with the ribbons baking into a render target, at `resolution` when the target is
+ * not the canvas's size (screen-space line widths are computed against it). Both settings are
+ * restored to what they were, so the direct passes that follow see exactly what they had set.
+ */
+export function bakePathRibbons(render: () => void, resolution?: { width: number; height: number }): void {
+  const previousWidth = sharedResolution.x;
+  const previousHeight = sharedResolution.y;
+  if (resolution) sharedResolution.set(resolution.width, resolution.height);
+  sharedCacheEncode.value = 1;
+  render();
+  sharedCacheEncode.value = 0;
+  sharedResolution.set(previousWidth, previousHeight);
 }
 
 const VERTEX_SHADER = /* glsl */ `

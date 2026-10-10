@@ -2,7 +2,7 @@ import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
-import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
+import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
 // Motion-time compositor for the trace-constraints pass in 3D mode.
@@ -39,7 +39,8 @@ export class Trace3DCompositor {
   private quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
   private materialScratch: Material[] = [];
-  private lastViewKey = "";
+  // the view the last frame was composited for, as the numbers that place the camera
+  private readonly lastView = new Float64Array(13).fill(NaN);
   private lastViewChangeAt = -Infinity;
   private settle: SettleTimer;
 
@@ -55,18 +56,15 @@ export class Trace3DCompositor {
     const state = getState();
     if (snapshot.mode !== "3d") {
       this.releaseTarget();
-      this.lastViewKey = "";
+      this.lastView.fill(NaN);
       return null;
     }
 
     const p = snapshot.perspective;
-    const now = performance.now();
     const t = snapshot.target;
-    const viewKey =
-      `${p.position.x},${p.position.y},${p.position.z},` + `${p.up.x},${p.up.y},${p.up.z},${p.fov},${p.aspect},` + `${t.x},${t.y},${t.z},` + `${state.zScale},${snapshot.transitionZMultiplier}`;
-    if (viewKey !== this.lastViewKey) {
+    const now = performance.now();
+    if (this.viewChanged([p.position.x, p.position.y, p.position.z, p.up.x, p.up.y, p.up.z, p.fov, p.aspect, t.x, t.y, t.z, state.zScale, snapshot.transitionZMultiplier])) {
       this.lastViewChangeAt = now;
-      this.lastViewKey = viewKey;
     }
     const moving = state.isTransitioning3D || now - this.lastViewChangeAt < VIEW_SETTLE_MS;
     if (!moving) {
@@ -93,9 +91,7 @@ export class Trace3DCompositor {
     for (const scene of occluderScenes) {
       this.renderDepthOnly(renderer, scene, camera);
     }
-    setPathRibbonCacheEncode(true);
-    renderer.render(traceLinesScene, camera);
-    setPathRibbonCacheEncode(false);
+    bakePathRibbons(() => renderer.render(traceLinesScene, camera));
     renderer.setRenderTarget(previousTarget);
 
     return this.quadScene;
@@ -103,6 +99,17 @@ export class Trace3DCompositor {
 
   get camera(): Camera {
     return this.quadCamera;
+  }
+
+  // Whether `view` differs from the last one, which it then becomes.
+  private viewChanged(view: readonly number[]): boolean {
+    let changed = false;
+    for (let i = 0; i < view.length; i++) {
+      if (view[i] === this.lastView[i]) continue;
+      this.lastView[i] = view[i]!;
+      changed = true;
+    }
+    return changed;
   }
 
   private renderDepthOnly(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {
