@@ -1,8 +1,10 @@
 // Which drawn thing a pointer position is on: vertices, edges, boundary rays, the objective tip
 // and the start marker, in screen or world tolerances as each one needs.
 
-import type { DragTarget, State } from "@/features/core/store";
-import { displayedSolverStartPoint, getState, iterateHeight } from "@/features/core/store";
+import { getState, type State } from "@/features/core/store";
+import type { DragTarget } from "@/features/polytope-editor/editorState";
+import { displayedSolverStartPoint, iterateHeight } from "@/features/solver/solverState";
+
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";

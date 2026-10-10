@@ -15,8 +15,6 @@ export type ResultTextBlock = {
   index?: number | undefined;
 };
 
-export const MAX_TRACE_POINT_SPRITES = 1200;
-
 // Index order is the share link's wire identity (compactUrl): only ever append.
 export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
 export type SolverMode = (typeof SOLVER_MODES)[number];

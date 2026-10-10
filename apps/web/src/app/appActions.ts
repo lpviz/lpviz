@@ -1,4 +1,5 @@
-import { freshState, getState, on, setState, type SolverMode } from "@/features/core/store";
+import { freshState, getState, on, setState } from "@/features/core/store";
+import type { SolverMode } from "@/features/solver/solverState";
 import type { HistoryService } from "@/features/history/historyService";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";

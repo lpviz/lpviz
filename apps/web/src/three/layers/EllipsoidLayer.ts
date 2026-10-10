@@ -1,4 +1,5 @@
-import { type EllipsoidPath, type LocalizingSetPath, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
+import type { EllipsoidPath, LocalizingSetPath } from "@/features/solver/solverState";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import { Group, Matrix4 } from "three";

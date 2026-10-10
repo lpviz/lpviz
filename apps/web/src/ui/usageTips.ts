@@ -1,4 +1,4 @@
-import type { DrawingPhase } from "@/features/core/store";
+import type { DrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
 
 // [label, description]; the description is HTML (inline <kbd>/<strong>) and

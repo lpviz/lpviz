@@ -1,5 +1,5 @@
-import { getState, setState, type HistoryEntry } from "@/features/core/store";
-import { captureHistoryEntry } from "@/features/history/historyState";
+import { getState, setState } from "@/features/core/store";
+import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 
 export type SaveHistory = (snapshotSource?: HistoryEntry, options?: { clearRedo?: boolean }) => void;
 export type HandleUndoRedo = (isRedo: boolean) => void;

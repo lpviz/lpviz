@@ -1,4 +1,5 @@
-import { displayedSolverStartPoint, type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
+import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";

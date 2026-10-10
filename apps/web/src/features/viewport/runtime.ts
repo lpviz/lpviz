@@ -1,4 +1,5 @@
-import { DEFAULT_VIEW_ANGLE, getState, on, onMeta, setState, type State } from "@/features/core/store";
+import { getState, on, onMeta, setState, type State } from "@/features/core/store";
+import { DEFAULT_VIEW_ANGLE } from "@lpviz/viewport/defaults";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY, Vec } from "@lpviz/math/types";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/perspective";

@@ -1,8 +1,8 @@
-import { getState, setState, type SolverMode } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { decodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
 import { applySharedSettings, buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
-import type { SolverSettingUpdater } from "@/features/solver/solverState";
+import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverState";
 import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
 import type { ViewportApi } from "@/features/viewport/runtime";
 

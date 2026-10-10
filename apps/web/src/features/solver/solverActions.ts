@@ -1,11 +1,11 @@
-import { getState, on, setState, type SolverMode } from "@/features/core/store";
+import { getState, on, setState } from "@/features/core/store";
 import { isReadyForSolvers } from "@/features/problem/selectors";
 import { resetTraceState, setTraceCapacity } from "@/features/solver/iterateStore";
 import { createReplayController } from "@/features/solver/replayController";
 import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createSolveRunner } from "@/features/solver/solveRunner";
-import type { SolverSettingUpdater } from "@/features/solver/solverState";
+import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverState";
 import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type SolverActions = {

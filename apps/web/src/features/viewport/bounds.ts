@@ -1,4 +1,4 @@
-import { iterateHeight, type IteratePath } from "@/features/core/store";
+import { iterateHeight, type IteratePath } from "@/features/solver/solverState";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { Vec } from "@lpviz/math/types";
 

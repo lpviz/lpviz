@@ -1,6 +1,7 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { computeDrawingPhase, getState, setState, type DragTarget, type DrawingPhase, type HistoryEntry, type State } from "@/features/core/store";
-import { captureHistoryEntry } from "@/features/history/historyState";
+import { getState, setState, type State } from "@/features/core/store";
+import { computeDrawingPhase, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
+import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";

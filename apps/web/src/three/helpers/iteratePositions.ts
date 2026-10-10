@@ -1,4 +1,4 @@
-import { iterateHeight, type IteratePath } from "@/features/core/store";
+import { iterateHeight, type IteratePath } from "@/features/solver/solverState";
 
 // Write `count` iterates of a path into `dst` as [x, y, z]*count: iterate i, or iterate indices[i]
 // when a subset of the path is drawn. z is the render-space height from iterateHeight; the zScale

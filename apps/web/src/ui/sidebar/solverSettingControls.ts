@@ -1,4 +1,4 @@
-import type { SolverSettings } from "@/features/core/store";
+import type { SolverSettings } from "@/features/solver/solverState";
 import { checkbox, el, range } from "@/ui/dom";
 
 const MAXIT_LOG_MIN = 0;

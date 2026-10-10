@@ -1,5 +1,6 @@
-import type { CompletionMode, State } from "@/features/core/store";
-import { computeDrawingPhase } from "@/features/core/store";
+import type { State } from "@/features/core/store";
+import { type CompletionMode, computeDrawingPhase } from "@/features/polytope-editor/editorState";
+
 import { derivedClosure } from "@/features/problem/selectors";
 import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains, segmentProjection } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";

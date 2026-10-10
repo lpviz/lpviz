@@ -1,7 +1,8 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type CompletionMode, type Dimension, type SolverMode, type SolverSettings, type State } from "@/features/core/store";
-import type { SolverSettingUpdater } from "@/features/solver/solverState";
+import type { State } from "@/features/core/store";
+import { COMPLETION_MODES, type CompletionMode } from "@/features/polytope-editor/editorState";
+import { DEFAULT_SOLVER_SETTINGS, SOLVER_MODES, type SolverMode, type SolverSettings, type SolverSettingUpdater } from "@/features/solver/solverState";
 import type { Vec } from "@lpviz/math/types";
-import { vecFrom } from "@lpviz/math/vec";
+import { type Dimension, vecFrom } from "@lpviz/math/vec";
 import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;

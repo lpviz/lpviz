@@ -1,4 +1,5 @@
-import { COMPLETION_MODES, DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/core/store";
+import { COMPLETION_MODES } from "@/features/polytope-editor/editorState";
+import { DEFAULT_SOLVER_SETTINGS, QUERY_POINTS, SOLVER_MODES } from "@/features/solver/solverState";
 import { isDimension, vecFrom } from "@lpviz/math/vec";
 import type { ShareSettings, SharedAppState } from "@/features/share/sharedState";
 import type { Vec } from "@lpviz/math/types";

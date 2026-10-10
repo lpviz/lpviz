@@ -1,4 +1,4 @@
-import { type State } from "@/features/core/store";
+import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Group } from "three";
 import { iteratePositions } from "../helpers/iteratePositions";

@@ -1,5 +1,6 @@
 import { setCurrentMouse } from "@/features/core/currentMouse";
-import { DEFAULT_Z_SCALE, getState, setState } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
+import { DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
 import {
   EDGE_HIT_RADIUS_PX,
