@@ -20,14 +20,14 @@ import {
   getAvailableViewportSize,
   getViewportSize,
   getViewportVisibleCenterCanvasPoint,
-  orthographicFor,
+  perspectiveSnapshot,
   type ViewportPerspectivePose,
   type ViewportRect,
   type ViewportRenderSnapshot,
   type ViewportZBounds,
 } from "./snapshot";
 
-export type Viewport3DViewState = { viewAngle: PointXYZ; target: PointXYZ; distance: number; pose: ViewportPerspectivePose };
+type Viewport3DViewState = { viewAngle: PointXYZ; target: PointXYZ; distance: number; pose: ViewportPerspectivePose };
 
 const DEFAULT_TARGET: PointXYZ = { x: 0, y: 0, z: 0 };
 const EPS = 1e-6;
@@ -37,7 +37,7 @@ const fitRelative = new Vector3();
 const clampPerspectiveDistance3D = (snapshot: ViewportRenderSnapshot, distance: number, rect?: ViewportRect) =>
   Math.min(getMaxPerspectiveDistance3D(snapshot, rect), Math.max(MIN_PERSPECTIVE_DISTANCE, distance));
 
-const getPerspectiveDistanceToFitBounds3D = (snapshot: ViewportRenderSnapshot, rect: ViewportRect, sidebarWidth: number, bounds: BoundingBox, padding: number, topInset: number) => {
+function getPerspectiveDistanceToFitBounds3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, sidebarWidth: number, bounds: BoundingBox, padding: number, topInset: number) {
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
   if (width <= 0 || height <= 0) return getDefaultPerspectiveDistance3D(snapshot, rect);
@@ -48,9 +48,9 @@ const getPerspectiveDistanceToFitBounds3D = (snapshot: ViewportRenderSnapshot, r
   const viewport = getAvailableViewportSize(snapshot, rect, sidebarWidth, padding, topInset);
   const unitsPerPixel = Math.max(width / viewport.availWidth, height / viewport.availHeight);
   return getPerspectiveDistanceForUnitsPerPixel(snapshot, unitsPerPixel, viewport.height);
-};
+}
 
-const getPerspectiveDistanceToFitBox3D = (
+function getPerspectiveDistanceToFitBox3D(
   snapshot: ViewportRenderSnapshot,
   rect: ViewportRect,
   sidebarWidth: number,
@@ -59,7 +59,7 @@ const getPerspectiveDistanceToFitBox3D = (
   viewAngle: PointXYZ,
   padding: number,
   topInset: number,
-) => {
+) {
   const viewport = getAvailableViewportSize(snapshot, rect, sidebarWidth, padding, topInset);
   const tanHalfFull = Math.max(EPS, tanHalfVerticalFov(snapshot));
   // Pixels per unit of (offset / depth): px = offset / depth * K
@@ -118,21 +118,21 @@ const getPerspectiveDistanceToFitBox3D = (
     }
   }
   return hi;
-};
+}
 
 // The camera fills the whole viewport but the sidebar covers its left edge
 // and an open gallery its top edge, so the target — what the camera looks
 // straight at — is moved left and up in the target plane by half of each, and
 // the fitted content lands centered in the part of the viewport that shows.
-const offsetTargetForVisibleViewport3D = (
+function offsetTargetForVisibleViewport3D(
   snapshot: ViewportRenderSnapshot,
   rect: ViewportRect,
   target: PointXYZ,
   viewAngle: PointXYZ,
   distance: number,
   sidebarWidth: number,
-  topInset = 0,
-): PointXYZ => {
+  topInset: number,
+): PointXYZ {
   if (sidebarWidth <= 0 && topInset <= 0) {
     return target;
   }
@@ -142,7 +142,7 @@ const offsetTargetForVisibleViewport3D = (
   const upOffset = (topInset / 2) * unitsPerPixelAtTarget;
   const { right, up } = viewAngleBasis(viewAngle);
   return { x: target.x - right.x * rightOffset + up.x * upOffset, y: target.y - right.y * rightOffset + up.y * upOffset, z: target.z - right.z * rightOffset + up.z * upOffset };
-};
+}
 
 export function getViewAngleFromSnapshot3D(snapshot: ViewportRenderSnapshot): PointXYZ {
   const { rotation } = configurePerspectiveCameraFromSnapshot(snapshot);
@@ -199,16 +199,5 @@ export function buildViewport3DSnapshot(snapshot: ViewportRenderSnapshot, pose: 
   const safeDistance = Number.isFinite(distance) && distance > 0 ? distance : getPerspectiveDistanceFromSnapshot3D(snapshot);
   const scaleFactor = getScaleFactorFromPerspectiveDistance(snapshot, safeDistance, height);
   const unitsPerPixel = 1 / Math.max(EPS, snapshot.gridSpacing * scaleFactor);
-  return {
-    ...snapshot,
-    mode: "3d",
-    width,
-    height,
-    scaleFactor,
-    unitsPerPixel,
-    transitionZMultiplier: 1,
-    target: { ...pose.target },
-    orthographic: orthographicFor(width, height, unitsPerPixel, pose.target),
-    perspective: { ...snapshot.perspective, position: { ...pose.position }, up: { ...pose.up }, aspect: width / Math.max(1, height) },
-  };
+  return perspectiveSnapshot(snapshot, pose, width, height, scaleFactor, unitsPerPixel, 1);
 }

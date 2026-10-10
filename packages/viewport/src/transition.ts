@@ -6,7 +6,7 @@ import { DEFAULT_VIEW_ANGLE, MIN_PERSPECTIVE_DISTANCE } from "./defaults";
 import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getPerspectiveDistanceFromSnapshot3D, getScaleFactorFromPerspectiveDistance } from "./perspective";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
 import { projectCanvasPointToWorldPlane } from "./projection3d";
-import { getViewportSize, getViewportVisibleCenterCanvasPoint, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+import { getViewportSize, getViewportVisibleCenterCanvasPoint, perspectiveSnapshot, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 type ViewportTransitionDirection = "to3d" | "to2d";
 
@@ -22,7 +22,7 @@ export type ViewportTransitionPlan = {
   perspectiveDistance: number;
 };
 
-export type ViewportTransitionFrame = {
+type ViewportTransitionFrame = {
   viewAngle: PointXYZ;
   target: PointXYZ;
   pose: ViewportPerspectivePose;
@@ -64,23 +64,8 @@ export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progr
   const viewAngle = lerpPoint(plan.startAngles, plan.endAngles, clampedProgress);
   const target = plan.direction === "to2d" ? lerpPoint(plan.startTarget, plan.endTarget, clampedProgress) : { ...plan.startTarget };
   const pose = buildPerspectivePoseFromViewAngle(viewAngle, plan.perspectiveDistance, target);
-  return {
-    viewAngle,
-    target,
-    pose,
-    snapshot: {
-      ...plan.baseSnapshot,
-      mode: "3d",
-      width,
-      height,
-      scaleFactor,
-      unitsPerPixel,
-      transitionZMultiplier: plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress,
-      target,
-      orthographic: orthographicFor(width, height, unitsPerPixel, target),
-      perspective: { ...plan.baseSnapshot.perspective, aspect: width / Math.max(1, height), position: { ...pose.position }, up: { ...pose.up } },
-    },
-  };
+  const transitionZMultiplier = plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress;
+  return { viewAngle, target, pose, snapshot: perspectiveSnapshot(plan.baseSnapshot, pose, width, height, scaleFactor, unitsPerPixel, transitionZMultiplier) };
 }
 
 /** The 2D state that shows what a transition frame shows at the visible center, for the handoff to the 2D controls. */

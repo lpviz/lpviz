@@ -42,7 +42,7 @@ describe("dense matrix builders", () => {
   });
 
   test("extractColumn reads one column", () => {
-    expect(Array.from(extractColumn(M, 1))).toEqual([2, 5]);
+    expect(Array.from(extractColumn(M, 1, new Float64Array(2)))).toEqual([2, 5]);
   });
 });
 

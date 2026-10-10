@@ -59,23 +59,49 @@ export const getViewportSize = (snapshot: ViewportRenderSnapshot, rect?: Viewpor
 
 // The viewport, and the part of it left for content once the sidebar, a top
 // overlay and the padding on each side are taken off (never under 100px).
-export const getAvailableViewportSize = (snapshot: ViewportRenderSnapshot, rect: ViewportRect, sidebarWidth: number, padding: number, topInset: number) => {
+export function getAvailableViewportSize(snapshot: ViewportRenderSnapshot, rect: ViewportRect, sidebarWidth: number, padding: number, topInset: number) {
   const { width, height } = getViewportSize(snapshot, rect);
   return { width, height, availWidth: Math.max(100, width - sidebarWidth - 2 * padding), availHeight: Math.max(100, height - topInset - 2 * padding) };
-};
+}
 
 /** The canvas point at the center of what the sidebar leaves visible. */
 export function getViewportVisibleCenterCanvasPoint(rect: ViewportRect, sidebarWidth: number): PointXY {
   return { x: sidebarWidth + ((rect.width || 1) - sidebarWidth) / 2, y: (rect.height || 1) / 2 };
 }
 
-export const orthographicFor = (width: number, height: number, unitsPerPixel: number, target: PointXY): ViewportRenderSnapshot["orthographic"] => ({
-  left: -(width * unitsPerPixel) / 2,
-  right: (width * unitsPerPixel) / 2,
-  top: (height * unitsPerPixel) / 2,
-  bottom: -(height * unitsPerPixel) / 2,
-  position: { x: target.x, y: target.y, z: ORTHOGRAPHIC_HEIGHT },
-});
+export function orthographicFor(width: number, height: number, unitsPerPixel: number, target: PointXY): ViewportRenderSnapshot["orthographic"] {
+  return {
+    left: -(width * unitsPerPixel) / 2,
+    right: (width * unitsPerPixel) / 2,
+    top: (height * unitsPerPixel) / 2,
+    bottom: -(height * unitsPerPixel) / 2,
+    position: { x: target.x, y: target.y, z: ORTHOGRAPHIC_HEIGHT },
+  };
+}
+
+/** A 3D snapshot: the cameras at `pose`, with the 2D zoom fields the caller derived from it. */
+export function perspectiveSnapshot(
+  base: ViewportRenderSnapshot,
+  pose: ViewportPerspectivePose,
+  width: number,
+  height: number,
+  scaleFactor: number,
+  unitsPerPixel: number,
+  transitionZMultiplier: number,
+): ViewportRenderSnapshot {
+  return {
+    ...base,
+    mode: "3d",
+    width,
+    height,
+    scaleFactor,
+    unitsPerPixel,
+    transitionZMultiplier,
+    target: { ...pose.target },
+    orthographic: orthographicFor(width, height, unitsPerPixel, pose.target),
+    perspective: { ...base.perspective, position: { ...pose.position }, up: { ...pose.up }, aspect: width / Math.max(1, height) },
+  };
+}
 
 export const snapPoint = (point: PointXY, snapToGrid: boolean): PointXY => (snapToGrid ? { x: Math.round(point.x), y: Math.round(point.y) } : point);
 

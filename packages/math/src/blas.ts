@@ -138,7 +138,7 @@ export function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
   return out;
 }
 
-export function extractColumn(matrix: DenseMatrix, column: number, out = new Float64Array(matrix.rows)): Float64Array {
+export function extractColumn(matrix: DenseMatrix, column: number, out: Float64Array): Float64Array {
   for (let row = 0; row < matrix.rows; row++) {
     out[row] = matrix.data[row * matrix.cols + column]!;
   }

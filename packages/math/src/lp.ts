@@ -1,6 +1,6 @@
 // Seidel's randomized incremental linear program, for the tiny dense LPs the
 // cutting-plane solvers need: the upper bound `max c'x` over a localizing
-// polyhedron (2 variables) and the Chebyshev center of one (3 variables).
+// polyhedron (n variables) and the Chebyshev center of one (n + 1 variables).
 //
 // Expected O(n! m) — linear in the number of constraints for fixed n, which is
 // what makes it affordable to call once or twice per solver iteration as the
@@ -12,11 +12,13 @@
 
 const VIOLATION_TOLERANCE = 1e-9;
 const DEGENERATE_COEFFICIENT = 1e-12;
+// the one seed every solve shuffles with, so the same problem always gets the same answer
+const SEED = 1;
 
 // Each row is [a_0, ..., a_{n-1}, b], meaning a'x <= b.
 export type LpRow = readonly number[];
 
-export type SmallLpResult = { status: "optimal"; x: Float64Array; value: number } | { status: "infeasible" };
+type SmallLpResult = { status: "optimal"; x: Float64Array; value: number } | { status: "infeasible" };
 
 function makeRandom(seed: number) {
   let state = seed >>> 0 || 0x9e3779b9;
@@ -70,7 +72,7 @@ function boxRowsForEliminated(row: LpRow, k: number, n: number, bound: number): 
   return [upper, lower];
 }
 
-function solveRecursive(rows: LpRow[], n: number, objective: readonly number[], bound: number, random: () => number): Float64Array | null {
+function solveRecursive(rows: readonly LpRow[], n: number, objective: readonly number[], bound: number, random: () => number): Float64Array | null {
   if (n === 1) {
     let low = -bound;
     let high = bound;
@@ -134,17 +136,10 @@ function solveRecursive(rows: LpRow[], n: number, objective: readonly number[], 
  * `|x_j| <= bound`. The box is what makes the problem bounded, so pick it large
  * enough to be inert unless you mean it as a constraint.
  */
-export function solveSmallLp(objective: readonly number[], rows: readonly LpRow[], bound: number, seed = 1): SmallLpResult {
+export function solveSmallLp(objective: readonly number[], rows: readonly LpRow[], bound: number): SmallLpResult {
   const n = objective.length;
   if (n === 0) return { status: "optimal", x: new Float64Array(0), value: 0 };
-  const objectiveRow = [...objective, 0];
-  const x = solveRecursive(
-    rows.map((row) => row),
-    n,
-    objectiveRow,
-    bound,
-    makeRandom(seed),
-  );
+  const x = solveRecursive(rows, n, [...objective, 0], bound, makeRandom(SEED));
   if (!x) return { status: "infeasible" };
   let value = 0;
   for (let j = 0; j < n; j++) value += objective[j]! * x[j]!;
@@ -157,16 +152,15 @@ export function solveSmallLp(objective: readonly number[], rows: readonly LpRow[
  * interior (it is empty or flat), which the cutting-plane solvers read as "the
  * localizing set is exhausted".
  */
-export function chebyshevCenter(rows: readonly LpRow[], dimension: number, bound: number, seed = 1): { center: Float64Array; radius: number } | null {
+export function chebyshevCenter(rows: readonly LpRow[], dimension: number, bound: number): { center: Float64Array; radius: number } | null {
   const lifted: number[][] = rows.map((row) => {
     let norm = 0;
     for (let j = 0; j < dimension; j++) norm += row[j]! * row[j]!;
-    const lift = [...row.slice(0, dimension), Math.sqrt(norm), row[dimension]!];
-    return lift;
+    return [...row.slice(0, dimension), Math.sqrt(norm), row[dimension]!];
   });
   const objective = new Array(dimension + 1).fill(0);
   objective[dimension] = 1;
-  const result = solveSmallLp(objective, lifted, bound, seed);
+  const result = solveSmallLp(objective, lifted, bound);
   if (result.status === "infeasible") return null;
   return {
     center: result.x.slice(0, dimension),

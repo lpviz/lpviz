@@ -13,17 +13,21 @@ export interface Ray {
   direction: Vec;
 }
 
-export function expandDegenerateBounds(bounds: BoundingBox, minExtent = 1): BoundingBox {
+// a point or a segment is fitted as if it were at least this wide
+const MIN_EXTENT = 1;
+
+/** The box widened about its center to at least MIN_EXTENT on each axis. */
+export function expandDegenerateBounds(bounds: BoundingBox): BoundingBox {
   let { minX, maxX, minY, maxY } = bounds;
-  if (maxX - minX < minExtent) {
+  if (maxX - minX < MIN_EXTENT) {
     const centerX = (minX + maxX) / 2;
-    minX = centerX - minExtent / 2;
-    maxX = centerX + minExtent / 2;
+    minX = centerX - MIN_EXTENT / 2;
+    maxX = centerX + MIN_EXTENT / 2;
   }
-  if (maxY - minY < minExtent) {
+  if (maxY - minY < MIN_EXTENT) {
     const centerY = (minY + maxY) / 2;
-    minY = centerY - minExtent / 2;
-    maxY = centerY + minExtent / 2;
+    minY = centerY - MIN_EXTENT / 2;
+    maxY = centerY + MIN_EXTENT / 2;
   }
   return { minX, maxX, minY, maxY };
 }
