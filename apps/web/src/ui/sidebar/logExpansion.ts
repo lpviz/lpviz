@@ -13,6 +13,14 @@
 // unconditionally would kill the gesture at an exhausted inner scroller. The
 // one asymmetry is that shrinking is always available, because an expansion
 // the user cannot undo is a trap.
+//
+// A touch device has no wheel, so there the log is as tall as the sidebar from the start and the
+// sidebar follows the drawing: scrolled to the log (a gutter below the sidebar's top, as at its
+// sides), where the directions are, while a region is being drawn, and back to the top, where
+// the problem and the solvers are, once it is complete.
+
+import { getState, on } from "@/features/core/store";
+import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
 
 const LINE_HEIGHT_PX = 16;
 const PAGE_FRACTION = 0.8;
@@ -24,6 +32,8 @@ const OVERFLOW_SLACK_PX = 1;
 // scrollTop cannot strand the gesture
 const SCROLL_END_SLACK_PX = 1;
 const TERMINALS = "#terminal-container, #terminal-container2";
+const COARSE_POINTER_QUERY = "(hover: none) and (pointer: coarse)";
+const REDUCED_MOTION_QUERY = "(prefers-reduced-motion: reduce)";
 
 // Whether the wheel lands inside a terminal that can still scroll in this
 // direction, in which case the terminal keeps the gesture.
@@ -58,19 +68,23 @@ function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
 
 export function createSidebarLogExpansion({ sidebar, content, logPanel }: { sidebar: HTMLElement; content: HTMLElement; logPanel: HTMLElement }) {
   let expansion = 0;
+  const coarsePointer = window.matchMedia(COARSE_POINTER_QUERY);
 
   // Everything stacked above the log panel, which is also how far the log can
   // grow (at the limit the controls are scrolled off). Measured in content
   // space (scrollTop added back) so it does not move as the sidebar scrolls.
   const roomAbove = () => logPanel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+  // the gutter the panels keep from the sidebar's sides, kept above the log when scrolled to it
+  const gutter = () => logPanel.getBoundingClientRect().left - content.getBoundingClientRect().left;
 
   const applyExpansion = () => {
-    if (expansion <= 0) {
+    const applied = coarsePointer.matches ? roomAbove() : expansion;
+    if (applied <= 0) {
       logPanel.style.minHeight = "";
       return;
     }
     const fitted = content.clientHeight - roomAbove();
-    logPanel.style.minHeight = `${Math.max(0, fitted) + expansion}px`;
+    logPanel.style.minHeight = `${Math.max(0, fitted) + applied}px`;
   };
 
   const onWheel = (event: WheelEvent) => {
@@ -113,6 +127,10 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
   // The room above changes with the window and the active solver's settings;
   // re-clamp rather than leave the log taller than there is room for.
   const observer = new ResizeObserver(() => {
+    if (coarsePointer.matches) {
+      applyExpansion();
+      return;
+    }
     if (expansion === 0) return;
     const clamped = Math.min(expansion, Math.max(0, roomAbove()));
     if (clamped === expansion) return;
@@ -120,10 +138,33 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     applyExpansion();
   });
   observer.observe(content);
+  coarsePointer.addEventListener("change", applyExpansion);
+
+  // the sidebar follows the drawing on a touch device (see the header); the expansion is applied
+  // first so the log's top can reach the sidebar's
+  const scrollBehavior = (): ScrollBehavior => (window.matchMedia(REDUCED_MOTION_QUERY).matches ? "auto" : "smooth");
+  let lastPhase: DrawingPhase | null = null;
+  const followDrawing = () => {
+    const phase = computeDrawingPhase(getState());
+    if (phase === lastPhase) return;
+    lastPhase = phase;
+    if (!coarsePointer.matches) return;
+    if (phase === "ready_for_solvers") {
+      content.scrollTo({ top: 0, behavior: scrollBehavior() });
+      return;
+    }
+    applyExpansion();
+    content.scrollTo({ top: roomAbove() - gutter(), behavior: scrollBehavior() });
+  };
+  const subscriptions = new AbortController();
+  on(["vertices", "completionMode", "objectiveVector", "currentObjective"], followDrawing, subscriptions.signal);
+  followDrawing();
 
   return {
     destroy: () => {
+      subscriptions.abort();
       sidebar.removeEventListener("wheel", onWheel);
+      coarsePointer.removeEventListener("change", applyExpansion);
       observer.disconnect();
       logPanel.style.minHeight = "";
     },
