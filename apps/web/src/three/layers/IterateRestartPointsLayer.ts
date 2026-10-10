@@ -3,7 +3,6 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writeIteratePositions } from "../helpers/iteratePositions";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
 import { PointCloudLayer } from "./base/PointCloudLayer";
@@ -14,7 +13,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
     super({
       color: PALETTE.iterate,
       pixelSize: ITERATE_POINT_PIXEL_SIZE * 1.4,
-      texture: SHARED_SQUARE_TEXTURE,
+      shape: "square",
       renderOrder: RENDER_ORDER.iterateRestartPoints,
       renderPass: "trace",
       invalidationKeys: ["iterate"],

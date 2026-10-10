@@ -3,7 +3,6 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writeIteratePositions } from "../helpers/iteratePositions";
 import { writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { SHARED_CIRCLE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
@@ -15,7 +14,7 @@ export class IteratePointsLayer extends PointCloudLayer {
     super({
       color: PALETTE.iterate,
       pixelSize: ITERATE_POINT_PIXEL_SIZE,
-      texture: SHARED_CIRCLE_TEXTURE,
+      shape: "disc",
       renderOrder: RENDER_ORDER.iteratePoints,
       renderPass: "trace",
       invalidationKeys: ["iterate"],

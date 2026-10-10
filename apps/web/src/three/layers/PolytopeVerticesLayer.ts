@@ -6,7 +6,6 @@ import { Group } from "three";
 import { PointCloud } from "../helpers/pointCloud";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { SHARED_CIRCLE_TEXTURE, SHARED_SQUARE_TEXTURE } from "../helpers/sharedTextures";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
@@ -17,8 +16,8 @@ export class PolytopeVerticesLayer extends LayerBase {
   readonly object3D = new Group();
   override readonly renderPass = "vertices" as const;
   override readonly invalidationKeys = ["polytope"] as const;
-  private readonly circles = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, texture: SHARED_CIRCLE_TEXTURE, renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
-  private readonly squares = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, texture: SHARED_SQUARE_TEXTURE, renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
+  private readonly circles = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, shape: "disc", renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
+  private readonly squares = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, shape: "square", renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
 
   constructor() {
     super();
