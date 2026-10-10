@@ -1,10 +1,9 @@
-import type { HistoryService } from "@/features/history/historyService";
-import type { ViewportApi } from "@/features/viewport/runtime";
+import type { EditorActionDeps } from "@/features/polytope-editor/editorActions";
 
-// The editor's pointer and keyboard behaviour as the gesture layer sees it: one implementation per
-// problem dimension (editorTools2d is the polygon editor), chosen by attachCanvasInteractions. The
+// The editor's pointer behaviour as the gesture layer sees it: one implementation per problem
+// dimension (editorTools2d is the polygon editor), chosen by attachCanvasInteractions. The
 // gesture layer normalizes mouse, pen and touch into these calls and knows nothing about what the
-// editor does with them.
+// editor does with them. The keyboard shortcuts hold for any editor and live in canvasShortcuts.
 export type EditorTools = {
   /** Hit-test a press; true when something was grabbed, which makes the gesture the editor's. */
   handleDragStart: (clientX: number, clientY: number) => boolean;
@@ -14,21 +13,11 @@ export type EditorTools = {
   handleDoubleClickAt: (clientX: number, clientY: number) => void;
   /** The right-click (or press-and-hold) edit; true when something under the pointer was acted on. */
   handleContextMenu: (event: MouseEvent) => boolean;
-  handleWheel: (event: WheelEvent) => void;
-  handleKeyDown: (event: KeyboardEvent) => void;
   /** Drop any interaction in progress: the canvas is going away. */
   cleanup: () => void;
 };
 
-export type EditorToolsDeps = {
-  viewportApi: ViewportApi;
-  saveHistory: HistoryService["save"];
-  /** re-derive the polytope from the drawing and re-solve */
-  derivePolytope: () => void;
-  handleUndoRedo: HistoryService["handleUndoRedo"];
+export type EditorToolsDeps = EditorActionDeps & {
   /** Re-solve the active solver after the start marker moved or reset. */
   onSolverStartMoved: () => void;
-  showReplayDuration: (durationMs: number) => void;
-  // the gesture layer's "this click is the synthetic one after a double tap"
-  isClickSuppressed: () => boolean;
 };

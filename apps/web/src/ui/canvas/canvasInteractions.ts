@@ -1,5 +1,5 @@
 import { getState } from "@/features/core/store";
-import { createCanvasGestures } from "./canvasGestures";
+import { attachCanvasGestures } from "./canvasGestures";
 import type { EditorTools, EditorToolsDeps } from "./editorTools";
 import { createEditorTools2D } from "./editorTools2d";
 
@@ -10,12 +10,9 @@ function createEditorTools(deps: EditorToolsDeps): EditorTools {
   return createEditorTools2D(deps);
 }
 
-export function attachCanvasInteractions(deps: Omit<EditorToolsDeps, "isClickSuppressed">): () => void {
-  const canvas = deps.viewportApi.getCanvasElement();
-  const gestures = createCanvasGestures(canvas);
-  const tools = createEditorTools({ ...deps, isClickSuppressed: gestures.isClickSuppressed });
-  const detachGestures = gestures.attach(tools);
-
+export function attachCanvasInteractions(deps: EditorToolsDeps): () => void {
+  const tools = createEditorTools(deps);
+  const detachGestures = attachCanvasGestures(deps.viewportApi.getCanvasElement(), tools);
   return () => {
     tools.cleanup();
     detachGestures();

@@ -19,6 +19,7 @@ export type DragTarget =
       operation: ConstraintDragOperation;
       start: Vec;
       normal: Vec;
+      viewAnchor3D?: PointXYZ | undefined;
     }
   | { kind: "objective"; viewAnchor3D?: PointXYZ | undefined }
   | {

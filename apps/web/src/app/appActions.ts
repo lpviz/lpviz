@@ -1,7 +1,7 @@
 import { freshState, getState, on, setState } from "@/features/core/store";
 import type { SolverMode } from "@/features/solver/solverState";
 import type { HistoryService } from "@/features/history/historyService";
-import { createEditorActions } from "@/features/polytope-editor/editorActions";
+import { finishOpenRegion } from "@/features/polytope-editor/editorActions";
 import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
@@ -68,6 +68,7 @@ export function createAppActions({
   viewportApi: ViewportApi;
 }): AppActions {
   let topInset = 0;
+  const editor = { viewportApi, saveHistory: history.save, derivePolytope: polytope.derive };
 
   const resetView = () => viewportApi.resetView();
   const toggle3D = () => {
@@ -129,7 +130,7 @@ export function createAppActions({
       polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());
     },
-    finishOpenRegion: () => createEditorActions({ viewportApi, saveHistory: history.save, derivePolytope: polytope.derive }).finishOpenRegion(),
+    finishOpenRegion: () => finishOpenRegion(editor),
 
     // ---- the view ----
     resetView,

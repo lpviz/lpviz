@@ -1,4 +1,5 @@
 import { getState } from "@/features/core/store";
+import { swallow } from "@/ui/dom";
 import type { EditorTools } from "./editorTools";
 
 const DOUBLE_TAP_MS = 350;
@@ -8,14 +9,7 @@ const LONG_PRESS_MS = 500;
 const TOUCH_TAP_SLOP_PX = 28;
 const POINTER_TAP_SLOP_PX = 5;
 
-export const swallow = (event: Event) => {
-  event.preventDefault();
-  event.stopImmediatePropagation();
-};
-
-// what the gesture layer drives: the editor's drag lifecycle and its click,
-// double-click, context-menu, wheel and keyboard actions (see editorTools.ts)
-type CanvasGestureHandlers = Omit<EditorTools, "cleanup">;
+type PointerTools = Omit<EditorTools, "cleanup">;
 
 // The primary pointer's press: where it began, whether it has since drifted beyond a tap, and
 // whether a press-and-hold has already acted on it.
@@ -29,25 +23,38 @@ type ClickState = {
   lastPressMoved: boolean;
 };
 
-// The editor's drag handlers behind the store's transition and navigation guards, plus the tap
-// and double-tap detection for touch and pen (a mouse gets the browser's dblclick instead).
-function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState) {
+// The editor behind the transition guard: while the view animates between 2D and 3D nothing is
+// editable, so every handler is a no-op (a press is not claimed, no tap or edit lands).
+const unlessTransitioning =
+  <A extends unknown[], R>(fn: (...args: A) => R) =>
+  (...args: A): R | undefined =>
+    getState().isTransitioning3D ? undefined : fn(...args);
+const guarded = (tools: PointerTools) => ({
+  handleDragStart: unlessTransitioning(tools.handleDragStart),
+  handleDragMove: unlessTransitioning(tools.handleDragMove),
+  handleDragEnd: unlessTransitioning(tools.handleDragEnd),
+  handleClick: unlessTransitioning(tools.handleClick),
+  handleDoubleClickAt: unlessTransitioning(tools.handleDoubleClickAt),
+  handleContextMenu: unlessTransitioning(tools.handleContextMenu),
+});
+
+// The editor's drag handlers behind the store's navigation guard, plus the tap and double-tap
+// detection for touch and pen (a mouse gets the browser's dblclick instead).
+function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickState) {
   const release = (event: Event) => {
-    if (getState().isTransitioning3D) return;
     const wasInteracting = getState().editorInteraction.kind !== "idle";
-    handlers.handleDragEnd();
+    editor.handleDragEnd();
     if (wasInteracting) swallow(event);
   };
 
   const start = (event: PointerEvent) => {
-    if (getState().isTransitioning3D) return;
-    if (handlers.handleDragStart(event.clientX, event.clientY)) swallow(event);
+    if (editor.handleDragStart(event.clientX, event.clientY)) swallow(event);
   };
 
   const move = (event: PointerEvent) => {
     const state = getState();
-    if (state.isTransitioning3D || (state.isNavigatingViewport && state.editorInteraction.kind === "idle")) return;
-    handlers.handleDragMove(event.clientX, event.clientY);
+    if (state.isNavigatingViewport && state.editorInteraction.kind === "idle") return;
+    editor.handleDragMove(event.clientX, event.clientY);
     if (getState().editorInteraction.kind !== "idle") swallow(event);
   };
 
@@ -56,8 +63,7 @@ function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState
   // moving on does not drag whatever now sits at the deleted vertex's index. A hold that found
   // nothing leaves its drag alone, since a finger often pauses before it moves.
   const hold = (event: PointerEvent) => {
-    if (getState().isTransitioning3D) return;
-    if (handlers.handleContextMenu(event)) release(event);
+    if (editor.handleContextMenu(event)) release(event);
   };
 
   const registerTap = (clientX: number, clientY: number) => {
@@ -66,7 +72,7 @@ function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState
     if (last && now - last.time <= DOUBLE_TAP_MS && Math.hypot(clientX - last.clientX, clientY - last.clientY) <= TOUCH_TAP_SLOP_PX) {
       clicks.lastTap = null;
       clicks.suppressClickUntil = now + DOUBLE_TAP_MS;
-      handlers.handleDoubleClickAt(clientX, clientY);
+      editor.handleDoubleClickAt(clientX, clientY);
       return true;
     }
     clicks.lastTap = { time: now, clientX, clientY };
@@ -74,16 +80,16 @@ function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState
   };
 
   // The end of a press: only a touch or pen press that neither drifted, dragged nor held is a
-  // tap, and a second tap in quick succession is a double tap. A touch has no browser click (its touch
-  // events are cancelled, see attachGestureListeners), so a single touch tap is clicked here; a
-  // pen's browser click follows and is suppressed when the tap completed a double tap.
+  // tap, and a second tap in quick succession is a double tap. A touch has no browser click (its
+  // touch events are cancelled, see attachCanvasGestures), so a single touch tap is clicked here;
+  // a pen's browser click follows and is suppressed when the tap completed a double tap.
   const end = (event: PointerEvent, press: Press) => {
     const wasDragging = getState().editorInteraction.kind === "dragging";
     release(event);
     if (press.pointerType === "mouse" || press.moved || press.held || wasDragging) return;
     const doubled = registerTap(event.clientX, event.clientY);
     if (press.pointerType === "touch") {
-      if (!doubled) handlers.handleClick(event);
+      if (!doubled) editor.handleClick(event);
       return;
     }
     if (doubled) swallow(event);
@@ -92,13 +98,16 @@ function createPointerBridge(handlers: CanvasGestureHandlers, clicks: ClickState
   return { start, move, hold, release, end };
 }
 
-// Registers every listener (the press, then keyboard, wheel, context menu, double-click and
-// click) and returns the detach.
-function attachGestureListeners(canvas: HTMLCanvasElement, handlers: CanvasGestureHandlers, clicks: ClickState) {
+// Pointer-gesture normalization for the canvas: registers every listener (the press, then the
+// context menu, double-click and click) against the editor's handlers and returns the detach.
+export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTools): () => void {
+  const clicks: ClickState = { lastTap: null, suppressClickUntil: 0, lastPressMoved: false };
+  const isClickSuppressed = () => clicks.lastPressMoved || performance.now() < clicks.suppressClickUntil;
+  const editor = guarded(tools);
+  const bridge = createPointerBridge(editor, clicks);
   const listeners = new AbortController();
   const { signal } = listeners;
   const capture = { capture: true, signal };
-  const bridge = createPointerBridge(handlers, clicks);
   let press: Press | null = null;
   let holdTimer: number | null = null;
   const cancelHold = () => {
@@ -175,25 +184,13 @@ function attachGestureListeners(canvas: HTMLCanvasElement, handlers: CanvasGestu
   // text selection or loupe on a long press, no double-tap zoom, no scroll, and no synthetic
   // click (the pointer events above carry the gesture; a tap is clicked from them).
   canvas.addEventListener("touchstart", (event) => event.preventDefault(), { passive: false, signal });
-  window.addEventListener("keydown", handlers.handleKeyDown, capture);
-  canvas.addEventListener("wheel", handlers.handleWheel, { capture: true, passive: false, signal });
-  canvas.addEventListener("contextmenu", (event) => handlers.handleContextMenu(event), capture);
-  canvas.addEventListener("dblclick", (event) => handlers.handleDoubleClickAt(event.clientX, event.clientY), { signal });
-  canvas.addEventListener("click", handlers.handleClick, { signal });
+  canvas.addEventListener("contextmenu", (event) => editor.handleContextMenu(event), capture);
+  canvas.addEventListener("dblclick", (event) => editor.handleDoubleClickAt(event.clientX, event.clientY), { signal });
+  // the browser's click follows every mouse press; one that follows a drag, a pan or a double tap is not a click
+  canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event)), { signal });
 
   return () => {
     cancelHold();
     listeners.abort();
-  };
-}
-
-// Pointer-gesture normalization for the canvas. Two phases: the click state is created first so
-// the editor's click handler can ask whether a click is the one that follows a drag or a double
-// tap; attach() then registers the listeners against the editor's handlers.
-export function createCanvasGestures(canvas: HTMLCanvasElement) {
-  const clicks: ClickState = { lastTap: null, suppressClickUntil: 0, lastPressMoved: false };
-  return {
-    isClickSuppressed: () => clicks.lastPressMoved || performance.now() < clicks.suppressClickUntil,
-    attach: (handlers: CanvasGestureHandlers) => attachGestureListeners(canvas, handlers, clicks),
   };
 }

@@ -1,4 +1,4 @@
-import { updatePanControls } from "@/features/polytope-editor/editorActions";
+import { applyEditorTransition, updatePanControls } from "@/features/polytope-editor/editorActions";
 import { createDragActions } from "./canvasDragActions";
 import { createEditActions } from "./canvasEditActions";
 import type { EditorTools, EditorToolsDeps } from "./editorTools";
@@ -6,7 +6,7 @@ import type { EditorTools, EditorToolsDeps } from "./editorTools";
 // The 2-variable polygon editor: vertices, edges and boundary rays dragged on the plane, the
 // objective tip and the start marker, with clicks sketching and closing the polygon.
 export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
-  const tools = { ...createDragActions(deps), ...createEditActions(deps) };
+  const tools = { ...createDragActions(deps), ...createEditActions(deps, (transition) => applyEditorTransition(deps, transition)) };
   updatePanControls(deps.viewportApi);
   return tools;
 }

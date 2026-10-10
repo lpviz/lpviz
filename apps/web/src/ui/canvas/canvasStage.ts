@@ -2,6 +2,7 @@ import type { AppContext } from "@/app/appContext";
 import { getState, on } from "@/features/core/store";
 import { createViewportRuntime } from "@/features/viewport/runtime";
 import { attachCanvasInteractions } from "@/ui/canvas/canvasInteractions";
+import { attachCanvasShortcuts } from "@/ui/canvas/canvasShortcuts";
 import { mountCanvasGL } from "@/ui/canvas/mountCanvasGL";
 import { mountHelpButton } from "@/ui/canvas/mountHelpButton";
 import { mountProblemGallery } from "@/ui/canvas/mountProblemGallery";
@@ -28,9 +29,12 @@ export function createCanvasStage(parent: HTMLElement) {
       viewportApi,
       saveHistory: ctx.services.history.save,
       derivePolytope: ctx.services.polytope.derive,
-      handleUndoRedo: ctx.services.history.handleUndoRedo,
       onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
+    });
+    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), {
+      handleUndoRedo: ctx.services.history.handleUndoRedo,
       showReplayDuration: replayDuration.show,
+      finishOpenRegion: ctx.actions.finishOpenRegion,
     });
     const gallery = mountProblemGallery(main, ctx);
     const zoom = el("div", { id: "zoomControls" });
@@ -104,6 +108,7 @@ export function createCanvasStage(parent: HTMLElement) {
     ctx.actions.setSidebarWidth(ctx.layout.getViewportSidebarWidth());
     destroyChrome = () => {
       controller.abort();
+      detachShortcuts();
       detachInteractions();
       gallery.destroy();
       help.destroy();
