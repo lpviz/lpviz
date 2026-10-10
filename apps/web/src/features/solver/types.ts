@@ -1,4 +1,4 @@
-import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LocalizingSetPath, ResultTextBlock } from "./solverState";
+import type { EllipsoidPath, EllipsoidQueryPoint, IteratePath, LazyList, LocalizingSetPath, ResultTextBlock } from "./solverState";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
@@ -12,7 +12,7 @@ import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
 // Each engine's own options, minus the tolerance the worker adds to all of them, on top of the
 // problem: its constraints and objective, plus the drawn vertices for the engines that localize
 // or start from the region. The central path's interior point is found from those vertices.
-type Problem = { constraints: Constraint[]; objective: Float64Array };
+export type Problem = { constraints: Constraint[]; objective: Float64Array };
 type DrawnProblem = Problem & { vertices: Vec[] };
 
 export type SolverWorkerPayload =
@@ -65,10 +65,7 @@ export type VirtualResultRow = string | NumericRow;
 
 // Rows materialize lazily through this view so that a 100k-iteration result
 // never pays for building row objects that are not scrolled into view.
-export type ResultRowsView = {
-  length: number;
-  at(index: number): VirtualResultRow | undefined;
-};
+export type ResultRowsView = LazyList<VirtualResultRow>;
 
 export type ResultLogSection = Omit<LogSection, "rows"> & { rows: ResultRowsView };
 

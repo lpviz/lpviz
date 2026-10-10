@@ -11,8 +11,8 @@ export function applyUrlParamsOnce({
   updateSolverSetting,
   invalidatePendingSolveResults,
   setActiveSolverMode,
-  sendPolytope,
-}: Pick<SolverActions, "updateSolverSetting" | "invalidatePendingSolveResults" | "setActiveSolverMode"> & { viewportApi: ViewportApi; sendPolytope: () => void }) {
+  derivePolytope,
+}: Pick<SolverActions, "updateSolverSetting" | "invalidatePendingSolveResults" | "setActiveSolverMode"> & { viewportApi: ViewportApi; derivePolytope: () => void }) {
   const params = new URLSearchParams(window.location.search);
   const applySharedState = (sharedState: SharedAppState) => {
     const { dimension } = getState();
@@ -26,7 +26,7 @@ export function applyUrlParamsOnce({
     const state = getState();
     const regionFinished = state.completionMode !== "draft";
     setActiveSolverMode(state.solverMode);
-    if (regionFinished) sendPolytope();
+    if (regionFinished) derivePolytope();
     if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);
   };
   if (!params.has("s")) return;

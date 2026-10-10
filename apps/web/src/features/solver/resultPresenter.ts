@@ -52,6 +52,12 @@ const createResultBlock = (className: ResultTextBlock["className"], text: string
 // fresh per call: resultVirtualRows must be a new array so the store sees a change
 const noVirtualRows = () => ({ resultVirtualHeader: null, resultVirtualFooter: null, resultVirtualShowEmpty: false, resultVirtualRows: [] });
 
+/** A two-line result: a header and the one line under it (why a solver did not run, or its error). */
+export const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
+  type: "blocks",
+  blocks: [createResultBlock("iterate-header", header), createResultBlock("iterate-item-nohover", message)],
+});
+
 export type ResultPresenter = {
   // push a solver result into the store's result-display fields (deferred while
   // the viewport is mid-navigation; see render)
@@ -117,8 +123,8 @@ export function createResultPresenter(): ResultPresenter {
       });
     }
   };
-  // the only writer besides clearResult: a deferred render is flushed with the
-  // payload recorded here, so applyRender need not set it again
+  // lastVirtualResult is the latest virtual payload, which restoreFullVirtualResult re-renders
+  // without the rotation cap; a deferred render is flushed with the payload it recorded
   const render = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
     lastVirtualResult = payload.type === "virtual" ? payload : null;
     if (getState().isNavigatingViewport) {
@@ -131,11 +137,7 @@ export function createResultPresenter(): ResultPresenter {
 
   return {
     render,
-    renderError: (message: string) =>
-      render({
-        type: "blocks",
-        blocks: [createResultBlock("iterate-header", "Solver error"), createResultBlock("iterate-item-nohover", message)],
-      }),
+    renderError: (message: string) => render(messageBlocks("Solver error", message)),
     flushDeferred: () => {
       if (!pendingRender || getState().isNavigatingViewport) return;
       const p = pendingRender;

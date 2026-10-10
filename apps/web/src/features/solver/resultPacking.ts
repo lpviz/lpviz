@@ -122,9 +122,8 @@ export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResp
   if (!wire.success) return wire;
   const { id, iterations, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
   const result: SolverResultView = {
-    // The packed iterations are already a flat block in one transferred buffer, so the iterate
-    // path is that buffer verbatim — no per-iterate views are materialized (their allocation,
-    // ~100k objects per solve at high maxit, was the dominant main-thread GC cost during rotation).
+    // the packed iterations are already a flat block in one transferred buffer, so the iterate
+    // path is that buffer verbatim: no per-iterate object exists on this side
     iterations: { points: iterations, count: Math.floor(iterations.length / stride), stride, lift: lift ?? null },
     log: log.map(unpackSection),
     phases,

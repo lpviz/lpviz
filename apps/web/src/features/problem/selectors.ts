@@ -7,8 +7,7 @@ import { hasConstraints } from "@lpviz/polytope/polytope";
 
 // What the UI and the solver pipeline need to know about the problem, derived in one place from the
 // editor's fields: whether there is a region, whether it has feasible points, whether the objective
-// is set, and whether a solve can run. Every panel and request builder reads these instead of
-// re-deriving them from `polytope` and `objectiveVector`.
+// is set, and whether a solve can run.
 
 /** The drawing has been derived into a constraint system. */
 export const hasRegion = (state: Pick<EditorState, "polytope">): boolean => hasConstraints(state.polytope);
@@ -27,7 +26,7 @@ export const derivedClosure = (state: Pick<EditorState, "completionMode" | "poly
 
 /** The drawing is finished, derived, and has an objective: everything a solve needs. */
 export const isReadyForSolvers = (state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective" | "polytope">): boolean =>
-  computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope) && state.objectiveVector !== null;
+  computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope);
 
 /** An unbounded region recedes along `direction`, so maximizing it has no optimum. */
 export const isUnboundedDirection = (state: Pick<EditorState, "polytope">, direction: Vec): boolean =>

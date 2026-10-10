@@ -33,7 +33,7 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext) {
           detachInteractions = attachCanvasInteractions({
             viewportApi: runtime,
             saveHistory: ctx.services.history.save,
-            sendPolytope: ctx.services.polytope.send,
+            derivePolytope: ctx.services.polytope.derive,
             handleUndoRedo: ctx.services.history.handleUndoRedo,
             onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
             showReplayDuration: replayDuration.show,

@@ -132,7 +132,7 @@ export function createAppActions({
         { viewportDirty: ALL_VIEWPORT_DIRTY },
       );
       viewportApi?.set2DPanEnabled(true);
-      polytope.send();
+      polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());
     },
 

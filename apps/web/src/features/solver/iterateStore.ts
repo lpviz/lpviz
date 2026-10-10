@@ -36,11 +36,13 @@ export function clearIterateState(): void {
   setState({ ...iteratePatch({ iterations: EMPTY_ITERATE_PATH }), highlightIteratePathIndex: null });
 }
 
+// the newest `capacity` entries of a trace buffer (the buffer itself when it fits)
+const newest = (buffer: IteratePath[], capacity: number): IteratePath[] => (buffer.length > capacity ? buffer.slice(buffer.length - capacity) : buffer);
+
 function appendedTraceBuffer(state: State, path: IteratePath): IteratePath[] {
   // The trace chunk shares the iterate path's flat buffers (no copy), which nothing mutates in
   // place; a replay interpolates over its own copy.
-  const raw: IteratePath[] = [...state.traceBuffer, { ...path }];
-  return raw.length > state.maxTraceCount ? raw.slice(raw.length - state.maxTraceCount) : raw;
+  return newest([...state.traceBuffer, { ...path }], state.maxTraceCount);
 }
 
 export function resetTraceState(): void {
@@ -52,8 +54,5 @@ export function setTraceCapacity(maxTraceCount: number): void {
   const { traceBuffer } = getState();
   // a repaint is derived only when traceBuffer actually changes (eviction);
   // a capacity-only bump draws the same chunks
-  setState({
-    maxTraceCount,
-    traceBuffer: traceBuffer.length > maxTraceCount ? traceBuffer.slice(traceBuffer.length - maxTraceCount) : traceBuffer,
-  });
+  setState({ maxTraceCount, traceBuffer: newest(traceBuffer, maxTraceCount) });
 }

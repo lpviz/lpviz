@@ -58,6 +58,8 @@ export function worldDistanceForPixels(viewportApi: ViewportApi, worldPoint: Vec
   return Math.hypot(shifted.x - worldPoint[0], shifted.y - worldPoint[1]);
 }
 
+// The screen, generously padded (in pixels and again in world units): the rays are clipped to it
+// only to be tested as segments, so the box need not be tight.
 function getVisibleBounds(viewportApi: ViewportApi): BoundingBox {
   const margin = 50;
   const topLeft = viewportApi.toLogicalCoords(-margin, -margin);

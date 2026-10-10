@@ -18,7 +18,7 @@ export function boot(root: HTMLElement) {
 
   const solver = createSolverActions();
   const polytope = createPolytopeService(solver.handleProblemChange);
-  const history = createHistoryService(polytope.send);
+  const history = createHistoryService(polytope.derive);
   const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
   const layout = createLayout(root, actions);
 
@@ -31,7 +31,7 @@ export function boot(root: HTMLElement) {
         updateSolverSetting: solver.updateSolverSetting,
         invalidatePendingSolveResults: solver.invalidatePendingSolveResults,
         setActiveSolverMode: solver.setActiveSolverMode,
-        sendPolytope: polytope.send,
+        derivePolytope: polytope.derive,
       });
     }
   };

@@ -15,13 +15,13 @@ const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteractio
   objective: "dragged-objective",
 };
 
-type DragActionDeps = Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "sendPolytope" | "onSolverStartMoved">;
+type DragActionDeps = Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "derivePolytope" | "onSolverStartMoved">;
 
 export const updatePanControls = (viewportApi: ViewportApi) => {
   viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
 };
 
-const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, sendPolytope: () => void) => {
+const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, derivePolytope: () => void) => {
   const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
   let operation: ConstraintDragTarget["operation"];
 
@@ -54,23 +54,23 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, s
       target: { kind: "constraint", operation, start: logicalCoords, normal: target.normal },
     },
   });
-  sendPolytope();
+  derivePolytope();
 };
 
 // moves whatever the drag holds (a vertex, a constraint, the start marker or
 // the objective) to the pointer's logical position
-const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { sendPolytope, onSolverStartMoved }: Pick<DragActionDeps, "sendPolytope" | "onSolverStartMoved">) => {
+const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { derivePolytope, onSolverStartMoved }: Pick<DragActionDeps, "derivePolytope" | "onSolverStartMoved">) => {
   if (dragTarget.kind === "point") {
     const pointIndex = dragTarget.index;
     setState({
       vertices: getState().vertices.map((v, i) => (i === pointIndex ? logicalCoords : v)),
     });
-    sendPolytope();
+    derivePolytope();
     return;
   }
 
   if (dragTarget.kind === "constraint") {
-    applyConstraintDrag(dragTarget, logicalCoords, sendPolytope);
+    applyConstraintDrag(dragTarget, logicalCoords, derivePolytope);
     return;
   }
 
@@ -86,7 +86,7 @@ const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { sendPolyt
   }
 
   setState({ objectiveVector: logicalCoords });
-  sendPolytope();
+  derivePolytope();
 };
 
 // the sketch cursor while drafting, the objective preview while placing the objective
@@ -99,7 +99,7 @@ const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec) => {
 // apply) and end, plus the undo-history entry captured at the start and
 // persisted on the first real move.
 export function createDragActions(deps: DragActionDeps) {
-  const { viewportApi, saveHistory, sendPolytope } = deps;
+  const { viewportApi, saveHistory, derivePolytope } = deps;
   let pendingDragHistory: HistoryEntry | null = null;
 
   const persistPendingDragHistory = () => {
@@ -197,7 +197,7 @@ export function createDragActions(deps: DragActionDeps) {
       // a moved start marker changes no geometry, and re-sending the polytope
       // would reset any accumulated trace (comparing paths from different
       // starts is the point of dragging it)
-      if (interaction.target.kind !== "solver-start") sendPolytope();
+      if (interaction.target.kind !== "solver-start") derivePolytope();
     }
 
     cleanup();
