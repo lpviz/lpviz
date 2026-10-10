@@ -17,44 +17,26 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   let refillVirtualWindow: (() => void) | null = null;
 
   function render(s: State) {
+    const view = s.result;
     // fit() reads layout (clientWidth); keep it ahead of the DOM writes below
-    fit(s);
+    fit(view.kind === "usage" ? 0 : view.maxLineChars);
     refillVirtualWindow = null;
-    result.className = s.resultDisplayMode === "virtual" ? "virtualized" : "";
+    result.className = view.kind === "virtual" ? "virtualized" : "";
     result.replaceChildren();
     hover.forgetHoveredRow();
-    if (s.resultDisplayMode === "usage") {
+    if (view.kind === "usage") {
       result.append(usageHint(s, ctx.actions.finishOpenRegion), desktopNote());
       return;
     }
-    if (s.resultDisplayMode === "blocks" && s.resultBlocks) {
-      result.append(el("div", {}, s.resultBlocks.map(rowEl)));
+    if (view.kind === "blocks") {
+      result.append(el("div", {}, view.blocks.map(rowEl)));
       return;
     }
-    if (s.resultDisplayMode === "virtual") {
-      result.append(
-        el("div", {
-          className: "iterate-header",
-          text: s.resultVirtualHeader ?? "",
-        }),
-      );
-      const sc = el("div", { className: "iterate-scroll" });
-      result.append(
-        sc,
-        el("div", {
-          className: "iterate-footer",
-          text: s.resultVirtualFooter ?? "",
-        }),
-      );
-      if (s.resultVirtualShowEmpty)
-        sc.append(
-          el("div", {
-            className: "iterate-item-nohover",
-            text: "No iterations available.",
-          }),
-        );
-      else refillVirtualWindow = mountVirtualRows(sc, s.resultVirtualRows, result);
-    }
+    result.append(el("div", { className: "iterate-header", text: view.header }));
+    const sc = el("div", { className: "iterate-scroll" });
+    result.append(sc, el("div", { className: "iterate-footer", text: view.footer ?? "" }));
+    if (view.rows.length === 0) sc.append(el("div", { className: "iterate-item-nohover", text: "No iterations available." }));
+    else refillVirtualWindow = mountVirtualRows(sc, view.rows, result);
     hover.scheduleHoverSync();
   }
   render(getState());
@@ -65,11 +47,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   });
 
   const controller = new AbortController();
-  on(
-    ["resultDisplayMode", "resultBlocks", "resultVirtualHeader", "resultVirtualFooter", "resultVirtualShowEmpty", "resultVirtualRows", "resultMaxLineChars"],
-    () => render(getState()),
-    controller.signal,
-  );
+  on(["result"], () => render(getState()), controller.signal);
   // The placeholder hint reflects the current drawing phase, so refresh it as
   // the user sketches — but only while the panel is showing that hint, never
   // while a (potentially huge) solver result is mounted.
@@ -77,7 +55,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     ["vertices", "completionMode", "objectiveVector", "currentObjective"],
     () => {
       const s = getState();
-      if (s.resultDisplayMode === "usage") render(s);
+      if (s.result.kind === "usage") render(s);
     },
     controller.signal,
   );

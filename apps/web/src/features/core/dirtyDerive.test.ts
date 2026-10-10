@@ -62,7 +62,7 @@ describe("deriveViewportDirty (field -> layers)", () => {
   });
 
   test("pure UI / solver-config fields repaint nothing", () => {
-    expect(deriveViewportDirty(st({}), ["resultDisplayMode"])).toBeNull();
+    expect(deriveViewportDirty(st({}), ["result"])).toBeNull();
     expect(deriveViewportDirty(st({}), ["maxTraceCount"])).toBeNull();
   });
 

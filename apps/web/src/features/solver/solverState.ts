@@ -30,6 +30,14 @@ export type LazyList<T> = {
   at(index: number): T | undefined;
 };
 
+// What the result panel shows: the usage hint before any solve, a phased run as text blocks, or a
+// single run as a header, a virtual list of rows and a footer. `maxLineChars` is the widest line,
+// which the panel fits its font to.
+export type ResultView =
+  | { kind: "usage" }
+  | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number }
+  | { kind: "virtual"; header: string; footer: string | null; rows: LazyList<ResultTextBlock>; maxLineChars: number };
+
 // Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
 // `stride` the problem's dimension. `lift[i]` is the height the 3D view raises iterate `i` above the
 // floor (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One
@@ -126,13 +134,7 @@ export const DEFAULT_SOLVER_SETTINGS: SolverSettings = {
 
 // The solver's slice of the store: the result panel, the solve and its iterates, and the trace.
 export type SolverState = {
-  resultDisplayMode: "usage" | "blocks" | "virtual";
-  resultBlocks: ResultTextBlock[] | null;
-  resultVirtualHeader: string | null;
-  resultVirtualFooter: string | null;
-  resultVirtualShowEmpty: boolean;
-  resultVirtualRows: LazyList<ResultTextBlock>;
-  resultMaxLineChars: number;
+  result: ResultView;
 
   solverMode: SolverMode;
   solverSettings: SolverSettings;
@@ -163,13 +165,7 @@ export type SolverRuntimeState = Pick<SolverState, "maxTraceCount">;
 
 export function freshSolverState(): Omit<SolverState, keyof SolverRuntimeState> {
   return {
-    resultDisplayMode: "usage",
-    resultBlocks: null,
-    resultVirtualHeader: null,
-    resultVirtualFooter: null,
-    resultVirtualShowEmpty: false,
-    resultVirtualRows: [],
-    resultMaxLineChars: 0,
+    result: { kind: "usage" },
 
     solverMode: "central",
     solverSettings: { ...DEFAULT_SOLVER_SETTINGS },
