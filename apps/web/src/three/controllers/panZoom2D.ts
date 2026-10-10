@@ -3,20 +3,19 @@ import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewp
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
 import type { ViewportRect } from "@lpviz/viewport/snapshot";
-import { addListeners, getTouchCenter, getTouchDistance } from "./controlEvents";
+import { touchPair } from "./touches";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
 
-// The 2D view's pan (mouse, pen, one finger) and zoom (wheel, pinch). They read the 2D controls
+// The 2D view's pan (any single pointer) and zoom (wheel, pinch). They read the 2D controls
 // config, act only while it owns the view, and report every move through it. Returns the detach.
 export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   // the view at the start of a pan, which each move offsets from
   let activePan: { startClientX: number; startClientY: number; targetX: number; targetY: number; scaleFactor: number; gridSpacing: number } | null = null;
-  let activePointerPanId: number | null = null;
-  let activePinch: {
-    startDistance: number;
-    startScaleFactor: number;
-  } | null = null;
+  let panPointerId: number | null = null;
+  // the fingers on the canvas; two of them pinch
+  const touches = new Map<number, PointXY>();
+  let activePinch: { startDistance: number; startScaleFactor: number } | null = null;
 
   const canZoom = () => {
     const config = get2DControlsConfig();
@@ -49,6 +48,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   const stopPan = () => {
     if (!activePan) return false;
     activePan = null;
+    panPointerId = null;
     return true;
   };
   const zoomAt = (point: PointXY, rect: ViewportRect, scaleFactor: number) => {
@@ -59,120 +59,63 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     return true;
   };
 
-  const clearActivePointerPan = () => {
-    if (activePointerPanId !== null && canvas.hasPointerCapture(activePointerPanId)) {
-      canvas.releasePointerCapture(activePointerPanId);
-    }
-    activePointerPanId = null;
-  };
-
-  const startPinch = (event: TouchEvent) => {
-    if (event.touches.length !== 2) return false;
-    const startDistance = getTouchDistance(event.touches);
-    if (startDistance <= 0) return false;
-    const config = get2DControlsConfig();
-    if (!config.enabled || config.blocked) return false;
-    activePinch = {
-      startDistance,
-      startScaleFactor: config.state.scaleFactor,
-    };
+  // a second finger turns the gesture into a pinch; the pan it interrupts ends
+  const startPinch = () => {
+    const { distance } = touchPair(touches);
+    if (distance <= 0 || !canZoom()) return false;
+    activePinch = { startDistance: distance, startScaleFactor: get2DControlsConfig().state.scaleFactor };
     stopPan();
-    clearActivePointerPan();
     canvas.focus();
-    event.preventDefault();
-    event.stopImmediatePropagation();
     return true;
   };
-
-  const updatePinch = (event: TouchEvent) => {
-    if (!activePinch || event.touches.length !== 2) return false;
-    const distance = getTouchDistance(event.touches);
+  const updatePinch = () => {
+    if (!activePinch || touches.size !== 2) return false;
+    const { center, distance } = touchPair(touches);
     if (distance <= 0) return false;
     const rect = canvas.getBoundingClientRect();
-    const center = getTouchCenter(event.touches);
-    const handled = zoomAt({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
-    if (!handled) return false;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    return true;
+    return zoomAt({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
   };
 
-  const handleMouseDown = (event: MouseEvent) => {
-    if (event.button !== 0) return;
-    if (!startPan(event.clientX, event.clientY)) {
-      return;
-    }
-    canvas.focus();
-    event.preventDefault();
-  };
-  const handleMouseMove = (event: MouseEvent) => {
-    if (!panActive()) return;
-    updatePan(event.clientX, event.clientY);
-    event.preventDefault();
-  };
-  const handleMouseUp = (event: MouseEvent) => {
-    if (event.button !== 0 || !panActive()) return;
-    if (!stopPan()) return;
-    event.preventDefault();
-  };
   const handlePointerDown = (event: PointerEvent) => {
-    if (event.pointerType === "mouse" || !event.isPrimary) return;
-    if (event.button !== 0 || !startPan(event.clientX, event.clientY)) {
-      return;
+    if (event.pointerType === "touch") {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      canvas.setPointerCapture(event.pointerId);
+      if (touches.size === 2) {
+        if (startPinch()) event.preventDefault();
+        return;
+      }
+      if (touches.size > 2) return;
     }
-    activePointerPanId = event.pointerId;
+    if (event.button !== 0 || !event.isPrimary || !startPan(event.clientX, event.clientY)) return;
+    panPointerId = event.pointerId;
+    // with the pointer captured, the pan follows it outside the canvas
     canvas.setPointerCapture(event.pointerId);
     canvas.focus();
     event.preventDefault();
   };
   const handlePointerMove = (event: PointerEvent) => {
-    if (activePointerPanId !== event.pointerId || !panActive()) {
-      return;
+    if (event.pointerType === "touch" && touches.has(event.pointerId)) {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (activePinch) {
+        if (updatePinch()) event.preventDefault();
+        return;
+      }
     }
+    if (panPointerId !== event.pointerId || !panActive()) return;
     updatePan(event.clientX, event.clientY);
     event.preventDefault();
   };
   const handlePointerUp = (event: PointerEvent) => {
-    if (activePointerPanId !== event.pointerId) return;
-    clearActivePointerPan();
-    if (!stopPan()) return;
-    event.preventDefault();
-  };
-  // single-finger touches are handled here as well as through the pointer
-  // events above: this touchstart preventDefault is what blocks page scroll
-  const handleTouchStart = (event: TouchEvent) => {
-    if (startPinch(event)) return;
-    if (event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    if (!touch || !startPan(touch.clientX, touch.clientY)) {
-      return;
+    if (event.pointerType === "touch") {
+      touches.delete(event.pointerId);
+      if (activePinch) {
+        activePinch = null;
+        event.preventDefault();
+        return;
+      }
     }
-    canvas.focus();
-    event.preventDefault();
-  };
-  const handleTouchMove = (event: TouchEvent) => {
-    if (updatePinch(event)) return;
-    if (event.touches.length !== 1) return;
-    const touch = event.touches[0];
-    if (!touch || !panActive()) return;
-    updatePan(touch.clientX, touch.clientY);
-    event.preventDefault();
-  };
-  const handleTouchEnd = (event: TouchEvent) => {
-    if (activePinch && event.touches.length < 2) {
-      activePinch = null;
-      event.preventDefault();
-      return;
-    }
-    if (!panActive()) return;
-    if (!stopPan()) return;
-    event.preventDefault();
-  };
-  const handleTouchCancel = (event: TouchEvent) => {
-    activePinch = null;
-    if (!panActive()) return;
-    if (!stopPan()) return;
-    event.preventDefault();
+    if (panPointerId !== event.pointerId) return;
+    if (stopPan()) event.preventDefault();
   };
   const handleWheel = (event: WheelEvent) => {
     const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
@@ -180,32 +123,24 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
 
     const rect = canvas.getBoundingClientRect();
     const { state } = get2DControlsConfig();
-    if (!zoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) {
-      return;
-    }
+    if (!zoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) return;
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  const removeListeners = addListeners([
-    [canvas, "mousedown", handleMouseDown],
-    [canvas, "pointerdown", handlePointerDown],
-    [canvas, "pointermove", handlePointerMove],
-    [canvas, "pointerup", handlePointerUp],
-    [canvas, "pointercancel", handlePointerUp],
-    [window, "mousemove", handleMouseMove],
-    [window, "mouseup", handleMouseUp],
-    [canvas, "touchstart", handleTouchStart, { passive: false }],
-    [window, "touchmove", handleTouchMove, { passive: false }],
-    [window, "touchend", handleTouchEnd, { passive: false }],
-    [window, "touchcancel", handleTouchCancel, { passive: false }],
-    [canvas, "wheel", handleWheel, { passive: false }],
-  ]);
+  const listeners = new AbortController();
+  const { signal } = listeners;
+  canvas.addEventListener("pointerdown", handlePointerDown, { signal });
+  canvas.addEventListener("pointermove", handlePointerMove, { signal });
+  canvas.addEventListener("pointerup", handlePointerUp, { signal });
+  canvas.addEventListener("pointercancel", handlePointerUp, { signal });
+  canvas.addEventListener("wheel", handleWheel, { passive: false, signal });
 
   return () => {
     subscriptions.abort();
-    removeListeners();
-    clearActivePointerPan();
+    listeners.abort();
+    activePan = null;
     activePinch = null;
+    touches.clear();
   };
 }

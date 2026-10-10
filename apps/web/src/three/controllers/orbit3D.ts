@@ -2,9 +2,10 @@ import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewp
 import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
+import type { PointXY } from "@lpviz/math/types";
 import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
-import { addListeners, getTouchCenter, getTouchDistance } from "./controlEvents";
+import { touchPair } from "./touches";
 
 const ROTATE_RADIANS_PER_PIXEL = 0.008;
 const MIN_ELEVATION = 0.08;
@@ -30,19 +31,20 @@ type ActiveDrag = {
   unitsPerPixel: number;
 };
 
-// The 3D view's orbit controls: left-drag pans in the target plane, right-drag (or two fingers)
-// orbits, the wheel (or a pinch) zooms toward the cursor. They move the perspective camera and
-// its target directly and report each pose through the 3D controls config, which also tells them
-// when they own the view and re-poses the camera from a snapshot when asked. Returns the detach.
+// The 3D view's orbit controls: a left-button or one-finger drag pans in the target plane, a
+// right-button or two-finger drag orbits, the wheel (or a pinch) zooms toward the cursor. They
+// move the perspective camera and its target directly and report each pose through the 3D
+// controls config, which also tells them when they own the view and re-poses the camera from a
+// snapshot when asked. Returns the detach.
 export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCamera, /** the point the camera looks at, shared with the camera controller */ target: Vector3): () => void {
   const canvas = sceneManager.renderer.domElement;
   let config = get3DControlsConfig();
   let syncToken = -1;
   let activeDrag: ActiveDrag | null = null;
-  let activePointerId: number | null = null;
-  let activeTwoFingerOrbit = false;
-  let activeTwoFingerStartDistance = 0;
-  let activeTwoFingerStartCameraDistance = MIN_PERSPECTIVE_DISTANCE;
+  let dragPointerId: number | null = null;
+  // the fingers on the canvas; two of them orbit and pinch
+  const touches = new Map<number, PointXY>();
+  let twoFinger: { startDistance: number; startCameraDistance: number } | null = null;
 
   const enabled = () => config.enabled && !config.blocked;
   const clampDistance = (distance: number) => Math.min(config.maxDistance, Math.max(MIN_PERSPECTIVE_DISTANCE, distance));
@@ -155,100 +157,79 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
   const stopDrag = () => {
     if (!activeDrag) return false;
     activeDrag = null;
-    activeTwoFingerOrbit = false;
-    activeTwoFingerStartDistance = 0;
+    dragPointerId = null;
+    twoFinger = null;
     config.onEnd?.();
     return true;
   };
-
-  const clearActivePointer = () => {
-    if (activePointerId !== null && canvas.hasPointerCapture(activePointerId)) {
-      canvas.releasePointerCapture(activePointerId);
-    }
-    activePointerId = null;
-  };
-
-  const handleMouseDown = (event: MouseEvent) => {
-    if (event.button !== 0 && event.button !== 2) return;
-    startDrag(event.button === 0 ? "pan" : "rotate", event.clientX, event.clientY);
-    if (!activeDrag) return;
+  const claim = (event: Event) => {
     event.preventDefault();
     event.stopImmediatePropagation();
   };
 
-  const handleMouseMove = (event: MouseEvent) => {
-    if (!activeDrag || !enabled()) return;
-    applyMove(event.clientX, event.clientY);
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
-  const handleMouseUp = (event: MouseEvent) => {
-    if (!stopDrag()) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
-  const handleTouchStart = (event: TouchEvent) => {
-    if (event.touches.length !== 2) return;
-    clearActivePointer();
-    activeTwoFingerStartDistance = getTouchDistance(event.touches);
-    if (activeTwoFingerStartDistance <= 0) return;
-    activeTwoFingerStartCameraDistance = getOrbitState().distance;
-    const center = getTouchCenter(event.touches);
+  // a second finger turns the gesture into an orbit that also zooms by the pinch; the one-finger
+  // pan it interrupts ends
+  const startTwoFinger = () => {
+    const { center, distance } = touchPair(touches);
+    if (distance <= 0) return false;
+    const startCameraDistance = getOrbitState().distance;
     startDrag("rotate", center.x, center.y);
-    if (!activeDrag) return;
-    activeTwoFingerOrbit = true;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (!activeDrag) return false;
+    twoFinger = { startDistance: distance, startCameraDistance };
+    return true;
   };
-
-  const handleTouchMove = (event: TouchEvent) => {
-    if (!activeTwoFingerOrbit || event.touches.length !== 2) return;
-    const center = getTouchCenter(event.touches);
+  const updateTwoFinger = () => {
+    if (!twoFinger || touches.size !== 2) return;
+    const { center, distance } = touchPair(touches);
     applyMove(center.x, center.y);
-    const distance = getTouchDistance(event.touches);
-    if (distance > 0 && activeTwoFingerStartDistance > 0) {
-      applyZoomDistance(activeTwoFingerStartCameraDistance * (activeTwoFingerStartDistance / distance));
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
-  const handleTouchEnd = (event: TouchEvent) => {
-    if (!activeTwoFingerOrbit || event.touches.length >= 2) return;
-    if (!stopDrag()) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (distance > 0) applyZoomDistance(twoFinger.startCameraDistance * (twoFinger.startDistance / distance));
   };
 
   const handlePointerDown = (event: PointerEvent) => {
-    if (activeTwoFingerOrbit) return;
-    if (event.pointerType === "mouse" || !event.isPrimary) return;
-    if (event.button !== 0) return;
-    startDrag("pan", event.clientX, event.clientY);
+    if (event.pointerType === "touch") {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      canvas.setPointerCapture(event.pointerId);
+      if (touches.size === 2) {
+        if (startTwoFinger()) claim(event);
+        return;
+      }
+      if (touches.size > 2) return;
+    }
+    if (twoFinger || !event.isPrimary) return;
+    const kind = event.button === 0 ? "pan" : event.button === 2 && event.pointerType === "mouse" ? "rotate" : null;
+    if (!kind) return;
+    startDrag(kind, event.clientX, event.clientY);
     if (!activeDrag) return;
-    activePointerId = event.pointerId;
+    dragPointerId = event.pointerId;
+    // with the pointer captured, the drag follows it outside the canvas
     canvas.setPointerCapture(event.pointerId);
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    claim(event);
   };
 
   const handlePointerMove = (event: PointerEvent) => {
-    if (activeTwoFingerOrbit) return;
-    if (activePointerId !== event.pointerId || !activeDrag) return;
+    if (event.pointerType === "touch" && touches.has(event.pointerId)) {
+      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (twoFinger) {
+        updateTwoFinger();
+        claim(event);
+        return;
+      }
+    }
+    if (dragPointerId !== event.pointerId || !activeDrag || !enabled()) return;
     applyMove(event.clientX, event.clientY);
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    claim(event);
   };
 
   const handlePointerUp = (event: PointerEvent) => {
-    if (activeTwoFingerOrbit) return;
-    if (activePointerId !== event.pointerId || !activeDrag) return;
-    clearActivePointer();
-    stopDrag();
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    if (event.pointerType === "touch") {
+      touches.delete(event.pointerId);
+      if (twoFinger) {
+        if (stopDrag()) claim(event);
+        return;
+      }
+    }
+    if (dragPointerId !== event.pointerId) return;
+    if (stopDrag()) claim(event);
   };
 
   const handleWheel = (event: WheelEvent) => {
@@ -285,8 +266,7 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
         target.add(wheelDelta);
       }
     }
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    claim(event);
     config.onStart?.();
     emitPose();
     config.onEnd?.();
@@ -310,29 +290,22 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
     config = get3DControlsConfig();
     applyConfig();
   }, subscriptions.signal);
-  const removeListeners = addListeners([
-    [canvas, "mousedown", handleMouseDown],
-    [canvas, "pointerdown", handlePointerDown],
-    [canvas, "pointermove", handlePointerMove],
-    [canvas, "pointerup", handlePointerUp],
-    [canvas, "pointercancel", handlePointerUp],
-    [canvas, "touchstart", handleTouchStart, { passive: false }],
-    [window, "touchmove", handleTouchMove, { passive: false }],
-    [window, "touchend", handleTouchEnd, { passive: false }],
-    [window, "touchcancel", handleTouchEnd, { passive: false }],
-    [window, "mousemove", handleMouseMove],
-    [window, "mouseup", handleMouseUp],
-    [canvas, "wheel", handleWheel, { passive: false }],
-    [canvas, "contextmenu", handleContextMenu],
-  ]);
+  const listeners = new AbortController();
+  const { signal } = listeners;
+  canvas.addEventListener("pointerdown", handlePointerDown, { signal });
+  canvas.addEventListener("pointermove", handlePointerMove, { signal });
+  canvas.addEventListener("pointerup", handlePointerUp, { signal });
+  canvas.addEventListener("pointercancel", handlePointerUp, { signal });
+  canvas.addEventListener("wheel", handleWheel, { passive: false, signal });
+  canvas.addEventListener("contextmenu", handleContextMenu, { signal });
   applyConfig();
 
   return () => {
     subscriptions.abort();
-    removeListeners();
+    listeners.abort();
     activeDrag = null;
-    clearActivePointer();
-    activeTwoFingerOrbit = false;
-    activeTwoFingerStartDistance = 0;
+    dragPointerId = null;
+    twoFinger = null;
+    touches.clear();
   };
 }
