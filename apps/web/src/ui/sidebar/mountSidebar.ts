@@ -25,7 +25,8 @@ export function mountSidebar(parent: HTMLElement, ctx: AppContext) {
   content.append(brand, ui);
   sidebar.append(content);
   header.append(sidebar);
-  parent.append(header);
+  // ahead of the canvas stage, which is already in the document (its runtime underlies the actions)
+  parent.prepend(header);
   const panels = [mountProblemPanel(ui, ctx), mountSolverControlsPanel(ui, ctx), mountAnimationControlsPanel(ui, ctx)];
   const log = mountSolverLogPanel(ui, ctx);
   const logExpansion = createSidebarLogExpansion({ sidebar, content, logPanel: log.root });

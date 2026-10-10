@@ -19,7 +19,7 @@ import { SolverStartLayer } from "@/three/layers/SolverStartLayer";
 import { TraceLineLayer } from "@/three/layers/TraceLineLayer";
 import { TracePointsLayer } from "@/three/layers/TracePointsLayer";
 
-export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: ViewportBridge) => void, onBridgeDispose: () => void) {
+export function mountCanvasGL(parent: HTMLElement) {
   const canvas = document.createElement("canvas");
   canvas.className = "canvas-stage__gl-canvas";
   canvas.tabIndex = 0;
@@ -49,19 +49,19 @@ export function mountCanvasGL(parent: HTMLElement, onBridgeReady: (bridge: Viewp
     new SolverStartLayer(),
   ];
   for (const layer of layers) mgr.addLayer(layer);
-  onBridgeReady({
+  const bridge: ViewportBridge = {
     getCanvasElement: () => canvas,
     getCanvasRect: () => canvas.getBoundingClientRect(),
     invalidate: (options) => mgr.invalidate(options),
-  });
+  };
   return {
+    bridge,
     destroy: () => {
       detachOrbit3D();
       detachPanZoom2D();
       cameraCtl.dispose();
       transitionCtl.dispose();
       mgr.dispose();
-      onBridgeDispose();
       canvas.remove();
     },
   };

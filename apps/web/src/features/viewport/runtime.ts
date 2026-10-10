@@ -70,7 +70,7 @@ const poseOf = (snapshot: ViewportRenderSnapshot): ViewportPerspectivePose => ({
  * is an immutable VALUE: only the reference is ever reassigned, always to a freshly built
  * snapshot, which is what makes publishSnapshot's prev/next diff meaningful.
  */
-export async function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): Promise<ViewportRuntime> {
+export function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): ViewportRuntime {
   let ownedSnapshot: ViewportRenderSnapshot = { ...DEFAULT_VIEWPORT_RENDER_SNAPSHOT };
   let controls2DActive = false;
   let controls3DActive = false;

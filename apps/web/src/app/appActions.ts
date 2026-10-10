@@ -7,7 +7,7 @@ import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import { ALL_VIEWPORT_DIRTY } from "@/features/viewport/dirtyFlags";
-import type { ViewportRuntime } from "@/features/viewport/runtime";
+import type { ViewportApi } from "@/features/viewport/runtime";
 import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
 // The action table the UI panels call: the solver actions they use directly, the view actions,
@@ -59,26 +59,23 @@ export function createAppActions({
   share,
   history,
   polytope,
-  getViewportApi,
+  viewportApi,
 }: {
   solver: SolverActions;
   share: () => void;
   history: HistoryService;
   polytope: PolytopeService;
-  getViewportApi: () => ViewportRuntime | null;
+  viewportApi: ViewportApi;
 }): AppActions {
   let topInset = 0;
 
-  const resetView = () => getViewportApi()?.resetView();
+  const resetView = () => viewportApi.resetView();
   const toggle3D = () => {
-    const viewportApi = getViewportApi();
     const state = getState();
-    if (viewportApi && !state.isTransitioning3D) viewportApi.start3DTransition(!state.is3DMode);
+    if (!state.isTransitioning3D) viewportApi.start3DTransition(!state.is3DMode);
   };
   // an unbounded open region is fitted to its clip box; the gallery strip, when open, is kept clear
   const zoomToFit = () => {
-    const viewportApi = getViewportApi();
-    if (!viewportApi) return;
     const state = getState();
     const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
@@ -91,7 +88,6 @@ export function createAppActions({
     share,
     reset: () => {
       if (!window.confirm("Reset lpviz? This clears the drawing and every setting.")) return;
-      const viewportApi = getViewportApi();
       // In place rather than by reloading the page, so it works offline.
       solver.invalidatePendingSolveResults();
       solver.stopMotion();
@@ -99,14 +95,13 @@ export function createAppActions({
       setState(freshState(), { viewportDirty: ALL_VIEWPORT_DIRTY });
       // pan is enabled on an empty canvas; the first vertex placed turns it
       // off until the region is finished
-      viewportApi?.set2DPanEnabled(true);
+      viewportApi.set2DPanEnabled(true);
       const { is3DMode, isTransitioning3D } = getState();
       if (is3DMode && !isTransitioning3D) toggle3D();
       afterViewTransition(resetView);
     },
     setActiveSolverMode: (mode) => solver.setActiveSolverMode(mode, true),
     loadGalleryProblem: (problem) => {
-      const viewportApi = getViewportApi();
       history.save();
       solver.invalidatePendingSolveResults();
       solver.stopMotion();
@@ -130,14 +125,11 @@ export function createAppActions({
         },
         { viewportDirty: ALL_VIEWPORT_DIRTY },
       );
-      viewportApi?.set2DPanEnabled(true);
+      viewportApi.set2DPanEnabled(true);
       polytope.derive();
       window.requestAnimationFrame(() => zoomToFit());
     },
-    finishOpenRegion: () => {
-      const viewportApi = getViewportApi();
-      if (viewportApi) createEditorActions({ viewportApi, saveHistory: history.save, derivePolytope: polytope.derive }).finishOpenRegion();
-    },
+    finishOpenRegion: () => createEditorActions({ viewportApi, saveHistory: history.save, derivePolytope: polytope.derive }).finishOpenRegion(),
 
     // ---- the view ----
     resetView,
@@ -147,6 +139,6 @@ export function createAppActions({
     setTopInset: (px) => {
       topInset = Math.max(0, px);
     },
-    setSidebarWidth: (width) => getViewportApi()?.setSidebarWidth(width),
+    setSidebarWidth: (width) => viewportApi.setSidebarWidth(width),
   };
 }

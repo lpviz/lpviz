@@ -6,41 +6,29 @@ import { createPolytopeService } from "@/features/polytope-editor/polytopeServic
 import { shareLink } from "@/features/share/shareService";
 import { applyUrlParamsOnce } from "@/features/share/urlParamsSync";
 import { createSolverActions } from "@/features/solver/solverActions";
-import type { ViewportRuntime } from "@/features/viewport/runtime";
-import { mountCanvasStage } from "@/ui/canvas/mountCanvasStage";
+import { createCanvasStage } from "@/ui/canvas/canvasStage";
 import { mountSidebar } from "@/ui/sidebar/mountSidebar";
 
 export function boot(root: HTMLElement) {
   root.replaceChildren();
 
-  let viewportApi: ViewportRuntime | null = null;
-  let urlApplied = false;
-
   const solver = createSolverActions();
   const polytope = createPolytopeService(solver.handleProblemChange);
   const history = createHistoryService(polytope.derive);
-  const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi });
+  const stage = createCanvasStage(root);
+  const actions = createAppActions({ solver, share: shareLink, history, polytope, viewportApi: stage.viewportApi });
   const layout = createLayout(root, actions);
-
-  const setViewportApi = (runtime: ViewportRuntime | null) => {
-    viewportApi = runtime;
-    if (runtime && !urlApplied) {
-      urlApplied = true;
-      applyUrlParamsOnce({
-        viewportApi: runtime,
-        updateSolverSetting: solver.updateSolverSetting,
-        invalidatePendingSolveResults: solver.invalidatePendingSolveResults,
-        setActiveSolverMode: solver.setActiveSolverMode,
-        derivePolytope: polytope.derive,
-      });
-    }
-  };
-
-  const ctx: AppContext = { actions, services: { history, polytope }, layout, getViewportApi: () => viewportApi, setViewportApi };
+  const ctx: AppContext = { actions, services: { history, polytope }, layout };
 
   const sidebar = mountSidebar(root, ctx);
-  const stage = mountCanvasStage(root, ctx);
-  layout.attach({ sidebar, stage });
+  layout.attach({ sidebar, stage: stage.mountChrome(ctx) });
+  applyUrlParamsOnce({
+    viewportApi: stage.viewportApi,
+    updateSolverSetting: solver.updateSolverSetting,
+    invalidatePendingSolveResults: solver.invalidatePendingSolveResults,
+    setActiveSolverMode: solver.setActiveSolverMode,
+    derivePolytope: polytope.derive,
+  });
 
   return {
     destroy: () => {
