@@ -100,3 +100,8 @@ const DRAWING_HINTS: Record<DrawingPhase, string> = {
 export function usageHint(phase: DrawingPhase): HTMLDivElement {
   return el("div", { id: "usageHint", text: DRAWING_HINTS[phase] });
 }
+
+/** The advice under the hint on a phone or a touch-only device (the stylesheet shows it there). */
+export function desktopNote(): HTMLParagraphElement {
+  return el("p", { className: "desktop-note", text: "lpviz is best on a desktop browser." });
+}

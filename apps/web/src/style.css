@@ -371,6 +371,22 @@ body {
   padding: 14px 10px;
 }
 
+/* under the hint, for a phone-sized portrait window or a touch-only device */
+.desktop-note {
+  display: none;
+  margin: 0;
+  padding: 0 10px 14px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #9a9a9a;
+}
+
+@media (max-width: 700px) and (orientation: portrait), (hover: none) and (pointer: coarse) {
+  .desktop-note {
+    display: block;
+  }
+}
+
 #maximize,
 #subjectTo {
   text-align: left;
@@ -949,6 +965,11 @@ body {
   #usageHint {
     font-size: 0.74rem;
     padding: 10px 8px;
+  }
+
+  .desktop-note {
+    font-size: 0.74rem;
+    padding: 0 8px 10px;
   }
 
   #helpControl {

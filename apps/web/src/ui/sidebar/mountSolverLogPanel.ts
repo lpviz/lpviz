@@ -2,7 +2,7 @@ import type { AppContext } from "@/app/appContext";
 import { getState, on, type State } from "@/features/core/store";
 import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
 import { el } from "@/ui/dom";
-import { usageHint } from "@/ui/usageTips";
+import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
 import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
 
@@ -25,7 +25,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     result.replaceChildren();
     hover.forgetHoveredRow();
     if (s.resultDisplayMode === "usage") {
-      result.append(usageHint(computeDrawingPhase(s)));
+      result.append(usageHint(computeDrawingPhase(s)), desktopNote());
       return;
     }
     if (s.resultDisplayMode === "blocks" && s.resultBlocks) {
