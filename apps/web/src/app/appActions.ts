@@ -104,10 +104,7 @@ export function createAppActions({
       viewportApi?.set2DPanEnabled(true);
       const { is3DMode, isTransitioning3D } = getState();
       if (is3DMode && !isTransitioning3D) toggle3D();
-      afterViewTransition(() => {
-        resetView();
-        getViewportApi()?.draw();
-      });
+      afterViewTransition(resetView);
     },
     setActiveSolverMode: (mode) => solver.setActiveSolverMode(mode, true),
     loadGalleryProblem: (problem) => {
@@ -137,7 +134,6 @@ export function createAppActions({
       );
       viewportApi?.set2DPanEnabled(true);
       polytope.send();
-      viewportApi?.draw();
       window.requestAnimationFrame(() => zoomToFit());
     },
 
@@ -145,13 +141,7 @@ export function createAppActions({
     resetView,
     toggle3D,
     zoomToFit,
-    setZScale: (value) => {
-      const viewportApi = getViewportApi();
-      if (!viewportApi) return;
-      setState({ zScale: value }); // zScale derives polytope+objective+trace+iterate
-      const { is3DMode, isTransitioning3D } = getState();
-      if (is3DMode || isTransitioning3D) viewportApi.draw();
-    },
+    setZScale: (value) => setState({ zScale: value }),
     setTopInset: (px) => {
       topInset = Math.max(0, px);
     },
@@ -160,7 +150,6 @@ export function createAppActions({
       const viewportApi = getViewportApi();
       if (!viewportApi) return;
       viewportApi.setSidebarWidth(width);
-      viewportApi.draw();
     },
     syncViewportLayout: (width) => {
       sidebarWidth = width;
@@ -168,7 +157,6 @@ export function createAppActions({
       if (!viewportApi) return;
       viewportApi.setSidebarWidth(width);
       viewportApi.updateDimensions();
-      viewportApi.draw();
     },
   };
 }

@@ -6,7 +6,6 @@ import { createResultPresenter } from "@/features/solver/resultPresenter";
 import { createRotationController, objectiveAngleStep } from "@/features/solver/rotationController";
 import { createSolveRunner } from "@/features/solver/solveRunner";
 import type { SolverMode, SolverSettingUpdater } from "@/features/solver/solverState";
-import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;
@@ -25,9 +24,9 @@ export type SolverActions = {
   destroy: () => void;
 };
 
-export function createSolverActions(getViewportApi: () => ViewportApi | null): SolverActions {
+export function createSolverActions(): SolverActions {
   let iterateHoverActive = false;
-  const presenter = createResultPresenter({ getViewportApi });
+  const presenter = createResultPresenter();
 
   const updateSolverSetting: SolverSettingUpdater = (key, value) =>
     setState({
@@ -36,17 +35,9 @@ export function createSolverActions(getViewportApi: () => ViewportApi | null): S
 
   const syncTraceCapacity = () => setTraceCapacity(Math.max(1, Math.ceil((2 * Math.PI) / objectiveAngleStep(getState().solverSettings))));
 
-  const replay = createReplayController({
-    getViewportApi,
-    isIterateHoverActive: () => iterateHoverActive,
-  });
-  const { solve, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ getViewportApi, presenter, replay });
-
-  const rotation = createRotationController({
-    solve,
-    syncTraceCapacity,
-    hasCanvas: () => getViewportApi() !== null,
-  });
+  const replay = createReplayController({ isIterateHoverActive: () => iterateHoverActive });
+  const { solve, invalidatePending: invalidatePendingSolveResults, clearComputedState } = createSolveRunner({ presenter, replay });
+  const rotation = createRotationController({ solve, syncTraceCapacity });
   const stopMotion = () => {
     const s = getState();
     const wasRotating = s.rotateObjectiveMode;
@@ -76,12 +67,9 @@ export function createSolverActions(getViewportApi: () => ViewportApi | null): S
     void solve().finally(() => rotation.rearm());
   };
   const setTraceEnabled = (enabled: boolean) => {
-    const viewportApi = getViewportApi();
     setState({ traceEnabled: enabled });
-    if (!enabled) {
-      resetTraceState();
-      viewportApi?.draw();
-    } else syncTraceCapacity();
+    if (enabled) syncTraceCapacity();
+    else resetTraceState();
   };
   const startRotation = () => {
     if (!getState().objectiveVector) setState({ objectiveVector: [1, 0] });
@@ -96,30 +84,16 @@ export function createSolverActions(getViewportApi: () => ViewportApi | null): S
   const recomputeIfModeActive = (mode: SolverMode) => {
     if (!getState().rotateObjectiveMode && getState().solverMode === mode) void solve();
   };
-  const resetTraceAndRedrawIfNeeded = () => {
-    if (getState().traceBuffer.length === 0) return;
-    resetTraceState();
-    getViewportApi()?.draw();
-  };
   const setActiveSolverMode = (mode: SolverMode, solveNow = false) => {
     invalidatePendingSolveResults();
-    if (getState().solverMode !== mode) resetTraceAndRedrawIfNeeded();
+    if (getState().solverMode !== mode) resetTraceState();
     setState({ solverMode: mode });
     if (solveNow && !getState().rotateObjectiveMode) void solve();
   };
-  const setConstraintHighlight = (index: number | null) => {
-    const viewportApi = getViewportApi();
-    if (!viewportApi || getState().highlightIndex === index) return;
-    setState({ highlightIndex: index });
-    viewportApi.draw();
-  };
+  const setConstraintHighlight = (index: number | null) => setState({ highlightIndex: index });
   const setIterateHighlight = (index: number | null) => {
-    const viewportApi = getViewportApi();
-    if (!viewportApi) return;
     iterateHoverActive = index !== null;
-    if (getState().highlightIteratePathIndex === index) return;
     setState({ highlightIteratePathIndex: index });
-    viewportApi.draw();
   };
   let wasNavigatingViewport = getState().isNavigatingViewport;
   const controller = new AbortController();

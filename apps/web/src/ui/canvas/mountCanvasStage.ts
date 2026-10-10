@@ -39,7 +39,6 @@ export function mountCanvasStage(parent: HTMLElement, ctx: AppContext) {
             showReplayDuration: replayDuration.show,
           });
           ctx.actions.syncViewportLayout(ctx.layout.getViewportSidebarWidth());
-          runtime.draw();
         })
         .catch((e) => console.error("Failed to initialize viewport", e));
     },

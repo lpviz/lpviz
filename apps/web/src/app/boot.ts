@@ -16,13 +16,9 @@ export function boot(root: HTMLElement) {
   let viewportApi: ViewportRuntime | null = null;
   let urlApplied = false;
 
-  const history = createHistoryService(() => {
-    viewportApi?.draw();
-    polytope.send();
-  });
-
-  const solver = createSolverActions(() => viewportApi);
+  const solver = createSolverActions();
   const polytope = createPolytopeService(solver.handleProblemChange);
+  const history = createHistoryService(polytope.send);
   const actions = createAppActions({ solver, share: shareLink, history, polytope, getViewportApi: () => viewportApi, initialSidebarWidth: DEFAULT_SIDEBAR_WIDTH });
   const layout = createLayout(root, actions);
 

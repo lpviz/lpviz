@@ -27,7 +27,6 @@ import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportBridge, type ViewportRen
 const VIEWPORT_NAVIGATION_IDLE_MS = 100;
 
 export type ViewportApi = {
-  draw: () => void;
   updateDimensions: () => void;
   setSidebarWidth: (width: number) => void;
   zoomToFit: (
@@ -363,7 +362,6 @@ export async function createViewportRuntime({ viewportBridge }: { viewportBridge
   const planar = () => wants2DControls();
 
   return {
-    draw: () => viewportBridge.invalidate({ layers: false }),
     updateDimensions: () => {
       rect = viewportBridge.getCanvasRect();
       if (planar()) {

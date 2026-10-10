@@ -33,10 +33,7 @@ export function applyUrlParamsOnce({
     const regionFinished = state.completionMode !== "draft";
     setActiveSolverMode(state.solverMode);
     if (regionFinished) sendPolytope();
-    if (sharedState.is3DMode === true && !state.is3DMode) {
-      viewportApi.start3DTransition(true);
-    }
-    viewportApi.draw();
+    if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);
   };
   if (!params.has("s")) return;
   try {

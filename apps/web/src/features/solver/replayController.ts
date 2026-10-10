@@ -1,6 +1,5 @@
 import { getState, setState } from "@/features/core/store";
 import { clampReplayDurationMs } from "@/features/solver/replayDuration";
-import type { ViewportApi } from "@/features/viewport/runtime";
 
 export type ReplayController = {
   // start a replay, or stop the one already playing (the Animate button is the same control for both)
@@ -13,8 +12,9 @@ export type ReplayController = {
 // polyline, so a replay takes the configured duration whether the solve produced 20 iterates or
 // 100k. Each frame computes the head's fractional position straight from the clock, crossing
 // however many iterates that takes; a per-step timer cannot deliver 100k ticks in a second.
-export function createReplayController(deps: {
-  getViewportApi: () => ViewportApi | null;
+export function createReplayController({
+  isIterateHoverActive,
+}: {
   // the user hovering a log row owns the highlight; the replay yields it
   isIterateHoverActive: () => boolean;
 }): ReplayController {
@@ -31,14 +31,11 @@ export function createReplayController(deps: {
       iteratePath: state.originalIteratePath,
       iteratePhases: state.originalIteratePhases,
       replayActive: false,
-      ...(deps.isIterateHoverActive() ? {} : { highlightIteratePathIndex: null }),
+      ...(isIterateHoverActive() ? {} : { highlightIteratePathIndex: null }),
     });
-    deps.getViewportApi()?.draw();
   };
 
   const start = () => {
-    const cm = deps.getViewportApi();
-    if (!cm) return;
     const snap = getState();
     if (snap.rotateObjectiveMode) return;
     const orig = snap.originalIteratePath;
@@ -64,7 +61,6 @@ export function createReplayController(deps: {
       highlightIteratePathIndex: null,
       replayActive: true,
     });
-    cm.draw();
 
     const startTime = performance.now();
     const tick = (timestamp: number) => {
@@ -72,11 +68,6 @@ export function createReplayController(deps: {
       // whoever stopped the replay cleared the flag; a frame that was already
       // queued must not keep mutating the store or drawing after that
       if (!getState().replayActive) return;
-      const canvas = deps.getViewportApi();
-      if (!canvas) {
-        cancel();
-        return;
-      }
       const progress = (timestamp - startTime) / durationMs;
       // cancel() restores the untouched original path, so the run ends exactly
       // on the last iterate rather than a rounded approximation of it
@@ -126,10 +117,9 @@ export function createReplayController(deps: {
         // iterate's localizing ellipse). The green marker does not read it —
         // it rides the interpolated head instead, so it sweeps rather than
         // snapping — see IterateHighlightLayer.
-        ...(deps.isIterateHoverActive() ? {} : { highlightIteratePathIndex: base }),
+        ...(isIterateHoverActive() ? {} : { highlightIteratePathIndex: base }),
       });
       shownCount = count;
-      canvas.draw();
       // a listener of the patch above may have cancelled us mid-frame
       if (getState().replayActive) rafId = requestAnimationFrame(tick);
     };
