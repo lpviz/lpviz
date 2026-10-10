@@ -22,7 +22,7 @@ const USAGE_TIP_SECTIONS: [title: string, tips: UsageTip[]][] = [
   [
     "Objective",
     [
-      { label: "Place it", desc: "click inside the region", touch: "tap inside the region" },
+      { label: "Place it", desc: "click anywhere on the grid", touch: "tap anywhere on the grid" },
       { label: "Aim it", desc: "drag the arrow" },
       { label: "Spin it", desc: "click <strong>Rotate Objective</strong>", touch: "tap <strong>Rotate Objective</strong>" },
       { label: "Hide / show it", desc: "press <kbd>H</kbd>", touch: null },
@@ -104,7 +104,7 @@ export function usageTipsList(): HTMLDivElement {
 const DRAWING_HINTS: Record<DrawingPhase, [click: string, tap: string]> = {
   empty: ["Click the grid to add vertices.", "Tap the grid to add vertices."],
   sketching_polytope: ["Keep clicking to add vertices — click the first one or press Enter to close.", "Keep tapping to add vertices — tap the first one to close."],
-  awaiting_objective: ["Click inside the region to set the objective direction.", "Tap inside the region to set the objective direction."],
+  awaiting_objective: ["Click anywhere to set the objective direction.", "Tap anywhere to set the objective direction."],
   objective_preview: ["Click to lock in the objective direction.", "Tap to lock in the objective direction."],
   ready_for_solvers: ["Pick a solver above to solve.", "Pick a solver above to solve."],
 };
