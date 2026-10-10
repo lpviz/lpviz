@@ -2,7 +2,7 @@ import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
-import { setPathRibbonCacheEncode, setPathRibbonResolution } from "./helpers/pathRibbon";
+import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
@@ -279,19 +279,12 @@ export class TraceCache {
   }
 
   private renderSeqRange(renderer: WebGLRenderer, traceLinesScene: Scene, target: WebGLRenderTarget, startSeq: number, endSeq: number, clear: boolean): void {
-    // screen-space line widths must be computed against the cache viewport
-    setPathRibbonResolution(this.cachedCssWidth, this.cachedCssHeight);
-    setPathRibbonCacheEncode(true);
     const previousTarget = renderer.getRenderTarget();
     renderer.setRenderTarget(target);
     if (clear) renderer.clear();
-    this.withSeqRangeVisible(startSeq, endSeq, () => {
-      renderer.render(traceLinesScene, this.cacheCamera);
-    });
+    // screen-space line widths are computed against the cache's own viewport
+    bakePathRibbons(() => this.withSeqRangeVisible(startSeq, endSeq, () => renderer.render(traceLinesScene, this.cacheCamera)), { width: this.cachedCssWidth, height: this.cachedCssHeight });
     renderer.setRenderTarget(previousTarget);
-    setPathRibbonCacheEncode(false);
-    const snapshot = getViewportRenderSnapshot();
-    setPathRibbonResolution(snapshot.width || 1, snapshot.height || 1);
   }
 
   private renderTrailing(renderer: WebGLRenderer, traceLinesScene: Scene, startSeq: number, endSeq: number): void {

@@ -2,7 +2,7 @@ import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
-import { setPathRibbonCacheEncode } from "./helpers/pathRibbon";
+import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 
 // Motion-time compositor for the trace-constraints pass in 3D mode.
@@ -93,9 +93,7 @@ export class Trace3DCompositor {
     for (const scene of occluderScenes) {
       this.renderDepthOnly(renderer, scene, camera);
     }
-    setPathRibbonCacheEncode(true);
-    renderer.render(traceLinesScene, camera);
-    setPathRibbonCacheEncode(false);
+    bakePathRibbons(() => renderer.render(traceLinesScene, camera));
     renderer.setRenderTarget(previousTarget);
 
     return this.quadScene;
