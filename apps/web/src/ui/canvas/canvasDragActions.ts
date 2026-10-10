@@ -1,11 +1,8 @@
-import { setCurrentMouse } from "@/features/core/currentMouse";
 import { getState, setState, type State } from "@/features/core/store";
-import { computeDrawingPhase, type DragTarget, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
-import { updatePanControls } from "@/features/polytope-editor/editorActions";
-import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient, type ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
-import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
-import type { Vec } from "@lpviz/math/types";
+import { applyDragTarget, updatePanControls, updatePointerPreview } from "@/features/polytope-editor/editorActions";
+import { computeDrawingPhase, type DragTarget } from "@/features/polytope-editor/editorState";
+import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient } from "@/features/polytope-editor/hitTesting";
 import type { EditorToolsDeps } from "./editorTools";
 
 const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
@@ -15,86 +12,10 @@ const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteractio
   objective: "dragged-objective",
 };
 
-type DragActionDeps = Pick<EditorToolsDeps, "viewportApi" | "saveHistory" | "derivePolytope" | "onSolverStartMoved">;
-
-const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, derivePolytope: () => void) => {
-  const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
-  let operation: ConstraintDragTarget["operation"];
-
-  if (target.operation.kind === "closed-line") {
-    const line = target.operation.constraints[target.operation.lineIndex]!;
-    const length = Math.hypot(line[0], line[1]);
-    if (length <= 0) return;
-
-    const shift = delta * length;
-    const updatedLines = target.operation.constraints.slice();
-    updatedLines[target.operation.lineIndex] = [line[0], line[1], line[2] + shift];
-    const updatedVertices = verticesFromConstraints(updatedLines);
-    if (updatedVertices.length < 2) return;
-
-    setState({ vertices: updatedVertices });
-    operation = { kind: "closed-line", lineIndex: target.operation.lineIndex, constraints: updatedLines };
-  } else {
-    operation = target.operation;
-    const shiftX = target.normal[0] * delta;
-    const shiftY = target.normal[1] * delta;
-    const indices = new Set(operation.vertexIndices);
-    setState({
-      vertices: getState().vertices.map((v, i): Vec => (indices.has(i) ? [v[0] + shiftX, v[1] + shiftY] : v)),
-    });
-  }
-
-  setState({
-    editorInteraction: {
-      kind: "dragging",
-      target: { kind: "constraint", operation, start: logicalCoords, normal: target.normal },
-    },
-  });
-  derivePolytope();
-};
-
-// moves whatever the drag holds (a vertex, a constraint, the start marker or
-// the objective) to the pointer's logical position
-const applyDragTarget = (dragTarget: DragTarget, logicalCoords: Vec, { derivePolytope, onSolverStartMoved }: Pick<DragActionDeps, "derivePolytope" | "onSolverStartMoved">) => {
-  if (dragTarget.kind === "point") {
-    const pointIndex = dragTarget.index;
-    setState({
-      vertices: getState().vertices.map((v, i) => (i === pointIndex ? logicalCoords : v)),
-    });
-    derivePolytope();
-    return;
-  }
-
-  if (dragTarget.kind === "constraint") {
-    applyConstraintDrag(dragTarget, logicalCoords, derivePolytope);
-    return;
-  }
-
-  if (dragTarget.kind === "solver-start") {
-    // store the raw point; the marker layer and the solver request both
-    // derive the effective start (simplex snaps it to the nearest vertex)
-    const off = dragTarget.grabOffset;
-    setState({
-      solverStartPoint: off ? [logicalCoords[0] + off[0], logicalCoords[1] + off[1]] : logicalCoords,
-    });
-    onSolverStartMoved();
-    return;
-  }
-
-  setState({ objectiveVector: logicalCoords });
-  derivePolytope();
-};
-
-// the sketch cursor while drafting, the objective preview while placing the objective
-const updatePointerPreview = (phase: DrawingPhase, logicalCoords: Vec) => {
-  if (phase === "empty" || phase === "sketching_polytope") setCurrentMouse(logicalCoords);
-  else if (phase === "awaiting_objective" || phase === "objective_preview") setState({ currentObjective: logicalCoords });
-};
-
 // The drag lifecycle: start (hit test + pending-drag), move (threshold, then
 // apply) and end, plus the undo-history entry captured at the start and
 // persisted on the first real move.
-export function createDragActions(deps: DragActionDeps) {
+export function createDragActions(deps: EditorToolsDeps) {
   const { viewportApi, saveHistory, derivePolytope } = deps;
   let pendingDragHistory: HistoryEntry | null = null;
 

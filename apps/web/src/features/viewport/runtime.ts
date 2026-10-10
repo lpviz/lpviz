@@ -373,10 +373,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       const state = getState();
       if (wants2DControls()) return toLogicalCoords2D(get2DControlsSnapshot(), rect, point, { snapToGrid: state.snapToGrid });
       const { editorInteraction } = state;
-      const viewAnchor3D =
-        editorInteraction.kind === "dragging" && (editorInteraction.target.kind === "point" || editorInteraction.target.kind === "objective" || editorInteraction.target.kind === "solver-start")
-          ? editorInteraction.target.viewAnchor3D
-          : undefined;
+      const viewAnchor3D = editorInteraction.kind === "dragging" ? editorInteraction.target.viewAnchor3D : undefined;
       return toLogicalCoords3D(ownedSnapshot, rect, point, { zScale: state.zScale, snapToGrid: state.snapToGrid, interacting: editorInteraction.kind !== "idle", viewAnchor3D });
     },
     toCanvasCoords: (x, y, z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),

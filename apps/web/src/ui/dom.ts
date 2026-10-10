@@ -1,3 +1,9 @@
+/** Ends an event here: no default action, and no other listener sees it. */
+export const swallow = (event: Event) => {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+};
+
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
   // `html` is parsed into the element after its attributes are set and before `children` are appended
