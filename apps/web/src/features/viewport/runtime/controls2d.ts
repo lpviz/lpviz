@@ -1,16 +1,14 @@
 import { createSignal } from "@/features/core/signal";
-import { deriveViewport2DState, type Viewport2DState } from "@lpviz/viewport/projection2d";
-import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "../types";
+import { deriveViewport2DState, type Viewport2DContext, type Viewport2DState } from "@lpviz/viewport/projection2d";
+import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT } from "../types";
 
 // What the 2D pan/zoom controls read (see three/controllers/panZoom2D.ts): whether they own the
-// view, the state they move, the snapshot that sizes it, and where to report a move.
-export type Controls2DConfig = {
+// view, what the view is built from (the state they move, the sidebar, the snapshot that sizes
+// it), and where to report a move.
+export type Controls2DConfig = Viewport2DContext & {
   enabled: boolean;
   blocked: boolean;
   panEnabled: boolean;
-  sidebarWidth: number;
-  state: Viewport2DState;
-  fallbackSnapshot: ViewportRenderSnapshot;
   onStateChange?: (state: Viewport2DState) => void;
   onNavigationFrame?: () => void;
 };

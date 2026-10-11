@@ -1,5 +1,6 @@
 import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewport/runtime/controls3d";
 import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
+import { unitsPerPixelAtDistance } from "@lpviz/viewport/perspective";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
 import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
@@ -89,9 +90,7 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
       right.normalize();
     }
     const up = panBasisUp.crossVectors(right, forward).normalize();
-    const fov = (camera.fov * Math.PI) / 180;
-    const unitsPerPixel = (2 * Math.tan(fov / 2) * Math.max(MIN_PERSPECTIVE_DISTANCE, distance)) / Math.max(1, canvas.clientHeight);
-    return { right: right.clone(), up: up.clone(), unitsPerPixel };
+    return { right: right.clone(), up: up.clone(), unitsPerPixel: unitsPerPixelAtDistance(config.snapshot, distance, canvas.clientHeight) };
   };
 
   const applyMove = (clientX: number, clientY: number) => {

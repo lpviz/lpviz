@@ -6,7 +6,7 @@ import { Euler, Vector3 } from "three";
 import type { PointXYZ } from "@lpviz/math/types";
 import { MIN_PERSPECTIVE_DISTANCE } from "./defaults";
 import { clampScaleFactor2D } from "./projection2d";
-import type { ViewportPerspectivePose, ViewportRenderSnapshot } from "./snapshot";
+import { getViewportSize, perspectiveSnapshot, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
@@ -34,6 +34,13 @@ export function getPerspectiveDistanceForUnitsPerPixel(snapshot: ViewportRenderS
 /** The 2D scale factor that shows the target plane at the same zoom as a camera at `distance`. */
 export function getScaleFactorFromPerspectiveDistance(snapshot: ViewportRenderSnapshot, distance: number, height = snapshot.height || 1) {
   return clampScaleFactor2D(1 / (unitsPerPixelAtDistance(snapshot, distance, height) * snapshot.gridSpacing));
+}
+
+/** The 3D snapshot of a pose `distance` from its target, with the 2D zoom fields that show the target plane at that distance. */
+export function perspectiveSnapshotAtDistance(base: ViewportRenderSnapshot, pose: ViewportPerspectivePose, distance: number, rect?: ViewportRect, transitionZMultiplier = 1): ViewportRenderSnapshot {
+  const { width, height } = getViewportSize(base, rect);
+  const scaleFactor = getScaleFactorFromPerspectiveDistance(base, distance, height);
+  return perspectiveSnapshot(base, pose, width, height, scaleFactor, 1 / (base.gridSpacing * scaleFactor), transitionZMultiplier);
 }
 
 export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {

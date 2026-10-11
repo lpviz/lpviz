@@ -2,11 +2,14 @@
 
 import { type BoundingBox, expandDegenerateBounds } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
-import { DEFAULT_FIT_PADDING, DEFAULT_GRID_SPACING, MAX_SCALE_FACTOR, MIN_SCALE_FACTOR } from "./defaults";
-import { getAvailableViewportSize, getViewportSize, orthographicFor, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+import { DEFAULT_GRID_SPACING, MAX_SCALE_FACTOR, MIN_SCALE_FACTOR } from "./defaults";
+import { type FitInsets, getAvailableViewportSize, getViewportSize, orthographicFor, resolveFitInsets, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 /** The 2D controls' state: the zoom and the offset of the view from the origin. */
 export type Viewport2DState = { gridSpacing: number; scaleFactor: number; offsetX: number; offsetY: number };
+
+/** What the 2D view is built from: the state, the sidebar's width, and the snapshot that sizes it when the rect has no size (and supplies the perspective fields). */
+export type Viewport2DContext = { state: Viewport2DState; sidebarWidth: number; fallbackSnapshot: ViewportRenderSnapshot };
 
 export function clampScaleFactor2D(value: number) {
   return Math.max(MIN_SCALE_FACTOR, Math.min(MAX_SCALE_FACTOR, value));
@@ -25,8 +28,7 @@ export function buildViewport2DStateFromTarget(target: PointXY, scaleFactor: num
   return { gridSpacing, scaleFactor: clampedScaleFactor, offsetX: -target.x - (sidebarWidth / 2) * unitsPerPixel, offsetY: -target.y };
 }
 
-/** The snapshot of a 2D state; `fallbackSnapshot` supplies the size when `rect` has none, and the perspective fields. */
-export function buildViewport2DSnapshot(state: Viewport2DState, sidebarWidth: number, rect: ViewportRect, fallbackSnapshot: ViewportRenderSnapshot): ViewportRenderSnapshot {
+export function buildViewport2DSnapshot({ state, sidebarWidth, fallbackSnapshot }: Viewport2DContext, rect: ViewportRect): ViewportRenderSnapshot {
   const scaleFactor = clampScaleFactor2D(state.scaleFactor);
   const unitsPerPixel = 1 / (state.gridSpacing * scaleFactor);
   const { width, height } = getViewportSize(fallbackSnapshot, rect);
@@ -57,15 +59,9 @@ export function toCanvasCoords2D(snapshot: ViewportRenderSnapshot, rect: Viewpor
 }
 
 /** The state zoomed to `scaleFactor` with the world point under the canvas `point` held still. */
-export function zoomViewport2DStateAtCanvasPoint(
-  state: Viewport2DState,
-  sidebarWidth: number,
-  rect: ViewportRect,
-  fallbackSnapshot: ViewportRenderSnapshot,
-  point: PointXY,
-  scaleFactor: number,
-): Viewport2DState {
-  const snapshot = buildViewport2DSnapshot(state, sidebarWidth, rect, fallbackSnapshot);
+export function zoomViewport2DStateAtCanvasPoint(context: Viewport2DContext, rect: ViewportRect, point: PointXY, scaleFactor: number): Viewport2DState {
+  const { state, sidebarWidth } = context;
+  const snapshot = buildViewport2DSnapshot(context, rect);
   const logicalPoint = toLogicalCoords2D(snapshot, rect, point);
   const { width, height } = getViewportSize(snapshot, rect);
   const nextScaleFactor = clampScaleFactor2D(scaleFactor);
@@ -81,25 +77,23 @@ export function zoomViewport2DStateAtCanvasPoint(
  * an inset below the viewport's.
  */
 export function fitViewport2DToBounds(
-  state: Viewport2DState,
-  sidebarWidth: number,
+  { state, sidebarWidth, fallbackSnapshot }: Viewport2DContext,
   rect: ViewportRect,
-  fallbackSnapshot: ViewportRenderSnapshot,
   rawBounds: BoundingBox,
-  padding = DEFAULT_FIT_PADDING,
-  topInset = 0,
+  fit: Omit<FitInsets, "sidebarWidth"> = {},
 ): Viewport2DState {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
 
-  const { availWidth, availHeight } = getAvailableViewportSize(fallbackSnapshot, rect, sidebarWidth, padding, topInset);
+  const insets = resolveFitInsets({ sidebarWidth, ...fit });
+  const { availWidth, availHeight } = getAvailableViewportSize(fallbackSnapshot, rect, insets);
   const scaleX = availWidth / (width * state.gridSpacing);
   const scaleY = availHeight / (height * state.gridSpacing);
   const scaleFactor = clampScaleFactor2D(Math.min(scaleX, scaleY));
   // the view center sits half an inset above the content center (world y is
   // up), which puts the content half an inset lower on screen
   const unitsPerPixel = 1 / (state.gridSpacing * scaleFactor);
-  return { gridSpacing: state.gridSpacing, scaleFactor, offsetX: -(bounds.minX + bounds.maxX) / 2, offsetY: -((bounds.minY + bounds.maxY) / 2 + (topInset / 2) * unitsPerPixel) };
+  return { gridSpacing: state.gridSpacing, scaleFactor, offsetX: -(bounds.minX + bounds.maxX) / 2, offsetY: -((bounds.minY + bounds.maxY) / 2 + (insets.topInset / 2) * unitsPerPixel) };
 }

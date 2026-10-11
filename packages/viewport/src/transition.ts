@@ -3,10 +3,10 @@
 
 import type { PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE, MIN_PERSPECTIVE_DISTANCE } from "./defaults";
-import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getPerspectiveDistanceFromSnapshot3D, getScaleFactorFromPerspectiveDistance } from "./perspective";
+import { buildPerspectivePoseFromViewAngle, getPerspectiveDistanceForUnitsPerPixel, getPerspectiveDistanceFromSnapshot3D, perspectiveSnapshotAtDistance } from "./perspective";
 import { clampScaleFactor2D, type Viewport2DState } from "./projection2d";
 import { projectCanvasPointToWorldPlane } from "./projection3d";
-import { getViewportSize, getViewportVisibleCenterCanvasPoint, perspectiveSnapshot, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+import { getViewportVisibleCenterCanvasPoint, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 type ViewportTransitionDirection = "to3d" | "to2d";
 
@@ -57,15 +57,11 @@ export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }:
 
 export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progress: number, rect: ViewportRect): ViewportTransitionFrame {
   const clampedProgress = Math.max(0, Math.min(1, progress));
-  const { width, height } = getViewportSize(plan.baseSnapshot, rect);
-  // already clamped by getScaleFactorFromPerspectiveDistance
-  const scaleFactor = getScaleFactorFromPerspectiveDistance(plan.baseSnapshot, plan.perspectiveDistance, height);
-  const unitsPerPixel = 1 / (plan.baseSnapshot.gridSpacing * scaleFactor);
   const viewAngle = lerpPoint(plan.startAngles, plan.endAngles, clampedProgress);
   const target = plan.direction === "to2d" ? lerpPoint(plan.startTarget, plan.endTarget, clampedProgress) : { ...plan.startTarget };
   const pose = buildPerspectivePoseFromViewAngle(viewAngle, plan.perspectiveDistance, target);
   const transitionZMultiplier = plan.direction === "to2d" ? 1 - clampedProgress : clampedProgress;
-  return { viewAngle, target, pose, snapshot: perspectiveSnapshot(plan.baseSnapshot, pose, width, height, scaleFactor, unitsPerPixel, transitionZMultiplier) };
+  return { viewAngle, target, pose, snapshot: perspectiveSnapshotAtDistance(plan.baseSnapshot, pose, plan.perspectiveDistance, rect, transitionZMultiplier) };
 }
 
 /** The 2D state that shows what a transition frame shows at the visible center, for the handoff to the 2D controls. */

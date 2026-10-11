@@ -2,7 +2,7 @@
 // value that the app's controls and transition animator publish and every projection reads.
 
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
-import { DEFAULT_GRID_SPACING } from "./defaults";
+import { DEFAULT_FIT_PADDING, DEFAULT_GRID_SPACING } from "./defaults";
 
 const PERSPECTIVE_FOV_DEGREES = 45;
 const PERSPECTIVE_NEAR = 0.1;
@@ -51,16 +51,37 @@ export type ViewportPerspectivePose = {
   target: PointXYZ;
 };
 
+/** The snapshot's perspective pose, as a fresh value. */
+export const poseOf = (snapshot: ViewportRenderSnapshot): ViewportPerspectivePose => ({
+  position: { ...snapshot.perspective.position },
+  up: { ...snapshot.perspective.up },
+  target: { ...snapshot.target },
+});
+
+const nearly = (a: PointXYZ, b: PointXYZ, epsilon: number) => Math.abs(a.x - b.x) <= epsilon && Math.abs(a.y - b.y) <= epsilon && Math.abs(a.z - b.z) <= epsilon;
+
+/** Whether two poses agree, to within `epsilon` on every coordinate. */
+export const samePerspectivePose = (a: ViewportPerspectivePose, b: ViewportPerspectivePose, epsilon: number) =>
+  nearly(a.position, b.position, epsilon) && nearly(a.up, b.up, epsilon) && nearly(a.target, b.target, epsilon);
+
+/**
+ * What a fit keeps clear: the sidebar's width along the left edge, an overlay's `topInset` along
+ * the top (the problem gallery when it is open), and `padding` around the content.
+ */
+export type FitInsets = { sidebarWidth: number; padding?: number | undefined; topInset?: number | undefined };
+
+export const resolveFitInsets = ({ sidebarWidth, padding, topInset }: FitInsets) => ({ sidebarWidth, padding: padding ?? DEFAULT_FIT_PADDING, topInset: topInset ?? 0 });
+
 export type ViewportRect = Pick<DOMRect, "width" | "height">;
 
 export type ViewportZBounds = { minZ: number; maxZ: number };
 
 export const getViewportSize = (snapshot: ViewportRenderSnapshot, rect?: ViewportRect) => ({ width: rect?.width || snapshot.width || 1, height: rect?.height || snapshot.height || 1 });
 
-// The viewport, and the part of it left for content once the sidebar, a top
-// overlay and the padding on each side are taken off (never under 100px).
-export function getAvailableViewportSize(snapshot: ViewportRenderSnapshot, rect: ViewportRect, sidebarWidth: number, padding: number, topInset: number) {
+// The viewport, and the part of it left for content once the insets are taken off (never under 100px).
+export function getAvailableViewportSize(snapshot: ViewportRenderSnapshot, rect: ViewportRect, insets: FitInsets) {
   const { width, height } = getViewportSize(snapshot, rect);
+  const { sidebarWidth, padding, topInset } = resolveFitInsets(insets);
   return { width, height, availWidth: Math.max(100, width - sidebarWidth - 2 * padding), availHeight: Math.max(100, height - topInset - 2 * padding) };
 }
 

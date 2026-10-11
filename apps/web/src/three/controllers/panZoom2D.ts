@@ -29,7 +29,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   const startPan = (clientX: number, clientY: number) => {
     if (!canPan()) return false;
     const config = get2DControlsConfig();
-    const snapshot = buildViewport2DSnapshot(config.state, config.sidebarWidth, canvas.getBoundingClientRect(), config.fallbackSnapshot);
+    const snapshot = buildViewport2DSnapshot(config, canvas.getBoundingClientRect());
     activePan = { startClientX: clientX, startClientY: clientY, targetX: snapshot.target.x, targetY: snapshot.target.y, scaleFactor: config.state.scaleFactor, gridSpacing: config.state.gridSpacing };
     return true;
   };
@@ -49,7 +49,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   const zoomAt = (point: PointXY, rect: ViewportRect, scaleFactor: number) => {
     if (!canZoom()) return false;
     const config = get2DControlsConfig();
-    config.onStateChange?.(zoomViewport2DStateAtCanvasPoint(config.state, config.sidebarWidth, rect, config.fallbackSnapshot, point, scaleFactor));
+    config.onStateChange?.(zoomViewport2DStateAtCanvasPoint(config, rect, point, scaleFactor));
     config.onNavigationFrame?.();
     return true;
   };
