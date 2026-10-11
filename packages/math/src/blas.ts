@@ -156,6 +156,14 @@ export function maxAbsDifference(a: Float64Array, b: Float64Array): number {
 }
 
 /** v' M v for a symmetric n x n matrix. */
+/** v' M v for symmetric M; the two-variable form is kept verbatim so those results stay bit-identical. */
+export function symmetricQuadraticForm(M: Float64Array, v: ArrayLike<number>, n: number): number {
+  if (n === 2) {
+    return M[0]! * v[0]! * v[0]! + 2 * M[1]! * v[0]! * v[1]! + M[3]! * v[1]! * v[1]!;
+  }
+  return quadraticForm(M, v, n);
+}
+
 export function quadraticForm(M: Float64Array, v: ArrayLike<number>, n: number): number {
   let quadratic = 0;
   for (let j = 0; j < n; j++) {

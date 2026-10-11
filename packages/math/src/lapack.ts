@@ -135,6 +135,35 @@ export function logDetFromCholesky(L: Float64Array, size: number): number | null
 }
 
 /** (L Lᵀ)⁻¹ from a Cholesky factor, by a forward and a back substitution per unit column. */
+/**
+ * log det H for symmetric positive definite H, or null otherwise. The 2x2 closed form is kept apart
+ * from the factorization so two-variable results stay bit-identical.
+ */
+export function logDetSymmetric(H: Float64Array, n: number): number | null {
+  if (n === 2) {
+    const determinant = H[0]! * H[3]! - H[1]! * H[1]!;
+    return determinant > 0 ? Math.log(determinant) : null;
+  }
+  const L = cholesky(H, n);
+  return L && logDetFromCholesky(L, n);
+}
+
+/** H^-1 for symmetric positive definite H, or null otherwise (2x2 closed form, see logDetSymmetric). */
+export function invertSymmetric(H: Float64Array, n: number): Float64Array | null {
+  if (n === 2) {
+    const a11 = H[0]!;
+    const a12 = H[1]!;
+    const a22 = H[3]!;
+    const determinant = a11 * a22 - a12 * a12;
+    if (!(determinant > 0) || !Number.isFinite(determinant)) return null;
+    return Float64Array.of(a22 / determinant, -a12 / determinant, -a12 / determinant, a11 / determinant);
+  }
+  const L = cholesky(H, n);
+  if (!L) return null;
+  const inverse = invertFromCholesky(L, n);
+  return inverse.every(Number.isFinite) ? inverse : null;
+}
+
 export function invertFromCholesky(L: Float64Array, size: number): Float64Array {
   const inverse = new Float64Array(size * size);
   const column = new Float64Array(size);
