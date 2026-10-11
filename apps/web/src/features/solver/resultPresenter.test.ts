@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { getState } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { createResultPresenter, type VirtualResultPayload } from "./resultPresenter";
 
 const run = (count: number): VirtualResultPayload => ({
@@ -25,7 +25,7 @@ const run = (count: number): VirtualResultPayload => ({
 // all of it. The window must still reach the last row — the iterate the
 // viewport stars — and every shown row must keep its own index for hovering.
 describe("rotation row window", () => {
-  const presenter = createResultPresenter();
+  const presenter = createResultPresenter(new AbortController().signal);
   const rows = () => {
     const view = getState().result;
     if (view.kind !== "virtual") throw new Error(`expected a virtual result, got ${view.kind}`);
@@ -56,5 +56,19 @@ describe("rotation row window", () => {
     presenter.render(run(50), { limitVirtualRows: false });
     expect(rows().length).toBe(50);
     expect(indices()[49]).toBe(49);
+  });
+});
+
+// A result that arrives while the view is being navigated waits, so the log does not relayout under
+// a pan; it lands the moment the navigation ends.
+describe("deferred render", () => {
+  test("a render during navigation lands when it ends", () => {
+    const presenter = createResultPresenter(new AbortController().signal);
+    setState({ isNavigatingViewport: true });
+    presenter.clearResult();
+    presenter.render(run(3));
+    expect(getState().result.kind).toBe("usage");
+    setState({ isNavigatingViewport: false });
+    expect(getState().result.kind).toBe("virtual");
   });
 });

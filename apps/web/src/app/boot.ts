@@ -1,6 +1,5 @@
 import { createAppActions } from "@/app/appActions";
 import { createLayout } from "@/app/layout";
-import { getState } from "@/features/core/store";
 import { createHistoryService } from "@/features/history/historyService";
 import { createPolytopeService } from "@/features/polytope-editor/polytopeService";
 import { applyUrlParamsOnce, shareLink } from "@/features/share/shareLink";
@@ -17,7 +16,7 @@ export function boot(root: HTMLElement) {
   const polytope = createPolytopeService(solver.handleProblemChange);
   const history = createHistoryService(polytope.derive);
   const stage = createCanvasStage(root, signal);
-  const editor = { viewportApi: stage.viewportApi, saveHistory: history.save, derivePolytope: polytope.derive, onSolverStartMoved: () => solver.recomputeIfModeActive(getState().solverMode) };
+  const editor = { viewportApi: stage.viewportApi, saveHistory: history.save, derivePolytope: polytope.derive, onSolverStartMoved: solver.solveUnlessRotating };
   const actions = createAppActions({ solver, share: shareLink, history, editor });
   const handle = createLayout(root, actions, signal);
 

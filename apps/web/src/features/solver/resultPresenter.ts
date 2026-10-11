@@ -1,7 +1,6 @@
-import { getState, setState } from "@/features/core/store";
+import { getState, on, setState } from "@/features/core/store";
 import { formatVirtualResultRow } from "@/features/solver/resultPacking";
-import type { ResultTextBlock, ResultView } from "@/features/solver/types";
-import type { LazyRows, ResultLogSection, VirtualResultRow } from "@/features/solver/types";
+import type { LazyRows, ResultLogSection, ResultTextBlock, ResultView, VirtualResultRow } from "@/features/solver/types";
 
 /** What a solve renders: a single run as a header, lazily formatted rows and a footer, or a phased run (or a message) as blocks. */
 export type VirtualResultPayload = { kind: "virtual"; header: string; rows: LazyRows; footer: string };
@@ -62,8 +61,6 @@ export type ResultPresenter = {
   render: (payload: ResultRenderPayload, options?: RenderOptions) => void;
   // render a solver failure as a two-line block result
   renderError: (message: string) => void;
-  // apply a render deferred during viewport navigation, once it has ended
-  flushDeferred: () => void;
   // reset the result panel to its usage/placeholder state
   clearResult: () => void;
   // re-render the last virtual result without the rotation row cap
@@ -71,8 +68,9 @@ export type ResultPresenter = {
 };
 
 // How a solver result becomes the store's result view: virtual-vs-blocks shaping, the
-// widest-line measurement, the rotation row cap, and the defer-while-navigating buffer.
-export function createResultPresenter(): ResultPresenter {
+// widest-line measurement, the rotation row cap, and the defer-while-navigating buffer, applied
+// once the navigation ends.
+export function createResultPresenter(signal: AbortSignal): ResultPresenter {
   let lastVirtualResult: VirtualResultPayload | null = null;
   let pendingRender: {
     payload: ResultRenderPayload;
@@ -126,15 +124,20 @@ export function createResultPresenter(): ResultPresenter {
     applyRender(payload, options);
   };
 
-  return {
-    render,
-    renderError: (message: string) => render(messageBlocks("Solver error", message)),
-    flushDeferred: () => {
-      if (!pendingRender || getState().isNavigatingViewport) return;
+  on(
+    ["isNavigatingViewport"],
+    ({ isNavigatingViewport }) => {
+      if (isNavigatingViewport || !pendingRender) return;
       const p = pendingRender;
       pendingRender = null;
       applyRender(p.payload, p.options);
     },
+    signal,
+  );
+
+  return {
+    render,
+    renderError: (message: string) => render(messageBlocks("Solver error", message)),
     clearResult: () => {
       lastVirtualResult = null;
       pendingRender = null;

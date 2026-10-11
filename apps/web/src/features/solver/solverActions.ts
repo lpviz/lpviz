@@ -1,4 +1,4 @@
-import { getState, on, setState } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { onAbort } from "@/features/core/lifetime";
 import { isReadyForSolvers } from "@/features/problem/selectors";
 import { resetTraceState, setTraceCapacity } from "@/features/solver/iterateStore";
@@ -12,6 +12,8 @@ export type SolverActions = {
   updateSolverSetting: SolverSettingUpdater;
   /** switch solvers and solve, unless the objective is rotating (its next step solves) */
   setActiveSolverMode: (mode: SolverMode) => void;
+  /** solve again (the start marker moved), unless the objective is rotating */
+  solveUnlessRotating: () => void;
   setTraceEnabled: (enabled: boolean) => void;
   startRotation: () => void;
   /** stop the objective rotation and any replay */
@@ -32,7 +34,7 @@ export function createSolverActions(signal: AbortSignal): SolverActions {
   // a replay writes highlightIteratePathIndex too, so the field alone cannot say whether the
   // person is hovering a row; the replay asks before it yields the highlight
   let iterateHoverActive = false;
-  const presenter = createResultPresenter();
+  const presenter = createResultPresenter(signal);
 
   const updateSolverSetting: SolverSettingUpdater = (key, value) =>
     setState({
@@ -85,28 +87,23 @@ export function createSolverActions(signal: AbortSignal): SolverActions {
     setState({ rotateObjectiveMode: true, highlightIteratePathIndex: null });
     rotation.begin();
   };
+  // a rotation's next step solves on its own
+  const solveUnlessRotating = () => {
+    if (!getState().rotateObjectiveMode) void solve();
+  };
   const recomputeIfModeActive = (mode: SolverMode) => {
-    if (!getState().rotateObjectiveMode && getState().solverMode === mode) void solve();
+    if (getState().solverMode === mode) solveUnlessRotating();
   };
   const setActiveSolverMode = (mode: SolverMode) => {
     if (getState().solverMode !== mode) resetTraceState();
     setState({ solverMode: mode });
-    if (!getState().rotateObjectiveMode) void solve();
+    solveUnlessRotating();
   };
   const setConstraintHighlight = (index: number | null) => setState({ highlightIndex: index });
   const setIterateHighlight = (index: number | null) => {
     iterateHoverActive = index !== null;
     setState({ highlightIteratePathIndex: index });
   };
-  let wasNavigatingViewport = getState().isNavigatingViewport;
-  on(
-    ["isNavigatingViewport"],
-    ({ isNavigatingViewport }) => {
-      if (wasNavigatingViewport && !isNavigatingViewport) presenter.flushDeferred();
-      wasNavigatingViewport = isNavigatingViewport;
-    },
-    signal,
-  );
   // a rotation or a replay would otherwise keep mutating the store and drawing on the torn-down
   // viewport runtime
   onAbort(signal, () => {
@@ -116,6 +113,7 @@ export function createSolverActions(signal: AbortSignal): SolverActions {
   return {
     updateSolverSetting,
     setActiveSolverMode,
+    solveUnlessRotating,
     setTraceEnabled,
     startRotation,
     stopMotion,

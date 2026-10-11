@@ -1,10 +1,9 @@
-import { type PointXY } from "@lpviz/math/types";
 import type { State } from "@/features/core/store";
 import { type ViewportRenderSnapshot } from "@/features/viewport/types";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/projection3d";
 import { iterateHeight, type IteratePath } from "@/features/solver/types";
 import type { BoundingBox } from "@lpviz/math/bounds";
-import type { Vec } from "@lpviz/math/types";
+import type { PointXY, Vec } from "@lpviz/math/types";
 
 // How far an unbounded region is drawn and fitted: far beyond any zoom, inside float precision.
 const UNBOUNDED_EXTENT = 5000;
