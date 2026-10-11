@@ -1,4 +1,5 @@
 import { getState, on, setState } from "@/features/core/store";
+import { onAbort } from "@/features/core/lifetime";
 import { isReadyForSolvers } from "@/features/problem/selectors";
 import { resetTraceState, setTraceCapacity } from "@/features/solver/iterateStore";
 import { createReplayController } from "@/features/solver/replayController";
@@ -22,13 +23,12 @@ export type SolverActions = {
   clearComputedState: () => void;
   setConstraintHighlight: (index: number | null) => void;
   setIterateHighlight: (index: number | null) => void;
-  destroy: () => void;
 };
 
 // The solver's actions: the settings and the mode, the objective rotation and the trace it leaves
 // (the trail of earlier paths kept on the canvas; not the engine's NumericTrace), the replay and
 // the highlights.
-export function createSolverActions(): SolverActions {
+export function createSolverActions(signal: AbortSignal): SolverActions {
   // a replay writes highlightIteratePathIndex too, so the field alone cannot say whether the
   // person is hovering a row; the replay asks before it yields the highlight
   let iterateHoverActive = false;
@@ -99,15 +99,20 @@ export function createSolverActions(): SolverActions {
     setState({ highlightIteratePathIndex: index });
   };
   let wasNavigatingViewport = getState().isNavigatingViewport;
-  const controller = new AbortController();
   on(
     ["isNavigatingViewport"],
     ({ isNavigatingViewport }) => {
       if (wasNavigatingViewport && !isNavigatingViewport) presenter.flushDeferred();
       wasNavigatingViewport = isNavigatingViewport;
     },
-    controller.signal,
+    signal,
   );
+  // a rotation or a replay would otherwise keep mutating the store and drawing on the torn-down
+  // viewport runtime
+  onAbort(signal, () => {
+    rotation.cancel();
+    replay.cancel();
+  });
   return {
     updateSolverSetting,
     setActiveSolverMode,
@@ -120,12 +125,5 @@ export function createSolverActions(): SolverActions {
     clearComputedState,
     setConstraintHighlight,
     setIterateHighlight,
-    destroy: () => {
-      rotation.cancel();
-      // stop any active replay; its RAF loop would otherwise keep mutating
-      // the store and drawing on the destroyed viewport runtime
-      replay.cancel();
-      controller.abort();
-    },
   };
 }

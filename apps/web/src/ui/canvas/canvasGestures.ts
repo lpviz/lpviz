@@ -1,3 +1,4 @@
+import { onAbort } from "@/features/core/lifetime";
 import { restartableTimeout } from "@/features/core/timers";
 import { getState } from "@/features/core/store";
 import type { EditorTools } from "@/features/polytope-editor/editorTools";
@@ -101,14 +102,12 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
 }
 
 // Pointer-gesture normalization for the canvas: registers every listener (the press, then the
-// context menu, double-click and click) against the editor's handlers and returns the detach.
-export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTools): () => void {
+// context menu, double-click and click) against the editor's handlers.
+export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTools, signal: AbortSignal): void {
   const clicks: ClickState = { lastTap: null, suppressClickUntil: 0, lastPressMoved: false };
   const isClickSuppressed = () => clicks.lastPressMoved || performance.now() < clicks.suppressClickUntil;
   const editor = guarded(tools);
   const bridge = createPointerBridge(editor, clicks);
-  const listeners = new AbortController();
-  const { signal } = listeners;
   const capture = { capture: true, signal };
   let press: Press | null = null;
   const hold = restartableTimeout();
@@ -192,9 +191,5 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
   canvas.addEventListener("dblclick", (event) => editor.handleDoubleClickAt(event.clientX, event.clientY), { signal });
   // the browser's click follows every mouse press; one that follows a drag, a pan or a double tap is not a click
   canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event.clientX, event.clientY)), { signal });
-
-  return () => {
-    hold.clear();
-    listeners.abort();
-  };
+  onAbort(signal, hold.clear);
 }

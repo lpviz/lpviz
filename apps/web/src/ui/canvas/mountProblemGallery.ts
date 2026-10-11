@@ -1,4 +1,5 @@
 import type { AppActions } from "@/app/appActions";
+import { onAbort } from "@/features/core/lifetime";
 import { GALLERY_PROBLEMS, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
 import { randomConvexPolygonPreview } from "@/features/problem-gallery/randomPolygon";
 import { el } from "@/ui/dom";
@@ -49,7 +50,7 @@ function createReshuffle(button: HTMLButtonElement) {
   };
   return { setRunning, stop };
 }
-export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppActions, "loadGalleryProblem" | "setTopInset">) {
+export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppActions, "loadGalleryProblem" | "setTopInset">, signal: AbortSignal): void {
   let expanded = false;
   const root = el("div", {
     className: "problem-gallery",
@@ -113,8 +114,7 @@ export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppAction
   const onVisibility = () => {
     for (const r of reshuffles) r.setRunning(expanded);
   };
-  const listeners = new AbortController();
-  document.addEventListener("visibilitychange", onVisibility, { signal: listeners.signal });
+  document.addEventListener("visibilitychange", onVisibility, { signal });
   // the auto-open: a timer that opens the strip, disarmed by the first click anywhere
   const autoOpen = setTimeout(() => {
     armed.abort();
@@ -132,12 +132,8 @@ export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppAction
     { signal: armed.signal },
   );
   render();
-  return {
-    destroy: () => {
-      armed.abort();
-      listeners.abort();
-      for (const r of reshuffles) r.stop();
-      root.remove();
-    },
-  };
+  onAbort(signal, () => {
+    armed.abort();
+    for (const r of reshuffles) r.stop();
+  });
 }

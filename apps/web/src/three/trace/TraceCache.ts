@@ -7,7 +7,7 @@ import { PerspectiveView, PlanarView, type TraceFrame, type TraceView, VIEW_SETT
 
 // The trace render pass's stand-in: an accumulation buffer the chunks are baked into once.
 // Trace chunks are immutable once appended, so the offscreen target is keyed by each chunk's append
-// sequence number (see traceSequence.ts): appends draw only the new chunks into the existing
+// sequence number (see sequence.ts): appends draw only the new chunks into the existing
 // target with no clear (alpha-over of one shared color and opacity is associative, so neither
 // chunk order nor the order of the two composite quads changes the blend). Evictions cannot be
 // un-blended, so a rebuild leaves the oldest TRAILING_HEADROOM chunks out of the main bake and
@@ -22,6 +22,7 @@ import { PerspectiveView, PlanarView, type TraceFrame, type TraceView, VIEW_SETT
 // evictions are streaming skip multisampling: the MSAA fill and resolve are what make a full
 // rebuild blow the frame budget, and aliasing is not discernible while the content or camera is
 // churning; one crisp rebuild follows on settle.
+
 // match the antialiasing of the default framebuffer so cached strokes look
 // identical to directly rendered ones
 const CACHE_SAMPLES = 4;

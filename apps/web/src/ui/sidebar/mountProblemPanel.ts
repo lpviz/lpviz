@@ -1,6 +1,6 @@
 import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
-import { el, mounted } from "@/ui/dom";
+import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { NULL_STATE_LOGO_SVG } from "@/ui/logo";
 import { hasObjective, hasRegion, READY_FOR_SOLVERS_KEYS } from "@/features/problem/selectors";
@@ -21,7 +21,7 @@ function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): stri
     .join(" ");
 }
 
-export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions, "setConstraintHighlight">) {
+export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions, "setConstraintHighlight">, signal: AbortSignal): void {
   const frame = el("div", { id: "terminal-container2" });
   const topResult = el("div", { id: "topResult" });
   const nullState = el("div", { id: "nullStateMessage", attrs: { role: "img", "aria-label": "lpviz logo" }, html: NULL_STATE_LOGO_SVG });
@@ -78,6 +78,5 @@ export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions,
       );
     });
   }
-  const stopRender = renderOn([...READY_FOR_SOLVERS_KEYS, "inequalitiesMessage"], render);
-  return mounted(frame, stopRender);
+  renderOn([...READY_FOR_SOLVERS_KEYS, "inequalitiesMessage"], render, signal);
 }

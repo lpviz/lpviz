@@ -1,7 +1,7 @@
-import { el, mounted } from "@/ui/dom";
+import { el } from "@/ui/dom";
 import { usageTipsList } from "@/ui/usageTips";
 
-export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
+export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement, signal: AbortSignal): void {
   const container = el("div", { id: "helpControl" });
   // Covers the viewport while the popover is open: the press that dismisses it must not also
   // reach the canvas, where it would place a vertex (on a phone the sheet covers most of the
@@ -52,13 +52,12 @@ export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
   backdrop.addEventListener("touchstart", (e) => e.preventDefault(), { passive: false });
 
   // a press outside the popover or Escape closes it
-  const listeners = new AbortController();
   document.addEventListener(
     "pointerdown",
     (e) => {
       if (open && !container.contains(e.target as Node)) setOpen(false);
     },
-    { signal: listeners.signal },
+    { signal },
   );
   document.addEventListener(
     "keydown",
@@ -68,16 +67,10 @@ export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
         button.focus();
       }
     },
-    { signal: listeners.signal },
+    { signal },
   );
 
   container.append(panel, button);
   viewport.append(backdrop);
   stage.append(container);
-
-  return mounted(
-    container,
-    () => listeners.abort(),
-    () => backdrop.remove(),
-  );
 }

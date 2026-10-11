@@ -46,7 +46,9 @@ function harness(claims: Partial<Record<"dragStart" | "pinchStart" | "wheel", bo
       return claims.wheel ?? true;
     },
   };
-  const detach = attachPointerGestures(canvas as unknown as HTMLCanvasElement, handlers);
+  const lifetime = new AbortController();
+  attachPointerGestures(canvas as unknown as HTMLCanvasElement, handlers, lifetime.signal);
+  const detach = () => lifetime.abort();
   const pointer = (type: string, pointerId: number, x: number, y: number, pointerType = "touch") => {
     const event = Object.assign(new Event(type, { cancelable: true }), { pointerId, pointerType, clientX: x, clientY: y, isPrimary: pointerId === 1, button: 0 });
     canvas.dispatchEvent(event);

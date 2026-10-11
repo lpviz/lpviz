@@ -36,7 +36,12 @@ type ActiveDrag = {
 // move the perspective camera and its target directly and report each pose through the 3D
 // controls config, which also tells them when they own the view and re-poses the camera from a
 // snapshot when asked. Returns the detach.
-export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCamera, /** the point the camera looks at, shared with the camera controller */ target: Vector3): () => void {
+export function attachOrbit3D(
+  sceneManager: SceneManager,
+  camera: PerspectiveCamera,
+  /** the point the camera looks at, shared with the camera controller */ target: Vector3,
+  signal: AbortSignal,
+): void {
   const canvas = sceneManager.renderer.domElement;
   let config = get3DControlsConfig();
   let syncToken = -1;
@@ -180,48 +185,44 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
     sceneManager.invalidate("frame");
   };
 
-  const subscriptions = new AbortController();
   subscribe3DControlsConfig(() => {
     config = get3DControlsConfig();
     applyConfig();
-  }, subscriptions.signal);
-  const detach = attachPointerGestures(canvas, {
-    // the left button or one finger pans, the right button orbits
-    dragStart: (event) => {
-      const kind = event.button === 0 ? "pan" : event.button === 2 && event.pointerType === "mouse" ? "rotate" : null;
-      if (!kind) return false;
-      startDrag(kind, event.clientX, event.clientY);
-      return activeDrag !== null;
+  }, signal);
+  attachPointerGestures(
+    canvas,
+    {
+      // the left button or one finger pans, the right button orbits
+      dragStart: (event) => {
+        const kind = event.button === 0 ? "pan" : event.button === 2 && event.pointerType === "mouse" ? "rotate" : null;
+        if (!kind) return false;
+        startDrag(kind, event.clientX, event.clientY);
+        return activeDrag !== null;
+      },
+      dragMove: applyMove,
+      dragEnd: stopDrag,
+      // a second finger turns the gesture into an orbit that also zooms by the pinch, in place of
+      // the one-finger pan
+      pinchStart: ({ center, distance }) => {
+        if (distance <= 0) return false;
+        const startCameraDistance = getOrbitState().distance;
+        startDrag("rotate", center.x, center.y);
+        if (!activeDrag) return false;
+        twoFinger = { startDistance: distance, startCameraDistance };
+        return true;
+      },
+      pinchMove: ({ center, distance }) => {
+        if (!twoFinger) return;
+        applyMove(center.x, center.y);
+        if (distance > 0) applyZoomDistance(twoFinger.startCameraDistance * (twoFinger.startDistance / distance));
+      },
+      pinchEnd: () => {
+        stopDrag();
+      },
+      wheel: wheelZoom,
     },
-    dragMove: applyMove,
-    dragEnd: stopDrag,
-    // a second finger turns the gesture into an orbit that also zooms by the pinch, in place of
-    // the one-finger pan
-    pinchStart: ({ center, distance }) => {
-      if (distance <= 0) return false;
-      const startCameraDistance = getOrbitState().distance;
-      startDrag("rotate", center.x, center.y);
-      if (!activeDrag) return false;
-      twoFinger = { startDistance: distance, startCameraDistance };
-      return true;
-    },
-    pinchMove: ({ center, distance }) => {
-      if (!twoFinger) return;
-      applyMove(center.x, center.y);
-      if (distance > 0) applyZoomDistance(twoFinger.startCameraDistance * (twoFinger.startDistance / distance));
-    },
-    pinchEnd: () => {
-      stopDrag();
-    },
-    wheel: wheelZoom,
-  });
-  canvas.addEventListener("contextmenu", handleContextMenu, { signal: subscriptions.signal });
+    signal,
+  );
+  canvas.addEventListener("contextmenu", handleContextMenu, { signal });
   applyConfig();
-
-  return () => {
-    subscriptions.abort();
-    detach();
-    activeDrag = null;
-    twoFinger = null;
-  };
 }

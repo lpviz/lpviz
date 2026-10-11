@@ -30,8 +30,8 @@ function touchPair(touches: ReadonlyMap<number, PointXY>): TouchPair {
 
 // The pointer scaffolding under both viewport controllers: the fingers on the canvas (two of
 // them pinch, a third is ignored), the one dragging pointer, pointer capture so a drag follows
-// the pointer outside the canvas, and the wheel's dominant axis. Returns the detach.
-export function attachPointerGestures(canvas: HTMLCanvasElement, handlers: PointerGestureHandlers): () => void {
+// the pointer outside the canvas, and the wheel's dominant axis.
+export function attachPointerGestures(canvas: HTMLCanvasElement, handlers: PointerGestureHandlers, signal: AbortSignal): void {
   const touches = new Map<number, PointXY>();
   let dragPointerId: number | null = null;
   let pinching = false;
@@ -92,16 +92,9 @@ export function attachPointerGestures(canvas: HTMLCanvasElement, handlers: Point
     if (dominantDelta !== 0 && handlers.wheel(event, dominantDelta)) swallow(event);
   };
 
-  const listeners = new AbortController();
-  const { signal } = listeners;
   canvas.addEventListener("pointerdown", onPointerDown, { signal });
   canvas.addEventListener("pointermove", onPointerMove, { signal });
   canvas.addEventListener("pointerup", onPointerUp, { signal });
   canvas.addEventListener("pointercancel", onPointerUp, { signal });
   canvas.addEventListener("wheel", onWheel, { passive: false, signal });
-
-  return () => {
-    listeners.abort();
-    touches.clear();
-  };
 }

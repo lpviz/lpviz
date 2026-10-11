@@ -12,7 +12,19 @@ export const fixed = (digits: number) => (value: number) => value.toFixed(digits
 
 type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
 type MaxitSettingKey = Extract<keyof SolverSettings, `maxit${string}`>;
-type SliderSpec = { key: NumberSettingKey; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
+type SliderSpec = {
+  key: NumberSettingKey;
+  /** the input's id, `<key>Slider` unless given */
+  id?: string;
+  label: string;
+  /** the slider's own range, when it is not the setting's (a log scale) */
+  range?: readonly [min: string, max: string, step: string];
+  /** the readout of a value, and the slider's position for it */
+  format?: (v: number) => string;
+  toInput?: (v: number) => string;
+  parse?: (v: string) => number;
+  br?: boolean;
+};
 // writes one setting, then re-solves if the section's solver is the active one
 type SettingUpdater = <K extends keyof SolverSettings>(key: K) => (v: SolverSettings[K]) => void;
 // what a solver section is built from: the updater its controls write through; their values come by `sync`
@@ -44,11 +56,13 @@ export function group(className: string, controls: SettingControl[]): SettingCon
 
 // A slider (id `<key>Slider`) over the setting's range, with a live readout: <label>text " "
 // <span></label>, the input, and a <br> unless `br` is false.
-export function numberSlider({ set }: SectionContext, { key, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
-  const id = key + "Slider";
+export function numberSlider(
+  { set }: SectionContext,
+  { key, id = key + "Slider", label, range: bounds = settingRange(key), format = fixed(3), toInput = String, parse = parseFloat, br = true }: SliderSpec,
+): SettingControl {
   const span = el("span");
   const update = set(key);
-  const input = range(id, ...settingRange(key), (v) => {
+  const input = range(id, ...bounds, (v) => {
     const next = parse(v);
     span.textContent = format(next);
     update(next);
@@ -61,7 +75,7 @@ export function numberSlider({ set }: SectionContext, { key, label, format = fix
     nodes,
     sync: (next) => {
       span.textContent = format(next[key]);
-      setInputValue(input, String(next[key]));
+      setInputValue(input, toInput(next[key]));
     },
   };
 }
@@ -112,26 +126,21 @@ export function labeledSelect<K extends SelectSettingKey>({ set }: SectionContex
   return { nodes: [labelFor(key, label), input], sync: (next) => setInputValue(input, next[key]) };
 }
 
-// A log-scale slider for an iteration cap, with the decades marked under it.
-export function maxitSlider({ set }: SectionContext, id: string, key: MaxitSettingKey): SettingControl {
-  const span = el("span");
-  const update = set(key);
-  const input = range(id, String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP), (v) => {
-    const maxit = sliderValueToMaxit(v);
-    span.textContent = fmt(maxit);
-    update(maxit);
+// A log-scale slider for an iteration cap: a number slider positioned by the cap's decade, in a
+// wrapper with the decades marked under it.
+export function maxitSlider(ctx: SectionContext, id: string, key: MaxitSettingKey): SettingControl {
+  const { nodes, sync } = numberSlider(ctx, {
+    key,
+    id,
+    label: "Maximum iterations:",
+    range: [String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP)],
+    format: fmt,
+    toInput: (v) => String(maxitToSliderValue(v)),
+    parse: sliderValueToMaxit,
+    br: false,
   });
+  const input = nodes[1] as HTMLInputElement;
   input.classList.add("log-slider");
-  const wrap = el("div", { className: "log-slider-control" });
-  const label = labelFor(id, "Maximum iterations:");
-  label.append(" ", span);
   const scale = ["1", "10", "100", "1k", "10k", "100k"].map((text) => el("span", { text }));
-  wrap.append(label, input, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale));
-  return {
-    nodes: [wrap],
-    sync: (next) => {
-      span.textContent = fmt(next[key]);
-      setInputValue(input, String(maxitToSliderValue(next[key])));
-    },
-  };
+  return { nodes: [el("div", { className: "log-slider-control" }, [...nodes, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale)])], sync };
 }

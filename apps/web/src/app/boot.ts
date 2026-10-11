@@ -1,5 +1,4 @@
 import { createAppActions } from "@/app/appActions";
-import type { AppContext } from "@/app/appContext";
 import { createLayout } from "@/app/layout";
 import { getState } from "@/features/core/store";
 import { createHistoryService } from "@/features/history/historyService";
@@ -12,27 +11,24 @@ import { mountSidebar } from "@/ui/sidebar/mountSidebar";
 
 export function boot(root: HTMLElement) {
   root.replaceChildren();
+  const lifetime = new AbortController();
+  const { signal } = lifetime;
 
-  const solver = createSolverActions();
+  const solver = createSolverActions(signal);
   const polytope = createPolytopeService(solver.handleProblemChange);
   const history = createHistoryService(polytope.derive);
-  const stage = createCanvasStage(root);
+  const stage = createCanvasStage(root, signal);
   const editor = { viewportApi: stage.viewportApi, saveHistory: history.save, derivePolytope: polytope.derive, onSolverStartMoved: () => solver.recomputeIfModeActive(getState().solverMode) };
   const actions = createAppActions({ solver, share: shareLink, history, editor });
-  const layout = createLayout(root, actions);
-  const ctx: AppContext = { actions, editor, layout };
+  const handle = createLayout(root, actions, signal);
 
-  const sidebar = mountSidebar(root, actions);
-  stage.mountChrome(ctx);
-  layout.attach();
+  mountSidebar(root, actions, signal);
+  stage.mountChrome({ actions, editor, handle });
   applyUrlParamsOnce({ viewportApi: stage.viewportApi, derivePolytope: polytope.derive });
 
   return {
     destroy: () => {
-      layout.destroy();
-      stage.destroy();
-      sidebar.destroy();
-      solver.destroy();
+      lifetime.abort();
       root.replaceChildren();
     },
   };

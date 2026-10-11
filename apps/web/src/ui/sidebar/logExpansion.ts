@@ -20,6 +20,7 @@
 // the problem and the solvers are, once it is complete.
 
 import { DRAWING_PHASE_KEYS } from "@/features/problem/selectors";
+import { onAbort } from "@/features/core/lifetime";
 import { getState, on } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/problem/selectors";
 import { COARSE_POINTER_QUERY, prefersReducedMotion } from "@/ui/media";
@@ -66,7 +67,7 @@ function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
   return event.deltaY;
 }
 
-export function createSidebarLogExpansion({ sidebar, content, logPanel }: { sidebar: HTMLElement; content: HTMLElement; logPanel: HTMLElement }) {
+export function createSidebarLogExpansion({ sidebar, content, logPanel }: { sidebar: HTMLElement; content: HTMLElement; logPanel: HTMLElement }, signal: AbortSignal): void {
   let expansion = 0;
   const coarsePointer = window.matchMedia(COARSE_POINTER_QUERY);
 
@@ -122,8 +123,6 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     event.preventDefault();
   };
 
-  const listeners = new AbortController();
-  const { signal } = listeners;
   sidebar.addEventListener("wheel", onWheel, { passive: false, signal });
 
   // The room above changes with the window and the active solver's settings;
@@ -160,12 +159,8 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
   };
   on(DRAWING_PHASE_KEYS, followDrawing, signal);
   followDrawing();
-
-  return {
-    destroy: () => {
-      listeners.abort();
-      observer.disconnect();
-      logPanel.style.minHeight = "";
-    },
-  };
+  onAbort(signal, () => {
+    observer.disconnect();
+    logPanel.style.minHeight = "";
+  });
 }

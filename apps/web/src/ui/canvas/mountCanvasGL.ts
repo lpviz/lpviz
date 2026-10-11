@@ -1,4 +1,5 @@
 import { el } from "@/ui/dom";
+import { onAbort } from "@/features/core/lifetime";
 import { createViewportRuntime } from "@/features/viewport/runtime";
 import type { ViewportBridge } from "@/features/viewport/types";
 import { SceneManager } from "@/three/SceneManager";
@@ -17,7 +18,7 @@ import { PolytopeVerticesLayer } from "@/three/layers/PolytopeVerticesLayer";
 import { SolverStartLayer } from "@/three/layers/SolverStartLayer";
 import { TraceLayer } from "@/three/layers/TraceLayer";
 
-export function mountCanvasGL(parent: HTMLElement) {
+export function mountCanvasGL(parent: HTMLElement, signal: AbortSignal) {
   const canvas = el("canvas", { className: "canvas-stage__gl-canvas", attrs: { tabindex: "0" } });
   parent.append(canvas);
   const mgr = new SceneManager(canvas);
@@ -32,11 +33,11 @@ export function mountCanvasGL(parent: HTMLElement) {
   };
   // the runtime's tick (the 2D/3D transition's frame) registers before the camera's, so a frame it
   // publishes is posed the same frame
-  const viewportApi = createViewportRuntime({ viewportBridge: bridge });
-  const cameraCtl = new CameraController(mgr);
+  const viewportApi = createViewportRuntime({ viewportBridge: bridge, signal });
+  const cameraCtl = new CameraController(mgr, signal);
   // the 2D listeners register before the 3D ones on the same targets
-  const detachPanZoom2D = attachPanZoom2D(canvas);
-  const detachOrbit3D = attachOrbit3D(mgr, cameraCtl.perspective, cameraCtl.perspectiveTarget);
+  attachPanZoom2D(canvas, signal);
+  attachOrbit3D(mgr, cameraCtl.perspective, cameraCtl.perspectiveTarget, signal);
   const layers = [
     new GridLayer(),
     new PolytopeBaseLayer(),
@@ -55,15 +56,6 @@ export function mountCanvasGL(parent: HTMLElement) {
   ];
   for (const layer of layers) mgr.addLayer(layer);
   mgr.precompile(cameraCtl.perspective);
-  return {
-    viewportApi,
-    destroy: () => {
-      viewportApi.destroy();
-      detachOrbit3D();
-      detachPanZoom2D();
-      cameraCtl.dispose();
-      mgr.dispose();
-      canvas.remove();
-    },
-  };
+  onAbort(signal, () => mgr.dispose());
+  return { viewportApi };
 }

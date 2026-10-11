@@ -1,5 +1,5 @@
 import type { AppActions } from "@/app/appActions";
-import { button, el, labelFor, mounted } from "@/ui/dom";
+import { button, el, labelFor } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 
 const ICONS = {
@@ -13,7 +13,7 @@ const ICONS = {
 
 // The column of view buttons in the canvas's top-right corner (home, fit, reset, 2D/3D, share)
 // and, in 3D, the z-scale slider under them.
-export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "resetView" | "zoomToFit" | "reset" | "toggle3D" | "share" | "setZScale">) {
+export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "resetView" | "zoomToFit" | "reset" | "toggle3D" | "share" | "setZScale">, signal: AbortSignal): void {
   const icon = (title: string, svg: string, onClick: () => void, id?: string) => el("button", { id, attrs: { title }, html: svg, on: { click: onClick } });
   const toggle3d = button("", () => actions.toggle3D(), { id: "toggle3DButton", attrs: { title: "Toggle 3D Mode" } });
   const zScaleSlider = el("input", {
@@ -35,12 +35,15 @@ export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "res
     zScaleControl,
   ]);
   parent.append(root);
-  const stop = renderOn(["is3DMode", "zScale"], ({ is3DMode, zScale }) => {
-    toggle3d.classList.toggle("button-active", is3DMode);
-    toggle3d.textContent = is3DMode ? "2D" : "3D";
-    zScaleSlider.value = String(zScale);
-    zScaleValue.textContent = zScale.toFixed(2);
-    zScaleControl.hidden = !is3DMode;
-  });
-  return mounted(root, stop);
+  renderOn(
+    ["is3DMode", "zScale"],
+    ({ is3DMode, zScale }) => {
+      toggle3d.classList.toggle("button-active", is3DMode);
+      toggle3d.textContent = is3DMode ? "2D" : "3D";
+      zScaleSlider.value = String(zScale);
+      zScaleValue.textContent = zScale.toFixed(2);
+      zScaleControl.hidden = !is3DMode;
+    },
+    signal,
+  );
 }

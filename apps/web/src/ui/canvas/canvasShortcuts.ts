@@ -14,10 +14,8 @@ const isTextEntryTarget = (target: EventTarget | null) =>
 // The shortcuts that hold for any editor: undo/redo, Enter (leave the region open), S (snap to
 // grid), H (hide the objective), + and - (the animation's length) and, in 3D, shift+wheel (the z
 // scale).
-export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasShortcutDeps): () => void {
+export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasShortcutDeps, signal: AbortSignal): void {
   const { undo, redo, showReplayDuration, finishOpenRegion, toggleSnapToGrid, toggleObjectiveHidden, setZScale, updateSolverSetting } = deps;
-  const listeners = new AbortController();
-  const { signal } = listeners;
 
   // "+" lengthens the replay, "-" shortens it; the readout shows on every press, including one
   // that hits an end of the range, so the keys never feel dead
@@ -77,5 +75,4 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasSho
 
   window.addEventListener("keydown", onKeyDown, { capture: true, signal });
   canvas.addEventListener("wheel", onWheel, { capture: true, passive: false, signal });
-  return () => listeners.abort();
 }

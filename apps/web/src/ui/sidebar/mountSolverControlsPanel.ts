@@ -2,11 +2,11 @@ import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { SOLVER_LABELS, type SolverMode } from "@/features/solver/solverSettings";
 import { isReadyForSolvers, isSolverSelectable, READY_FOR_SOLVERS_KEYS } from "@/features/problem/selectors";
-import { button, el, mounted } from "@/ui/dom";
+import { button, el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
 
-export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppActions, "setActiveSolverMode" | "updateSolverSetting" | "recomputeIfModeActive">) {
+export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppActions, "setActiveSolverMode" | "updateSolverSetting" | "recomputeIfModeActive">, signal: AbortSignal): void {
   const root = el("div", { className: "controlPanel" });
   parent.append(root);
   const buttonGroup = el("div", { className: "button-group" });
@@ -52,6 +52,5 @@ export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppA
     syncSettings(state.solverSettings);
   }
 
-  const stopRender = renderOn(["solverMode", "solverSettings", ...READY_FOR_SOLVERS_KEYS], render);
-  return mounted(root, stopRender);
+  renderOn(["solverMode", "solverSettings", ...READY_FOR_SOLVERS_KEYS], render, signal);
 }

@@ -1,7 +1,7 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Group } from "three";
-import { iteratePosition, iteratePositions, writeIteratePositions } from "../helpers/iteratePositions";
+import { iteratePosition, iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { PointCloud } from "../helpers/pointCloud";
 import { PALETTE, SPRITE, STROKE } from "../palette";
@@ -39,8 +39,8 @@ function sameDrawnPosition(entry: TraceEntry, i: number, j: number): boolean {
 // so it gets a pooled chunk whose path texture and sprite positions are built and uploaded exactly
 // once: a rotation step costs one chunk upload, every iterate is drawn (the ribbon is never
 // sampled), and previously drawn curves can never shift between frames. Both of a chunk's objects
-// carry the entry's append sequence (see trace/sequence.ts), which is what lets the 2D cache bake
-// the chunk once and the 3D compositor treat the pass as a whole.
+// carry the entry's append sequence (see trace/sequence.ts), which is what lets the trace cache
+// bake the chunk once in either view.
 export class TraceLayer extends ZScaledLayer {
   readonly object3D = new Group();
   readonly slot = "traceLine" as const;
@@ -93,7 +93,7 @@ export class TraceLayer extends ZScaledLayer {
       const chunk = this.free.pop() ?? this.makeChunk();
       chunk.ribbon.setPath(iteratePositions(entry), entry.count);
       const sampled = sampledIterates(entry);
-      chunk.sprites.draw(sampled.length, (out) => writeIteratePositions(out, entry, sampled.length, sampled));
+      chunk.sprites.drawIterates(entry, sampled, null);
       const seq = this.nextSeq++;
       stampTraceSequence(chunk.ribbon.object3D, seq);
       stampTraceSequence(chunk.sprites.object3D, seq);

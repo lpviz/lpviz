@@ -1,6 +1,7 @@
+import { onAbort } from "@/features/core/lifetime";
 import { restartableTimeout } from "@/features/core/timers";
 import { formatReplayDuration } from "@/features/solver/replayDuration";
-import { el, mounted } from "@/ui/dom";
+import { el } from "@/ui/dom";
 
 // How long the readout stays up after the last +/- press. Long enough to read
 // while holding a key down, short enough that it never reads as persistent UI.
@@ -10,7 +11,7 @@ const VISIBLE_MS = 900;
 // the +/- shortcuts. The duration has no visible control of its own (the speed
 // slider is hidden), so without this the keys would change the setting with no
 // feedback at all.
-export function mountReplayDurationOverlay(parent: HTMLElement) {
+export function mountReplayDurationOverlay(parent: HTMLElement, signal: AbortSignal) {
   const root = el("div", {
     className: "replay-duration",
     attrs: { role: "status", "aria-live": "polite" },
@@ -26,6 +27,7 @@ export function mountReplayDurationOverlay(parent: HTMLElement) {
   // One timer, restarted on every press, is what makes the readout fade out
   // shortly after the *last* press rather than shortly after the first
   const hide = restartableTimeout();
+  onAbort(signal, hide.clear);
 
   return {
     show: (durationMs: number) => {
@@ -33,6 +35,5 @@ export function mountReplayDurationOverlay(parent: HTMLElement) {
       root.classList.add("is-visible");
       hide.schedule(() => root.classList.remove("is-visible"), VISIBLE_MS);
     },
-    ...mounted(root, hide.clear),
   };
 }

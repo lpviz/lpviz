@@ -1,6 +1,7 @@
 import { visibleBounds } from "@/features/viewport/bounds";
 import { restartableTimeout } from "@/features/core/timers";
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
+import { onAbort } from "@/features/core/lifetime";
 import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
@@ -57,10 +58,6 @@ export type ViewportApi = {
   getCanvasRect: () => DOMRect;
 };
 
-export type ViewportRuntime = ViewportApi & {
-  destroy: () => void;
-};
-
 /**
  * The viewport runtime: the one place that decides who owns the render snapshot and publishes it
  * to the canvas. At any instant exactly one source owns it: the 2D pan/zoom controls, the 3D
@@ -79,7 +76,7 @@ export type ViewportRuntime = ViewportApi & {
  * view shows now, which is the 2D controls' own while they are wanted) and the published one (what
  * the canvas reads, kept in runtime/channels.ts).
  */
-export function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): ViewportRuntime {
+export function createViewportRuntime({ viewportBridge, signal }: { viewportBridge: ViewportBridge; signal: AbortSignal }): ViewportApi {
   let ownedSnapshot: ViewportRenderSnapshot = { ...DEFAULT_VIEWPORT_RENDER_SNAPSHOT };
   let controls2DActive = false;
   let controls3DActive = false;
@@ -295,7 +292,6 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   sync3DControls(wants3DControls());
   publishSnapshot(liveSnapshot());
 
-  const subscriptions = new AbortController();
   on(
     ["is3DMode", "isTransitioning3D"],
     () => {
@@ -317,14 +313,22 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       }
       publishSnapshot(ownedSnapshot);
     },
-    subscriptions.signal,
+    signal,
   );
-  onViewportDirty((viewportDirty) => viewportBridge.invalidate(viewportDirty), subscriptions.signal);
+  onViewportDirty((viewportDirty) => viewportBridge.invalidate(viewportDirty), signal);
   // the sketch cursor moves the rubber band while a region is being drawn
   subscribeCurrentMouse(() => {
     const state = getState();
     if (state.completionMode === "draft" && state.vertices.length > 0) viewportBridge.invalidate({ polytope: true });
-  }, subscriptions.signal);
+  }, signal);
+  onAbort(signal, () => {
+    clearActiveNavigation();
+    transition = null;
+    removeTransitionTick();
+    reset2DControlsConfig();
+    reset3DControlsConfig();
+    resetViewportRenderSnapshot();
+  });
 
   return {
     setSidebarWidth: (width) => {
@@ -370,14 +374,5 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     start3DTransition,
     getCanvasElement: () => viewportBridge.getCanvasElement(),
     getCanvasRect: () => rect,
-    destroy: () => {
-      clearActiveNavigation();
-      transition = null;
-      removeTransitionTick();
-      reset2DControlsConfig();
-      reset3DControlsConfig();
-      subscriptions.abort();
-      resetViewportRenderSnapshot();
-    },
   };
 }

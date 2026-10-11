@@ -1,5 +1,6 @@
 import { DRAWING_PHASE_KEYS } from "@/features/problem/selectors";
 import type { AppActions } from "@/app/appActions";
+import { onAbort } from "@/features/core/lifetime";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
@@ -7,7 +8,7 @@ import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
 import { createResultFit, mountVirtualRows, observeResultSize, rowEl, type VirtualRows } from "./solverLogVirtualRows";
 
-export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppActions, "setIterateHighlight" | "finishOpenRegion">) {
+export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppActions, "setIterateHighlight" | "finishOpenRegion">, signal: AbortSignal) {
   const frame = el("div", { id: "terminal-container" });
   const result = el("div", { id: "result" });
   frame.append(result, el("div", { id: "terminal-window" }));
@@ -52,7 +53,7 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
     }
     hover.scheduleHoverSync();
   }
-  const stopRender = renderOn(["result"], render);
+  renderOn(["result"], render, signal);
 
   const sizeObserver = observeResultSize(result, {
     onWidthChange: (width) => {
@@ -65,23 +66,17 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
   // The placeholder hint reflects the current drawing phase, so refresh it as
   // the user sketches — but only while the panel is showing that hint, never
   // while a (potentially huge) solver result is mounted.
-  const hintSync = new AbortController();
   on(
     DRAWING_PHASE_KEYS,
     () => {
       const state = getState();
       if (state.result.kind === "usage") render(state);
     },
-    hintSync.signal,
+    signal,
   );
-  return {
-    root: frame,
-    destroy: () => {
-      hintSync.abort();
-      stopRender();
-      sizeObserver.disconnect();
-      hover.clearHoverState();
-      frame.remove();
-    },
-  };
+  onAbort(signal, () => {
+    sizeObserver.disconnect();
+    hover.clearHoverState();
+  });
+  return { root: frame };
 }

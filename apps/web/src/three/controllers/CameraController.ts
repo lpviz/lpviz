@@ -1,3 +1,4 @@
+import { onAbort } from "@/features/core/lifetime";
 import { getViewportRenderSnapshot, subscribeViewportRenderSnapshot } from "@/features/viewport/runtime/channels";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
@@ -15,10 +16,12 @@ export class CameraController {
   // The point the perspective camera looks at, which the orbit controls move too. NaN until the
   // first snapshot is applied, so nothing matches it before then.
   readonly perspectiveTarget = new Vector3(NaN, NaN, NaN);
-  private subscriptions = new AbortController();
   private pendingSnapshot = false;
 
-  constructor(private sceneManager: SceneManager) {
+  constructor(
+    private sceneManager: SceneManager,
+    signal: AbortSignal,
+  ) {
     // every 2D snapshot looks straight down from z = 10 with +y up, so the
     // orientation is fixed here once; applySnapshot only moves the camera
     this.ortho.position.set(0, 0, 10);
@@ -27,10 +30,11 @@ export class CameraController {
     subscribeViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;
       this.sceneManager.invalidate("frame");
-    }, this.subscriptions.signal);
+    }, signal);
 
     this.applySnapshot();
     this.sceneManager.addTick(this.tick);
+    onAbort(signal, () => this.sceneManager.removeTick(this.tick));
   }
 
   private tick = (): void => {
@@ -69,11 +73,6 @@ export class CameraController {
       nearlyEqual(camera.far, lens.far) &&
       samePerspectivePose({ position: camera.position, up: camera.up, target: this.perspectiveTarget }, poseOf(snap), EPS)
     );
-  }
-
-  dispose(): void {
-    this.subscriptions.abort();
-    this.sceneManager.removeTick(this.tick);
   }
 }
 

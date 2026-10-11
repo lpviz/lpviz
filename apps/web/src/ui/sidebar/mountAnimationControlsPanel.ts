@@ -2,10 +2,14 @@ import { settingRange } from "@/features/solver/solverSettings";
 import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
-import { button, checkbox, el, mounted, range } from "@/ui/dom";
+import { button, checkbox, el, range } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 
-export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<AppActions, "toggleReplay" | "startRotation" | "stopMotion" | "updateSolverSetting" | "setTraceEnabled">) {
+export function mountAnimationControlsPanel(
+  parent: HTMLElement,
+  actions: Pick<AppActions, "toggleReplay" | "startRotation" | "stopMotion" | "updateSolverSetting" | "setTraceEnabled">,
+  signal: AbortSignal,
+): void {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
   parent.append(root);
   const animate = button("Animate", () => actions.toggleReplay());
@@ -38,6 +42,5 @@ export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<A
     angle.value = String(state.solverSettings.objectiveAngleStep);
     speed.value = String(state.solverSettings.objectiveRotationSpeed);
   }
-  const stopRender = renderOn(["polytope", "originalIteratePath", "objectiveVector", "rotateObjectiveMode", "replayActive", "traceEnabled", "solverSettings"], render);
-  return mounted(root, stopRender);
+  renderOn(["polytope", "originalIteratePath", "objectiveVector", "rotateObjectiveMode", "replayActive", "traceEnabled", "solverSettings"], render, signal);
 }
