@@ -1,4 +1,4 @@
-import { quadraticForm } from "@lpviz/math/blas";
+import { createDenseMatrix, dot, matVec, quadraticForm } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
@@ -26,6 +26,7 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
   const initialCenter = center.slice();
   const initialSemiAxes = Float64Array.from({ length: n }, (_, j) => Math.sqrt(P[j * n + j]!));
 
+  const Pmatrix = createDenseMatrix(n, n, P);
   const g = new Float64Array(n);
   const Pg = new Float64Array(n);
   const nextP = new Float64Array(n * n);
@@ -50,7 +51,8 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
       beta = incumbent.objective - objectiveValue;
     }
 
-    const gPg = symmetricMatVec(P, g, Pg, n);
+    matVec(Pmatrix, g, Pg);
+    const gPg = dot(Pg, g);
     if (!(gPg > 0) || !Number.isFinite(gPg)) {
       run.termination = "degenerate";
       break;
@@ -119,16 +121,4 @@ function onInitialBoundary(x: Float64Array, center: Float64Array, semiAxes: Floa
     quadratic += ratio * ratio;
   }
   return quadratic >= 1 - INITIAL_BOUNDARY_TOLERANCE;
-}
-
-// out = P v, returning v'Pv
-function symmetricMatVec(P: Float64Array, v: Float64Array, out: Float64Array, n: number) {
-  let quadratic = 0;
-  for (let j = 0; j < n; j++) {
-    let sum = 0;
-    for (let k = 0; k < n; k++) sum += P[j * n + k]! * v[k]!;
-    out[j] = sum;
-    quadratic += sum * v[j]!;
-  }
-  return quadratic;
 }

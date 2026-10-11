@@ -3,6 +3,7 @@
 // only on its seed and options.
 
 import type { Constraint, Vec } from "@lpviz/math/types";
+import { constraintsFromChain } from "@lpviz/polytope/constraints";
 import type { NumericRow, SolverResult } from "../src/result";
 
 // square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
@@ -25,25 +26,7 @@ export const ipmOptions = (alphaMax = 0.9, maxit = 200) => ({ tol: 1e-6, maxit, 
 export const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // The edges of a convex hull as inward-pointing unit-normal constraints.
-export function polygonConstraints(hull: Vec[]): Constraint[] {
-  const cx = hull.reduce((s, v) => s + v[0], 0) / hull.length;
-  const cy = hull.reduce((s, v) => s + v[1], 0) / hull.length;
-  return hull.map((start, i) => {
-    const end = hull[(i + 1) % hull.length]!;
-    let A = end[1] - start[1];
-    let B = -(end[0] - start[0]);
-    const norm = Math.hypot(A, B);
-    A /= norm;
-    B /= norm;
-    let C = A * start[0] + B * start[1];
-    if (A * cx + B * cy > C) {
-      A = -A;
-      B = -B;
-      C = -C;
-    }
-    return [A, B, C];
-  });
-}
+export const polygonConstraints = (hull: Vec[]): Constraint[] => constraintsFromChain(hull, true);
 
 // A random convex polygon (3-7 vertices on a circle, so no three edges are
 // concurrent) as inward-pointing constraints, or null when two vertices

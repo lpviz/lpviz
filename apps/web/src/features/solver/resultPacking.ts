@@ -1,4 +1,4 @@
-import { fmtCoordinates, fmtExp, fmtExpUnsigned, fmtIteration, logColumnWidths } from "@lpviz/solver-engine/fmt";
+import { formatNumericRow } from "@lpviz/solver-engine/fmt";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
 import type {
@@ -141,8 +141,4 @@ export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResp
 }
 
 /** A row as the log prints it: a preformatted line, or a numeric row in the engine's columns. */
-export function formatVirtualResultRow(row: VirtualResultRow): string {
-  if (typeof row === "string") return row;
-  const { coordinate, measure } = logColumnWidths(row.point.length);
-  return `${fmtIteration(row.iteration, row.restart ? "r" : "")} ${fmtCoordinates(row.point, coordinate)} ${fmtExp(row.objective, measure, 1)} ${fmtExp(row.infeasibility, measure, 1)} ${fmtExpUnsigned(row.convergence, measure, 1)}`;
-}
+export const formatVirtualResultRow = (row: VirtualResultRow): string => (typeof row === "string" ? row : formatNumericRow(row));

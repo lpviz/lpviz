@@ -1,4 +1,4 @@
-import type { Vec } from "./types";
+import type { Constraint, Vec } from "./types";
 
 export interface BoundingBox {
   minX: number;
@@ -63,4 +63,63 @@ export function clipRayToBoundingBox({ start, direction }: Ray, bounds: Bounding
   if (candidates.length === 0) return null;
   candidates.sort((a, b) => b.t - a.t);
   return [start, candidates[0]!.point];
+}
+
+const CLIP_EPS = 1e-10;
+
+/** The line a·x + b·y = c across the box, as its two points on the box's extent along the line's gentler axis; null for a degenerate line. */
+export function clipLineToBoundingBox([a, b, c]: Constraint, box: BoundingBox): [Vec, Vec] | null {
+  if (Math.abs(a) < CLIP_EPS && Math.abs(b) < CLIP_EPS) return null;
+  if (Math.abs(b) > Math.abs(a)) {
+    return [
+      [box.minX, (c - a * box.minX) / b],
+      [box.maxX, (c - a * box.maxX) / b],
+    ];
+  }
+  return [
+    [(c - b * box.minY) / a, box.minY],
+    [(c - b * box.maxY) / a, box.maxY],
+  ];
+}
+
+// Sutherland–Hodgman: the polygon kept inside the half-plane a·x + b·y <= c.
+function clipPolygonToHalfPlane(polygon: Vec[], [a, b, c]: Constraint): Vec[] {
+  if (polygon.length === 0) return [];
+  const inside = (p: Vec) => a * p[0] + b * p[1] <= c + CLIP_EPS;
+  const intersect = (s: Vec, e: Vec): Vec => {
+    const dx = e[0] - s[0],
+      dy = e[1] - s[1];
+    const denom = a * dx + b * dy;
+    if (Math.abs(denom) < CLIP_EPS) return e;
+    const t = (c - a * s[0] - b * s[1]) / denom;
+    return [s[0] + t * dx, s[1] + t * dy];
+  };
+  const result: Vec[] = [];
+  let prev = polygon[polygon.length - 1]!,
+    prevIn = inside(prev);
+  for (const cur of polygon) {
+    const curIn = inside(cur);
+    if (curIn) {
+      if (!prevIn) result.push(intersect(prev, cur));
+      result.push(cur);
+    } else if (prevIn) result.push(intersect(prev, cur));
+    prev = cur;
+    prevIn = curIn;
+  }
+  return result;
+}
+
+/** The box cut down by every half-plane a·x + b·y <= c: the polygon's vertices, empty once nothing is left. */
+export function clipHalfPlanesToBoundingBox(constraints: readonly Constraint[], bounds: BoundingBox): Vec[] {
+  let polygon: Vec[] = [
+    [bounds.minX, bounds.minY],
+    [bounds.maxX, bounds.minY],
+    [bounds.maxX, bounds.maxY],
+    [bounds.minX, bounds.maxY],
+  ];
+  for (const line of constraints) {
+    polygon = clipPolygonToHalfPlane(polygon, line);
+    if (polygon.length === 0) return [];
+  }
+  return polygon;
 }

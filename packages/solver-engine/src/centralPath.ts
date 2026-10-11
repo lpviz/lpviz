@@ -1,4 +1,4 @@
-import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec } from "@lpviz/math/blas";
+import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, rowDot, weightedGram } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
@@ -128,9 +128,7 @@ class BarrierProblem {
     const { A, b } = this;
     if (x.length !== A.cols) return false;
     for (let i = 0; i < A.rows; i++) {
-      let ax = 0;
-      for (let j = 0; j < A.cols; j++) ax += A.data[i * A.cols + j]! * x[j]!;
-      if (!(ax < b[i]!)) return false;
+      if (!(rowDot(A, i, x) < b[i]!)) return false;
     }
     return true;
   }
@@ -179,24 +177,24 @@ class BarrierProblem {
     const { A, b, c, ax, slack, gradient, hessian, step, luScratch } = this;
     matVec(A, point, ax);
     gradient.set(c);
-    hessian.fill(0);
 
     for (let i = 0; i < b.length; i++) {
       const s = b[i]! - ax[i]!;
       slack[i] = s;
       if (s <= 0) return false;
-      const invSlack = 1 / s;
-      const hessianScale = mu * invSlack * invSlack;
-      const gradientScale = mu * invSlack;
+      const gradientScale = mu * (1 / s);
       const rowOffset = i * A.cols;
-      for (let j = 0; j < A.cols; j++) {
-        const aij = A.data[rowOffset + j]!;
-        gradient[j]! -= gradientScale * aij;
-        for (let k = 0; k < A.cols; k++) {
-          hessian[j * A.cols + k]! += hessianScale * aij * A.data[rowOffset + k]!;
-        }
-      }
+      for (let j = 0; j < A.cols; j++) gradient[j]! -= gradientScale * A.data[rowOffset + j]!;
     }
+    // the barrier's Hessian, Aᵀ diag(mu / s²) A
+    weightedGram(
+      A,
+      (i) => {
+        const invSlack = 1 / slack[i]!;
+        return mu * invSlack * invSlack;
+      },
+      hessian,
+    );
 
     try {
       solveDenseSystem(hessian, A.cols, gradient, step, luScratch);

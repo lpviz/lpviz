@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { clipRayToBoundingBox, expandDegenerateBounds } from "../src/bounds";
+import { clipHalfPlanesToBoundingBox, clipLineToBoundingBox, clipRayToBoundingBox, expandDegenerateBounds } from "../src/bounds";
 
 describe("expandDegenerateBounds", () => {
   test("expands a point and a segment, keeps real bounds", () => {
@@ -29,5 +29,53 @@ describe("clipRayToBoundingBox", () => {
 
   test("returns null for a ray that leaves the box behind it", () => {
     expect(clipRayToBoundingBox({ start: [10, 0], direction: [1, 0] }, box)).toBeNull();
+  });
+});
+
+describe("clipLineToBoundingBox", () => {
+  const box = { minX: -5, maxX: 5, minY: -2, maxY: 2 };
+
+  test("spans the box along the line's gentler axis", () => {
+    // y = x / 2: gentler along x, so the points sit on the box's x extent
+    expect(clipLineToBoundingBox([-1, 2, 0], box)).toEqual([
+      [-5, -2.5],
+      [5, 2.5],
+    ]);
+    // x = 1: vertical, so the points sit on the box's y extent
+    expect(clipLineToBoundingBox([1, 0, 1], box)).toEqual([
+      [1, -2],
+      [1, 2],
+    ]);
+  });
+
+  test("has no points for a degenerate line", () => {
+    expect(clipLineToBoundingBox([0, 0, 1], box)).toBeNull();
+  });
+});
+
+describe("clipHalfPlanesToBoundingBox", () => {
+  const box = { minX: 0, maxX: 4, minY: 0, maxY: 4 };
+
+  test("keeps the part of the box the half-planes leave", () => {
+    // x <= 2 and x + y <= 5 cut the square down to a pentagon
+    expect(
+      clipHalfPlanesToBoundingBox(
+        [
+          [1, 0, 2],
+          [1, 1, 5],
+        ],
+        box,
+      ),
+    ).toEqual([
+      [0, 0],
+      [2, 0],
+      [2, 3],
+      [1, 4],
+      [0, 4],
+    ]);
+  });
+
+  test("is empty once a half-plane excludes the whole box", () => {
+    expect(clipHalfPlanesToBoundingBox([[1, 0, -1]], box)).toEqual([]);
   });
 });

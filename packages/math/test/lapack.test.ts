@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cholesky, invertDenseMatrix, invertFromCholesky, logDetFromCholesky, solveDenseSystem } from "../src/lapack";
+import { cholesky, invertDenseMatrix, invertFromCholesky, invertSymmetric, logDetFromCholesky, logDetSymmetric, solveDenseSystem } from "../src/lapack";
 
 const solve = (matrix: number[], rhs: number[]) => {
   const size = Math.sqrt(matrix.length);
@@ -84,5 +84,25 @@ describe("cholesky", () => {
         expect(sum).toBeCloseTo(i === j ? 1 : 0, 12);
       }
     }
+  });
+});
+
+describe("symmetric positive definite helpers", () => {
+  test("invert and log det, by the 2x2 closed form and by the factorization", () => {
+    // [[4, 1], [1, 3]]: determinant 11
+    const two = invertSymmetric(Float64Array.of(4, 1, 1, 3), 2)!;
+    expect(Array.from(two)).toEqual([3 / 11, -1 / 11, -1 / 11, 4 / 11]);
+    expect(logDetSymmetric(Float64Array.of(4, 1, 1, 3), 2)).toBeCloseTo(Math.log(11), 12);
+
+    // 2I in three dimensions
+    const three = invertSymmetric(Float64Array.of(2, 0, 0, 0, 2, 0, 0, 0, 2), 3)!;
+    [0.5, 0, 0, 0, 0.5, 0, 0, 0, 0.5].forEach((expected, i) => expect(three[i]).toBeCloseTo(expected, 12));
+    expect(logDetSymmetric(Float64Array.of(2, 0, 0, 0, 2, 0, 0, 0, 2), 3)).toBeCloseTo(3 * Math.log(2), 12);
+  });
+
+  test("an indefinite matrix has neither", () => {
+    expect(invertSymmetric(Float64Array.of(1, 2, 2, 1), 2)).toBeNull();
+    expect(logDetSymmetric(Float64Array.of(1, 2, 2, 1), 2)).toBeNull();
+    expect(invertSymmetric(Float64Array.of(1, 0, 0, 0, -1, 0, 0, 0, 1), 3)).toBeNull();
   });
 });
