@@ -1,4 +1,4 @@
-import { type DenseMatrix, dot, transposedMatVec } from "@lpviz/math/blas";
+import { createDenseMatrix, type DenseMatrix, dot, matVec, transposedMatVec } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 
 /** An LP in standard form, `max c'x s.t. Ax = b, x >= 0`, as a simplex phase walks it. */
@@ -21,6 +21,7 @@ export class Basis {
   readonly columns: number[] = [];
   readonly isBasic: boolean[];
   private readonly inverse: Float64Array;
+  private readonly inverseMatrix: DenseMatrix;
   private readonly work: Float64Array;
   private readonly matrix: Float64Array;
   private transposed: Float64Array | null = null;
@@ -34,6 +35,7 @@ export class Basis {
     this.isBasic = isBasic.slice();
     for (let j = 0; j < isBasic.length; j++) if (isBasic[j]) this.columns.push(j);
     this.inverse = new Float64Array(this.m * this.m);
+    this.inverseMatrix = createDenseMatrix(this.m, this.m, this.inverse);
     this.work = new Float64Array(this.m * this.m);
     this.matrix = new Float64Array(this.m * this.m);
     this.refactor();
@@ -78,13 +80,7 @@ export class Basis {
 
   /** out = B⁻¹ v */
   apply(v: Float64Array, out: Float64Array): Float64Array {
-    const { m, inverse } = this;
-    for (let i = 0; i < m; i++) {
-      let sum = 0;
-      const offset = i * m;
-      for (let k = 0; k < m; k++) sum += inverse[offset + k]! * v[k]!;
-      out[i] = sum;
-    }
+    matVec(this.inverseMatrix, v, out);
     return out;
   }
 

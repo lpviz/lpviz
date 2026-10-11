@@ -66,6 +66,30 @@ export function matVec(matrix: DenseMatrix, vector: Float64Array, out: Float64Ar
   }
 }
 
+/** Row `row` of the matrix dotted with `vector`, accumulated onto `init`. */
+export function rowDot(matrix: DenseMatrix, row: number, vector: ArrayLike<number>, init = 0): number {
+  const { cols, data } = matrix;
+  const offset = row * cols;
+  let sum = init;
+  for (let j = 0; j < cols; j++) sum += data[offset + j]! * vector[j]!;
+  return sum;
+}
+
+/** out = Aᵀ diag(w) A (n x n, row-major), with `weight(i)` the weight of row i. */
+export function weightedGram(matrix: DenseMatrix, weight: (row: number) => number, out: Float64Array): Float64Array {
+  const { rows, cols, data } = matrix;
+  out.fill(0);
+  for (let i = 0; i < rows; i++) {
+    const w = weight(i);
+    const offset = i * cols;
+    for (let j = 0; j < cols; j++) {
+      const wj = w * data[offset + j]!;
+      for (let k = 0; k < cols; k++) out[j * cols + k]! += wj * data[offset + k]!;
+    }
+  }
+  return out;
+}
+
 export function transposedMatVec(matrix: DenseMatrix, vector: Float64Array, out: Float64Array) {
   out.fill(0);
   const { rows, cols, data } = matrix;
@@ -155,7 +179,6 @@ export function maxAbsDifference(a: Float64Array, b: Float64Array): number {
   return worst;
 }
 
-/** v' M v for a symmetric n x n matrix. */
 /** v' M v for symmetric M; the two-variable form is kept verbatim so those results stay bit-identical. */
 export function symmetricQuadraticForm(M: Float64Array, v: ArrayLike<number>, n: number): number {
   if (n === 2) {
@@ -164,6 +187,7 @@ export function symmetricQuadraticForm(M: Float64Array, v: ArrayLike<number>, n:
   return quadraticForm(M, v, n);
 }
 
+/** v' M v for a symmetric n x n matrix. */
 export function quadraticForm(M: Float64Array, v: ArrayLike<number>, n: number): number {
   let quadratic = 0;
   for (let j = 0; j < n; j++) {

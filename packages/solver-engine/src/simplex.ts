@@ -1,7 +1,7 @@
 // Two-phase simplex on `max c'x s.t. Ax <= b`: this file is the entry, the warm start and the dual
 // mode; the basis, the pivot rules and a phase's walk are in simplex/.
 
-import { createDenseMatrix, type DenseMatrix, denseFromConstraints, diagonalMatrix, hstackMatrices, negateMatrix, scaleRows, transposeMatrix } from "@lpviz/math/blas";
+import { createDenseMatrix, type DenseMatrix, denseFromConstraints, diagonalMatrix, hstackMatrices, negateMatrix, rowDot, scaleRows, transposeMatrix } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import type { SolverResult } from "./result";
@@ -125,10 +125,7 @@ function warmStartBasis(A: DenseMatrix, b: Float64Array, phase2: StandardLp, ver
   const n = A.cols;
   const active: number[] = [];
   for (let i = 0; i < m; i++) {
-    let ax = 0;
-    const rowOffset = i * n;
-    for (let j = 0; j < n; j++) ax += A.data[rowOffset + j]! * vertex[j]!;
-    const slack = b[i]! - ax;
+    const slack = b[i]! - rowDot(A, i, vertex);
     const scale = 1 + Math.abs(b[i]!);
     if (slack < -tol * scale) return null; // infeasible point
     if (slack <= tol * scale) active.push(i);

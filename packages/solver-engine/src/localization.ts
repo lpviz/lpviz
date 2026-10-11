@@ -2,8 +2,9 @@
 // separation oracle, the incumbent, the initial localization around the drawn region, the
 // lockstep record of every iterate's drawn shape, the stopping test and the footer.
 
-import { type DenseMatrix, denseFromConstraints, dot } from "@lpviz/math/blas";
+import { type DenseMatrix, denseFromConstraints, dot, rowDot } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
+import { boundsOf } from "@lpviz/math/vec";
 import { numericLogHeader, solveFooter } from "./fmt";
 import { assertMaxit } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
@@ -45,9 +46,7 @@ function mostViolatedConstraint(A: DenseMatrix, b: Float64Array, x: Float64Array
   let row = 0;
   let violation = -Infinity;
   for (let i = 0; i < A.rows; i++) {
-    const offset = i * A.cols;
-    let value = -b[i]!;
-    for (let j = 0; j < A.cols; j++) value += A.data[offset + j]! * x[j]!;
+    const value = rowDot(A, i, x, -b[i]!);
     if (value > violation) {
       violation = value;
       row = i;
@@ -59,18 +58,11 @@ function mostViolatedConstraint(A: DenseMatrix, b: Float64Array, x: Float64Array
 // max t with A(x + t*c) <= b: how far a feasible point can slide along the objective. Zero when
 // nothing blocks at all (not infinity): an unbounded direction has no boundary point to adopt.
 function objectiveRayStep(A: DenseMatrix, b: Float64Array, x: Float64Array, c: Float64Array) {
-  const n = A.cols;
   let step = Infinity;
   for (let i = 0; i < A.rows; i++) {
-    const offset = i * n;
-    let along = 0;
-    let at = 0;
-    for (let j = 0; j < n; j++) {
-      along += A.data[offset + j]! * c[j]!;
-      at += A.data[offset + j]! * x[j]!;
-    }
+    const along = rowDot(A, i, c);
     if (along > RAY_BLOCKING_TOLERANCE) {
-      step = Math.min(step, (b[i]! - at) / along);
+      step = Math.min(step, (b[i]! - rowDot(A, i, x)) / along);
     }
   }
   return Number.isFinite(step) && step > 0 ? step : 0;
@@ -138,16 +130,10 @@ export function regionBoundingBox(vertices: Vec[], n: number, scale: number) {
     // axes the vertices actually span; any further axis (a 3-variable LP fed
     // planar vertices) gets the largest spanned extent instead
     const planar = Math.min(n, vertices[0]!.length);
+    const { min, max } = boundsOf(vertices);
     for (let axis = 0; axis < planar; axis++) {
-      let lo = Infinity;
-      let hi = -Infinity;
-      for (const vertex of vertices) {
-        const value = vertex[axis] ?? 0;
-        if (value < lo) lo = value;
-        if (value > hi) hi = value;
-      }
-      center[axis] = (lo + hi) / 2;
-      halfExtents[axis] = (hi - lo) / 2;
+      center[axis] = (min[axis]! + max[axis]!) / 2;
+      halfExtents[axis] = (max[axis]! - min[axis]!) / 2;
     }
     let largest = 0;
     for (let axis = 0; axis < planar; axis++) {

@@ -1,4 +1,4 @@
-import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, negateMatrix, transposedMatVec } from "@lpviz/math/blas";
+import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, negateMatrix, transposedMatVec, weightedGram } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
@@ -178,18 +178,7 @@ class NormalEquations {
   /** Rebuild Aᵀ D A for the current s and y. */
   form(): void {
     const { A, s, y, M } = this;
-    const { rows: m, cols: n } = A;
-    M.fill(0);
-    for (let i = 0; i < m; i++) {
-      const d = y[i]! / s[i]!;
-      const offset = i * n;
-      for (let j = 0; j < n; j++) {
-        const dj = d * A.data[offset + j]!;
-        for (let k = 0; k < n; k++) {
-          M[j * n + k]! += dj * A.data[offset + k]!;
-        }
-      }
-    }
+    weightedGram(A, (i) => y[i]! / s[i]!, M);
   }
 
   solve(rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): void {
