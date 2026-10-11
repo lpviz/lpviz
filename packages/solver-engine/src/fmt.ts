@@ -1,6 +1,7 @@
 // The text of the solver logs: column formatting, headers, footers.
 
 import { variableName } from "@lpviz/math/vec";
+import type { NumericRow } from "./result";
 
 /** Fixed-point with an explicit sign, right-aligned: "   -4.00". */
 const fmtFixed = (value: number, width: number, decimals: number) => ((value >= 0 ? "+" : "") + value.toFixed(decimals)).padStart(width);
@@ -34,6 +35,12 @@ export function numericLogHeader(n: number, measure: string): string {
 /** The coordinate columns of one log row. */
 export function fmtCoordinates(point: ArrayLike<number>, width: number): string {
   return Array.from(point, (value) => fmtFixed(value, width, COORDINATE_DECIMALS)).join(" ");
+}
+
+/** One row of a numeric log, under numericLogHeader's columns. */
+export function formatNumericRow(row: NumericRow): string {
+  const { coordinate, measure } = logColumnWidths(row.point.length);
+  return `${fmtIteration(row.iteration, row.restart ? "r" : "")} ${fmtCoordinates(row.point, coordinate)} ${fmtExp(row.objective, measure, 1)} ${fmtExp(row.infeasibility, measure, 1)} ${fmtExpUnsigned(row.convergence, measure, 1)}`;
 }
 
 export function formatMilliseconds(milliseconds: number) {

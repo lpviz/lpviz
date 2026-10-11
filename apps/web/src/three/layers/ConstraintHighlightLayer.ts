@@ -1,32 +1,15 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox } from "@lpviz/math/bounds";
-import type { Constraint, PointXY } from "@lpviz/math/types";
+import { clipLineToBoundingBox } from "@lpviz/math/bounds";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { FatLine } from "../helpers/fatLine";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { visibleBounds } from "../helpers/visibleBounds";
+import { visibleBounds, visibleBoundsDeps } from "../helpers/visibleBounds";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
 const CONSTRAINT_LINE_THICKNESS = 2;
-const EPS = 1e-10;
-
-function clipLineToBounds(line: Constraint, b: BoundingBox): [PointXY, PointXY] | null {
-  const [A, B, C] = line;
-  if (Math.abs(A) < EPS && Math.abs(B) < EPS) return null;
-  if (Math.abs(B) > Math.abs(A)) {
-    return [
-      { x: b.minX, y: (C - A * b.minX) / B },
-      { x: b.maxX, y: (C - A * b.maxX) / B },
-    ];
-  }
-  return [
-    { y: b.minY, x: (C - B * b.minY) / A },
-    { y: b.maxY, x: (C - B * b.maxY) / A },
-  ];
-}
 
 export class ConstraintHighlightLayer extends LayerBase {
   private readonly line = new FatLine({ color: PALETTE.accent, linewidth: CONSTRAINT_LINE_THICKNESS, renderOrder: RENDER_ORDER.constraintLines });
@@ -36,22 +19,7 @@ export class ConstraintHighlightLayer extends LayerBase {
   override readonly invalidationKeys = ["constraints", "grid"] as const;
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [
-      state.completionMode,
-      state.highlightIndex,
-      state.polytope,
-      snap.mode,
-      snap.orthographic.left,
-      snap.orthographic.right,
-      snap.orthographic.top,
-      snap.orthographic.bottom,
-      snap.target.x,
-      snap.target.y,
-      snap.unitsPerPixel,
-      snap.width,
-      snap.height,
-      snap.scaleFactor,
-    ];
+    return [state.completionMode, state.highlightIndex, state.polytope, ...visibleBoundsDeps(snap)];
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
@@ -60,13 +28,13 @@ export class ConstraintHighlightLayer extends LayerBase {
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const line = state.highlightIndex !== null && hasConstraints(state.polytope) ? state.polytope.constraints[state.highlightIndex] : undefined;
-    const clipped = line && clipLineToBounds(line, visibleBounds(snap));
+    const clipped = line && clipLineToBoundingBox(line, visibleBounds(snap));
     if (!clipped) {
       this.hide();
       return;
     }
     const [start, end] = clipped;
-    this.line.draw([start.x, start.y, 0, end.x, end.y, 0], snap.mode === "3d");
+    this.line.draw([start[0], start[1], 0, end[0], end[1], 0], snap.mode === "3d");
   }
 
   dispose(): void {

@@ -49,3 +49,18 @@ function visibleBounds3D(snap: ViewportRenderSnapshot): BoundingBox {
 export function visibleBounds(snap: ViewportRenderSnapshot): BoundingBox {
   return snap.mode === "2d" ? visibleBounds2D(snap) : visibleBounds3D(snap);
 }
+
+/** The snapshot fields the visible bounds follow, for a layer's dependency list. */
+export const visibleBoundsDeps = (snap: ViewportRenderSnapshot): readonly unknown[] => [
+  snap.mode,
+  snap.orthographic.left,
+  snap.orthographic.right,
+  snap.orthographic.top,
+  snap.orthographic.bottom,
+  snap.target.x,
+  snap.target.y,
+  snap.unitsPerPixel,
+  snap.width,
+  snap.height,
+  snap.scaleFactor,
+];

@@ -2,21 +2,20 @@ import type { State } from "@/features/core/store";
 import { derivedClosure } from "@/features/problem/selectors";
 import { UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
+import { clipHalfPlanesToBoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { isConvexChain, isConvexPolygon } from "@lpviz/math/polygon";
-import type { Constraint, Vec } from "@lpviz/math/types";
+import type { Vec } from "@lpviz/math/types";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { FatLine } from "../helpers/fatLine";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { visibleBounds2D } from "../helpers/visibleBounds";
+import { visibleBounds2D, visibleBoundsDeps } from "../helpers/visibleBounds";
 import type { LayerPlacement } from "../Layer";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
 export const POLYTOPE_EDGE_THICKNESS = 2;
-const EPS = 1e-10;
 
 const translucentFill = (color: string) =>
   new MeshBasicMaterial({
@@ -38,47 +37,6 @@ function buildShapeFromVertices(vertices: ReadonlyArray<Vec>) {
   for (let i = 1; i < vertices.length; i++) shape.lineTo(vertices[i]![0], vertices[i]![1]);
   shape.closePath();
   return shape;
-}
-
-function clipPolygonToHalfPlane(polygon: Vec[], line: Constraint): Vec[] {
-  if (polygon.length === 0) return [];
-  const [A, B, C] = line;
-  const inside = (p: Vec) => A * p[0] + B * p[1] <= C + EPS;
-  const intersect = (s: Vec, e: Vec): Vec => {
-    const dx = e[0] - s[0],
-      dy = e[1] - s[1];
-    const denom = A * dx + B * dy;
-    if (Math.abs(denom) < EPS) return e;
-    const t = (C - A * s[0] - B * s[1]) / denom;
-    return [s[0] + t * dx, s[1] + t * dy];
-  };
-  const result: Vec[] = [];
-  let prev = polygon[polygon.length - 1]!,
-    prevIn = inside(prev);
-  for (const cur of polygon) {
-    const curIn = inside(cur);
-    if (curIn) {
-      if (!prevIn) result.push(intersect(prev, cur));
-      result.push(cur);
-    } else if (prevIn) result.push(intersect(prev, cur));
-    prev = cur;
-    prevIn = curIn;
-  }
-  return result;
-}
-
-function clipRegionToBoundingBox(constraints: Constraint[], bounds: BoundingBox): Vec[] {
-  let polygon: Vec[] = [
-    [bounds.minX, bounds.minY],
-    [bounds.maxX, bounds.minY],
-    [bounds.maxX, bounds.maxY],
-    [bounds.minX, bounds.maxY],
-  ];
-  for (const line of constraints) {
-    polygon = clipPolygonToHalfPlane(polygon, line);
-    if (polygon.length === 0) return [];
-  }
-  return polygon;
 }
 
 type PolytopeRenderResult = {
@@ -109,7 +67,7 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
     isClosedRegion && displayVertices.length >= 3
       ? displayVertices
       : completionMode === "open" && polytope?.kind === "unbounded" && hasConstraints(polytope)
-        ? clipRegionToBoundingBox(polytope.constraints, bounds)
+        ? clipHalfPlanesToBoundingBox(polytope.constraints, bounds)
         : [];
 
   const normalSegments: number[] = [];
@@ -170,20 +128,7 @@ export class PolytopeBaseLayer extends LayerBase {
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
-    return [
-      state.vertices,
-      state.completionMode,
-      state.highlightIndex,
-      state.polytope,
-      snap.mode,
-      snap.orthographic.left,
-      snap.orthographic.right,
-      snap.orthographic.top,
-      snap.orthographic.bottom,
-      snap.unitsPerPixel,
-      snap.target.x,
-      snap.target.y,
-    ];
+    return [state.vertices, state.completionMode, state.highlightIndex, state.polytope, ...visibleBoundsDeps(snap)];
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
