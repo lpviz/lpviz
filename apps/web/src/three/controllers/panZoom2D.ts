@@ -1,5 +1,5 @@
 import { getState } from "@/features/core/store";
-import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewport/runtime/controls2d";
+import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewport/runtime/channels";
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
 import type { ViewportRect } from "@lpviz/viewport/snapshot";

@@ -55,6 +55,12 @@ export function buildViewportTransitionPlan({ snapshot, to3D, viewAngle }: { sna
   };
 }
 
+/** The eased progress of a transition `elapsedMs` after it began: 0 at the start, 1 from its duration on. */
+export function transitionProgressAt(plan: ViewportTransitionPlan, elapsedMs: number): number {
+  const t = Math.max(0, Math.min(elapsedMs / Math.max(1, plan.duration), 1));
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
 export function buildViewportTransitionFrame(plan: ViewportTransitionPlan, progress: number, rect: ViewportRect): ViewportTransitionFrame {
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const viewAngle = lerpPoint(plan.startAngles, plan.endAngles, clampedProgress);

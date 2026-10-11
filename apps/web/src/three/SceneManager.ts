@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { singleFrame } from "@/features/core/timers";
 import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { getViewportRenderSnapshot } from "@/features/viewport/runtime/channels";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer, WebGLRenderTarget } from "three";

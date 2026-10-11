@@ -1,6 +1,5 @@
 import type { AppContext } from "@/app/appContext";
 import { createEditorTools } from "@/features/polytope-editor/editorTools";
-import { createViewportRuntime } from "@/features/viewport/runtime";
 import { attachCanvasGestures } from "@/ui/canvas/canvasGestures";
 import { attachCanvasShortcuts } from "@/ui/canvas/canvasShortcuts";
 import { mountCanvasGL } from "@/ui/canvas/mountCanvasGL";
@@ -21,8 +20,9 @@ export function createCanvasStage(parent: HTMLElement) {
   main.append(viewport);
   parent.append(main);
   const gl = mountCanvasGL(viewport);
-  const viewportApi = createViewportRuntime({ viewportBridge: gl.bridge });
-  gl.bridge.getCanvasElement().focus();
+  const { viewportApi } = gl;
+  const canvas = viewportApi.getCanvasElement();
+  canvas.focus();
   let destroyChrome: (() => void) | null = null;
 
   const mountChrome = (ctx: AppContext) => {
@@ -30,8 +30,8 @@ export function createCanvasStage(parent: HTMLElement) {
     // the editor for the problem's dimension, driven by the canvas's gestures; a finger needs a
     // more forgiving close target than a mouse cursor
     const tools = createEditorTools({ ...ctx.editor, closeHitRadiusPx: hasCoarsePointer() ? 24 : 12 });
-    const detachGestures = attachCanvasGestures(gl.bridge.getCanvasElement(), tools);
-    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), { ...ctx.actions, showReplayDuration: replayDuration.show });
+    const detachGestures = attachCanvasGestures(canvas, tools);
+    const detachShortcuts = attachCanvasShortcuts(canvas, { ...ctx.actions, showReplayDuration: replayDuration.show });
     const gallery = mountProblemGallery(main, ctx.actions);
     const toolbar = mountToolbar(main, ctx.actions);
     const help = mountHelpButton(main, viewport);
@@ -63,7 +63,6 @@ export function createCanvasStage(parent: HTMLElement) {
     mountChrome,
     destroy: () => {
       destroyChrome?.();
-      viewportApi.destroy();
       gl.destroy();
       main.remove();
     },

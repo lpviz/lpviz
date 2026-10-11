@@ -1,4 +1,4 @@
-import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewport/runtime/controls3d";
+import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewport/runtime/channels";
 import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
 import { unitsPerPixelAtDistance } from "@lpviz/viewport/perspective";
 import { configurePerspectiveCameraFromSnapshot, zoomPerspectivePoseAtCanvasPoint } from "@lpviz/viewport/projection3d";

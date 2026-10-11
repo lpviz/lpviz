@@ -1,10 +1,10 @@
 import { el } from "@/ui/dom";
+import { createViewportRuntime } from "@/features/viewport/runtime";
 import type { ViewportBridge } from "@/features/viewport/types";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
 import { attachOrbit3D } from "@/three/controllers/orbit3D";
 import { attachPanZoom2D } from "@/three/controllers/panZoom2D";
-import { TransitionController } from "@/three/controllers/TransitionController";
 import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLayer";
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
 import { GridLayer } from "@/three/layers/GridLayer";
@@ -21,8 +21,18 @@ export function mountCanvasGL(parent: HTMLElement) {
   const canvas = el("canvas", { className: "canvas-stage__gl-canvas", attrs: { tabindex: "0" } });
   parent.append(canvas);
   const mgr = new SceneManager(canvas);
-  // the transition's tick runs before the camera's, so a frame it publishes is posed the same frame
-  const transitionCtl = new TransitionController(mgr);
+  const bridge: ViewportBridge = {
+    getCanvasElement: () => canvas,
+    getCanvasRect: () => canvas.getBoundingClientRect(),
+    invalidate: (repaint) => mgr.invalidate(repaint),
+    addTick: (tick) => {
+      mgr.addTick(tick);
+      return () => mgr.removeTick(tick);
+    },
+  };
+  // the runtime's tick (the 2D/3D transition's frame) registers before the camera's, so a frame it
+  // publishes is posed the same frame
+  const viewportApi = createViewportRuntime({ viewportBridge: bridge });
   const cameraCtl = new CameraController(mgr);
   // the 2D listeners register before the 3D ones on the same targets
   const detachPanZoom2D = attachPanZoom2D(canvas);
@@ -45,18 +55,13 @@ export function mountCanvasGL(parent: HTMLElement) {
   ];
   for (const layer of layers) mgr.addLayer(layer);
   mgr.precompile(cameraCtl.perspective);
-  const bridge: ViewportBridge = {
-    getCanvasElement: () => canvas,
-    getCanvasRect: () => canvas.getBoundingClientRect(),
-    invalidate: (repaint) => mgr.invalidate(repaint),
-  };
   return {
-    bridge,
+    viewportApi,
     destroy: () => {
+      viewportApi.destroy();
       detachOrbit3D();
       detachPanZoom2D();
       cameraCtl.dispose();
-      transitionCtl.dispose();
       mgr.dispose();
       canvas.remove();
     },

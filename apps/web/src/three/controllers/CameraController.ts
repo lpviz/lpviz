@@ -1,4 +1,4 @@
-import { getViewportRenderSnapshot, subscribeViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import { getViewportRenderSnapshot, subscribeViewportRenderSnapshot } from "@/features/viewport/runtime/channels";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { poseOf, samePerspectivePose } from "@lpviz/viewport/snapshot";

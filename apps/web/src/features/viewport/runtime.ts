@@ -10,7 +10,7 @@ import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/perspective";
 import { buildViewport2DSnapshot, deriveViewport2DState, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D, type Viewport2DState } from "@lpviz/viewport/projection2d";
 import { toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
 import type { ViewportPerspectivePose, ViewportZBounds } from "@lpviz/viewport/snapshot";
-import { buildViewport2DStateFromTransitionFrame, buildViewportTransitionFrame, buildViewportTransitionPlan, type ViewportTransitionPlan } from "@lpviz/viewport/transition";
+import { buildViewport2DStateFromTransitionFrame, buildViewportTransitionFrame, buildViewportTransitionPlan, transitionProgressAt, type ViewportTransitionPlan } from "@lpviz/viewport/transition";
 import {
   buildResetViewport3DView,
   buildViewport3DSnapshot,
@@ -19,10 +19,17 @@ import {
   getMaxPerspectiveDistance3D,
   getViewAngleFromSnapshot3D,
 } from "@lpviz/viewport/view3d";
-import { get2DControlsConfig, reset2DControlsConfig, set2DControlsConfig, type Controls2DConfig } from "./runtime/controls2d";
-import { reset3DControlsConfig, set3DControlsConfig } from "./runtime/controls3d";
-import { getViewportRenderSnapshot, resetViewportRenderSnapshot, setViewportRenderSnapshot } from "./runtime/snapshot";
-import { resetTransitionConfig, setTransitionConfig } from "./runtime/transitionConfig";
+import {
+  type Controls2DConfig,
+  get2DControlsConfig,
+  getViewportRenderSnapshot,
+  reset2DControlsConfig,
+  reset3DControlsConfig,
+  resetViewportRenderSnapshot,
+  set2DControlsConfig,
+  set3DControlsConfig,
+  setViewportRenderSnapshot,
+} from "./runtime/channels";
 import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportBridge, type ViewportRenderSnapshot } from "./types";
 import { showsDepth } from "./viewportState";
@@ -70,7 +77,7 @@ export type ViewportRuntime = ViewportApi & {
  *
  * Three snapshots are in play: the owned one (held here), the live one (`liveSnapshot()`: what the
  * view shows now, which is the 2D controls' own while they are wanted) and the published one (what
- * the canvas reads, kept in runtime/snapshot.ts).
+ * the canvas reads, kept in runtime/channels.ts).
  */
 export function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): ViewportRuntime {
   let ownedSnapshot: ViewportRenderSnapshot = { ...DEFAULT_VIEWPORT_RENDER_SNAPSHOT };
@@ -182,10 +189,9 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     publish3DControlsConfig({ syncFromSnapshot: enabled });
   };
 
-  // ---- the transition: owns the snapshot from begin to complete ----
-  let transitionRun = 0;
-  let transitionProgress = 0;
-  let transitionPlan: ViewportTransitionPlan | null = null;
+  // ---- the transition: owns the snapshot from begin to complete, stepping its own clock at the
+  // start of each frame the canvas renders ----
+  let transition: { plan: ViewportTransitionPlan; startTime: number; progress: number } | null = null;
 
   // Derive the frame at `progress` and adopt it as the owned snapshot. While a to-2D transition
   // runs, the 2D controls' planar state follows the frame so the handoff at completion is seamless.
@@ -208,7 +214,6 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
 
     const baseSnapshot = liveSnapshot();
     const viewAngle = controls3DActive ? getViewAngleFromSnapshot3D(baseSnapshot) : getState().viewAngle;
-    const startTime = performance.now();
 
     if (wants2DControls()) {
       adoptPlanarSnapshot();
@@ -220,44 +225,39 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     }
 
     const plan = buildViewportTransitionPlan({ snapshot: baseSnapshot, to3D, viewAngle });
-    transitionPlan = plan;
-    transitionProgress = 0;
+    transition = { plan, startTime: performance.now(), progress: 0 };
     setState({ isTransitioning3D: true, is3DMode: to3D, viewAngle: { ...plan.startAngles } });
     publishSnapshot(renderTransitionFrame(plan, 0).snapshot);
-
-    transitionRun += 1;
-    setTransitionConfig({
-      active: true,
-      runId: transitionRun,
-      startTime,
-      duration: plan.duration,
-      onFrame: (easedProgress) => {
-        if (!transitionPlan) return;
-        transitionProgress = easedProgress;
-        publishSnapshot(renderTransitionFrame(transitionPlan, easedProgress).snapshot);
-      },
-      onComplete: () => {
-        const completed = transitionPlan;
-        if (completed) {
-          transitionProgress = 1;
-          renderTransitionFrame(completed, 1);
-        }
-        // Synchronous mode switch: clear the plan before setState so the
-        // store subscription sees the transition inactive and activates the
-        // 2D/3D controls without an extra RAF delay.
-        transitionPlan = null;
-        if (completed) setState({ isTransitioning3D: false, viewAngle: { ...completed.endAngles } });
-        resetTransitionConfig();
-        publishSnapshot(liveSnapshot());
-      },
-    });
+    // every transition frame rebuilds every layer: the flatten they read changes each frame
+    viewportBridge.invalidate();
   };
+  // Each frame maps the wall clock onto the eased progress and publishes the snapshot for it; the
+  // last one completes the transition.
+  const transitionTick = () => {
+    if (!transition) return;
+    const { plan, startTime } = transition;
+    const progress = transitionProgressAt(plan, performance.now() - startTime);
+    transition.progress = progress;
+    publishSnapshot(renderTransitionFrame(plan, progress).snapshot);
+    if (progress < 1) {
+      viewportBridge.invalidate();
+      return;
+    }
+    renderTransitionFrame(plan, 1);
+    // Synchronous mode switch: clear the plan before setState so the store subscription sees the
+    // transition inactive and activates the 2D/3D controls without an extra RAF delay.
+    transition = null;
+    setState({ isTransitioning3D: false, viewAngle: { ...plan.endAngles } });
+    viewportBridge.invalidate();
+    publishSnapshot(liveSnapshot());
+  };
+  const removeTransitionTick = viewportBridge.addTick(transitionTick);
 
   // ---- layout: the canvas rect changed; re-derive and republish whichever snapshot is live ----
   const refreshCanvasRect = () => {
     rect = viewportBridge.getCanvasRect();
-    if (transitionPlan) {
-      publishSnapshot(renderTransitionFrame(transitionPlan, transitionProgress).snapshot);
+    if (transition) {
+      publishSnapshot(renderTransitionFrame(transition.plan, transition.progress).snapshot);
       return;
     }
     if (wants2DControls()) {
@@ -310,7 +310,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
 
       // the transition owns the snapshot until it completes; don't let a mode
       // change mid-transition publish a competing controls snapshot
-      if (transitionPlan) return;
+      if (transition) return;
       if (controls2DActive) {
         adoptPlanarSnapshot();
         sync2DControls(true);
@@ -372,8 +372,8 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     getCanvasRect: () => rect,
     destroy: () => {
       clearActiveNavigation();
-      transitionPlan = null;
-      resetTransitionConfig();
+      transition = null;
+      removeTransitionTick();
       reset2DControlsConfig();
       reset3DControlsConfig();
       subscriptions.abort();
