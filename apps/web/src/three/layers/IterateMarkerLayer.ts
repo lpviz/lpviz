@@ -2,17 +2,14 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePosition } from "../helpers/iteratePositions";
 import type { SpriteShape } from "../helpers/pointCloud";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import type { RenderPassName } from "../Layer";
-import { PALETTE } from "../palette";
-import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
+import type { RenderSlot } from "../Layer";
+import { PALETTE, SPRITE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 type IterateMarkerConfig = {
   pixelSize: number;
   shape: SpriteShape;
-  renderOrder: number;
-  renderPass: RenderPassName;
+  slot: RenderSlot;
   /** the iterate index to mark, or null to hide */
   selectIndex: (state: State) => number | null;
   /** the inputs `selectIndex` reads, beyond the iterate path */
@@ -22,11 +19,12 @@ type IterateMarkerConfig = {
 // One sprite at a single iterate of the path: the star on the optimum and the hover highlight
 // differ only in shape, size, pass and which index they pick.
 class IterateMarkerLayer extends PointCloudLayer {
+  override readonly invalidationKeys = ["iterate"] as const;
   private readonly selectIndex: IterateMarkerConfig["selectIndex"];
   private readonly selectorDeps: IterateMarkerConfig["selectorDeps"];
 
   constructor({ selectIndex, selectorDeps, ...style }: IterateMarkerConfig) {
-    super({ ...style, color: PALETTE.iterateMarker, invalidationKeys: ["iterate"], vertexColors: false });
+    super({ ...style, color: PALETTE.iterateMarker, vertexColors: false });
     this.selectIndex = selectIndex;
     this.selectorDeps = selectorDeps;
   }
@@ -51,10 +49,9 @@ class IterateMarkerLayer extends PointCloudLayer {
 // drawn out to.
 export const createIterateHighlightLayer = () =>
   new IterateMarkerLayer({
-    pixelSize: ITERATE_POINT_PIXEL_SIZE * 2,
+    pixelSize: SPRITE.iterate * 2,
     shape: "disc",
-    renderOrder: RENDER_ORDER.iterateHighlight,
-    renderPass: "trace",
+    slot: "iterateHighlight",
     selectorDeps: (state) => [state.highlightIteratePathIndex, state.replayActive],
     // A replay's path ends on an interpolated head that slides along the
     // current segment, so taking its last point keeps this marker in lockstep
@@ -69,10 +66,9 @@ export const createIterateHighlightLayer = () =>
 // replay animation has finished playing out.
 export const createIterateStarLayer = () =>
   new IterateMarkerLayer({
-    pixelSize: 27,
+    pixelSize: SPRITE.iterateStar,
     shape: "star",
-    renderOrder: RENDER_ORDER.iterateStar,
-    renderPass: "overlay",
+    slot: "iterateStar",
     selectorDeps: (state) => [state.replayActive],
     // `replayActive` falls exactly when the replay ends — whether it played out
     // or was stopped — and both leave the full path on screen, so the marker is

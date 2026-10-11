@@ -2,8 +2,7 @@ import type { State } from "@/features/core/store";
 import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, SPRITE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
@@ -16,17 +15,10 @@ import { PointCloudLayer } from "./base/PointCloudLayer";
 // Unlike the other iterate layers it does not hide during the 2D/3D
 // transition.
 export class SolverStartLayer extends PointCloudLayer {
+  override readonly invalidationKeys = ["iterate"] as const;
+
   constructor() {
-    super({
-      color: PALETTE.solverStart,
-      opacity: 0.9,
-      pixelSize: 15,
-      shape: "ring",
-      renderOrder: RENDER_ORDER.solverStart,
-      renderPass: "overlay",
-      invalidationKeys: ["iterate"],
-      vertexColors: false,
-    });
+    super({ color: PALETTE.solverStart, opacity: 0.9, pixelSize: SPRITE.solverStart, shape: "ring", slot: "solverStart", vertexColors: false });
   }
 
   // shown through the 2D/3D transition too, unlike the other iterate layers

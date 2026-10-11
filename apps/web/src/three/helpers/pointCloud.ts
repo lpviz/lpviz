@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Points, PointsMaterial } from "three";
+import { renderOrderOf, type RenderSlot } from "../Layer";
 import { applyHugeBounds } from "./hugeBounds";
 
 export type SpriteShape = "disc" | "ring" | "square" | "star";
@@ -8,7 +9,7 @@ export type PointCloudStyle = {
   opacity?: number;
   pixelSize: number;
   shape: SpriteShape;
-  renderOrder: number;
+  slot: RenderSlot;
   // true to support an optional per-point color attribute (phase coloring)
   vertexColors: boolean;
 };
@@ -84,7 +85,7 @@ export class PointCloud {
     const geometry = new BufferGeometry();
     applyHugeBounds(geometry);
     this.points = new Points(geometry, this.plain);
-    this.points.renderOrder = style.renderOrder;
+    this.points.renderOrder = renderOrderOf[style.slot];
     this.points.frustumCulled = false;
     this.points.visible = false;
   }

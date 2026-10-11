@@ -3,16 +3,14 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { clipLineToBoundingBox } from "@lpviz/math/bounds";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { FatLine } from "../helpers/fatLine";
-import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { visibleBounds, visibleBoundsDeps } from "../helpers/visibleBounds";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
-const CONSTRAINT_LINE_THICKNESS = 2;
-
 export class ConstraintHighlightLayer extends LayerBase {
-  private readonly line = new FatLine({ color: PALETTE.accent, linewidth: CONSTRAINT_LINE_THICKNESS, renderOrder: RENDER_ORDER.constraintLines });
+  readonly slot = "constraintHighlight" as const;
+  private readonly line = new FatLine({ color: PALETTE.accent, linewidth: STROKE.constraintHighlight, slot: this.slot });
   readonly object3D = this.line.object3D;
   // "grid" fires on zoom/resize/pan, which move the visible bounds this
   // layer clips against; the dependency check below keeps updates cheap.

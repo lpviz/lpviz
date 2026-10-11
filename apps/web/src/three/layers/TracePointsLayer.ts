@@ -1,11 +1,8 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, SPRITE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
-
-const TRACE_POINT_PIXEL_SIZE = 6;
 // a path with more iterates than this is sampled, so the cloud stays this big per trace
 const MAX_TRACE_POINT_SPRITES = 1200;
 
@@ -43,16 +40,10 @@ function getCachedTracePointPositions(entry: TraceEntry) {
 
 // Sampled points of every traced path, in one cloud.
 export class TracePointsLayer extends PointCloudLayer {
+  override readonly invalidationKeys = ["trace"] as const;
+
   constructor() {
-    super({
-      color: PALETTE.trace,
-      pixelSize: TRACE_POINT_PIXEL_SIZE,
-      shape: "disc",
-      renderOrder: RENDER_ORDER.tracePoints,
-      renderPass: "trace",
-      invalidationKeys: ["trace"],
-      vertexColors: false,
-    });
+    super({ color: PALETTE.trace, pixelSize: SPRITE.tracePoint, shape: "disc", slot: "tracePoints", vertexColors: false });
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {

@@ -4,20 +4,17 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Vec } from "@lpviz/math/types";
 import { Group } from "three";
 import { PointCloud } from "../helpers/pointCloud";
-import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { PALETTE } from "../palette";
+import { PALETTE, SPRITE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
-
-const VERTEX_PIXEL_SIZE = 10;
 
 // The drawn vertices: circles, except the two ends of an open chain, which are squares.
 export class PolytopeVerticesLayer extends LayerBase {
   readonly object3D = new Group();
-  override readonly renderPass = "vertices" as const;
+  readonly slot = "polytopeVertices" as const;
   override readonly invalidationKeys = ["polytope"] as const;
-  private readonly circles = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, shape: "disc", renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
-  private readonly squares = new PointCloud({ color: PALETTE.accent, pixelSize: VERTEX_PIXEL_SIZE, shape: "square", renderOrder: RENDER_ORDER.polytopeVertices, vertexColors: false });
+  private readonly circles = new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "disc", slot: this.slot, vertexColors: false });
+  private readonly squares = new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "square", slot: this.slot, vertexColors: false });
 
   constructor() {
     super();

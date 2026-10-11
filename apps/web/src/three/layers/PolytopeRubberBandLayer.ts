@@ -2,15 +2,14 @@ import { getCurrentMouse } from "@/features/core/currentMouse";
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { FatLine } from "../helpers/fatLine";
-import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
-import { POLYTOPE_EDGE_THICKNESS } from "./PolytopeBaseLayer";
 
 // The edge being drawn: from the last placed vertex to the pointer, while the region is a draft.
 export class PolytopeRubberBandLayer extends LayerBase {
-  private readonly line = new FatLine({ color: PALETTE.polytopeOutline, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
+  readonly slot = "polytopeEdges" as const;
+  private readonly line = new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot });
   readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["polytope"] as const;
   private readonly positions = new Float32Array(6);

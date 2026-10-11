@@ -2,17 +2,16 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { isUnboundedDirection } from "@/features/problem/selectors";
 import { FatLine } from "../helpers/fatLine";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
-const OBJECTIVE_LINE_THICKNESS = 3;
 const OBJECTIVE_HEAD_LENGTH_PX = 16;
 const ARROW_HALF_ANGLE = Math.PI / 6;
 const OBJECTIVE_EPSILON = 1e-3;
 
 export class ObjectiveLayer extends LayerBase {
-  private readonly line = new FatLine({ color: PALETTE.objective, linewidth: OBJECTIVE_LINE_THICKNESS, renderOrder: RENDER_ORDER.objective });
+  readonly slot = "objective" as const;
+  private readonly line = new FatLine({ color: PALETTE.objective, linewidth: STROKE.objective, slot: this.slot });
   readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["objective"] as const;
 

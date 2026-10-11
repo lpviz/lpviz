@@ -8,14 +8,11 @@ import type { Vec } from "@lpviz/math/types";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { FatLine } from "../helpers/fatLine";
-import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
 import { visibleBounds2D, visibleBoundsDeps } from "../helpers/visibleBounds";
-import type { LayerPlacement } from "../Layer";
-import { PALETTE } from "../palette";
+import { type LayerPlacement, passOf, renderOrderOf } from "../Layer";
+import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
-
-export const POLYTOPE_EDGE_THICKNESS = 2;
 
 const translucentFill = (color: string) =>
   new MeshBasicMaterial({
@@ -103,17 +100,18 @@ function buildPolytopeGeometry(state: State, snap: ViewportRenderSnapshot): Poly
 
 export class PolytopeBaseLayer extends LayerBase {
   readonly object3D = new Group();
+  readonly slot = "polytopeEdges" as const;
   override readonly invalidationKeys = ["polytope"] as const;
   private readonly fillMaterial = translucentFill(PALETTE.polytopeFill);
   // a nonconvex drawing is filled in the accent colour, so the rejection is visible
   private readonly nonconvexFillMaterial = translucentFill(PALETTE.accent);
   private readonly fillMesh = new Mesh(undefined, this.fillMaterial);
-  private readonly normalEdges = new FatLine({ color: PALETTE.polytopeOutline, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
-  private readonly highlightEdges = new FatLine({ color: PALETTE.accent, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
+  private readonly normalEdges = new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot });
+  private readonly highlightEdges = new FatLine({ color: PALETTE.accent, linewidth: STROKE.polytopeEdge, slot: this.slot });
 
   constructor() {
     super();
-    this.fillMesh.renderOrder = RENDER_ORDER.polytopeFill;
+    this.fillMesh.renderOrder = renderOrderOf.polytopeFill;
     this.fillMesh.frustumCulled = false;
     this.fillMesh.visible = false;
     this.object3D.add(this.normalEdges.object3D, this.highlightEdges.object3D);
@@ -122,8 +120,8 @@ export class PolytopeBaseLayer extends LayerBase {
   // the fill renders in the transparent pass, under everything drawn on the floor; the edges above it
   override placements(): readonly LayerPlacement[] {
     return [
-      { object3D: this.fillMesh, pass: "transparent" },
-      { object3D: this.object3D, pass: "foreground" },
+      { object3D: this.fillMesh, pass: passOf.polytopeFill },
+      { object3D: this.object3D, pass: passOf[this.slot] },
     ];
   }
 

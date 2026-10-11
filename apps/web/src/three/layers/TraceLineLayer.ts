@@ -3,13 +3,11 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Group } from "three";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
-import { RENDER_ORDER } from "../helpers/renderOrder";
 import { stampTraceSequence } from "../helpers/traceSequence";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
 
 const TRACE_OPACITY = 0.4;
-const TRACE_LINE_THICKNESS = 2;
 
 type TraceEntry = State["traceBuffer"][number];
 
@@ -22,7 +20,7 @@ type TraceEntry = State["traceBuffer"][number];
 // previously drawn curves can never shift between frames.
 export class TraceLineLayer extends ZScaledLayer {
   readonly object3D = new Group();
-  override readonly renderPass = "traceLines" as const;
+  readonly slot = "traceLine" as const;
   override readonly invalidationKeys = ["trace"] as const;
   private pool: PathRibbon[] = [];
   private assigned = new Map<TraceEntry, PathRibbon>();
@@ -30,12 +28,7 @@ export class TraceLineLayer extends ZScaledLayer {
   private nextSeq = 0;
 
   private makeRibbon(): PathRibbon {
-    const ribbon = new PathRibbon({
-      color: PALETTE.trace,
-      opacity: TRACE_OPACITY,
-      linewidth: TRACE_LINE_THICKNESS,
-    });
-    ribbon.mesh.renderOrder = RENDER_ORDER.traceLine;
+    const ribbon = new PathRibbon({ color: PALETTE.trace, opacity: TRACE_OPACITY, linewidth: STROKE.trace, slot: this.slot });
     this.object3D.add(ribbon.mesh);
     this.pool.push(ribbon);
     return ribbon;

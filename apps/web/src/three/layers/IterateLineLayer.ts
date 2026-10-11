@@ -3,24 +3,16 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { phaseColorsOf, phasesCovering } from "../helpers/phaseColors";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
-
-const ITERATE_LINE_THICKNESS = 3;
 
 // The iterate path renders as a screen-space ribbon (see pathRibbon.ts); phase coloring rides
 // along as a per-point color texture, one draw call for the whole path.
 export class IterateLineLayer extends ZScaledLayer {
-  private readonly ribbon = new PathRibbon({ color: PALETTE.iterate, opacity: 1, linewidth: ITERATE_LINE_THICKNESS });
+  readonly slot = "iterateLine" as const;
+  private readonly ribbon = new PathRibbon({ color: PALETTE.iterate, opacity: 1, linewidth: STROKE.iteratePath, slot: this.slot });
   readonly object3D = this.ribbon.mesh;
-  override readonly renderPass = "trace" as const;
   override readonly invalidationKeys = ["iterate"] as const;
-
-  constructor() {
-    super();
-    this.object3D.renderOrder = RENDER_ORDER.iterateLine;
-  }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
     return [state.iteratePath, state.iteratePhases, snap.mode];

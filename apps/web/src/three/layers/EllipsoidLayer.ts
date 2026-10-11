@@ -7,15 +7,10 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { FatLine, lineDepthMaterial, lineGeometry, setupLine } from "../helpers/fatLine";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, STROKE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
 
-const ACTIVE_THICKNESS = 2.5;
-const TRAIL_THICKNESS = 1.5;
-// The localizing polyhedron is the region actually still under consideration: thinner and fainter
-// than the ellipse it accompanies, so it reads as a boundary without competing with the path.
-const POLYGON_THICKNESS = 1.25;
+// the localizing polyhedron is the region actually still under consideration
 const POLYGON_OPACITY = 0.7;
 const ACTIVE_OPACITY = 0.95;
 // Only a mild fade with age: each ellipsoid is ~77% the area of the one before, so the older ones
@@ -98,11 +93,11 @@ function writeEllipseMatrix(matrix: Matrix4, ellipsoids: EllipsoidPath, index: n
 // as for the iterate path.
 export class EllipsoidLayer extends ZScaledLayer {
   readonly object3D = new Group();
-  override readonly renderPass = "trace" as const;
+  readonly slot = "ellipsoid" as const;
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
-  private readonly polygon = new FatLine({ color: PALETTE.ellipsoid, linewidth: POLYGON_THICKNESS, opacity: POLYGON_OPACITY, renderOrder: RENDER_ORDER.ellipsoid });
+  private readonly polygon = new FatLine({ color: PALETTE.ellipsoid, linewidth: STROKE.localizingPolygon, opacity: POLYGON_OPACITY, slot: this.slot });
   private readonly matrix = new Matrix4();
   private readonly indices: number[] = [];
   private polygonScratch = new Float32Array(0);
@@ -115,7 +110,7 @@ export class EllipsoidLayer extends ZScaledLayer {
     this.object3D.add(this.polygon.object3D);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
-      const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), RENDER_ORDER.ellipsoid);
+      const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), this.slot);
       segments.matrixAutoUpdate = false;
       this.slots.push(segments);
       this.object3D.add(segments);
@@ -220,5 +215,5 @@ function slotOpacity(slot: number) {
 
 function slotMaterial(slot: number, is3D: boolean) {
   const newest = slot >= TRAIL_COUNT - 1;
-  return lineDepthMaterial(PALETTE.ellipsoid, newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS, is3D, Number(slotOpacity(slot).toFixed(3)));
+  return lineDepthMaterial(PALETTE.ellipsoid, newest ? STROKE.ellipsoidActive : STROKE.ellipsoidTrail, is3D, Number(slotOpacity(slot).toFixed(3)));
 }

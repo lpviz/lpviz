@@ -1,9 +1,7 @@
-import { getState } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
+import { CompositeQuad, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
 // World-anchored impostor for the traceLines render pass in 2D mode. Trace chunks are immutable
@@ -58,7 +56,7 @@ type ViewParams = {
   centerY: number;
 };
 
-export class TraceCache {
+export class TraceCache implements TraceImpostor {
   private cacheCamera = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
   private quadScene = new Scene();
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
@@ -151,9 +149,9 @@ export class TraceCache {
   // Prepares the impostor for the traceLines pass. Returns the scene with
   // the composite quads (the caller renders it in place of the pass), or
   // null when the pass must render directly.
-  prepare(renderer: WebGLRenderer, traceLinesScene: Scene): TracePassImpostor | null {
-    const snapshot = getViewportRenderSnapshot();
-    if (snapshot.mode !== "2d" || getState().isTransitioning3D) {
+  prepare(frame: TraceFrame): TracePassImpostor | null {
+    const { renderer, snapshot, state, traceLines: traceLinesScene } = frame;
+    if (snapshot.mode !== "2d" || state.isTransitioning3D) {
       // keep a stale billboard from surviving a round trip through 3D
       this.fullRebuildNeeded = true;
       return null;

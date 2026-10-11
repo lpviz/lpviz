@@ -1,9 +1,7 @@
-import { getState } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
+import { CompositeQuad, drawsNothing, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 
 // Motion-time compositor for the traceLines pass in 3D mode.
 //
@@ -32,7 +30,7 @@ void main() {
 }
 `;
 
-export class Trace3DCompositor {
+export class Trace3DCompositor implements TraceImpostor {
   private quadScene = new Scene();
   private quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
@@ -50,9 +48,10 @@ export class Trace3DCompositor {
 
   // Returns the composite quad when the pass should go through the offscreen
   // target this frame, or null to render directly.
-  prepare(renderer: WebGLRenderer, camera: Camera, traceLinesScene: Scene, occluderScenes: readonly Scene[]): TracePassImpostor | null {
-    const snapshot = getViewportRenderSnapshot();
-    const state = getState();
+  prepare(frame: TraceFrame): TracePassImpostor | null {
+    // a pass with nothing to draw needs no impostor
+    if (drawsNothing(frame.traceLines)) return null;
+    const { renderer, camera, snapshot, state, traceLines: traceLinesScene, occluders: occluderScenes } = frame;
     if (snapshot.mode !== "3d") {
       this.target.release();
       this.lastView.fill(NaN);
