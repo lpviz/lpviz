@@ -1,6 +1,7 @@
 import { getViewportRenderSnapshot, subscribeViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
+import { poseOf, samePerspectivePose } from "@lpviz/viewport/snapshot";
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
 import type { SceneManager } from "../SceneManager";
 
@@ -60,21 +61,13 @@ export class CameraController {
 
   private perspectiveMatches(snap: ViewportRenderSnapshot): boolean {
     const camera = this.perspective;
-    const target = this.perspectiveTarget;
+    const lens = snap.perspective;
     return (
-      nearlyEqual(camera.fov, snap.perspective.fov) &&
-      nearlyEqual(camera.aspect, snap.perspective.aspect) &&
-      nearlyEqual(camera.near, snap.perspective.near) &&
-      nearlyEqual(camera.far, snap.perspective.far) &&
-      nearlyEqual(camera.position.x, snap.perspective.position.x) &&
-      nearlyEqual(camera.position.y, snap.perspective.position.y) &&
-      nearlyEqual(camera.position.z, snap.perspective.position.z) &&
-      nearlyEqual(camera.up.x, snap.perspective.up.x) &&
-      nearlyEqual(camera.up.y, snap.perspective.up.y) &&
-      nearlyEqual(camera.up.z, snap.perspective.up.z) &&
-      nearlyEqual(target.x, snap.target.x) &&
-      nearlyEqual(target.y, snap.target.y) &&
-      nearlyEqual(target.z, snap.target.z)
+      nearlyEqual(camera.fov, lens.fov) &&
+      nearlyEqual(camera.aspect, lens.aspect) &&
+      nearlyEqual(camera.near, lens.near) &&
+      nearlyEqual(camera.far, lens.far) &&
+      samePerspectivePose({ position: camera.position, up: camera.up, target: this.perspectiveTarget }, poseOf(snap), EPS)
     );
   }
 

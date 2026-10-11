@@ -73,7 +73,7 @@ describe("fitViewport3DToBounds", () => {
   for (const { name, viewAngle, bounds, zBounds } of cases) {
     test(`${name}: projected corners stay inside the padded area`, () => {
       const snap = snapshotAtAngle(viewAngle);
-      const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds);
+      const view = fitViewport3DToBounds(snap, rect, bounds, { sidebarWidth: SIDEBAR, padding: PAD, zBounds });
       const fitted = buildViewport3DSnapshot(snap, view.pose, rect);
       const ext = projectedExtent(fitted, bounds, zBounds);
       expect(ext.minPx).toBeGreaterThanOrEqual(SIDEBAR + PAD - 1);
@@ -87,7 +87,7 @@ describe("fitViewport3DToBounds", () => {
     const inset = 104;
     for (const { viewAngle, bounds, zBounds } of cases) {
       const snap = snapshotAtAngle(viewAngle);
-      const view = fitViewport3DToBounds(snap, rect, SIDEBAR, bounds, PAD, zBounds, inset);
+      const view = fitViewport3DToBounds(snap, rect, bounds, { sidebarWidth: SIDEBAR, padding: PAD, zBounds, topInset: inset });
       const fitted = buildViewport3DSnapshot(snap, view.pose, rect);
       const ext = projectedExtent(fitted, bounds, zBounds);
       expect(ext.minPx).toBeGreaterThanOrEqual(SIDEBAR + PAD - 1);
@@ -99,12 +99,7 @@ describe("fitViewport3DToBounds", () => {
 
   test("a degenerate (single point) bounds still produces a fit", () => {
     const snap = snapshotAtAngle({ x: 0, y: 0, z: 0 });
-    const view = fitViewport3DToBounds(snap, rect, SIDEBAR, {
-      minX: 7,
-      maxX: 7,
-      minY: -3,
-      maxY: -3,
-    });
+    const view = fitViewport3DToBounds(snap, rect, { minX: 7, maxX: 7, minY: -3, maxY: -3 }, { sidebarWidth: SIDEBAR });
     expect(view.target.y).toBeCloseTo(-3, 6);
   });
 });

@@ -7,10 +7,10 @@ import { createDefaultViewportRenderSnapshot } from "../src/snapshot";
 // ViewportMode interface) can be proven equivalent.
 const rect = { width: 1200, height: 800 };
 const fallback = createDefaultViewportRenderSnapshot(rect);
+const context = (state: ReturnType<typeof buildViewport2DStateFromTarget>, fallbackSnapshot = fallback) => ({ state, sidebarWidth: 0, fallbackSnapshot });
 
 function snapshotAt(target: { x: number; y: number }, scaleFactor: number) {
-  const state = buildViewport2DStateFromTarget(target, scaleFactor, 30, 0);
-  return buildViewport2DSnapshot(state, 0, rect, fallback);
+  return buildViewport2DSnapshot(context(buildViewport2DStateFromTarget(target, scaleFactor, 30, 0)), rect);
 }
 
 describe("2D projection round-trips", () => {
@@ -44,11 +44,11 @@ describe("2D projection round-trips", () => {
 
   test("the world point under the cursor is invariant across a zoom", () => {
     const state = buildViewport2DStateFromTarget({ x: 1, y: 1 }, 1, 30, 0);
-    const before = buildViewport2DSnapshot(state, 0, rect, fallback);
+    const before = buildViewport2DSnapshot(context(state), rect);
     const cursor = { x: 800, y: 250 };
     const worldBefore = toLogicalCoords2D(before, rect, cursor);
-    const zoomed = zoomViewport2DStateAtCanvasPoint(state, 0, rect, before, cursor, state.scaleFactor * 1.2);
-    const after = buildViewport2DSnapshot(zoomed, 0, rect, fallback);
+    const zoomed = zoomViewport2DStateAtCanvasPoint(context(state, before), rect, cursor, state.scaleFactor * 1.2);
+    const after = buildViewport2DSnapshot(context(zoomed), rect);
     const worldAfter = toLogicalCoords2D(after, rect, cursor);
     expect(worldAfter.x).toBeCloseTo(worldBefore.x, 4);
     expect(worldAfter.y).toBeCloseTo(worldBefore.y, 4);
@@ -58,10 +58,10 @@ describe("2D projection round-trips", () => {
 describe("fitViewport2DToBounds", () => {
   const bounds = { minX: -10, maxX: 10, minY: -30, maxY: 30 };
   const base = buildViewport2DStateFromTarget({ x: 0, y: 0 }, 1, 30, 0);
-  const canvasOf = (state: typeof base, point: { x: number; y: number }) => toCanvasCoords2D(buildViewport2DSnapshot(state, 0, rect, fallback), rect, point);
+  const canvasOf = (state: typeof base, point: { x: number; y: number }) => toCanvasCoords2D(buildViewport2DSnapshot(context(state), rect), rect, point);
 
   test("with no inset the content is centered and fills the padded height", () => {
-    const fitted = fitViewport2DToBounds(base, 0, rect, fallback, bounds, 50);
+    const fitted = fitViewport2DToBounds(context(base), rect, bounds, { padding: 50 });
     const top = canvasOf(fitted, { x: 0, y: bounds.maxY });
     const bottom = canvasOf(fitted, { x: 0, y: bounds.minY });
     expect(top.y).toBeCloseTo(50, 6);
@@ -70,7 +70,7 @@ describe("fitViewport2DToBounds", () => {
 
   test("a top inset keeps the content below it and centers it in what remains", () => {
     const inset = 104;
-    const fitted = fitViewport2DToBounds(base, 0, rect, fallback, bounds, 50, inset);
+    const fitted = fitViewport2DToBounds(context(base), rect, bounds, { padding: 50, topInset: inset });
     const top = canvasOf(fitted, { x: 0, y: bounds.maxY });
     const bottom = canvasOf(fitted, { x: 0, y: bounds.minY });
     expect(top.y).toBeCloseTo(inset + 50, 6);

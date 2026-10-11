@@ -2,6 +2,7 @@ import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "@lpviz/viewport/defaults";
+import { poseOf } from "@lpviz/viewport/snapshot";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/perspective";
 import { buildViewport2DSnapshot, deriveViewport2DState, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D, type Viewport2DState } from "@lpviz/viewport/projection2d";
 import { toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
@@ -49,12 +50,6 @@ export type ViewportRuntime = ViewportApi & {
   destroy: () => void;
 };
 
-const poseOf = (snapshot: ViewportRenderSnapshot): ViewportPerspectivePose => ({
-  position: { ...snapshot.perspective.position },
-  up: { ...snapshot.perspective.up },
-  target: { ...snapshot.target },
-});
-
 /**
  * The viewport runtime: the one place that decides who owns the render snapshot and publishes it
  * to the canvas. At any instant exactly one source owns it: the 2D pan/zoom controls, the 3D
@@ -96,7 +91,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   const patch2DControls = (patch: Partial<Controls2DConfig>) => set2DControlsConfig({ ...get2DControlsConfig(), ...patch });
   const get2DControlsSnapshot = () => {
     const config = get2DControlsConfig();
-    return buildViewport2DSnapshot(config.state, config.sidebarWidth, rect, config.fallbackSnapshot);
+    return buildViewport2DSnapshot(config, rect);
   };
   // the snapshot the view shows right now: the 2D controls' own while they are wanted
   const liveSnapshot = () => (wants2DControls() ? get2DControlsSnapshot() : ownedSnapshot);
@@ -109,7 +104,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   // a 2D state the controls or a fit produced: adopt it as the owned snapshot and publish it
   const adopt2DState = (state: Viewport2DState) => {
     patch2DControls({ state });
-    setOwnedSnapshot(buildViewport2DSnapshot(state, sidebarWidth, rect, ownedSnapshot));
+    setOwnedSnapshot(buildViewport2DSnapshot({ state, sidebarWidth, fallbackSnapshot: ownedSnapshot }, rect));
     publishSnapshot(ownedSnapshot);
   };
   const sync2DControls = (enabled: boolean, { syncStateFromSnapshot = false }: { syncStateFromSnapshot?: boolean } = {}) => {
@@ -339,14 +334,13 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     },
     zoomToFit: (bounds, padding, zBounds, topInset) => {
       if (wants2DControls()) {
-        const config = get2DControlsConfig();
-        adopt2DState(fitViewport2DToBounds(config.state, config.sidebarWidth, rect, ownedSnapshot, bounds, padding, topInset));
+        adopt2DState(fitViewport2DToBounds(get2DControlsConfig(), rect, bounds, { padding, topInset }));
         return;
       }
       const state = getState();
       if (state.isTransitioning3D) return;
       const scaledZ = zBounds ? { minZ: (zBounds.minZ * state.zScale) / 100, maxZ: (zBounds.maxZ * state.zScale) / 100 } : undefined;
-      applyPerspectivePose(fitViewport3DToBounds(ownedSnapshot, rect, sidebarWidth, bounds, padding, scaledZ, topInset).pose, { syncControls: true });
+      applyPerspectivePose(fitViewport3DToBounds(ownedSnapshot, rect, bounds, { sidebarWidth, padding, zBounds: scaledZ, topInset }).pose, { syncControls: true });
     },
     resetView: () => {
       setState({ viewAngle: { ...DEFAULT_VIEW_ANGLE } });

@@ -150,7 +150,7 @@ function buildTranscript() {
                 for (const [zi, zBounds] of Z_BOUNDS.entries()) {
                   for (const padding of [50, 0]) {
                     for (const topInset of [0, 104]) {
-                      record(`${key} fit ${sidebar} b${bi} z${zi} ${padding} ${topInset}`, fitViewport3DToBounds(snap, rect, sidebar, bounds, padding, zBounds, topInset));
+                      record(`${key} fit ${sidebar} b${bi} z${zi} ${padding} ${topInset}`, fitViewport3DToBounds(snap, rect, bounds, { sidebarWidth: sidebar, padding, zBounds, topInset }));
                     }
                   }
                 }
@@ -168,7 +168,8 @@ function buildTranscript() {
             const key = `${tag} 2d g${gridSpacing} s${scaleFactor} t${ti} ${sidebar}`;
             const state = buildViewport2DStateFromTarget(target, scaleFactor, gridSpacing, sidebar);
             record(`${key} state`, state);
-            const snap = buildViewport2DSnapshot(state, sidebar, rect, base);
+            const context = { state, sidebarWidth: sidebar, fallbackSnapshot: base };
+            const snap = buildViewport2DSnapshot(context, rect);
             snapshots.push(snap);
             record(`${key} snapshot`, snap);
             for (const p of [
@@ -177,7 +178,7 @@ function buildTranscript() {
               { x: rect.width - 1, y: 12 },
             ]) {
               record(`${key} logical ${p.x},${p.y}`, [toLogicalCoords2D(snap, rect, p), toLogicalCoords2D(snap, rect, p, { snapToGrid: true })]);
-              record(`${key} zoom ${p.x},${p.y}`, zoomViewport2DStateAtCanvasPoint(state, sidebar, rect, base, p, scaleFactor * 1.2));
+              record(`${key} zoom ${p.x},${p.y}`, zoomViewport2DStateAtCanvasPoint(context, rect, p, scaleFactor * 1.2));
             }
             for (const w of [
               { x: 0, y: 0 },
@@ -187,7 +188,7 @@ function buildTranscript() {
               record(`${key} canvas ${w.x},${w.y}`, toCanvasCoords2D(snap, rect, w));
             }
             for (const [bi, bounds] of BOUNDS.entries()) {
-              record(`${key} fit b${bi}`, [fitViewport2DToBounds(state, sidebar, rect, base, bounds), fitViewport2DToBounds(state, sidebar, rect, base, bounds, 0, 104)]);
+              record(`${key} fit b${bi}`, [fitViewport2DToBounds(context, rect, bounds), fitViewport2DToBounds(context, rect, bounds, { padding: 0, topInset: 104 })]);
             }
           }
         }
