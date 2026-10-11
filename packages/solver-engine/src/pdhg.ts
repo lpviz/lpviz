@@ -1,7 +1,7 @@
 // PDHG on `max c'x s.t. Ax <= b` (or its equality form), with the Halpern-anchored iteration and its
 // restarts as an option: the core walks one scheme, the wrapper sets up the problem and the start.
 
-import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, maxAbsDifference, transposedMatVec } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, maxAbsDifference, negate, transposedMatVec } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
 import { assertMaxit, warmStart } from "./limits";
@@ -252,7 +252,7 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
   const warm = warmStart(startPoint, nOrig);
   const x0 = warm ? Float64Array.from(warm) : undefined;
   // max c'x is min (−c)'x
-  const cost = Float64Array.from(objective, (value) => -value);
+  const cost = negate(objective);
 
   if (core.ineq) {
     return pdhgCore(A, b, cost, x0, nOrig, core);

@@ -1,9 +1,9 @@
 import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, rowDot, weightedGram } from "@lpviz/math/blas";
-import { solveDenseSystem } from "@lpviz/math/lapack";
+import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
-import { coordinateHeaders, fmtCoordinates, fmtExp, fmtExpUnsigned, formatMilliseconds, logColumnWidths } from "./fmt";
+import { fmtExpUnsigned, fmtIterate, formatMilliseconds, iterateHeaders, logColumnWidths } from "./fmt";
 import { MAX_PATH_POINTS } from "./limits";
 import type { SolverResult } from "./result";
 
@@ -54,7 +54,7 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
   }
 
   const widths = logColumnWidths(n);
-  const header = `  ${"Iter".padEnd(PATH_INDEX_WIDTH)} ${coordinateHeaders(n)} ${"Obj".padStart(widths.measure)} ${"µ".padStart(widths.measure)}  \n`;
+  const header = `  ${"Iter".padEnd(PATH_INDEX_WIDTH)} ${iterateHeaders(n)} ${"µ".padStart(widths.measure)}  \n`;
   const points: Float64Array[] = [];
   const barrierTerms: number[] = [];
   const rows: string[] = [];
@@ -68,9 +68,7 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
     points.push(point);
     // the barrier's share of the objective: what the 3D view lifts this iterate by
     barrierTerms.push(barrier.value(mu, point) - linearObjective);
-    rows.push(
-      `  ${String(points.length).padEnd(PATH_INDEX_WIDTH)} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(linearObjective, widths.measure, 1)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`,
-    );
+    rows.push(`  ${String(points.length).padEnd(PATH_INDEX_WIDTH)} ${fmtIterate(point, linearObjective)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`);
     current = point;
   }
 
@@ -196,12 +194,7 @@ class BarrierProblem {
       hessian,
     );
 
-    try {
-      solveDenseSystem(hessian, A.cols, gradient, step, luScratch);
-      return true;
-    } catch {
-      return false;
-    }
+    return trySolveDenseSystem(hessian, A.cols, gradient, step, luScratch);
   }
 
   // Backtracking along the Newton step until the Armijo condition holds; zero when no step does.

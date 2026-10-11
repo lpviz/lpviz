@@ -122,12 +122,11 @@ export function transposeMatrix(matrix: DenseMatrix): DenseMatrix {
   return out;
 }
 
+/** −v. */
+export const negate = (v: Float64Array): Float64Array => Float64Array.from(v, (value) => -value);
+
 export function negateMatrix(matrix: DenseMatrix): DenseMatrix {
-  return createDenseMatrix(
-    matrix.rows,
-    matrix.cols,
-    Float64Array.from(matrix.data, (value) => -value),
-  );
+  return createDenseMatrix(matrix.rows, matrix.cols, negate(matrix.data));
 }
 
 export function scaleRows(matrix: DenseMatrix, rowScales: Float64Array): DenseMatrix {
@@ -159,6 +158,14 @@ export function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
     }
     colOffset += matrix.cols;
   }
+  return out;
+}
+
+/** Row `row` of the matrix copied into `out`. */
+export function extractRow<T extends Float64Array | number[]>(matrix: DenseMatrix, row: number, out: T): T {
+  const { cols, data } = matrix;
+  const offset = row * cols;
+  for (let j = 0; j < cols; j++) out[j] = data[offset + j]!;
   return out;
 }
 

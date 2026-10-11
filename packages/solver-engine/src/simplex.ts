@@ -1,8 +1,8 @@
 // Two-phase simplex on `max c'x s.t. Ax <= b`: this file is the entry, the warm start and the dual
 // mode; the basis, the pivot rules and a phase's walk are in simplex/.
 
-import { createDenseMatrix, type DenseMatrix, denseFromConstraints, diagonalMatrix, hstackMatrices, negateMatrix, rowDot, scaleRows, transposeMatrix } from "@lpviz/math/blas";
-import { solveDenseSystem } from "@lpviz/math/lapack";
+import { createDenseMatrix, denseFromConstraints, type DenseMatrix, diagonalMatrix, extractRow, hstackMatrices, negate, negateMatrix, rowDot, scaleRows, transposeMatrix } from "@lpviz/math/blas";
+import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { warmStart } from "./limits";
 import type { SolverResult } from "./result";
@@ -58,22 +58,18 @@ function primalPointFromDualBasis(A: DenseMatrix, b: Float64Array, columns: read
   const rhs = new Float64Array(n);
   for (let row = 0; row < n; row++) {
     const source = support[row]!;
-    for (let j = 0; j < n; j++) matrix[row * n + j] = A.data[source * n + j]!;
+    extractRow(A, source, matrix.subarray(row * n, (row + 1) * n));
     rhs[row] = b[source]!;
   }
   const point = new Float64Array(n);
-  try {
-    solveDenseSystem(matrix, n, rhs, point);
-  } catch {
-    return new Float64Array(n);
-  }
+  if (!trySolveDenseSystem(matrix, n, rhs, point)) return new Float64Array(n);
   return point.every(Number.isFinite) ? point : new Float64Array(n);
 }
 
 function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array, cfg: Pick<PhaseConfig, "tol" | "pivotRules">): SolverResult {
   const { tol, pivotRules } = cfg;
   const dual = dropRedundantRows(transposeMatrix(A), Float64Array.from(objective), tol);
-  const cDual = Float64Array.from(b, (value) => -value);
+  const cDual = negate(b);
   const { columns: aPhase2, lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
   const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
 

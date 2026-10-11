@@ -16,6 +16,16 @@ function findPivotRow(lu: Float64Array, size: number, pivot: number): number {
   return pivotRow;
 }
 
+/** solveDenseSystem as a yes or no: false when it throws (a singular matrix), with `out` then meaningless. */
+export function trySolveDenseSystem(matrix: Float64Array, size: number, rhs: Float64Array, out: Float64Array, luScratch?: Float64Array): boolean {
+  try {
+    solveDenseSystem(matrix, size, rhs, out, luScratch);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function solveDenseSystem(matrix: Float64Array, size: number, rhs: Float64Array, out: Float64Array, luScratch?: Float64Array) {
   const lu = luScratch ?? new Float64Array(size * size);
   lu.set(matrix);

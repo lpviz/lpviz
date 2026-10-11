@@ -1,4 +1,5 @@
 import { centroid, signedArea } from "@lpviz/math/polygon";
+import { mulberry32, type Rng } from "@lpviz/math/random";
 import type { Vec } from "@lpviz/math/types";
 import { boundsOf } from "@lpviz/math/vec";
 
@@ -10,8 +11,6 @@ export type GalleryProblem = {
   objectiveVector: Vec;
   isRandom?: boolean;
 };
-
-type Rng = () => number;
 
 const RANDOM_POLYGON_MIN_VERTICES = 3;
 const RANDOM_POLYGON_MAX_VERTICES = 50;
@@ -38,15 +37,6 @@ const regularPolygon = (count: number, radiusX: number, radiusY: number): Vec[] 
     const angle = (index * 2 * Math.PI) / count;
     return [radiusX * Math.cos(angle), radiusY * Math.sin(angle)];
   });
-
-const mulberry32 =
-  (seed: number): Rng =>
-  () => {
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 
 const shuffle = <T>(values: T[], rng: Rng): T[] => {
   for (let i = values.length - 1; i > 0; i--) {

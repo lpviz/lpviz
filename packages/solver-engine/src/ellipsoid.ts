@@ -1,4 +1,4 @@
-import { createDenseMatrix, dot, matVec, quadraticForm } from "@lpviz/math/blas";
+import { createDenseMatrix, dot, extractRow, matVec, quadraticForm } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
@@ -42,7 +42,7 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
     // cut normal g and its offset beta: keep { x : g'x <= g'center - beta }
     let beta: number;
     if (!feasible) {
-      for (let j = 0; j < n; j++) g[j] = A.data[worstRow * n + j]!;
+      extractRow(A, worstRow, g);
       beta = violation;
     } else {
       for (let j = 0; j < n; j++) g[j] = -c[j]!;

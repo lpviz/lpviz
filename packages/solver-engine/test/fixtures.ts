@@ -2,6 +2,8 @@
 // in a fixed order (count, center, angles, radius), so a test's inputs depend
 // only on its seed and options.
 
+import { expect } from "bun:test";
+import type { Rng } from "@lpviz/math/random";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "@lpviz/polytope/constraints";
 import type { NumericRow, SolverResult } from "../src/result";
@@ -20,10 +22,54 @@ export const SQUARE_VERTICES: Vec[] = [
   [-6, -4],
 ];
 
+// x in [-1, 2]: a strip, unbounded along y
+export const STRIP: Constraint[] = [
+  [1, 0, 2],
+  [-1, 0, 1],
+];
+// a piece of the strip, as the vertices a drawing of it would bound the localization by
+export const STRIP_HULL: Vec[] = [
+  [-1, -5],
+  [2, -5],
+  [2, 5],
+  [-1, 5],
+];
+// x <= 1 and x >= 2: an empty region
+export const EMPTY: Constraint[] = [
+  [1, 0, 1],
+  [-1, 0, -2],
+  [0, 1, 1],
+  [0, -1, 1],
+];
+export const EMPTY_HULL: Vec[] = [
+  [1, 1],
+  [2, 1],
+  [2, -1],
+  [1, -1],
+];
+
 export const PDHG_DEFAULTS = { halpern: false, maxit: 2000, eta: 0.25, tau: 0.25, tol: 1e-4, colorByBasis: false };
 export const ipmOptions = (alphaMax = 0.9, maxit = 200) => ({ tol: 1e-6, maxit, alphaMax, correctorThreshold: 0.9 });
+// what the ellipsoid method and the cutting planes share
+export const LOCALIZATION_DEFAULTS = { maxit: 500, tol: 1e-6, rayShoot: true, initialScale: 1.5 };
 
-export const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+/** A random objective with coordinates in [-2, 2), drawn in index order. */
+export const randomObjective = (rand: Rng, n = 2) => Float64Array.from({ length: n }, () => rand() * 4 - 2);
+
+/** The point is within `digits` decimals of `expected`, coordinate by coordinate. */
+export const expectNear = (point: ArrayLike<number>, expected: readonly number[], digits: number) => {
+  expect(point.length).toBe(expected.length);
+  expected.forEach((value, j) => expect(point[j]!).toBeCloseTo(value, digits));
+};
+
+/** Every constraint a·x ≤ b holds at the point, to `tol`. */
+export const expectFeasible = (constraints: readonly Constraint[], point: ArrayLike<number>, tol: number) => {
+  for (const row of constraints) {
+    let lhs = 0;
+    for (let j = 0; j < row.length - 1; j++) lhs += row[j]! * point[j]!;
+    expect(lhs).toBeLessThanOrEqual(row[row.length - 1]! + tol);
+  }
+};
 
 // The edges of a convex hull as inward-pointing unit-normal constraints.
 export const polygonConstraints = (hull: Vec[]): Constraint[] => constraintsFromChain(hull, true);
