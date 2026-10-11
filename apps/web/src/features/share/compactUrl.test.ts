@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeSharedState, encodeSharedState } from "./compactUrl";
+import { expectNear, expectVerticesNear } from "./fixtures";
 import type { SharedAppState } from "./sharedState";
 
 const BASE: SharedAppState = {
@@ -35,39 +36,26 @@ describe("compact share links", () => {
     expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 
-  test("round-trips geometry to within a fraction of a pixel", () => {
-    const decoded = roundTrip(BASE);
-    expect(decoded).not.toBeNull();
-    expect(decoded!.vertices.length).toBe(BASE.vertices.length);
-    decoded!.vertices.forEach((vertex, i) => {
-      expect(vertex[0]).toBeCloseTo(BASE.vertices[i]![0], 4);
-      expect(vertex[1]).toBeCloseTo(BASE.vertices[i]![1], 4);
-    });
-    expect(decoded!.objective![0]).toBeCloseTo(0.8, 4);
-    expect(decoded!.objective![1]).toBeCloseTo(0.6, 4);
-    expect(decoded!.solverMode).toBe("ellipsoid");
-    expect(decoded!.completionMode).toBe("closed");
-  });
+  const AWKWARD: SharedAppState = {
+    ...BASE,
+    vertices: [
+      [-123.4567, 987.6543],
+      [0, 0],
+      [0.0001, -0.0001],
+      [-1000.5, 1000.5],
+    ],
+    objective: [-0.739752, 1.907456],
+  };
 
-  test("round-trips awkward coordinates", () => {
-    const state: SharedAppState = {
-      ...BASE,
-      vertices: [
-        [-123.4567, 987.6543],
-        [0, 0],
-        [0.0001, -0.0001],
-        [-1000.5, 1000.5],
-      ],
-      objective: [-0.739752, 1.907456],
-    };
+  test.each([
+    ["the drawing", BASE],
+    ["awkward coordinates", AWKWARD],
+  ])("round-trips %s to within a fraction of a pixel", (_name, state) => {
     const decoded = roundTrip(state)!;
-    expect(decoded.vertices.length).toBe(state.vertices.length);
-    decoded.vertices.forEach((vertex, i) => {
-      expect(vertex[0]).toBeCloseTo(state.vertices[i]![0], 4);
-      expect(vertex[1]).toBeCloseTo(state.vertices[i]![1], 4);
-    });
-    expect(decoded.objective![0]).toBeCloseTo(-0.739752, 4);
-    expect(decoded.objective![1]).toBeCloseTo(1.907456, 4);
+    expectVerticesNear(decoded.vertices, state.vertices);
+    expectNear(decoded.objective, state.objective);
+    expect(decoded.solverMode).toBe(state.solverMode);
+    expect(decoded.completionMode).toBe(state.completionMode);
   });
 
   test("round-trips every solver mode and completion mode", () => {
@@ -127,8 +115,7 @@ describe("compact share links", () => {
       solverMode: "simplex",
       solverStartPoint: [-3.5017, 2.25],
     })!;
-    expect(decoded.solverStartPoint![0]).toBeCloseTo(-3.5017, 4);
-    expect(decoded.solverStartPoint![1]).toBeCloseTo(2.25, 4);
+    expectNear(decoded.solverStartPoint, [-3.5017, 2.25]);
   });
 
   test("an untouched start point costs nothing and stays null", () => {
@@ -141,37 +128,17 @@ describe("compact share links", () => {
   });
 
   test("round-trips a 3-variable problem", () => {
-    const decoded = roundTrip({
-      ...BASE,
-      dimension: 3,
-      vertices: [
-        [1, 2, 3],
-        [-4, 5, -6],
-        [7, -8, 9],
-        [0, 0, 0],
-      ],
-      objective: [0.1, -0.2, 0.3],
-      solverStartPoint: [1, -1, 0.5],
-    })!;
+    const vertices: SharedAppState["vertices"] = [
+      [1, 2, 3],
+      [-4, 5, -6],
+      [7, -8, 9],
+      [0, 0, 0],
+    ];
+    const decoded = roundTrip({ ...BASE, dimension: 3, vertices, objective: [0.1, -0.2, 0.3], solverStartPoint: [1, -1, 0.5] })!;
     expect(decoded.dimension).toBe(3);
-    expect(decoded.vertices).toHaveLength(4);
-    decoded.vertices.forEach((vertex, i) => {
-      expect(vertex).toHaveLength(3);
-      for (let j = 0; j < 3; j++)
-        expect(vertex[j]).toBeCloseTo(
-          [
-            [1, 2, 3],
-            [-4, 5, -6],
-            [7, -8, 9],
-            [0, 0, 0],
-          ][i]![j]!,
-          4,
-        );
-    });
-    expect(decoded.objective).toHaveLength(3);
-    expect(decoded.objective![2]).toBeCloseTo(0.3, 4);
-    expect(decoded.solverStartPoint).toHaveLength(3);
-    expect(decoded.solverStartPoint![2]).toBeCloseTo(0.5, 4);
+    expectVerticesNear(decoded.vertices, vertices);
+    expectNear(decoded.objective, [0.1, -0.2, 0.3]);
+    expectNear(decoded.solverStartPoint, [1, -1, 0.5]);
     expect(roundTrip(BASE)!.dimension).toBe(2);
   });
 
@@ -191,8 +158,7 @@ describe("compact share links", () => {
     expect(plain.solverMode).toBe("ellipsoid");
     const withStart = decodeSharedState("AukBBf_wBN_UA4DiCZ-cAcC4AsCpB7-pB4DxBJ-NBt_UA4DUYYCfSdYNkaMEyN8CAQLBAg")!;
     expect(withStart.solverMode).toBe("simplex");
-    expect(withStart.solverStartPoint![0]).toBeCloseTo(-3.5017, 4);
-    expect(withStart.solverStartPoint![1]).toBeCloseTo(2.25, 4);
+    expectNear(withStart.solverStartPoint, [-3.5017, 2.25]);
     expect(withStart.zScale).toBeCloseTo(1.75, 3);
     expect(withStart.is3DMode).toBe(true);
     expect(withStart.settings.maxitIPM).toBe(321);

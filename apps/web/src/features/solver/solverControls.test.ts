@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import type { State } from "../core/store";
+import { freshState, type State } from "../core/store";
 import { SOLVER_CONTROLS } from "./solverControls";
 import type { Vec } from "@lpviz/math/types";
 
@@ -11,6 +11,7 @@ describe("ellipsoid request", () => {
   ];
   const stateWith = (polytope: Partial<State["polytope"]>) =>
     ({
+      ...freshState(),
       vertices: CHAIN,
       objectiveVector: [-1, 0],
       polytope: {
@@ -22,13 +23,6 @@ describe("ellipsoid request", () => {
         vertices: [],
         boundaryRays: [],
         ...polytope,
-      },
-      solverSettings: {
-        maxitEllipsoid: 100,
-        ellipsoidDeepCuts: true,
-        ellipsoidRayShoot: true,
-        ellipsoidQueryPoint: "chebyshev",
-        ellipsoidInitialScale: 1.5,
       },
     }) as unknown as State;
   const verticesOf = (state: State) => {
