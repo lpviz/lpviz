@@ -12,10 +12,10 @@
     "build": "vite build",
     "preview": "vite preview --port 3000",
     "test": "bun test",
-    "format": "prettier --write apps packages package.json tsconfig.base.json tsconfig.json vite.config.ts index.html && bunx tsc --noEmit && bunx knip",
+    "format": "prettier --write apps packages package.json tsconfig.json vite.config.ts index.html && bunx tsc --noEmit && bunx knip",
     "deploy": "npx wrangler deploy --assets=./dist --name lpviz --compatibility-date 2025-09-01",
     "prdeploy": "npx wrangler versions upload --assets=./dist --name lpviz --compatibility-date 2025-09-01",
-    "format:check": "prettier --check apps packages package.json tsconfig.base.json tsconfig.json vite.config.ts index.html",
+    "format:check": "prettier --check apps packages package.json tsconfig.json vite.config.ts index.html",
     "check": "bunx tsc --noEmit && bunx knip && bun run lint && bun test && bun run format:check",
     "lint": "oxlint --type-aware --deny-warnings apps packages vite.config.ts"
   },
@@ -51,22 +51,7 @@
           "docs/*.ts"
         ]
       },
-      "packages/math": {
-        "project": [
-          "src/**/*.ts"
-        ]
-      },
-      "packages/polytope": {
-        "project": [
-          "src/**/*.ts"
-        ]
-      },
-      "packages/solver-engine": {
-        "project": [
-          "src/**/*.ts"
-        ]
-      },
-      "packages/viewport": {
+      "packages/*": {
         "project": [
           "src/**/*.ts"
         ]

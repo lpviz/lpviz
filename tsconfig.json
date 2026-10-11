@@ -1,4 +1,36 @@
 {
-  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitThis": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "useDefineForClassFields": true,
+    "lib": ["DOM", "DOM.Iterable", "ESNext"],
+    "forceConsistentCasingInFileNames": true,
+    "paths": {
+      "@/*": ["./apps/web/src/*"],
+      "@lpviz/math/*": ["./packages/math/src/*"],
+      "@lpviz/polytope/*": ["./packages/polytope/src/*"],
+      "@lpviz/solver-engine/*": ["./packages/solver-engine/src/*"],
+      "@lpviz/viewport/*": ["./packages/viewport/src/*"]
+    }
+  },
   "include": ["apps/**/*", "packages/**/*", "vite.config.ts"]
 }
