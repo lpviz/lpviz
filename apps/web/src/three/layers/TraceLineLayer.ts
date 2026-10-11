@@ -26,7 +26,6 @@ export class TraceLineLayer extends ZScaledLayer {
   override readonly invalidationKeys = ["trace"] as const;
   private pool: PathRibbon[] = [];
   private assigned = new Map<TraceEntry, PathRibbon>();
-  private lastMode: string | null = null;
   // monotonic append sequence stamped on each ribbon mesh (see traceSequence.ts)
   private nextSeq = 0;
 
@@ -51,9 +50,6 @@ export class TraceLineLayer extends ZScaledLayer {
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    const modeChanged = this.lastMode !== snap.mode;
-    this.lastMode = snap.mode;
-
     // Recycle ribbons whose entries were evicted from the buffer
     const live = new Set<TraceEntry>(state.traceBuffer);
     const freed: PathRibbon[] = [];
@@ -66,23 +62,20 @@ export class TraceLineLayer extends ZScaledLayer {
     }
 
     // Build the path texture only for entries that don't have one yet
-    const is3D = snap.mode === "3d";
     for (const entry of state.traceBuffer) {
       if (this.assigned.has(entry)) continue;
       if (entry.count < 2) continue;
       const ribbon = freed.pop() ?? this.makeRibbon();
       ribbon.setPath(iteratePositions(entry), entry.count);
-      ribbon.setDepth(is3D);
       stampTraceSequence(ribbon.mesh, this.nextSeq++);
       ribbon.mesh.visible = true;
       this.assigned.set(entry, ribbon);
     }
 
-    if (modeChanged) {
-      for (const ribbon of this.assigned.values()) ribbon.setDepth(is3D);
-    }
-
-    this.object3D.visible = this.assigned.size > 0;
+    // the depth mode follows the view, one of the inputs a rebuild answers to
+    const is3D = snap.mode === "3d";
+    for (const ribbon of this.assigned.values()) ribbon.setDepth(is3D);
+    if (this.assigned.size === 0) this.hide();
   }
 
   dispose(): void {

@@ -33,7 +33,6 @@ export class PolytopeVerticesLayer extends LayerBase {
   }
 
   protected rebuild(state: State): void {
-    this.object3D.visible = true;
     const derived = derivedClosure(state);
     const displayVertices = derived ?? state.vertices;
     const isAnchor = (index: number) => state.completionMode === "open" && !derived && (index === 0 || index === displayVertices.length - 1);

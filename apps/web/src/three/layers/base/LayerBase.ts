@@ -9,8 +9,9 @@ import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 // change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
 // against the previous one and calls `rebuild()` only on change. `everyFrame()` runs
 // unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
-// A layer the view does not show (`visibleIn`) is hidden without a rebuild, and rebuilt when it
-// shows again. The store and the render snapshot are read once per update and handed down.
+// A layer the view does not show (`visibleIn`) is hidden without a rebuild, and shown and rebuilt
+// when it shows again; a rebuild that finds nothing to draw hides the layer itself. The store and
+// the render snapshot are read once per update and handed down.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass: RenderPassName = "foreground";
@@ -34,6 +35,7 @@ export abstract class LayerBase implements Layer {
     const next = this.dependencies(state, snap);
     if (this.deps && sameDeps(this.deps, next)) return;
     this.deps = next;
+    this.show();
     this.rebuild(state, snap);
   }
 
@@ -45,9 +47,13 @@ export abstract class LayerBase implements Layer {
   protected hide(): void {
     this.object3D.visible = false;
   }
+  /** Put the layer back on screen ahead of a rebuild, which may hide it again for lack of anything to draw. */
+  protected show(): void {
+    this.object3D.visible = true;
+  }
   /** Inputs compared with Object.is; a change triggers `rebuild`. */
   protected abstract dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[];
-  /** Rebuild geometry/visibility from current state. Runs only on change. */
+  /** Rebuild the geometry from the current state (hiding the layer when there is nothing). Runs only on change. */
   protected abstract rebuild(state: State, snap: ViewportRenderSnapshot): void;
   /** Cheap per-frame work (e.g. object3D.scale.z). Runs every update. */
   protected everyFrame(_state: State, _snap: ViewportRenderSnapshot): void {}

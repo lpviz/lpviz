@@ -1,17 +1,17 @@
 import { getCurrentMouse } from "@/features/core/currentMouse";
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { FatLine } from "../helpers/fatLine";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 import { POLYTOPE_EDGE_THICKNESS } from "./PolytopeBaseLayer";
 
 // The edge being drawn: from the last placed vertex to the pointer, while the region is a draft.
 export class PolytopeRubberBandLayer extends LayerBase {
-  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.polytopeOutline, POLYTOPE_EDGE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+  private readonly line = new FatLine({ color: PALETTE.polytopeOutline, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
+  readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["polytope"] as const;
   private readonly positions = new Float32Array(6);
 
@@ -27,11 +27,11 @@ export class PolytopeRubberBandLayer extends LayerBase {
     const last = state.vertices[state.vertices.length - 1]!;
     const mouse = getCurrentMouse()!;
     this.positions.set([last[0], last[1], 0, mouse[0], mouse[1], 0]);
-    replaceLinePositions(this.object3D.geometry, this.positions);
-    this.object3D.visible = true;
+    // a sketch aid, drawn over everything in either view
+    this.line.draw(this.positions, false);
   }
 
   dispose(): void {
-    this.object3D.geometry.dispose();
+    this.line.dispose();
   }
 }

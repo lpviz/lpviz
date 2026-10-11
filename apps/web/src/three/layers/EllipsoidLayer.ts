@@ -5,9 +5,9 @@ import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/local
 import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import { FatLine, lineDepthMaterial, lineGeometry, setupLine } from "../helpers/fatLine";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
 
@@ -102,7 +102,7 @@ export class EllipsoidLayer extends ZScaledLayer {
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
-  private readonly polygon: LineSegments2;
+  private readonly polygon = new FatLine({ color: PALETTE.ellipsoid, linewidth: POLYGON_THICKNESS, opacity: POLYGON_OPACITY, renderOrder: RENDER_ORDER.ellipsoid });
   private readonly matrix = new Matrix4();
   private readonly indices: number[] = [];
   private polygonScratch = new Float32Array(0);
@@ -112,9 +112,7 @@ export class EllipsoidLayer extends ZScaledLayer {
     const geometry = lineGeometry();
     geometry.setPositions(buildUnitCirclePositions());
     this.geometry = geometry;
-
-    this.polygon = setupLine(new LineSegments2(lineGeometry(), polygonMaterial(false)), RENDER_ORDER.ellipsoid);
-    this.object3D.add(this.polygon);
+    this.object3D.add(this.polygon.object3D);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
       const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), RENDER_ORDER.ellipsoid);
@@ -130,7 +128,6 @@ export class EllipsoidLayer extends ZScaledLayer {
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const ellipsoids = state.iterateEllipsoids;
-    this.object3D.visible = true;
     if (!ellipsoids || ellipsoids.count === 0) {
       this.hideFrom(0);
       return;
@@ -170,18 +167,9 @@ export class EllipsoidLayer extends ZScaledLayer {
 
   private showLocalizingSet(state: State, is3D: boolean): void {
     const index = state.highlightIteratePathIndex;
-    if (index === null) {
-      this.polygon.visible = false;
-      return;
-    }
-    const written = this.writePolygon(state.iterateLocalizingSets, index, iterateHeightOrFloor(state.iteratePath, index));
-    if (written === 0) {
-      this.polygon.visible = false;
-      return;
-    }
-    replaceLinePositions(this.polygon.geometry, this.polygonScratch.subarray(0, written));
-    this.polygon.material = polygonMaterial(is3D);
-    this.polygon.visible = true;
+    const written = index === null ? 0 : this.writePolygon(state.iterateLocalizingSets, index, iterateHeightOrFloor(state.iteratePath, index));
+    if (written === 0) this.polygon.hide();
+    else this.polygon.draw(this.polygonScratch.subarray(0, written), is3D);
   }
 
   // The localizing polygon as segment endpoint pairs, closed back to the start. A 3-variable
@@ -219,7 +207,7 @@ export class EllipsoidLayer extends ZScaledLayer {
 
   dispose(): void {
     this.geometry.dispose();
-    this.polygon.geometry.dispose();
+    this.polygon.dispose();
   }
 }
 
@@ -233,8 +221,4 @@ function slotOpacity(slot: number) {
 function slotMaterial(slot: number, is3D: boolean) {
   const newest = slot >= TRAIL_COUNT - 1;
   return lineDepthMaterial(PALETTE.ellipsoid, newest ? ACTIVE_THICKNESS : TRAIL_THICKNESS, is3D, Number(slotOpacity(slot).toFixed(3)));
-}
-
-function polygonMaterial(is3D: boolean) {
-  return lineDepthMaterial(PALETTE.ellipsoid, POLYGON_THICKNESS, is3D, POLYGON_OPACITY);
 }
