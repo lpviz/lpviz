@@ -1,5 +1,5 @@
 import type { AppActions } from "@/app/appActions";
-import { button, el } from "@/ui/dom";
+import { button, el, labelFor, mounted } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 
 const ICONS = {
@@ -25,7 +25,7 @@ export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "res
     },
   });
   const zScaleValue = el("div", { id: "zScaleValue" });
-  const zScaleControl = el("div", { id: "zScaleSliderContainer" }, [el("label", { attrs: { for: "zScaleSlider" }, text: "Scale" }), zScaleSlider, zScaleValue]);
+  const zScaleControl = el("div", { id: "zScaleSliderContainer" }, [labelFor("zScaleSlider", "Scale"), zScaleSlider, zScaleValue]);
   const root = el("div", { id: "zoomControls" }, [
     icon("Reset Zoom (Home)", ICONS.home, () => actions.resetView()),
     icon("Zoom", ICONS.fit, () => actions.zoomToFit()),
@@ -42,10 +42,5 @@ export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "res
     zScaleValue.textContent = zScale.toFixed(2);
     zScaleControl.hidden = !is3DMode;
   });
-  return {
-    destroy: () => {
-      stop();
-      root.remove();
-    },
-  };
+  return mounted(root, stop);
 }

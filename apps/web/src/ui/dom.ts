@@ -32,6 +32,17 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, options: ElOpt
 
 export const button = (text: string, onClick: () => void, options: Pick<ElOptions<"button">, "id" | "className" | "attrs"> = {}) => el("button", { ...options, text, on: { click: onClick } });
 
+/** A `<label for=…>`, with its text when given. */
+export const labelFor = (htmlFor: string, text?: string, children: Node[] = []) => el("label", { attrs: { for: htmlFor }, ...(text === undefined ? {} : { text }) }, children);
+
+/** What a mount returns: a destroy that runs the stops, then removes the root. */
+export const mounted = (root: Element, ...stops: (() => void)[]) => ({
+  destroy: () => {
+    for (const stop of stops) stop();
+    root.remove();
+  },
+});
+
 // A horizontal range input (the stylesheet's `.range`); onInput receives the slider's string
 // value on every input event.
 export function range(id: string, min: string, max: string, step: string, onInput: (v: string) => void) {

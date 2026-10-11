@@ -1,5 +1,5 @@
 import { type NumberSettingKey, type SelectSettingKey, settingRange, settingValues, type SolverSettings } from "@/features/solver/solverSettings";
-import { checkbox, el, range } from "@/ui/dom";
+import { checkbox, el, labelFor, range } from "@/ui/dom";
 
 const MAXIT_LOG_MIN = 0;
 const MAXIT_LOG_MAX = 5;
@@ -53,7 +53,7 @@ export function numberSlider({ set }: SectionContext, { key, label, format = fix
     span.textContent = format(next);
     update(next);
   });
-  const text = el("label", { attrs: { for: id } });
+  const text = labelFor(id);
   text.append(label, " ", span);
   const nodes: Node[] = [text, input];
   if (br) nodes.push(el("br"));
@@ -76,7 +76,7 @@ export function checkboxRow(
   const row = el("div", { className: "settings-checkbox-row" });
   const boxes = (Object.entries(labels) as [SettingKeys<boolean>, string][]).map(([key, label]) => {
     const box = checkbox(key, set(key));
-    const wrap = el("label", { attrs: { for: key }, text: label + " " }, [box]);
+    const wrap = labelFor(key, label + " ", [box]);
     row.append(wrap);
     return { key, box, wrap };
   });
@@ -109,7 +109,7 @@ export function labeledSelect<K extends SelectSettingKey>({ set }: SectionContex
     },
     settingValues(key).map((value) => el("option", { attrs: { value }, text: labels[value] })),
   );
-  return { nodes: [el("label", { attrs: { for: key }, text: label }), input], sync: (next) => setInputValue(input, next[key]) };
+  return { nodes: [labelFor(key, label), input], sync: (next) => setInputValue(input, next[key]) };
 }
 
 // A log-scale slider for an iteration cap, with the decades marked under it.
@@ -123,7 +123,7 @@ export function maxitSlider({ set }: SectionContext, id: string, key: MaxitSetti
   });
   input.classList.add("log-slider");
   const wrap = el("div", { className: "log-slider-control" });
-  const label = el("label", { attrs: { for: id }, text: "Maximum iterations:" });
+  const label = labelFor(id, "Maximum iterations:");
   label.append(" ", span);
   const scale = ["1", "10", "100", "1k", "10k", "100k"].map((text) => el("span", { text }));
   wrap.append(label, input, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale));
