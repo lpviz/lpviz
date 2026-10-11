@@ -5,7 +5,7 @@ import { createDenseMatrix, denseFromConstraints, type DenseMatrix, diagonalMatr
 import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { warmStart } from "./limits";
-import type { SolverResult } from "./result";
+import { FloatBlock, type SolverResult } from "./result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./simplex/basis";
 import { type PhaseConfig, type PhaseLog, phase1Problem, pivotOutArtificialVariables, simplexPhase, simplexResult, type SimplexStatus, skippedPhase, UNBOUNDED_NOTE } from "./simplex/phase";
 import { type PivotRuleOptions, resolvePivotRules } from "./simplex/pivotRules";
@@ -71,21 +71,22 @@ function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array,
   const dual = dropRedundantRows(transposeMatrix(A), Float64Array.from(objective), tol);
   const cDual = negate(b);
   const { columns: aPhase2, lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
-  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
+  const iterates = new FloatBlock(A.cols);
+  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, iterates, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
 
   const phase1 = simplexPhase(phase1Lp, phase1Basis, { ...config, phase: 1 });
 
   if (Math.abs(phase1.objective) > tol) {
     // The dual LP is infeasible; the region is non-empty (emptiness is rejected before the
     // solver runs), so by LP duality the primal is unbounded. Still plot the Phase 1 trajectory.
-    return simplexResult(phase1, skippedPhase("The dual LP is infeasible, so the primal LP is unbounded.\n"), "unbounded", "dual");
+    return simplexResult(iterates, phase1, skippedPhase("The dual LP is infeasible, so the primal LP is unbounded.\n"), "unbounded", "dual");
   }
 
   const phase2Basis = pivotOutArtificialVariables(phase1Lp, phase1.isBasic, aPhase2.cols, tol);
   // An unbounded dual means the primal LP being visualized is infeasible.
   const phase2 = simplexPhase({ A: aPhase2, b: phase1Lp.b, c: cDual }, phase2Basis, { ...config, phase: 2, unboundedNote: "Dual LP is unbounded: the LP is infeasible." });
   const status: SimplexStatus = phase2.status === "unbounded" ? "infeasible" : phase2.status;
-  return simplexResult(phase1, phase2, status, "dual");
+  return simplexResult(iterates, phase1, phase2, status, "dual");
 }
 
 // Rows of the dual system that are identically zero with a zero right-hand side are redundant
@@ -137,7 +138,7 @@ function warmStartBasis(A: DenseMatrix, b: Float64Array, phase2: StandardLp, ver
   for (let i = 0; i < m; i++) if (!activeSet.has(i)) isBasic[2 * n + i] = true;
 
   try {
-    const scratch = phaseScratch(m, phase2.A.cols);
+    const scratch = phaseScratch(phase2);
     const solution = basicSolution(phase2, new Basis(phase2.A, isBasic), scratch, false);
     for (let i = 0; i < m; i++) {
       if (scratch.xB[i]! < -tol) return null; // basis is not primal feasible
@@ -174,7 +175,8 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
   });
   const split = splitStandardForm(A, c);
   const phase2Lp: StandardLp = { A: split.A, b, c: split.c };
-  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: n, pointOf: (x) => unsplit(x, n), unboundedNote: UNBOUNDED_NOTE };
+  const iterates = new FloatBlock(n);
+  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: n, iterates, pointOf: (x) => unsplit(x, n), unboundedNote: UNBOUNDED_NOTE };
 
   const vertex = warmStart(startVertex, n);
   const warmBasis = vertex ? warmStartBasis(A, b, phase2Lp, vertex, tol) : null;
@@ -190,5 +192,5 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
   }
 
   const phase2 = simplexPhase(phase2Lp, phase2Basis, { ...config, phase: 2 });
-  return simplexResult(phase1, phase2, phase2.status, "primal");
+  return simplexResult(iterates, phase1, phase2, phase2.status, "primal");
 }

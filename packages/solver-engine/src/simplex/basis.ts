@@ -1,4 +1,4 @@
-import { createDenseMatrix, type DenseMatrix, dot, matVec, transposedMatVec } from "@lpviz/math/blas";
+import { createDenseMatrix, type DenseMatrix, dot, matVec, transposeMatrix } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 
 /** An LP in standard form, `max c'x s.t. Ax = b, x >= 0`, as a simplex phase walks it. */
@@ -122,8 +122,12 @@ export class Basis {
 
 type PhaseScratch = ReturnType<typeof phaseScratch>;
 
-export function phaseScratch(m: number, cols: number) {
+export function phaseScratch(lp: StandardLp) {
+  const m = lp.A.rows;
+  const cols = lp.A.cols;
   return {
+    // the transpose, for the reduced costs' Aᵀy by row dot products
+    At: transposeMatrix(lp.A),
     xB: new Float64Array(m),
     cB: new Float64Array(m),
     duals: new Float64Array(m),
@@ -150,7 +154,7 @@ export function basicSolution(lp: StandardLp, basis: Basis, scratch: PhaseScratc
   }
   if (exact) basis.solveTransposeExact(scratch.cB, scratch.duals);
   else basis.applyTranspose(scratch.cB, scratch.duals);
-  transposedMatVec(A, scratch.duals, scratch.aty);
+  matVec(scratch.At, scratch.duals, scratch.aty);
   for (let j = 0; j < A.cols; j++) reducedCosts[j] = c[j]! - scratch.aty[j]!;
   return { x, reducedCosts, objective: dot(c, x) };
 }

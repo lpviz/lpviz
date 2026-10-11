@@ -1,12 +1,12 @@
 // PDHG on `max c'x s.t. Ax <= b` (or its equality form), with the Halpern-anchored iteration and its
 // restarts as an option: the core walks one scheme, the wrapper sets up the problem and the start.
 
-import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, maxAbsDifference, negate, transposedMatVec } from "@lpviz/math/blas";
+import { denseFromConstraints, denseOperator, dot, infinityNorm, type LinearOperator, maxAbsDifference, negate } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
 import { assertMaxit, warmStart } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
-import { splitStandardForm, unsplit } from "./standardForm";
+import { splitCost, splitOperator, unsplit } from "./standardForm";
 
 const BASIS_THRESHOLD = 1e-10;
 const BASIS_HASH_MULTIPLIER = 33;
@@ -49,7 +49,7 @@ class KktError {
   private readonly cNorm: number;
 
   constructor(
-    private readonly A: DenseMatrix,
+    private readonly A: LinearOperator,
     private readonly b: Float64Array,
     private readonly c: Float64Array,
     private readonly ineq: boolean,
@@ -62,11 +62,11 @@ class KktError {
 
   of(xk: Float64Array, yk: Float64Array): number {
     const { A, b, c, ineq, ax, aty } = this;
-    matVec(A, xk, ax);
+    A.apply(xk, ax);
     const primal = primalResidual(ax, b, ineq);
     this.primal = primal;
 
-    transposedMatVec(A, yk, aty);
+    A.applyTranspose(yk, aty);
     let dualResidual = 0;
     for (let i = 0; i < aty.length; i++) {
       const residual = ineq ? Math.abs(c[i]! + aty[i]!) : Math.max(0, -aty[i]! - c[i]!);
@@ -100,14 +100,15 @@ function shouldRestartHalpern(innerIteration: number, totalIteration: number, fi
  * differ only in the residuals, the basis hash, the initial dual and which
  * variable takes the projected, extrapolated step.
  */
-function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, dimension: number, opts: Omit<PDHGOptions, "startPoint">): SolverResult {
+function pdhgCore(A: LinearOperator, b: Float64Array, c: Float64Array, x0: Float64Array | undefined, dimension: number, opts: Omit<PDHGOptions, "startPoint">): SolverResult {
   const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = opts;
 
   const { rows: m, cols: n } = A;
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
   const slackOffset = n - m;
-  // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
-  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, dimension));
+  // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode (the trace copies it)
+  const point = new Float64Array(dimension);
+  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk : unsplit(xk, dimension, point));
   const kkt = new KktError(A, b, c, ineq);
 
   let xk = new Float64Array(n);
@@ -137,7 +138,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
 
   let epsilonK = kkt.of(xk, yk);
 
-  const trace = new NumericTrace();
+  const trace = new NumericTrace(dimension);
   const basisHashes: number[] = [];
   const restartIndices: number[] = [];
 
@@ -160,7 +161,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       extrapolated[i] = 2 * nextY[i]! - yk[i]!;
     }
     // x_{k+1} = x_k - η(c + A^T ỹ_k)
-    transposedMatVec(A, extrapolated, atYScratch);
+    A.applyTranspose(extrapolated, atYScratch);
     for (let i = 0; i < n; i++) {
       nextX[i] = xk[i]! - eta * (c[i]! + atYScratch[i]!);
     }
@@ -168,14 +169,14 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const stepEquality = () => {
     // x_{k+1} = [x_k - η(c + A^T y_k)]_+
     // x̃_k = x_{k+1} + (x_{k+1} - x_k)
-    transposedMatVec(A, yk, atYScratch);
+    A.applyTranspose(yk, atYScratch);
     for (let i = 0; i < n; i++) {
       const candidate = xk[i]! - eta * (c[i]! + atYScratch[i]!);
       nextX[i] = candidate > 0 ? candidate : 0;
       extrapolated[i] = 2 * nextX[i]! - xk[i]!;
     }
     // y_{k+1} = y_k + τ(Ax̃_k - b)
-    matVec(A, extrapolated, axExtrapolated);
+    A.apply(extrapolated, axExtrapolated);
     for (let i = 0; i < m; i++) {
       nextY[i] = yk[i]! + tau * (axExtrapolated[i]! - b[i]!);
     }
@@ -255,10 +256,11 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
   const cost = negate(objective);
 
   if (core.ineq) {
-    return pdhgCore(A, b, cost, x0, nOrig, core);
+    return pdhgCore(denseOperator(A), b, cost, x0, nOrig, core);
   }
 
-  const split = splitStandardForm(A, cost);
+  // the split form's matrix is applied without being formed (see splitOperator)
+  const c = splitCost(cost, A.rows);
   // Warm start mapped into the split variables chi = [x^+; x^-; s] >= 0:
   // x^+ - x^- = x0 exactly, so the displayed first iterate is the chosen
   // point. The slack block stays at the cold start's zeros — like the cold
@@ -266,12 +268,12 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
   // chi0 >= 0 (the splitting's hard constraint) holds by construction.
   let chi0: Float64Array | undefined;
   if (x0) {
-    chi0 = new Float64Array(split.c.length);
+    chi0 = new Float64Array(c.length);
     for (let j = 0; j < nOrig; j++) {
       const value = x0[j]!;
       if (value >= 0) chi0[j] = value;
       else chi0[nOrig + j] = -value;
     }
   }
-  return pdhgCore(split.A, b, split.c, chi0, nOrig, core);
+  return pdhgCore(splitOperator(A), b, c, chi0, nOrig, core);
 }

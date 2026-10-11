@@ -5,7 +5,7 @@ import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
 import type { IPMOptions } from "@lpviz/solver-engine/ipm";
 import type { PDHGOptions } from "@lpviz/solver-engine/pdhg";
-import type { LogSection, NumericRow, SolverResult } from "@lpviz/solver-engine/result";
+import type { Iterates, LogSection, NumericRow, SolverResult } from "@lpviz/solver-engine/result";
 import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
@@ -27,31 +27,13 @@ export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 
 // ---------- wire ----------
 
-// What crosses the worker boundary (see resultPacking): the iterates as one flat
-// coordinate buffer plus their display lift, and the log with every numeric
-// section's rows as typed columns. The buffers are transferred, not cloned.
-export type PackedRows = {
-  /** every row's coordinates, `stride` per row */
-  coords: Float64Array;
-  stride: number;
-  objective: Float64Array;
-  infeasibility: Float64Array;
-  convergence: Float64Array;
-  restart: Uint8Array;
-};
-
-export type PackedLogSection = Omit<LogSection, "rows"> & { rows: string[] | PackedRows };
-
-// what a solver drew besides its iterates, as the engine returns it
-type DrawnByResult = Pick<SolverResult, "phases" | "restartIndices" | "ellipsoids" | "localizingSetPoints" | "localizingSetOffsets">;
-
-export type SolverWireSuccess = DrawnByResult & {
+// What crosses the worker boundary (see resultPacking): the engine's result as it is, the flat
+// iterate block, the log's numeric columns and what the solver drew, plus the iterates' display
+// lift. The buffers are transferred, not cloned.
+export type SolverWireSuccess = Pick<SolverResult, "iterates" | "log" | "phases" | "restartIndices" | "ellipsoids" | "localizingSetPoints" | "localizingSetOffsets"> & {
   id: number;
   success: true;
-  iterates: Float64Array;
-  stride: number;
   lift?: Float64Array | undefined;
-  log: PackedLogSection[];
 };
 
 type SolverWorkerError = { id: number; success: false; error: string };
@@ -71,7 +53,7 @@ export type ResultLogSection = Omit<LogSection, "rows"> & { rows: LazyRows };
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.
 export type UnpackedSolverResult = Pick<SolverResult, "phases" | "restartIndices"> & {
-  iterates: IteratePath;
+  iterates: IteratePath & Iterates;
   log: ResultLogSection[];
   ellipsoids?: EllipsoidPath | undefined;
   localizingSets?: LocalizingSetPath | undefined;

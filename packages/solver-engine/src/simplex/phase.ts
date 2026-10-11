@@ -1,7 +1,7 @@
 import { type DenseMatrix, extractColumn, hstackMatrices, identityMatrix } from "@lpviz/math/blas";
 import { fmtIterate, fmtIteration, ITERATION_COLUMN_WIDTH, iterateHeaders } from "../fmt";
 import { MAX_ITERATIONS } from "../limits";
-import type { LogSection, SolverResult } from "../result";
+import { type FloatBlock, iteratesOf, type LogSection, type SolverResult } from "../result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./basis";
 import { createCyclingGuard, type PivotRules, selectEnteringIndex, selectLeavingIndex } from "./pivotRules";
 
@@ -18,15 +18,17 @@ export interface PhaseConfig {
   phase: 1 | 2;
   /** the problem's variable count, which sizes the log's coordinate columns */
   dimension: number;
+  /** the run's iterates, which both phases append to */
+  iterates: FloatBlock;
   /** The point an iteration plots and logs, from the basic solution and the basis. */
   pointOf: (x: Float64Array, basis: Basis) => Float64Array;
   /** the line logged when no leaving variable exists */
   unboundedNote: string;
 }
 
-/** What a phase hands on: its iterates and log, and the basis and objective it ended on. */
+/** What a phase hands on: how many iterates it appended and its log, and the basis and objective it ended on. */
 interface PhaseRun {
-  iterates: Float64Array[];
+  count: number;
   log: LogSection;
   isBasic: boolean[];
   objective: number;
@@ -34,15 +36,15 @@ interface PhaseRun {
 }
 
 export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: PhaseConfig): PhaseRun {
-  const { tol, pivotRules, phase, dimension, pointOf, unboundedNote } = cfg;
+  const { tol, pivotRules, phase, dimension, iterates, pointOf, unboundedNote } = cfg;
   const { A } = lp;
   const header = `${"Iter".padStart(ITERATION_COLUMN_WIDTH)} ${iterateHeaders(dimension)} ${"basis".padEnd(A.cols)}\n`;
   const rows: string[] = [];
   const notes: string[] = [];
-  const iterates: Float64Array[] = [];
+  let count = 0;
   const guard = createCyclingGuard(pivotRules, tol);
   const basis = new Basis(A, initialBasis);
-  const scratch = phaseScratch(basis.m, A.cols);
+  const scratch = phaseScratch(lp);
   const { xB, enterColumn, direction } = scratch;
 
   let iteration = 0;
@@ -65,6 +67,7 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
     objective = solution.objective;
     const point = pointOf(solution.x, basis);
     iterates.push(point);
+    count++;
     rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtIterate(point, objective)} ${basisString(basis.isBasic)}\n`);
 
     if (entering === -1) break;
@@ -85,23 +88,23 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
 
   const isBasic = basis.isBasic.slice();
   const footer = `Phase ${phase} finished in ${iteration} iterations – basis ${basisString(isBasic)}\n`;
-  return { iterates, log: { header, rows, notes, footer }, isBasic, objective, status };
+  return { count, log: { header, rows, notes, footer }, isBasic, objective, status };
 }
 
-export type PhaseLog = Pick<PhaseRun, "iterates" | "log">;
+export type PhaseLog = Pick<PhaseRun, "count" | "log">;
 
 // A phase that never ran: its log is the one line saying why.
-export const skippedPhase = (reason: string): PhaseLog => ({ iterates: [], log: { header: reason, rows: [] } });
+export const skippedPhase = (reason: string): PhaseLog => ({ count: 0, log: { header: reason, rows: [] } });
 
-export function simplexResult(phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus, mode: SimplexMode): SolverResult {
+export function simplexResult(iterates: FloatBlock, phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus, mode: SimplexMode): SolverResult {
   const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : null;
   // a run that did not end optimal keeps Phase 2's closing line as a note and names the outcome in the footer
   const { header, rows, notes = [], footer } = phase2.log;
   const closing: LogSection = outcome ? { header, rows, notes: footer === undefined ? notes : [...notes, footer], footer: outcome } : phase2.log;
   return {
-    iterates: [...phase1.iterates, ...phase2.iterates],
+    iterates: iteratesOf(iterates),
     // the phase of each iterate, only once there are two phases to tell apart
-    ...(phase1.iterates.length > 0 ? { phases: [...phase1.iterates.map(() => 0), ...phase2.iterates.map(() => 1)] } : {}),
+    ...(phase1.count > 0 ? { phases: [...new Array<number>(phase1.count).fill(0), ...new Array<number>(phase2.count).fill(1)] } : {}),
     log: [phase1.log, closing],
     status,
     mode,

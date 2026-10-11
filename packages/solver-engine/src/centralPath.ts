@@ -5,7 +5,7 @@ import type { Constraint, Vec } from "@lpviz/math/types";
 import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
 import { fmtExpUnsigned, fmtIterate, formatMilliseconds, iterateHeaders, logColumnWidths } from "./fmt";
 import { MAX_PATH_POINTS } from "./limits";
-import type { SolverResult } from "./result";
+import { FloatBlock, iteratesOf, type SolverResult } from "./result";
 
 const MIN_STEP_SIZE = 1e-10;
 const LINE_SEARCH_SHRINK_FACTOR = 0.5;
@@ -55,7 +55,7 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
 
   const widths = logColumnWidths(n);
   const header = `  ${"Iter".padEnd(PATH_INDEX_WIDTH)} ${iterateHeaders(n)} ${"µ".padStart(widths.measure)}  \n`;
-  const points: Float64Array[] = [];
+  const points = new FloatBlock(n);
   const barrierTerms: number[] = [];
   const rows: string[] = [];
 
@@ -68,12 +68,12 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
     points.push(point);
     // the barrier's share of the objective: what the 3D view lifts this iterate by
     barrierTerms.push(barrier.value(mu, point) - linearObjective);
-    rows.push(`  ${String(points.length).padEnd(PATH_INDEX_WIDTH)} ${fmtIterate(point, linearObjective)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`);
+    rows.push(`  ${String(points.count).padEnd(PATH_INDEX_WIDTH)} ${fmtIterate(point, linearObjective)} ${fmtExpUnsigned(mu, widths.measure, 1)}  \n`);
     current = point;
   }
 
   const footer = `Traced central path in ${formatMilliseconds(performance.now() - startTime)}`;
-  return { iterates: points, convergence: barrierTerms, log: [{ header, rows, footer }] };
+  return { iterates: iteratesOf(points), convergence: Float64Array.from(barrierTerms), log: [{ header, rows, footer }] };
 }
 
 // A supplied point is checked, not trusted; without one, a two-variable problem starts from the
