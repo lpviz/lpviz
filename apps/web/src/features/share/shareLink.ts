@@ -1,9 +1,19 @@
 import { getState, setState } from "@/features/core/store";
 import { updatePanControls } from "@/features/polytope-editor/editorActions";
-import { decodeSharedState } from "@/features/share/compactUrl";
+import { decodeSharedState, encodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
-import { buildSharedStatePatch, type SharedAppState } from "@/features/share/sharedState";
+import { buildSharedStatePatch, type SharedAppState, sharedStateOf } from "@/features/share/sharedState";
 import type { ViewportApi } from "@/features/viewport/runtime";
+
+// The link at the window: offered in a prompt, and taken from the address on boot.
+
+/** Offer a link to the current problem, solver and view in a prompt, so it can be copied. */
+export function shareLink() {
+  // base64url only, so the whole link survives being pasted into chat,
+  // email or a paper without a linkifier clipping its tail
+  const encoded = encodeSharedState(sharedStateOf(getState()));
+  window.prompt("Share this link:", `${window.location.origin}${window.location.pathname}?s=${encoded}`);
+}
 
 export function applyUrlParamsOnce({ viewportApi, derivePolytope }: { viewportApi: ViewportApi; derivePolytope: () => void }) {
   const params = new URLSearchParams(window.location.search);

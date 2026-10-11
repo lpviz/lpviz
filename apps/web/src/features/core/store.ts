@@ -8,7 +8,7 @@ import { freshHistoryState, type HistoryState } from "@/features/history/history
 import { EDITOR_DIRTY, freshEditorState, initialEditorRuntimeState, type EditorRuntimeState, type EditorState } from "@/features/polytope-editor/editorState";
 import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverRuntimeState, type SolverState } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
-import type { ViewportDirtyFlags, FieldDirty } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags, FieldDirty } from "@/features/viewport/repaint";
 
 export type State = EditorState & SolverState & HistoryState & ViewportState;
 

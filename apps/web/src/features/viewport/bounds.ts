@@ -1,4 +1,5 @@
 import { type PointXY } from "@lpviz/math/types";
+import type { State } from "@/features/core/store";
 import { type ViewportRenderSnapshot } from "@/features/viewport/types";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/projection3d";
 import { iterateHeight, type IteratePath } from "@/features/solver/types";
@@ -21,7 +22,15 @@ type ZoomFitInputs = {
 
 // One pass over every drawn point with no intermediate arrays: a path can hold 100k iterates,
 // more than Math.min(...spread) accepts.
-export function collectZoomFitBounds({ vertices, iteratePath, originalIteratePath, traceBuffer, objectiveVector, currentObjective, objectiveHidden }: ZoomFitInputs) {
+/** What zoom-to-fit frames: the drawing with its paths, or the clip box of an unbounded open region; null with nothing to frame. */
+export function zoomFitTarget(state: ZoomFitInputs & Pick<State, "completionMode" | "polytope">) {
+  const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
+  const fit = collectZoomFitBounds(state);
+  if (!fit && !isOpenUnbounded) return null;
+  return { bounds: isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : fit!.bounds, zBounds: fit?.zBounds };
+}
+
+function collectZoomFitBounds({ vertices, iteratePath, originalIteratePath, traceBuffer, objectiveVector, currentObjective, objectiveHidden }: ZoomFitInputs) {
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;

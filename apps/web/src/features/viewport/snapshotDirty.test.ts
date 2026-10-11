@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createDefaultViewportRenderSnapshot } from "@lpviz/viewport/snapshot";
-import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
+import { getSnapshotViewportDirtyFlags } from "./repaint";
 
 const base = createDefaultViewportRenderSnapshot({ width: 1000, height: 800 });
 const next = (o: Partial<typeof base>) => ({ ...base, ...o });

@@ -1,5 +1,5 @@
 import type { State } from "@/features/core/store";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags } from "@/features/viewport/repaint";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
 

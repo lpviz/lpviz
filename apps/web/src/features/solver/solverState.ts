@@ -1,7 +1,7 @@
 import { DEFAULT_SOLVER_SETTINGS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
 import { type EllipsoidPath, EMPTY_ITERATE_PATH, type IteratePath, type LocalizingSetPath, type ResultView } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags } from "@/features/viewport/repaint";
 
 // The solver's slice of the store: the result panel, the solve and its iterates, and the trace.
 export type SolverState = {

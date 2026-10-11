@@ -1,6 +1,6 @@
 import type { PointXYZ } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
-import { WORLD_ANCHORED_DIRTY, type ViewportDirtyFlags } from "./dirtyFlags";
+import { WORLD_ANCHORED_DIRTY, type ViewportDirtyFlags } from "./repaint";
 
 // The viewport's slice of the store: the 2D/3D view and its transition.
 export type ViewportState = {

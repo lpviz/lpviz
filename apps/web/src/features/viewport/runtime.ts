@@ -31,7 +31,7 @@ import {
   set3DControlsConfig,
   setViewportRenderSnapshot,
 } from "./runtime/channels";
-import { getSnapshotViewportDirtyFlags } from "./snapshotDirty";
+import { getSnapshotViewportDirtyFlags } from "./repaint";
 import { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportBridge, type ViewportRenderSnapshot } from "./types";
 import { showsDepth } from "./viewportState";
 
@@ -54,6 +54,8 @@ export type ViewportApi = {
   /** the world rect the view shows, padded (see visibleBounds) */
   getVisibleBounds: () => BoundingBox;
   start3DTransition: (to3D: boolean) => void;
+  /** Run `fn` once no 2D/3D transition runs: now, or when the running one has completed. */
+  afterTransition: (fn: () => void) => void;
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
 };
@@ -188,7 +190,7 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
 
   // ---- the transition: owns the snapshot from begin to complete, stepping its own clock at the
   // start of each frame the canvas renders ----
-  let transition: { plan: ViewportTransitionPlan; startTime: number; progress: number } | null = null;
+  let transition: { plan: ViewportTransitionPlan; startTime: number; progress: number; onComplete: (() => void)[] } | null = null;
 
   // Derive the frame at `progress` and adopt it as the owned snapshot. While a to-2D transition
   // runs, the 2D controls' planar state follows the frame so the handoff at completion is seamless.
@@ -222,7 +224,7 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
     }
 
     const plan = buildViewportTransitionPlan({ snapshot: baseSnapshot, to3D, viewAngle });
-    transition = { plan, startTime: performance.now(), progress: 0 };
+    transition = { plan, startTime: performance.now(), progress: 0, onComplete: [] };
     setState({ isTransitioning3D: true, is3DMode: to3D, viewAngle: { ...plan.startAngles } });
     publishSnapshot(renderTransitionFrame(plan, 0).snapshot);
     // every transition frame rebuilds every layer: the flatten they read changes each frame
@@ -232,7 +234,7 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
   // last one completes the transition.
   const transitionTick = () => {
     if (!transition) return;
-    const { plan, startTime } = transition;
+    const { plan, startTime, onComplete } = transition;
     const progress = transitionProgressAt(plan, performance.now() - startTime);
     transition.progress = progress;
     publishSnapshot(renderTransitionFrame(plan, progress).snapshot);
@@ -247,6 +249,7 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
     setState({ isTransitioning3D: false, viewAngle: { ...plan.endAngles } });
     viewportBridge.invalidate();
     publishSnapshot(liveSnapshot());
+    for (const fn of onComplete) fn();
   };
   const removeTransitionTick = viewportBridge.addTick(transitionTick);
 
@@ -372,6 +375,10 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
     toCanvasCoords: (x, y, z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),
     getVisibleBounds: () => visibleBounds(liveSnapshot()),
     start3DTransition,
+    afterTransition: (fn) => {
+      if (transition) transition.onComplete.push(fn);
+      else fn();
+    },
     getCanvasElement: () => viewportBridge.getCanvasElement(),
     getCanvasRect: () => rect,
   };

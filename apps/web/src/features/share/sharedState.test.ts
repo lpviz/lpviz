@@ -1,6 +1,32 @@
 import { describe, expect, test } from "bun:test";
 import { DEFAULT_SOLVER_SETTINGS, type ShareSettings, type SolverSettings } from "../solver/solverSettings";
-import { collectShareSettings, validSharedSettings } from "./sharedState";
+import { decodeSharedState, encodeSharedState } from "./compactUrl";
+import { expectNear, expectVerticesNear, gallery } from "./fixtures";
+import { buildSharedStatePatch, collectShareSettings, sharedStateOf, validSharedSettings } from "./sharedState";
+
+describe("the store and a link", () => {
+  test("the state a link is made from comes back as the patch that restores it", () => {
+    const { vertices, objective } = gallery("pentagon");
+    const state = {
+      dimension: 2,
+      vertices,
+      completionMode: "closed",
+      objectiveVector: objective,
+      solverMode: "ipm",
+      solverSettings: DEFAULT_SOLVER_SETTINGS,
+      zScale: 50,
+      is3DMode: false,
+      solverStartPoint: [1, 2],
+    } satisfies Parameters<typeof sharedStateOf>[0];
+    const patch = buildSharedStatePatch(decodeSharedState(encodeSharedState(sharedStateOf(state)))!, state);
+    expectVerticesNear(patch.vertices!, vertices);
+    expectNear(patch.objectiveVector, objective);
+    expectNear(patch.solverStartPoint, [1, 2]);
+    expect(patch.completionMode).toBe("closed");
+    expect(patch.solverMode).toBe("ipm");
+    expect(patch.zScale).toBe(50);
+  });
+});
 
 // Share links are the app's only untrusted input: a hand-edited link must be
 // able to neither blank a <select> nor throw inside the settings panel's store

@@ -1,4 +1,4 @@
-import type { Repaint } from "./dirtyFlags";
+import type { Repaint } from "./repaint";
 
 export { DEFAULT_VIEWPORT_RENDER_SNAPSHOT, type ViewportRenderSnapshot } from "@lpviz/viewport/snapshot";
 

@@ -1,9 +1,9 @@
-import { freshState, getState, on, setState } from "@/features/core/store";
+import { freshState, getState, setState } from "@/features/core/store";
 import type { HistoryService } from "@/features/history/historyService";
 import { type EditorDeps, finishOpenRegion } from "@/features/polytope-editor/editorActions";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
-import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
+import { zoomFitTarget } from "@/features/viewport/bounds";
 import { clampZScale } from "@lpviz/viewport/defaults";
 
 // the solver actions the UI panels call directly
@@ -45,25 +45,6 @@ export type AppActions = Pick<SolverActions, (typeof SOLVER_ACTION_KEYS)[number]
 
 const pick = <T, K extends keyof T>(source: T, ...keys: K[]): Pick<T, K> => Object.fromEntries(keys.map((key) => [key, source[key]])) as Pick<T, K>;
 
-// Run `fn` once the viewport is not mid-transition between 2D and 3D: now if
-// it is not, otherwise when the running transition completes.
-const afterViewTransition = (fn: () => void) => {
-  if (!getState().isTransitioning3D) {
-    fn();
-    return;
-  }
-  const controller = new AbortController();
-  on(
-    ["isTransitioning3D"],
-    ({ isTransitioning3D }) => {
-      if (isTransitioning3D) return;
-      controller.abort();
-      fn();
-    },
-    controller.signal,
-  );
-};
-
 export function createAppActions({ solver, share, history, editor }: { solver: SolverActions; share: () => void; history: HistoryService; editor: EditorDeps }): AppActions {
   let topInset = 0;
   const { viewportApi } = editor;
@@ -73,13 +54,10 @@ export function createAppActions({ solver, share, history, editor }: { solver: S
     const state = getState();
     if (!state.isTransitioning3D) viewportApi.start3DTransition(!state.is3DMode);
   };
-  // an unbounded open region is fitted to its clip box; the gallery strip, when open, is kept clear
+  // the gallery strip, when open, is kept clear
   const zoomToFit = () => {
-    const state = getState();
-    const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
-    const zoomFit = collectZoomFitBounds(state);
-    if (!zoomFit && !isOpenUnbounded) return;
-    viewportApi.zoomToFit(isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : zoomFit!.bounds, zoomFit?.zBounds, topInset);
+    const target = zoomFitTarget(getState());
+    if (target) viewportApi.zoomToFit(target.bounds, target.zBounds, topInset);
   };
 
   return {
@@ -96,7 +74,7 @@ export function createAppActions({ solver, share, history, editor }: { solver: S
       viewportApi.set2DPanEnabled(true);
       const { is3DMode, isTransitioning3D } = getState();
       if (is3DMode && !isTransitioning3D) toggle3D();
-      afterViewTransition(resetView);
+      viewportApi.afterTransition(resetView);
     },
     loadGalleryProblem: (problem) => {
       editor.saveHistory();

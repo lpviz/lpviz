@@ -1,9 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { deriveViewportDirty, type State } from "./store";
 
-// Pins the field -> repainted-layers mapping that patch() derives automatically.
-// This must agree with the hand-tuned getXViewportDirtyFlags helpers (see
-// dirtyFlags.test.ts) that it replaces; the two oracles are updated together.
+// Pins the field -> repainted-layers mapping that patch() derives from the slices' dirty tables.
 const st = (o: Partial<State>): State => ({ is3DMode: false, isTransitioning3D: false, ...o }) as State;
 // what a change to one field repaints, in a 2D view unless said otherwise
 const dirtyOf = (key: keyof State, state: Partial<State> = {}) => deriveViewportDirty(st(state), [key]);

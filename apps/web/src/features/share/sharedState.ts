@@ -28,6 +28,31 @@ export type SharedAppState = {
   is3DMode?: boolean;
 };
 
+/** The link's state for the current one: the problem, the solver with the settings a link carries, and the view. */
+export function sharedStateOf({
+  dimension,
+  vertices,
+  completionMode,
+  objectiveVector,
+  solverMode,
+  solverSettings,
+  zScale,
+  is3DMode,
+  solverStartPoint,
+}: Pick<State, "dimension" | "vertices" | "completionMode" | "objectiveVector" | "solverMode" | "solverSettings" | "zScale" | "is3DMode" | "solverStartPoint">): SharedAppState {
+  return {
+    dimension,
+    vertices,
+    completionMode,
+    objective: objectiveVector,
+    solverMode,
+    settings: collectShareSettings(solverSettings, solverMode),
+    solverStartPoint,
+    zScale,
+    ...(is3DMode ? { is3DMode } : {}),
+  };
+}
+
 /** The settings a link for `mode` carries: the global ones and the mode's own. */
 export function collectShareSettings(settings: SolverSettings, mode: SolverMode): ShareSettings {
   const shared: ShareSettings = {};
