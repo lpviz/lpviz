@@ -9,7 +9,7 @@ import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { FatLine } from "../helpers/fatLine";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { type LayerPlacement, passOf, renderOrderOf, TRACE_OCCLUDER_LAYER } from "../Layer";
+import { type LayerPlacement, passOf, placeInSlot, TRACE_OCCLUDER_LAYER } from "../Layer";
 import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
@@ -104,15 +104,12 @@ export class PolytopeBaseLayer extends LayerBase {
   private readonly fillMaterial = translucentFill(PALETTE.polytopeFill);
   // a nonconvex drawing is filled in the accent colour, so the rejection is visible
   private readonly nonconvexFillMaterial = translucentFill(PALETTE.accent);
-  private readonly fillMesh = new Mesh(undefined, this.fillMaterial);
-  private readonly normalEdges = new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot });
-  private readonly highlightEdges = new FatLine({ color: PALETTE.accent, linewidth: STROKE.polytopeEdge, slot: this.slot });
+  private readonly fillMesh = placeInSlot(new Mesh(undefined, this.fillMaterial), "polytopeFill");
+  private readonly normalEdges = this.own(new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot }));
+  private readonly highlightEdges = this.own(new FatLine({ color: PALETTE.accent, linewidth: STROKE.polytopeEdge, slot: this.slot }));
 
   constructor() {
     super();
-    this.fillMesh.renderOrder = renderOrderOf.polytopeFill;
-    this.fillMesh.frustumCulled = false;
-    this.fillMesh.visible = false;
     this.object3D.add(this.normalEdges.object3D, this.highlightEdges.object3D);
     // the floor and its edges are what hides the trace behind them in 3D
     for (const object of [this.fillMesh, this.normalEdges.object3D, this.highlightEdges.object3D]) object.layers.enable(TRACE_OCCLUDER_LAYER);
@@ -162,9 +159,8 @@ export class PolytopeBaseLayer extends LayerBase {
     }
   }
 
-  dispose(): void {
-    this.normalEdges.dispose();
-    this.highlightEdges.dispose();
+  override dispose(): void {
+    super.dispose();
     this.fillMaterial.dispose();
     this.nonconvexFillMaterial.dispose();
     this.fillMesh.geometry.dispose();

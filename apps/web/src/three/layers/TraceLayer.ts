@@ -4,8 +4,8 @@ import { Group } from "three";
 import { iteratePosition, iteratePositions, writeIteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
 import { PointCloud } from "../helpers/pointCloud";
-import { stampTraceSequence } from "../helpers/traceSequence";
 import { PALETTE, SPRITE, STROKE } from "../palette";
+import { stampTraceSequence } from "../trace/sequence";
 import { ZScaledLayer } from "./base/LayerBase";
 
 const TRACE_OPACITY = 0.4;
@@ -39,7 +39,7 @@ function sameDrawnPosition(entry: TraceEntry, i: number, j: number): boolean {
 // so it gets a pooled chunk whose path texture and sprite positions are built and uploaded exactly
 // once: a rotation step costs one chunk upload, every iterate is drawn (the ribbon is never
 // sampled), and previously drawn curves can never shift between frames. Both of a chunk's objects
-// carry the entry's append sequence (see traceSequence.ts), which is what lets the 2D cache bake
+// carry the entry's append sequence (see trace/sequence.ts), which is what lets the 2D cache bake
 // the chunk once and the 3D compositor treat the pass as a whole.
 export class TraceLayer extends ZScaledLayer {
   readonly object3D = new Group();
@@ -63,7 +63,7 @@ export class TraceLayer extends ZScaledLayer {
       ribbon: new PathRibbon({ color: PALETTE.trace, opacity: TRACE_OPACITY, linewidth: STROKE.trace, slot: this.slot }),
       sprites: new PointCloud({ color: PALETTE.trace, pixelSize: SPRITE.tracePoint, shape: "disc", slot: "tracePoints", vertexColors: false }),
     };
-    this.object3D.add(chunk.ribbon.mesh, chunk.sprites.points);
+    this.object3D.add(chunk.ribbon.object3D, chunk.sprites.object3D);
     this.chunks.push(chunk);
     return chunk;
   }
@@ -82,8 +82,8 @@ export class TraceLayer extends ZScaledLayer {
     for (const [entry, chunk] of this.assigned) {
       if (live.has(entry)) continue;
       this.assigned.delete(entry);
-      chunk.ribbon.mesh.visible = false;
-      chunk.sprites.points.visible = false;
+      chunk.ribbon.object3D.visible = false;
+      chunk.sprites.object3D.visible = false;
       this.free.push(chunk);
     }
 
@@ -95,9 +95,9 @@ export class TraceLayer extends ZScaledLayer {
       const sampled = sampledIterates(entry);
       chunk.sprites.draw(sampled.length, (out) => writeIteratePositions(out, entry, sampled.length, sampled));
       const seq = this.nextSeq++;
-      stampTraceSequence(chunk.ribbon.mesh, seq);
-      stampTraceSequence(chunk.sprites.points, seq);
-      chunk.ribbon.mesh.visible = true;
+      stampTraceSequence(chunk.ribbon.object3D, seq);
+      stampTraceSequence(chunk.sprites.object3D, seq);
+      chunk.ribbon.object3D.visible = true;
       this.assigned.set(entry, chunk);
     }
 
@@ -107,7 +107,7 @@ export class TraceLayer extends ZScaledLayer {
     if (this.assigned.size === 0) this.hide();
   }
 
-  dispose(): void {
+  override dispose(): void {
     for (const { ribbon, sprites } of this.chunks) {
       ribbon.dispose();
       sprites.dispose();

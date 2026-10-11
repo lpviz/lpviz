@@ -17,7 +17,7 @@ export const phasesCovering = (phases: number[], count: number): number[] | null
 
 // Per-point linear RGB for `count` iterates: iterate i, or iterate indices[i]
 // when a subset of the path is drawn.
-export function writePhaseColors(out: Float32Array, phases: number[], indices: number[] | null, count: number): void {
+export function writePhaseColors(out: Float32Array, phases: number[], count: number, indices: readonly number[] | null): void {
   for (let i = 0; i < count; i++) {
     const rgb = PHASE_COLORS_LINEAR[phases[indices ? indices[i]! : i]! % PHASE_COLORS_LINEAR.length]!;
     out[i * 3] = rgb[0];
@@ -33,6 +33,6 @@ let scratch = new Float32Array(0);
 /** Per-point linear RGB for every iterate of a path. */
 export function phaseColorsOf(phases: number[]): Float32Array {
   if (scratch.length < phases.length * 3) scratch = new Float32Array(phases.length * 3);
-  writePhaseColors(scratch, phases, null, phases.length);
+  writePhaseColors(scratch, phases, phases.length, null);
   return scratch;
 }

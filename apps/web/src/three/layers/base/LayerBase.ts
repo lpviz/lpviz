@@ -2,7 +2,7 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
 import { viewShowsMode } from "../../helpers/sceneVisibility";
-import { type Layer, type LayerPlacement, passOf, type RenderSlot } from "../../Layer";
+import { type Drawable, type Layer, type LayerPlacement, passOf, type RenderSlot } from "../../Layer";
 
 // Template-method base for data-driven layers: a subclass declares the inputs whose reference
 // change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
@@ -10,7 +10,8 @@ import { type Layer, type LayerPlacement, passOf, type RenderSlot } from "../../
 // unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
 // A layer the view does not show (`visibleIn`) is hidden without a rebuild, and shown and rebuilt
 // when it shows again; a rebuild that finds nothing to draw hides the layer itself. The frame's
-// inputs come in from the scene manager and are handed down.
+// inputs come in from the scene manager and are handed down. The parts a layer draws with are
+// registered with `own` as its fields are made, and disposed with it.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   /** the slot `object3D` draws in (see RENDER_SLOTS); a layer with more objects overrides `placements` */
@@ -18,6 +19,7 @@ export abstract class LayerBase implements Layer {
   abstract readonly invalidationKeys: Layer["invalidationKeys"];
 
   private deps: readonly unknown[] | null = null;
+  private readonly parts: Drawable[] = [];
 
   placements(): readonly LayerPlacement[] {
     return [{ object3D: this.object3D, pass: passOf[this.slot] }];
@@ -56,7 +58,15 @@ export abstract class LayerBase implements Layer {
   /** Cheap per-frame work (e.g. object3D.scale.z). Runs every update. */
   protected everyFrame(_state: State, _snap: ViewportRenderSnapshot): void {}
 
-  abstract dispose(): void;
+  /** A part the layer draws with, disposed with the layer. */
+  protected own<T extends Drawable>(part: T): T {
+    this.parts.push(part);
+    return part;
+  }
+
+  dispose(): void {
+    for (const part of this.parts) part.dispose();
+  }
 }
 
 // Raw z is baked into the geometry; zScale and the 2D/3D flatten ride on

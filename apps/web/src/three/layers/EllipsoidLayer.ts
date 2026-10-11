@@ -5,8 +5,9 @@ import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/local
 import { Group, Matrix4 } from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import type { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
-import { FatLine, lineDepthMaterial, lineGeometry, setupLine } from "../helpers/fatLine";
+import { FatLine, lineDepthMaterial, lineGeometry } from "../helpers/fatLine";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
+import { placeInSlot } from "../Layer";
 import { PALETTE, STROKE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
 
@@ -97,7 +98,7 @@ export class EllipsoidLayer extends ZScaledLayer {
   override readonly invalidationKeys = ["iterate"] as const;
   private readonly geometry: LineSegmentsGeometry;
   private readonly slots: LineSegments2[] = [];
-  private readonly polygon = new FatLine({ color: PALETTE.ellipsoid, linewidth: STROKE.localizingPolygon, opacity: POLYGON_OPACITY, slot: this.slot });
+  private readonly polygon = this.own(new FatLine({ color: PALETTE.ellipsoid, linewidth: STROKE.localizingPolygon, opacity: POLYGON_OPACITY, slot: this.slot }));
   private readonly matrix = new Matrix4();
   private readonly indices: number[] = [];
   private polygonScratch = new Float32Array(0);
@@ -110,7 +111,7 @@ export class EllipsoidLayer extends ZScaledLayer {
     this.object3D.add(this.polygon.object3D);
 
     for (let slot = 0; slot < TRAIL_COUNT; slot++) {
-      const segments = setupLine(new LineSegments2(geometry, slotMaterial(slot, false)), this.slot);
+      const segments = placeInSlot(new LineSegments2(geometry, slotMaterial(slot, false)), this.slot);
       segments.matrixAutoUpdate = false;
       this.slots.push(segments);
       this.object3D.add(segments);
@@ -200,9 +201,9 @@ export class EllipsoidLayer extends ZScaledLayer {
     }
   }
 
-  dispose(): void {
+  override dispose(): void {
+    super.dispose();
     this.geometry.dispose();
-    this.polygon.dispose();
   }
 }
 

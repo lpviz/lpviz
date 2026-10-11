@@ -1,17 +1,17 @@
-import { renderOrderOf, type RenderSlot } from "../Layer";
+import { placeInSlot, type RenderSlot } from "../Layer";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import type { InterleavedBufferAttribute } from "three";
 import { applyHugeBounds } from "./hugeBounds";
-import { setPathRibbonResolution } from "./pathRibbon";
 
 const materialCache = new Map<string, LineMaterial>();
 
 // The depth-on-in-3D line material every polytope/objective/constraint layer
 // wants: 2D paints in draw order (no depth), 3D depth-tests so the floor
 // occludes correctly. One instance per distinct parameter set, shared by
-// every object that asks for it.
+// every object that asks for it. Its screen resolution three sets from the
+// renderer's viewport on every draw (LineSegments2.onBeforeRender).
 export function lineDepthMaterial(color: string, linewidth: number, is3D: boolean, opacity = 1): LineMaterial {
   const key = `${color}|${linewidth}|${is3D}|${opacity}`;
   let mat = materialCache.get(key);
@@ -22,31 +22,10 @@ export function lineDepthMaterial(color: string, linewidth: number, is3D: boolea
   return mat;
 }
 
-let lastWidth = 0;
-let lastHeight = 0;
-
-// The CSS resolution every screen-space line width is computed against; set on resize.
-export function setFatLineResolution(width: number, height: number): void {
-  if (width === lastWidth && height === lastHeight) return;
-  lastWidth = width;
-  lastHeight = height;
-  materialCache.forEach((mat) => mat.resolution.set(width, height));
-  setPathRibbonResolution(width, height);
-}
-
 export function lineGeometry(): LineSegmentsGeometry {
   const geo = new LineSegmentsGeometry();
   applyHugeBounds(geo);
   return geo;
-}
-
-// Every fat-line object in the app: never frustum-culled (its geometry's
-// bounds are fake) and hidden until its first draw.
-export function setupLine<T extends LineSegments2>(line: T, slot: RenderSlot): T {
-  line.renderOrder = renderOrderOf[slot];
-  line.frustumCulled = false;
-  line.visible = false;
-  return line;
 }
 
 // A line with as many segments as before (the objective arrow every rotation step, a region's
@@ -76,7 +55,7 @@ export class FatLine {
   readonly object3D: LineSegments2;
 
   constructor(private readonly style: FatLineStyle) {
-    this.object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(style.color, style.linewidth, false, style.opacity)), style.slot);
+    this.object3D = placeInSlot(new LineSegments2(lineGeometry(), lineDepthMaterial(style.color, style.linewidth, false, style.opacity)), style.slot);
   }
 
   /** Upload the segments and show them; `color` overrides the style's for an accent. */

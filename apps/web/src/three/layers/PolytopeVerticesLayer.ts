@@ -13,12 +13,12 @@ export class PolytopeVerticesLayer extends LayerBase {
   readonly object3D = new Group();
   readonly slot = "polytopeVertices" as const;
   override readonly invalidationKeys = ["polytope"] as const;
-  private readonly circles = new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "disc", slot: this.slot, vertexColors: false });
-  private readonly squares = new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "square", slot: this.slot, vertexColors: false });
+  private readonly circles = this.own(new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "disc", slot: this.slot, vertexColors: false }));
+  private readonly squares = this.own(new PointCloud({ color: PALETTE.accent, pixelSize: SPRITE.polytopeVertex, shape: "square", slot: this.slot, vertexColors: false }));
 
   constructor() {
     super();
-    this.object3D.add(this.circles.points, this.squares.points);
+    this.object3D.add(this.circles.object3D, this.squares.object3D);
   }
 
   protected override visibleIn(state: State, snap: ViewportRenderSnapshot): boolean {
@@ -37,11 +37,6 @@ export class PolytopeVerticesLayer extends LayerBase {
     const squares = displayVertices.filter((_, index) => isAnchor(index));
     this.circles.draw(circles.length, (positions) => writeVertices(positions, circles));
     this.squares.draw(squares.length, (positions) => writeVertices(positions, squares));
-  }
-
-  dispose(): void {
-    this.circles.dispose();
-    this.squares.dispose();
   }
 }
 

@@ -10,7 +10,7 @@ import { LayerBase } from "./base/LayerBase";
 
 export class ConstraintHighlightLayer extends LayerBase {
   readonly slot = "constraintHighlight" as const;
-  private readonly line = new FatLine({ color: PALETTE.accent, linewidth: STROKE.constraintHighlight, slot: this.slot });
+  private readonly line = this.own(new FatLine({ color: PALETTE.accent, linewidth: STROKE.constraintHighlight, slot: this.slot }));
   readonly object3D = this.line.object3D;
   // "grid" fires on zoom/resize/pan, which move the visible bounds this
   // layer clips against; the dependency check below keeps updates cheap.
@@ -33,9 +33,5 @@ export class ConstraintHighlightLayer extends LayerBase {
     }
     const [start, end] = clipped;
     this.line.draw([start[0], start[1], 0, end[0], end[1], 0], snap.mode === "3d");
-  }
-
-  dispose(): void {
-    this.line.dispose();
   }
 }

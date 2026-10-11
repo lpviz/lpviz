@@ -11,7 +11,7 @@ const OBJECTIVE_EPSILON = 1e-3;
 
 export class ObjectiveLayer extends LayerBase {
   readonly slot = "objective" as const;
-  private readonly line = new FatLine({ color: PALETTE.objective, linewidth: STROKE.objective, slot: this.slot });
+  private readonly line = this.own(new FatLine({ color: PALETTE.objective, linewidth: STROKE.objective, slot: this.slot }));
   readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["objective"] as const;
 
@@ -42,9 +42,5 @@ export class ObjectiveLayer extends LayerBase {
 
     // the accent colour says the objective points where the region is unbounded
     this.line.draw(positions, snap.mode === "3d", isUnboundedDirection(state, target) ? PALETTE.accent : PALETTE.objective);
-  }
-
-  dispose(): void {
-    this.line.dispose();
   }
 }

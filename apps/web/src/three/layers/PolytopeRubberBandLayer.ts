@@ -9,7 +9,7 @@ import { LayerBase } from "./base/LayerBase";
 // The edge being drawn: from the last placed vertex to the pointer, while the region is a draft.
 export class PolytopeRubberBandLayer extends LayerBase {
   readonly slot = "polytopeEdges" as const;
-  private readonly line = new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot });
+  private readonly line = this.own(new FatLine({ color: PALETTE.polytopeOutline, linewidth: STROKE.polytopeEdge, slot: this.slot }));
   readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["polytope"] as const;
   private readonly positions = new Float32Array(6);
@@ -28,9 +28,5 @@ export class PolytopeRubberBandLayer extends LayerBase {
     this.positions.set([last[0], last[1], 0, mouse[0], mouse[1], 0]);
     // a sketch aid, drawn over everything in either view
     this.line.draw(this.positions, false);
-  }
-
-  dispose(): void {
-    this.line.dispose();
   }
 }

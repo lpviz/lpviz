@@ -35,6 +35,20 @@ export const passOf = slots((_, pass) => pass);
 /** A slot's order within its pass, which three sorts a scene by before anything else. */
 export const renderOrderOf = slots((_, _pass, index) => index);
 
+/** Put an object in its slot: drawn in the slot's order, never frustum-culled (the geometries' bounds are fake), hidden until its first draw. */
+export function placeInSlot<T extends Object3D>(object: T, slot: RenderSlot): T {
+  object.renderOrder = renderOrderOf[slot];
+  object.frustumCulled = false;
+  object.visible = false;
+  return object;
+}
+
+/** A part a layer draws with: the object it puts in the scene and the GL resources it frees. */
+export interface Drawable {
+  readonly object3D: Object3D;
+  dispose(): void;
+}
+
 /** One of a layer's objects and the pass it renders in. */
 export type LayerPlacement = {
   readonly object3D: Object3D;

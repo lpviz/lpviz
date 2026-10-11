@@ -5,10 +5,10 @@ import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot"
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer, WebGLRenderTarget } from "three";
-import { setFatLineResolution } from "./helpers/fatLine";
-import { drawsNothing, type TraceFrame, type TraceImpostor, type TracePassImpostor } from "./helpers/traceComposite";
+import { setCanvasResolution } from "./helpers/screenUniforms";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
-import { TraceCache } from "./TraceCache";
+import { TraceCache } from "./trace/TraceCache";
+import type { TraceFrame } from "./trace/views";
 
 type Size = { width: number; height: number; dpr: number };
 
@@ -17,20 +17,21 @@ type Size = { width: number; height: number; dpr: number };
 // pixel-aligned with the screen; above it the browser would stretch the buffer.
 const MAX_DPR = 3;
 const clampDpr = () => Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio));
+// whether a scene has nothing visible to render
+const drawsNothing = (scene: Scene): boolean => scene.children.every((child) => !child.visible);
 
 // The demand-driven render loop: a frame per invalidation, in which the ticks run, the layers
 // named dirty rebuild (every layer when all are), and the passes render in order, the trace pass
-// through an impostor when one applies.
+// through its cache when that has a bake to composite.
 export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   private layers: Layer[] = [];
-  // The trace pass renders through the first impostor that applies: the accumulation cache, which
-  // bakes each chunk once (world-anchored in 2D, against the view's depth in 3D) so neither a
-  // trace append nor, in 2D, camera motion re-renders baked chunks, and which composites a
-  // single-sample bake while the view moves instead of the MSAA canvas.
+  // The trace pass renders through its accumulation cache, which bakes each chunk once
+  // (world-anchored in 2D, against the view's depth in 3D) so neither a trace append nor, in 2D,
+  // camera motion re-renders baked chunks, and which composites a single-sample bake while the
+  // view moves instead of the MSAA canvas.
   private readonly traceCache = new TraceCache(() => this.invalidate("frame"));
-  private readonly traceImpostors: readonly TraceImpostor[] = [this.traceCache];
   // the scenes holding the geometry that occludes the trace in 3D (see TRACE_OCCLUDER_LAYER)
   private readonly occluders = [this.scenes.transparent, this.scenes.foreground];
 
@@ -64,8 +65,8 @@ export class SceneManager {
 
     this.size = { width: canvas.clientWidth, height: canvas.clientHeight, dpr };
     this.renderer.setSize(this.size.width, this.size.height, false);
-    // screen-space line widths need the CSS resolution before the first render
-    setFatLineResolution(this.size.width, this.size.height);
+    // the ribbons' screen-space widths need the CSS resolution before the first render
+    setCanvasResolution(this.size.width, this.size.height);
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -83,7 +84,7 @@ export class SceneManager {
     this.size = { width, height, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
-    setFatLineResolution(width, height);
+    setCanvasResolution(width, height);
     this.invalidate();
   }
 
@@ -148,15 +149,15 @@ export class SceneManager {
   }
 
   // Compile every program ahead of its first draw: each pass's layers for the canvas, the trace and
-  // its occluders for the impostors' targets (a render target compiles its own variant), and the
-  // impostors' composites. Without it the first solve, the first 3D frame and the first trace each
+  // its occluders for the cache's targets (a render target compiles its own variant), and the
+  // cache's composites. Without it the first solve, the first 3D frame and the first trace each
   // stall on the shader compiler, for hundreds of milliseconds on a phone; issued at boot, the
   // compiles overlap the app's load instead.
   precompile(camera: Camera): void {
     const { renderer } = this;
     const compile = (scene: Scene) => void renderer.compile(scene, camera);
     for (const scene of Object.values(this.scenes)) compile(scene);
-    for (const impostor of this.traceImpostors) compile(impostor.scene);
+    compile(this.traceCache.scene);
     const target = new WebGLRenderTarget(1, 1);
     renderer.setRenderTarget(target);
     for (const scene of [this.scenes.trace, ...this.occluders]) compile(scene);
@@ -186,7 +187,7 @@ export class SceneManager {
       layer.dispose();
     }
     this.layers = [];
-    for (const impostor of this.traceImpostors) impostor.dispose();
+    this.traceCache.dispose();
     for (const scene of Object.values(this.scenes)) {
       scene.clear();
     }
@@ -197,19 +198,14 @@ export class SceneManager {
   private renderScenes(camera: Camera, state: State, snapshot: ViewportRenderSnapshot): void {
     this.renderer.clear();
     this.renderer.autoClear = false;
-    // The trace impostors bake offscreen (cache rebuild, 3D depth pre-pass) before any canvas pass
+    // The trace cache bakes offscreen (cache rebuild, 3D depth pre-pass) before any canvas pass
     // renders, or a mid-loop render-target switch would drop the composited result.
     const frame: TraceFrame = { renderer: this.renderer, camera, state, snapshot, trace: this.scenes.trace, occluders: this.occluders };
-    let impostor: TracePassImpostor | null = null;
-    for (const candidate of this.traceImpostors) {
-      impostor = candidate.prepare(frame);
-      if (impostor) break;
-    }
+    const composite = this.traceCache.prepare(frame);
     for (const pass of RENDER_PASSES) {
-      const substitute = pass === "trace" ? impostor : null;
-      const scene = substitute?.scene ?? this.scenes[pass];
+      const scene = (pass === "trace" && composite) || this.scenes[pass];
       if (drawsNothing(scene)) continue;
-      this.renderer.render(scene, substitute?.camera ?? camera);
+      this.renderer.render(scene, camera);
     }
     this.renderer.autoClear = true;
   }

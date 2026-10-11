@@ -1,9 +1,12 @@
+import type { IteratePath } from "@/features/solver/solverState";
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Points, PointsMaterial } from "three";
-import { renderOrderOf, type RenderSlot } from "../Layer";
-import { cacheEncodeGlsl, sharedCacheEncode } from "./cacheEncode";
+import { placeInSlot, type RenderSlot } from "../Layer";
 import { applyHugeBounds } from "./hugeBounds";
+import { writeIteratePositions } from "./iteratePositions";
+import { writePhaseColors } from "./phaseColors";
+import { cacheEncode, cacheEncodeGlsl } from "./screenUniforms";
 
-export type SpriteShape = "disc" | "ring" | "square" | "star";
+type SpriteShape = "disc" | "ring" | "square" | "star";
 
 export type PointCloudStyle = {
   color: string;
@@ -45,7 +48,7 @@ float starDistance(vec2 p, float r, float rf) {
 // signed distance evaluated per fragment, with a one-device-pixel antialiased edge. Exact at any
 // size and pixel ratio and with no texture to filter, so the edge is as sharp as the pixel grid
 // allows; it rides on PointsMaterial's own size, color and vertex-color handling. The output is
-// encoded by hand while the trace bakes (see cacheEncode.ts), so a sprite in a trace chunk is the
+// encoded by hand while the trace bakes (see screenUniforms.ts), so a sprite in a trace chunk is the
 // same pixels cached as drawn.
 function spriteMaterial(style: PointCloudStyle, color: string, vertexColors: boolean): PointsMaterial {
   const material = new PointsMaterial({
@@ -59,7 +62,7 @@ function spriteMaterial(style: PointCloudStyle, color: string, vertexColors: boo
     vertexColors,
   });
   material.onBeforeCompile = (shader) => {
-    shader.uniforms.cacheEncode = sharedCacheEncode;
+    shader.uniforms.cacheEncode = cacheEncode;
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", `uniform float cacheEncode;\n${STAR_DISTANCE}\nvoid main() {`)
       .replace(
@@ -81,8 +84,11 @@ function spriteMaterial(style: PointCloudStyle, color: string, vertexColors: boo
 // optional color attribute) and the plain/colored material pair. draw() writes straight into
 // the attribute arrays, so no intermediate copy exists on the rotation hot path. The geometry
 // starts empty with fake huge bounds, so the renderer neither computes them nor culls it.
+/** Which iterates of a path a cloud marks: the first `count`, or the ones at `indices`. */
+export type IterateSelection = number | readonly number[];
+
 export class PointCloud {
-  readonly points: Points;
+  readonly object3D: Points;
   private readonly plain: PointsMaterial;
   private readonly colored: PointsMaterial | null;
 
@@ -91,33 +97,37 @@ export class PointCloud {
     this.colored = style.vertexColors ? spriteMaterial(style, "#ffffff", true) : null;
     const geometry = new BufferGeometry();
     applyHugeBounds(geometry);
-    this.points = new Points(geometry, this.plain);
-    this.points.renderOrder = renderOrderOf[style.slot];
-    this.points.frustumCulled = false;
-    this.points.visible = false;
+    this.object3D = placeInSlot(new Points(geometry, this.plain), style.slot);
+  }
+
+  /** A sprite on each selected iterate of the path, coloured by phase when `phases` is given. */
+  drawIterates(path: IteratePath, selection: IterateSelection, phases: number[] | null): void {
+    const count = typeof selection === "number" ? selection : selection.length;
+    const indices = typeof selection === "number" ? null : selection;
+    this.draw(count, (out) => writeIteratePositions(out, path, count, indices), phases ? (out) => writePhaseColors(out, phases, count, indices) : null);
   }
 
   draw(count: number, writePositions: (out: Float32Array) => void, writeColors?: ((out: Float32Array) => void) | null): void {
     if (count === 0) {
-      this.points.visible = false;
+      this.object3D.visible = false;
       return;
     }
-    const geometry = this.points.geometry;
+    const geometry = this.object3D.geometry;
     writePositions(growAttribute(geometry.getAttribute("position") as BufferAttribute | undefined, count, (attribute) => geometry.setAttribute("position", attribute)));
     if (writeColors && this.colored) {
       writeColors(growAttribute(geometry.getAttribute("color") as BufferAttribute | undefined, count, (attribute) => geometry.setAttribute("color", attribute)));
-      this.points.material = this.colored;
+      this.object3D.material = this.colored;
     } else {
-      this.points.material = this.plain;
+      this.object3D.material = this.plain;
     }
     geometry.setDrawRange(0, count);
-    this.points.visible = true;
+    this.object3D.visible = true;
   }
 
   dispose(): void {
     this.plain.dispose();
     this.colored?.dispose();
-    this.points.geometry.dispose();
+    this.object3D.geometry.dispose();
   }
 }
 

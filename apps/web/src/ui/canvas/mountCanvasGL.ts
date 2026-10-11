@@ -9,9 +9,7 @@ import { ConstraintHighlightLayer } from "@/three/layers/ConstraintHighlightLaye
 import { EllipsoidLayer } from "@/three/layers/EllipsoidLayer";
 import { GridLayer } from "@/three/layers/GridLayer";
 import { IterateLineLayer } from "@/three/layers/IterateLineLayer";
-import { createIterateHighlightLayer, createIterateStarLayer } from "@/three/layers/IterateMarkerLayer";
-import { IteratePointsLayer } from "@/three/layers/IteratePointsLayer";
-import { IterateRestartPointsLayer } from "@/three/layers/IterateRestartPointsLayer";
+import { createIterateHighlightLayer, createIteratePointsLayer, createIterateRestartPointsLayer, createIterateStarLayer } from "@/three/layers/IterateSpritesLayer";
 import { ObjectiveLayer } from "@/three/layers/ObjectiveLayer";
 import { PolytopeBaseLayer } from "@/three/layers/PolytopeBaseLayer";
 import { PolytopeRubberBandLayer } from "@/three/layers/PolytopeRubberBandLayer";
@@ -39,8 +37,8 @@ export function mountCanvasGL(parent: HTMLElement) {
     new TraceLayer(),
     new EllipsoidLayer(),
     new IterateLineLayer(),
-    new IteratePointsLayer(),
-    new IterateRestartPointsLayer(),
+    createIteratePointsLayer(),
+    createIterateRestartPointsLayer(),
     createIterateHighlightLayer(),
     createIterateStarLayer(),
     new SolverStartLayer(),

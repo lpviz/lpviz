@@ -2,8 +2,9 @@ import type { State } from "@/features/core/store";
 import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
+import { PointCloud } from "../helpers/pointCloud";
 import { PALETTE, SPRITE } from "../palette";
-import { PointCloudLayer } from "./base/PointCloudLayer";
+import { ZScaledLayer } from "./base/LayerBase";
 
 // Subtle draggable marker for where IPM/PDHG/primal-simplex begin iterating:
 // a small gray ring at the effective start point (see
@@ -14,12 +15,11 @@ import { PointCloudLayer } from "./base/PointCloudLayer";
 // to the floor. Dragging maps through the z = 0 plane like the vertices.
 // Unlike the other iterate layers it does not hide during the 2D/3D
 // transition.
-export class SolverStartLayer extends PointCloudLayer {
+export class SolverStartLayer extends ZScaledLayer {
+  readonly slot = "solverStart" as const;
+  private readonly cloud = this.own(new PointCloud({ color: PALETTE.solverStart, opacity: 0.9, pixelSize: SPRITE.solverStart, shape: "ring", slot: this.slot, vertexColors: false }));
+  readonly object3D = this.cloud.object3D;
   override readonly invalidationKeys = ["iterate"] as const;
-
-  constructor() {
-    super({ color: PALETTE.solverStart, opacity: 0.9, pixelSize: SPRITE.solverStart, shape: "ring", slot: "solverStart", vertexColors: false });
-  }
 
   // shown through the 2D/3D transition too, unlike the other iterate layers
   protected override visibleIn(): boolean {
@@ -46,6 +46,6 @@ export class SolverStartLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    this.draw(1, (pos) => pos.set([point[0], point[1], iterateHeightOrFloor(state.iteratePath, 0)]));
+    this.cloud.draw(1, (pos) => pos.set([point[0], point[1], iterateHeightOrFloor(state.iteratePath, 0)]));
   }
 }

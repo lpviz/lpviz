@@ -10,8 +10,8 @@ import { ZScaledLayer } from "./base/LayerBase";
 // along as a per-point color texture, one draw call for the whole path.
 export class IterateLineLayer extends ZScaledLayer {
   readonly slot = "iterateLine" as const;
-  private readonly ribbon = new PathRibbon({ color: PALETTE.iterate, opacity: 1, linewidth: STROKE.iteratePath, slot: this.slot });
-  readonly object3D = this.ribbon.mesh;
+  private readonly ribbon = this.own(new PathRibbon({ color: PALETTE.iterate, opacity: 1, linewidth: STROKE.iteratePath, slot: this.slot }));
+  readonly object3D = this.ribbon.object3D;
   override readonly invalidationKeys = ["iterate"] as const;
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
@@ -28,9 +28,5 @@ export class IterateLineLayer extends ZScaledLayer {
     // state z: zScale and the 2D/3D transition flattening are applied via
     // object3D.scale.z, so neither rebuilds the path
     this.ribbon.setPath(iteratePositions(path), path.count, phases ? phaseColorsOf(phases) : null);
-  }
-
-  dispose(): void {
-    this.ribbon.dispose();
   }
 }

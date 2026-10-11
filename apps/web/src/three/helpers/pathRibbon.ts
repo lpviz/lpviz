@@ -1,7 +1,7 @@
-import { renderOrderOf, type RenderSlot } from "../Layer";
-import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, Vector2 } from "three";
-import { cacheEncodeGlsl, sharedCacheEncode, withCacheEncode } from "./cacheEncode";
+import { placeInSlot, type RenderSlot } from "../Layer";
+import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial } from "three";
 import { applyHugeBounds } from "./hugeBounds";
+import { cacheEncode, cacheEncodeGlsl, resolution } from "./screenUniforms";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
 // one uncapped quad per segment, extruded in the vertex shader along that segment's own
@@ -15,27 +15,6 @@ import { applyHugeBounds } from "./hugeBounds";
 const TEX_WIDTH = 4096;
 const TEX_WIDTH_MASK = TEX_WIDTH - 1;
 const TEX_WIDTH_SHIFT = 12;
-
-// Shared by reference across every ribbon material; updated on resize via
-// setFatLineResolution (CSS pixels, matching LineMaterial).
-const sharedResolution = new Vector2(1, 1);
-export function setPathRibbonResolution(width: number, height: number): void {
-  sharedResolution.set(width, height);
-}
-
-/**
- * Run `render` with the trace baking into a render target (see cacheEncode.ts), at `resolution`
- * when the target is not the canvas's size (screen-space line widths are computed against it).
- * Both settings are restored to what they were, so the direct passes that follow see exactly what
- * they had set.
- */
-export function bakeTrace(render: () => void, resolution?: { width: number; height: number }): void {
-  const previousWidth = sharedResolution.x;
-  const previousHeight = sharedResolution.y;
-  if (resolution) sharedResolution.set(resolution.width, resolution.height);
-  withCacheEncode(render);
-  sharedResolution.set(previousWidth, previousHeight);
-}
 
 const VERTEX_SHADER = /* glsl */ `
 uniform sampler2D pathTex;
@@ -162,7 +141,7 @@ const dummyColorTexture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 
 dummyColorTexture.needsUpdate = true;
 
 export class PathRibbon {
-  readonly mesh: Mesh;
+  readonly object3D: Mesh;
   private material: ShaderMaterial;
   private geometry: BufferGeometry;
   private texture: DataTexture | null = null;
@@ -183,8 +162,8 @@ export class PathRibbon {
         colorTex: { value: dummyColorTexture },
         useVertexColor: { value: 0 },
         pointCount: { value: 0 },
-        resolution: { value: sharedResolution },
-        cacheEncode: sharedCacheEncode,
+        resolution: { value: resolution },
+        cacheEncode,
         linewidth: { value: style.linewidth },
         color: { value: color },
         opacity: { value: style.opacity },
@@ -196,10 +175,7 @@ export class PathRibbon {
     });
     this.geometry = new BufferGeometry();
     applyHugeBounds(this.geometry);
-    this.mesh = new Mesh(this.geometry, this.material);
-    this.mesh.renderOrder = renderOrderOf[style.slot];
-    this.mesh.frustumCulled = false;
-    this.mesh.visible = false;
+    this.object3D = placeInSlot(new Mesh(this.geometry, this.material), style.slot);
   }
 
   setDepth(enabled: boolean): void {
