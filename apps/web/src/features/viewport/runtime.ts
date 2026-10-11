@@ -1,3 +1,4 @@
+import { visibleBounds } from "@/features/viewport/bounds";
 import { restartableTimeout } from "@/features/core/timers";
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState, on, onViewportDirty, setState } from "@/features/core/store";
@@ -42,6 +43,8 @@ export type ViewportApi = {
   set2DPanEnabled: (enabled: boolean) => void;
   toLogicalCoords: (x: number, y: number) => PointXY;
   toCanvasCoords: (x: number, y: number, z?: number) => PointXY;
+  /** the world rect the view shows, padded (see visibleBounds) */
+  getVisibleBounds: () => BoundingBox;
   start3DTransition: (to3D: boolean) => void;
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
@@ -363,6 +366,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       return toLogicalCoords3D(ownedSnapshot, rect, point, { zScale: state.zScale, snapToGrid: state.snapToGrid, interacting: editorInteraction.kind !== "idle", viewAnchor3D });
     },
     toCanvasCoords: (x, y, z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),
+    getVisibleBounds: () => visibleBounds(liveSnapshot()),
     start3DTransition,
     getCanvasElement: () => viewportBridge.getCanvasElement(),
     getCanvasRect: () => rect,

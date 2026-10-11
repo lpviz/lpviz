@@ -1,10 +1,10 @@
+import { visibleBounds, visibleBoundsDeps } from "@/features/viewport/bounds";
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { clipLineToBoundingBox } from "@lpviz/math/bounds";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { FatLine } from "../helpers/fatLine";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { visibleBounds, visibleBoundsDeps } from "../helpers/visibleBounds";
 import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 

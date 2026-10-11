@@ -1,7 +1,7 @@
 import type { Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
+import { CompositeQuad, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS, ViewMotion } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
 // World-anchored impostor for the traceLines render pass in 2D mode. Trace chunks are immutable
@@ -72,10 +72,8 @@ export class TraceCache implements TraceImpostor {
   private trailingEnd = 0;
   private lastMinSeq = -1;
   private lastEvictionAt = -Infinity;
-  private lastSeenUnitsPerPixel = 0;
-  private lastSeenCenterX = NaN;
-  private lastSeenCenterY = NaN;
-  private lastViewChangeAt = -Infinity;
+  // the view as [unitsPerPixel, centerX, centerY]
+  private readonly motion = new ViewMotion(3);
   private lastRebuildAt = -Infinity;
   private panVelocityX = 0;
   private panVelocityY = 0;
@@ -129,16 +127,14 @@ export class TraceCache implements TraceImpostor {
     this.lastMinSeq = minSeq;
     const evicting = now - this.lastEvictionAt < EVICTION_QUIET_MS;
 
-    if (unitsPerPixel !== this.lastSeenUnitsPerPixel || centerX !== this.lastSeenCenterX || centerY !== this.lastSeenCenterY) {
+    const previousCenterX = this.motion.previous(1);
+    const previousCenterY = this.motion.previous(2);
+    if (this.motion.update(now, [unitsPerPixel, centerX, centerY])) {
       // smoothed per-frame pan velocity, used to lead rebuilt rects
-      this.panVelocityX = 0.6 * this.panVelocityX + 0.4 * (Number.isNaN(this.lastSeenCenterX) ? 0 : centerX - this.lastSeenCenterX);
-      this.panVelocityY = 0.6 * this.panVelocityY + 0.4 * (Number.isNaN(this.lastSeenCenterY) ? 0 : centerY - this.lastSeenCenterY);
-      this.lastViewChangeAt = now;
-      this.lastSeenUnitsPerPixel = unitsPerPixel;
-      this.lastSeenCenterX = centerX;
-      this.lastSeenCenterY = centerY;
+      this.panVelocityX = 0.6 * this.panVelocityX + 0.4 * (Number.isNaN(previousCenterX) ? 0 : centerX - previousCenterX);
+      this.panVelocityY = 0.6 * this.panVelocityY + 0.4 * (Number.isNaN(previousCenterY) ? 0 : centerY - previousCenterY);
     }
-    const viewMoving = now - this.lastViewChangeAt < VIEW_SETTLE_MS;
+    const viewMoving = this.motion.moving(now);
     if (!viewMoving) {
       this.panVelocityX = 0;
       this.panVelocityY = 0;
