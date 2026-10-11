@@ -35,12 +35,8 @@ select {
   font-family: inherit;
 }
 
-.is-hidden {
+[hidden] {
   display: none !important;
-}
-
-.is-block {
-  display: block !important;
 }
 
 #objectiveDisplay,
@@ -575,7 +571,6 @@ select {
 #subjectTo {
   text-align: left;
   font-size: 1.2rem;
-  display: none;
 }
 
 #nullStateMessage {

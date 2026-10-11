@@ -11,7 +11,7 @@ export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<A
   const start = button("Rotate Objective", () => actions.startRotation());
   const stop = button("Stop Rotation", () => actions.stopMotion());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
-  const rot = el("div", { className: "objective-rotation is-hidden" });
+  const rot = el("div", { className: "objective-rotation", attrs: { hidden: "" } });
   const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
   const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
   const trace = checkbox("traceCheckbox", (enabled) => actions.setTraceEnabled(enabled));
@@ -32,7 +32,7 @@ export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<A
     animate.disabled = !regionDerived || !hasSolution || isRotating;
     start.disabled = !regionDerived || !hasObjective(state) || isAnimating || isRotating;
     stop.disabled = !isRotating;
-    rot.className = isRotating ? "objective-rotation is-block" : "objective-rotation is-hidden";
+    rot.hidden = !isRotating;
     trace.checked = state.traceEnabled;
     angle.value = String(state.solverSettings.objectiveAngleStep);
     speed.value = String(state.solverSettings.objectiveRotationSpeed);

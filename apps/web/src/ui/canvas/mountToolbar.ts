@@ -36,11 +36,11 @@ export function mountToolbar(parent: HTMLElement, actions: Pick<AppActions, "res
   ]);
   parent.append(root);
   const stop = renderOn(["is3DMode", "zScale"], ({ is3DMode, zScale }) => {
-    toggle3d.className = is3DMode ? "button-active" : "";
+    toggle3d.classList.toggle("button-active", is3DMode);
     toggle3d.textContent = is3DMode ? "2D" : "3D";
     zScaleSlider.value = String(zScale);
     zScaleValue.textContent = zScale.toFixed(2);
-    zScaleControl.className = is3DMode ? "" : "is-hidden";
+    zScaleControl.hidden = !is3DMode;
   });
   return {
     destroy: () => {
