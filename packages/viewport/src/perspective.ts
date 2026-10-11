@@ -6,7 +6,7 @@ import { Euler, Vector3 } from "three";
 import type { PointXYZ } from "@lpviz/math/types";
 import { MIN_PERSPECTIVE_DISTANCE } from "./defaults";
 import { clampScaleFactor2D } from "./projection2d";
-import { getViewportSize, perspectiveSnapshot, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+import { getViewportSize, orthographicFor, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 const DEGREES_TO_RADIANS = Math.PI / 180;
 
@@ -40,7 +40,19 @@ export function getScaleFactorFromPerspectiveDistance(snapshot: ViewportRenderSn
 export function perspectiveSnapshotAtDistance(base: ViewportRenderSnapshot, pose: ViewportPerspectivePose, distance: number, rect?: ViewportRect, transitionZMultiplier = 1): ViewportRenderSnapshot {
   const { width, height } = getViewportSize(base, rect);
   const scaleFactor = getScaleFactorFromPerspectiveDistance(base, distance, height);
-  return perspectiveSnapshot(base, pose, width, height, scaleFactor, 1 / (base.gridSpacing * scaleFactor), transitionZMultiplier);
+  const unitsPerPixel = 1 / (base.gridSpacing * scaleFactor);
+  return {
+    ...base,
+    mode: "3d",
+    width,
+    height,
+    scaleFactor,
+    unitsPerPixel,
+    transitionZMultiplier,
+    target: { ...pose.target },
+    orthographic: orthographicFor(width, height, unitsPerPixel, pose.target),
+    perspective: { ...base.perspective, position: { ...pose.position }, up: { ...pose.up }, aspect: width / Math.max(1, height) },
+  };
 }
 
 export function getPerspectiveDistanceFromSnapshot3D(snapshot: ViewportRenderSnapshot) {
