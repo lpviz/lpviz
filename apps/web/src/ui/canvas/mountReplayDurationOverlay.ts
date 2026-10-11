@@ -1,6 +1,6 @@
 import { restartableTimeout } from "@/features/core/timers";
 import { formatReplayDuration } from "@/features/solver/replayDuration";
-import { el } from "@/ui/dom";
+import { el, mounted } from "@/ui/dom";
 
 // How long the readout stays up after the last +/- press. Long enough to read
 // while holding a key down, short enough that it never reads as persistent UI.
@@ -33,9 +33,6 @@ export function mountReplayDurationOverlay(parent: HTMLElement) {
       root.classList.add("is-visible");
       hide.schedule(() => root.classList.remove("is-visible"), VISIBLE_MS);
     },
-    destroy: () => {
-      hide.clear();
-      root.remove();
-    },
+    ...mounted(root, hide.clear),
   };
 }

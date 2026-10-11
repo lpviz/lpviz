@@ -1,4 +1,4 @@
-import { el } from "@/ui/dom";
+import { el, mounted } from "@/ui/dom";
 import { usageTipsList } from "@/ui/usageTips";
 
 export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
@@ -75,11 +75,9 @@ export function mountHelpButton(stage: HTMLElement, viewport: HTMLElement) {
   viewport.append(backdrop);
   stage.append(container);
 
-  return {
-    destroy: () => {
-      listeners.abort();
-      backdrop.remove();
-      container.remove();
-    },
-  };
+  return mounted(
+    container,
+    () => listeners.abort(),
+    () => backdrop.remove(),
+  );
 }

@@ -1,6 +1,6 @@
 import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
-import { el } from "@/ui/dom";
+import { el, mounted } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { NULL_STATE_LOGO_SVG } from "@/ui/logo";
 import { hasObjective, hasRegion, READY_FOR_SOLVERS_KEYS } from "@/features/problem/selectors";
@@ -79,10 +79,5 @@ export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions,
     });
   }
   const stopRender = renderOn([...READY_FOR_SOLVERS_KEYS, "inequalitiesMessage"], render);
-  return {
-    destroy: () => {
-      stopRender();
-      frame.remove();
-    },
-  };
+  return mounted(frame, stopRender);
 }
