@@ -5,8 +5,8 @@ import type {
   PackedLogSection,
   PackedRows,
   ResultLogSection,
-  ResultRowsView,
-  SolverResultView,
+  LazyRows,
+  UnpackedSolverResult,
   SolverWireResponse,
   SolverWireSuccess,
   SolverWorkerPayload,
@@ -96,7 +96,7 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
 // Row objects materialize lazily from the packed columns: only rows that
 // actually render (a screenful) are ever built, instead of one object per
 // iteration per solve.
-function rowsView({ coords, stride, objective, infeasibility, convergence, restart }: PackedRows): ResultRowsView {
+function lazyRows({ coords, stride, objective, infeasibility, convergence, restart }: PackedRows): LazyRows {
   const length = objective.length;
   return {
     length,
@@ -115,13 +115,13 @@ function rowsView({ coords, stride, objective, infeasibility, convergence, resta
 }
 
 function unpackSection({ header, rows, notes, footer }: PackedLogSection): ResultLogSection {
-  return { header, rows: Array.isArray(rows) ? rows : rowsView(rows), notes, footer };
+  return { header, rows: Array.isArray(rows) ? rows : lazyRows(rows), notes, footer };
 }
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
   const { id, iterates, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
-  const result: SolverResultView = {
+  const result: UnpackedSolverResult = {
     // the packed iterations are already a flat block in one transferred buffer, so the iterate
     // path is that buffer verbatim: no per-iterate object exists on this side
     iterates: { points: iterates, count: Math.floor(iterates.length / stride), stride, lift: lift ?? null },

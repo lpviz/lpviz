@@ -9,7 +9,7 @@ export type Layout = ReturnType<typeof createLayout>;
 // handle drag that resizes it. The stylesheet lays the sidebar, its handle and the gallery out
 // from two root variables; the viewport runtime is told the width the sidebar takes from it.
 // `attach` installs the window listeners; `destroy` removes them.
-export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setSidebarWidth">) {
+export function createLayout(root: HTMLElement, actions: Pick<AppActions, "setSidebarWidth">) {
   let sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
   let mobileSidebarHeight = Math.round(window.innerHeight * 0.42);
   const mobileQuery = window.matchMedia(MOBILE_LAYOUT_QUERY);
@@ -21,7 +21,7 @@ export function createLayout(root: HTMLElement, viewport: Pick<AppActions, "setS
     root.classList.toggle("mobile-layout", mobileLayout);
     root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
     root.style.setProperty("--sidebar-width", `${getViewportSidebarWidth()}px`);
-    viewport.setSidebarWidth(getViewportSidebarWidth());
+    actions.setSidebarWidth(getViewportSidebarWidth());
   };
   applyGeometry();
 

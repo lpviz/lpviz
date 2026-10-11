@@ -18,6 +18,6 @@ describe("solver setting specs", () => {
     expect(ipm).toContain("alphaMax");
     expect(ipm).toContain("objectiveAngleStep");
     expect(ipm).not.toContain("pdhgEta");
-    expect(SHARED_SETTING_KEYS).not.toContain("replaySpeed");
+    expect(SHARED_SETTING_KEYS).not.toContain("replayDurationMs");
   });
 });

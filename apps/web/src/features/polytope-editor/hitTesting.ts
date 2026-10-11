@@ -31,15 +31,16 @@ export function getLogicalFromClient(viewportApi: ViewportApi, clientX: number, 
   return [x, y];
 }
 
-export function getLocalFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): PointXY {
+/** The pointer's position on the canvas, in CSS pixels from its top-left corner. */
+export function getCanvasFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): PointXY {
   const rect = viewportApi.getCanvasRect();
   return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
-export function findVertexNearLocalPoint(viewportApi: ViewportApi, localX: number, localY: number, vertices: Vec[]): number {
+export function findVertexNearCanvasPoint(viewportApi: ViewportApi, canvasPoint: PointXY, vertices: Vec[]): number {
   return vertices.findIndex((vertex) => {
-    const canvasPoint = viewportApi.toCanvasCoords(vertex[0], vertex[1]);
-    return Math.hypot(localX - canvasPoint.x, localY - canvasPoint.y) <= VERTEX_HIT_RADIUS_PX;
+    const drawn = viewportApi.toCanvasCoords(vertex[0], vertex[1]);
+    return Math.hypot(canvasPoint.x - drawn.x, canvasPoint.y - drawn.y) <= VERTEX_HIT_RADIUS_PX;
   });
 }
 
@@ -93,11 +94,11 @@ function getViewAnchor3D(state: State, point: Vec): PointXYZ | undefined {
 
 export function getDragStartTarget(viewportApi: ViewportApi, state: State, clientX: number, clientY: number): DragTarget | null {
   const logicalCoords = getLogicalFromClient(viewportApi, clientX, clientY);
-  const local = getLocalFromClient(viewportApi, clientX, clientY);
+  const canvasPoint = getCanvasFromClient(viewportApi, clientX, clientY);
   const { session } = getEditorContext(state);
   const edgeTolerance = worldDistanceForPixels(viewportApi, logicalCoords, EDGE_HIT_RADIUS_PX);
   const vertexTarget = (): DragTarget | null => {
-    const index = findVertexNearLocalPoint(viewportApi, local.x, local.y, state.vertices);
+    const index = findVertexNearCanvasPoint(viewportApi, canvasPoint, state.vertices);
     if (index === -1) return null;
     const vertex = state.vertices[index];
     return { kind: "point", index, viewAnchor3D: vertex ? getViewAnchor3D(state, vertex) : undefined };
@@ -107,12 +108,12 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
 
   if (state.objectiveVector) {
     const tip = viewportApi.toCanvasCoords(state.objectiveVector[0], state.objectiveVector[1]);
-    if (Math.hypot(local.x - tip.x, local.y - tip.y) < OBJECTIVE_TIP_HIT_RADIUS_PX) {
+    if (Math.hypot(canvasPoint.x - tip.x, canvasPoint.y - tip.y) < OBJECTIVE_TIP_HIT_RADIUS_PX) {
       return { kind: "objective", viewAnchor3D: getViewAnchor3D(state, state.objectiveVector) };
     }
   }
 
-  const startPoint = solverStartNearLocalPoint(viewportApi, state, local.x, local.y);
+  const startPoint = solverStartNearCanvasPoint(viewportApi, state, canvasPoint);
   if (startPoint) {
     return {
       kind: "solver-start",
@@ -154,15 +155,15 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
   return null;
 }
 
-export function solverStartNearLocalPoint(viewportApi: ViewportApi, state: State, localX: number, localY: number): Vec | null {
+export function solverStartNearCanvasPoint(viewportApi: ViewportApi, state: State, canvasPoint: PointXY): Vec | null {
   const startPoint = displayedSolverStartPoint(state);
   if (!startPoint) return null;
   // project at the marker's drawn height: in 3D the ring rides at the first
   // iterate's height, matching SolverStartLayer
   const { iteratePath } = state;
   const z = iteratePath.count > 0 ? iterateHeight(iteratePath, 0) : undefined;
-  const screen = viewportApi.toCanvasCoords(startPoint[0], startPoint[1], z);
-  return Math.hypot(localX - screen.x, localY - screen.y) <= SOLVER_START_HIT_RADIUS_PX ? startPoint : null;
+  const marker = viewportApi.toCanvasCoords(startPoint[0], startPoint[1], z);
+  return Math.hypot(canvasPoint.x - marker.x, canvasPoint.y - marker.y) <= SOLVER_START_HIT_RADIUS_PX ? startPoint : null;
 }
 
 export function exceedsDragThreshold(state: State, clientX: number, clientY: number): boolean {

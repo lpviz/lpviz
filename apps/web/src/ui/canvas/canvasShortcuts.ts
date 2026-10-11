@@ -25,11 +25,11 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, { handleUndoRed
   // that hits an end of the range, so the keys never feel dead
   const adjustReplayDuration = (direction: 1 | -1) => {
     const { solverSettings } = getState();
-    const replaySpeed = stepReplayDurationMs(solverSettings.replaySpeed, direction);
-    if (replaySpeed !== solverSettings.replaySpeed) {
-      setState({ solverSettings: { ...solverSettings, replaySpeed } });
+    const replayDurationMs = stepReplayDurationMs(solverSettings.replayDurationMs, direction);
+    if (replayDurationMs !== solverSettings.replayDurationMs) {
+      setState({ solverSettings: { ...solverSettings, replayDurationMs } });
     }
-    showReplayDuration(replaySpeed);
+    showReplayDuration(replayDurationMs);
   };
 
   const onKeyDown = (event: KeyboardEvent) => {

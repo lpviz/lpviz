@@ -64,15 +64,15 @@ export type SolverWireResponse = SolverWireSuccess | SolverWorkerError;
 
 export type VirtualResultRow = string | NumericRow;
 
-// Rows materialize lazily through this view so that a 100k-iteration result
-// never pays for building row objects that are not scrolled into view.
-export type ResultRowsView = LazyList<VirtualResultRow>;
+// Rows materialize lazily, so a 100k-iteration result never pays for building
+// row objects that are not scrolled into view.
+export type LazyRows = LazyList<VirtualResultRow>;
 
-export type ResultLogSection = Omit<LogSection, "rows"> & { rows: ResultRowsView };
+export type ResultLogSection = Omit<LogSection, "rows"> & { rows: LazyRows };
 
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.
-export type SolverResultView = {
+export type UnpackedSolverResult = {
   iterates: IteratePath;
   log: ResultLogSection[];
   phases?: number[] | undefined;
@@ -81,7 +81,7 @@ export type SolverResultView = {
   localizingSets?: LocalizingSetPath | undefined;
 };
 
-export type SolverWorkerSuccessResponse = { id: number; success: true; result: SolverResultView };
+export type SolverWorkerSuccessResponse = { id: number; success: true; result: UnpackedSolverResult };
 
 export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerError;
 
@@ -92,7 +92,7 @@ export type { ResultTextBlock } from "./solverState";
 export interface VirtualResultPayload {
   type: "virtual";
   header: string;
-  rows: ResultRowsView;
+  rows: LazyRows;
   footer?: string | undefined;
 }
 

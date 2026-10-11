@@ -34,10 +34,9 @@ export type SolverSettings = {
   ellipsoidInitialScale: number;
   objectiveAngleStep: number;
   objectiveRotationSpeed: number;
-  // Total wall-clock length of an "Animate" replay in milliseconds, not a per-step delay despite
-  // the name: the replay maps elapsed time onto the whole iterate path (see replayController).
-  // Adjusted with the +/- keys.
-  replaySpeed: number;
+  // Total wall-clock length of an "Animate" replay: the replay maps elapsed time onto the whole
+  // iterate path (see replayController). Adjusted with the +/- keys.
+  replayDurationMs: number;
 };
 
 export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
@@ -82,7 +81,7 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   ellipsoidInitialScale: { default: 1.5, owner: "ellipsoid", wire: { slot: 15, codec: { scaled: 1e4 } }, legacyKey: "w" },
   objectiveAngleStep: { default: 0.1, owner: "global", wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
   objectiveRotationSpeed: { default: 1, owner: "global", wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
-  replaySpeed: { default: DEFAULT_REPLAY_DURATION_MS, owner: "local" },
+  replayDurationMs: { default: DEFAULT_REPLAY_DURATION_MS, owner: "local" },
 };
 
 const SOLVER_SETTING_KEYS = Object.keys(SOLVER_SETTING_SPECS) as (keyof SolverSettings)[];
@@ -91,7 +90,7 @@ const SOLVER_SETTING_KEYS = Object.keys(SOLVER_SETTING_SPECS) as (keyof SolverSe
 export const DEFAULT_SOLVER_SETTINGS = Object.fromEntries(SOLVER_SETTING_KEYS.map((key) => [key, SOLVER_SETTING_SPECS[key].default])) as SolverSettings;
 
 /** The settings a share link may carry (every one but the local replay length). */
-export type ShareSettings = Partial<Omit<SolverSettings, "replaySpeed">>;
+export type ShareSettings = Partial<Omit<SolverSettings, "replayDurationMs">>;
 export type SharedSettingKey = keyof ShareSettings;
 
 const isShared = (key: keyof SolverSettings): key is SharedSettingKey => SOLVER_SETTING_SPECS[key].owner !== "local";

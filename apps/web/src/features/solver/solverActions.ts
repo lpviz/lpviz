@@ -45,9 +45,9 @@ export function createSolverActions(): SolverActions {
   const { solve, clearComputedState } = createSolveRunner({ presenter, replay });
   const rotation = createRotationController({ solve, syncTraceCapacity });
   const stopMotion = () => {
-    const s = getState();
-    const wasRotating = s.rotateObjectiveMode;
-    if (!wasRotating && !s.replayActive) return;
+    const state = getState();
+    const wasRotating = state.rotateObjectiveMode;
+    if (!wasRotating && !state.replayActive) return;
     replay.cancel();
     rotation.cancel();
     setState({
@@ -57,13 +57,13 @@ export function createSolverActions(): SolverActions {
     if (wasRotating) presenter.restoreFullVirtualResult();
   };
   const handleProblemChange = () => {
-    const s = getState();
-    if (!isReadyForSolvers(s)) {
+    const state = getState();
+    if (!isReadyForSolvers(state)) {
       stopMotion();
       clearComputedState();
       return;
     }
-    if (!s.rotateObjectiveMode) {
+    if (!state.rotateObjectiveMode) {
       resetTraceState();
       void solve();
       return;

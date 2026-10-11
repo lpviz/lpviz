@@ -2,9 +2,9 @@
 
 import { getState, setState, type State } from "@/features/core/store";
 import { EMPTY_ITERATE_PATH, type IteratePath } from "./solverState";
-import type { SolverResultView } from "./types";
+import type { UnpackedSolverResult } from "./types";
 
-type IterateResult = Pick<SolverResultView, "iterates" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets">;
+type IterateResult = Pick<UnpackedSolverResult, "iterates" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets">;
 
 // The flat path and phase/restart arrays are never mutated after creation
 // (replay grows a fresh IteratePath over the same shared buffer), so the

@@ -3,10 +3,10 @@ import { type EditorTransition, getEditorContext, getEditorTransition } from "@/
 import {
   EDGE_HIT_RADIUS_PX,
   findBoundaryRayNearPoint,
-  findVertexNearLocalPoint,
-  getLocalFromClient,
+  findVertexNearCanvasPoint,
+  getCanvasFromClient,
   getLogicalFromClient,
-  solverStartNearLocalPoint,
+  solverStartNearCanvasPoint,
   worldDistanceForPixels,
 } from "@/features/polytope-editor/hitTesting";
 import { swallow } from "@/ui/dom";
@@ -22,10 +22,10 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
 
   const handleContextMenu = (event: MouseEvent) => {
     const state = getState();
-    const local = getLocalFromClient(viewportApi, event.clientX, event.clientY);
+    const canvasPoint = getCanvasFromClient(viewportApi, event.clientX, event.clientY);
 
     // right-clicking the start marker resets it to the solver default
-    if (state.solverStartPoint && solverStartNearLocalPoint(viewportApi, state, local.x, local.y)) {
+    if (state.solverStartPoint && solverStartNearCanvasPoint(viewportApi, state, canvasPoint)) {
       swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
@@ -35,7 +35,7 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
     const {
       geometry: { vertices: displayVertices },
     } = getEditorContext(state);
-    const deleteIndex = findVertexNearLocalPoint(viewportApi, local.x, local.y, displayVertices);
+    const deleteIndex = findVertexNearCanvasPoint(viewportApi, canvasPoint, displayVertices);
     if (deleteIndex === -1) return false;
 
     swallow(event);

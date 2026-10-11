@@ -10,8 +10,8 @@ import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 // What each solver mode needs from the problem: the reason it cannot run, as the result panel
 // shows it, or the request the worker runs.
 export type SolverControl = {
-  /** why the solver cannot run on this problem, or null when it can */
-  getRunBlock: (state: State) => ResultRenderPayload | null;
+  /** why the solver cannot run on this problem, as the panel shows it, or null when it can */
+  blocker: (state: State) => ResultRenderPayload | null;
   buildRequest: (state: State) => SolverWorkerPayload | null;
 };
 
@@ -48,7 +48,7 @@ const unboundedObjectiveBlock = messageBlocks(
 
 export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
   central: {
-    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Central Path requires a feasible region.") : hasUnboundedObjectiveDirection(s) ? unboundedObjectiveBlock : null),
+    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Central Path requires a feasible region.") : hasUnboundedObjectiveDirection(s) ? unboundedObjectiveBlock : null),
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
@@ -61,24 +61,24 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     },
   },
   ipm: {
-    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
+    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
-      const ss = s.solverSettings;
+      const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
       return {
         solver: "ipm",
         ...solvable.problem,
         ...(startPoint ? { startPoint } : {}),
-        alphaMax: ss.alphaMax,
-        correctorThreshold: ss.correctorThreshold,
-        maxit: iterations(ss.maxitIPM),
+        alphaMax: settings.alphaMax,
+        correctorThreshold: settings.correctorThreshold,
+        maxit: iterations(settings.maxitIPM),
       };
     },
   },
   simplex: {
-    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Simplex requires a valid feasible region.") : null),
+    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Simplex requires a valid feasible region.") : null),
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
@@ -95,41 +95,41 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     },
   },
   ellipsoid: {
-    getRunBlock: (s) => (isEmptyRegion(s) ? emptyRegionBlock("The ellipsoid method requires a feasible region.") : null),
+    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("The ellipsoid method requires a feasible region.") : null),
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
-      const ss = s.solverSettings;
+      const settings = s.solverSettings;
       return {
         solver: "ellipsoid",
         // the drawn region bounds the initial ellipsoid (or box)
         vertices: regionBoundingVertices(s),
         ...solvable.problem,
-        maxit: iterations(ss.maxitEllipsoid),
-        deepCuts: ss.ellipsoidDeepCuts,
-        rayShoot: ss.ellipsoidRayShoot,
-        queryPoint: ss.ellipsoidQueryPoint,
-        initialScale: ss.ellipsoidInitialScale,
+        maxit: iterations(settings.maxitEllipsoid),
+        deepCuts: settings.ellipsoidDeepCuts,
+        rayShoot: settings.ellipsoidRayShoot,
+        queryPoint: settings.ellipsoidQueryPoint,
+        initialScale: settings.ellipsoidInitialScale,
       };
     },
   },
   pdhg: {
-    getRunBlock: () => null,
+    blocker: () => null,
     buildRequest: (s) => {
       const solvable = solvableProblem(s);
       if (!solvable) return null;
-      const ss = s.solverSettings;
+      const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
       return {
         solver: "pdhg",
         ...solvable.problem,
         ...(startPoint ? { startPoint } : {}),
-        ineq: ss.pdhgIneqMode,
-        halpern: ss.pdhgHalpernMode,
-        maxit: iterations(ss.maxitPDHG),
-        eta: ss.pdhgEta,
-        tau: ss.pdhgTau,
-        colorByBasis: ss.pdhgColorByBasis,
+        ineq: settings.pdhgIneqMode,
+        halpern: settings.pdhgHalpernMode,
+        maxit: iterations(settings.maxitPDHG),
+        eta: settings.pdhgEta,
+        tau: settings.pdhgTau,
+        colorByBasis: settings.pdhgColorByBasis,
       };
     },
   },

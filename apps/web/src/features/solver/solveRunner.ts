@@ -36,9 +36,9 @@ export function createSolveRunner({ presenter, replay }: { presenter: ResultPres
       return;
     }
     const control = activeSolverControl();
-    const runBlock = control.getRunBlock(state);
-    if (runBlock) {
-      presenter.render(runBlock);
+    const blocker = control.blocker(state);
+    if (blocker) {
+      presenter.render(blocker);
       return;
     }
     const request = control.buildRequest(state);
