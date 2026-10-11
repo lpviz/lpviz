@@ -4,7 +4,7 @@ import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Camera } from "three";
-import { Scene, WebGLRenderer } from "three";
+import { Scene, WebGLRenderer, WebGLRenderTarget } from "three";
 import { setFatLineResolution } from "./helpers/fatLine";
 import { drawsNothing, type TraceFrame, type TraceImpostor, type TracePassImpostor } from "./helpers/traceComposite";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
@@ -57,6 +57,10 @@ export class SceneManager {
     });
     this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(dpr);
+    // Querying a program's info logs on its first use is what blocks the main thread until the
+    // driver has linked it; off in production, so the programs compiled ahead (see precompile)
+    // link in the background and a first draw waits on nothing. The logs are for development.
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
 
     this.size = { width: canvas.clientWidth, height: canvas.clientHeight, dpr };
     this.renderer.setSize(this.size.width, this.size.height, false);
@@ -141,6 +145,23 @@ export class SceneManager {
       this.scenes[pass].add(object3D);
     }
     this.invalidate();
+  }
+
+  // Compile every program ahead of its first draw: each pass's layers for the canvas, the trace and
+  // its occluders for the impostors' targets (a render target compiles its own variant), and the
+  // impostors' composites. Without it the first solve, the first 3D frame and the first trace each
+  // stall on the shader compiler, for hundreds of milliseconds on a phone; issued at boot, the
+  // compiles overlap the app's load instead.
+  precompile(camera: Camera): void {
+    const { renderer } = this;
+    const compile = (scene: Scene) => void renderer.compile(scene, camera);
+    for (const scene of Object.values(this.scenes)) compile(scene);
+    for (const impostor of this.traceImpostors) compile(impostor.scene);
+    const target = new WebGLRenderTarget(1, 1);
+    renderer.setRenderTarget(target);
+    for (const scene of [this.scenes.trace, ...this.occluders]) compile(scene);
+    renderer.setRenderTarget(null);
+    target.dispose();
   }
 
   addTick(fn: () => void): void {

@@ -14,6 +14,8 @@ export type TraceFrame = { renderer: WebGLRenderer; camera: Camera; state: State
 
 /** Something that may stand in for the trace pass: `prepare` bakes offscreen and answers with the substitute, or null to render the pass directly. */
 export interface TraceImpostor {
+  /** the scene the impostor composites through, for compiling its programs ahead of the first trace */
+  readonly scene: Scene;
   prepare(frame: TraceFrame): TracePassImpostor | null;
   dispose(): void;
 }

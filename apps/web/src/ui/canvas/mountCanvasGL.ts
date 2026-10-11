@@ -46,6 +46,7 @@ export function mountCanvasGL(parent: HTMLElement) {
     new SolverStartLayer(),
   ];
   for (const layer of layers) mgr.addLayer(layer);
+  mgr.precompile(cameraCtl.perspective);
   const bridge: ViewportBridge = {
     getCanvasElement: () => canvas,
     getCanvasRect: () => canvas.getBoundingClientRect(),
