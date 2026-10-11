@@ -1,9 +1,9 @@
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
-import { bakePathRibbons } from "./helpers/pathRibbon";
+import { bakeTrace } from "./helpers/pathRibbon";
 import { CompositeQuad, drawsNothing, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS, ViewMotion } from "./helpers/traceComposite";
 
-// Motion-time compositor for the traceLines pass in 3D mode.
+// Motion-time compositor for the trace pass in 3D mode.
 //
 // A perspective view cannot reuse a cached billboard across frames (parallax),
 // so orbiting re-renders every trace chunk every frame. That render is fill
@@ -49,8 +49,8 @@ export class Trace3DCompositor implements TraceImpostor {
   // target this frame, or null to render directly.
   prepare(frame: TraceFrame): TracePassImpostor | null {
     // a pass with nothing to draw needs no impostor
-    if (drawsNothing(frame.traceLines)) return null;
-    const { renderer, camera, snapshot, state, traceLines: traceLinesScene, occluders: occluderScenes } = frame;
+    if (drawsNothing(frame.trace)) return null;
+    const { renderer, camera, snapshot, state, trace: traceScene, occluders: occluderScenes } = frame;
     if (snapshot.mode !== "3d") {
       this.target.release();
       this.motion.reset();
@@ -76,7 +76,7 @@ export class Trace3DCompositor implements TraceImpostor {
       for (const scene of occluderScenes) {
         this.renderDepthOnly(renderer, scene, camera);
       }
-      bakePathRibbons(() => renderer.render(traceLinesScene, camera));
+      bakeTrace(() => renderer.render(traceScene, camera));
     });
 
     return { scene: this.quadScene, camera: this.quadCamera };

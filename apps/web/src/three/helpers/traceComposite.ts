@@ -9,10 +9,10 @@ export const VIEW_SETTLE_MS = 160;
 /** What a trace impostor substitutes for the pass: its quad scene, and the camera to draw it with (the pass's own when absent). */
 export type TracePassImpostor = { scene: Scene; camera?: Camera };
 
-/** What an impostor is handed each frame: the renderer and camera, the frame's inputs, the pass's scene and the scenes that occlude it. */
-export type TraceFrame = { renderer: WebGLRenderer; camera: Camera; state: State; snapshot: ViewportRenderSnapshot; traceLines: Scene; occluders: readonly Scene[] };
+/** What an impostor is handed each frame: the renderer and camera, the frame's inputs, the trace pass's scene and the scenes that occlude it. */
+export type TraceFrame = { renderer: WebGLRenderer; camera: Camera; state: State; snapshot: ViewportRenderSnapshot; trace: Scene; occluders: readonly Scene[] };
 
-/** Something that may stand in for the traceLines pass: `prepare` bakes offscreen and answers with the substitute, or null to render the pass directly. */
+/** Something that may stand in for the trace pass: `prepare` bakes offscreen and answers with the substitute, or null to render the pass directly. */
 export interface TraceImpostor {
   prepare(frame: TraceFrame): TracePassImpostor | null;
   dispose(): void;

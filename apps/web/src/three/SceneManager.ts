@@ -26,7 +26,7 @@ export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   private layers: Layer[] = [];
-  // The traceLines pass renders through the first impostor that applies: in 2D a world-anchored
+  // The trace pass renders through the first impostor that applies: in 2D a world-anchored
   // accumulation cache (so neither camera motion nor a trace append re-renders baked chunks); while
   // the 3D view is in motion a single-sample offscreen composite instead of the MSAA canvas.
   private readonly traceCache = new TraceCache(() => this.invalidate("frame"));
@@ -178,14 +178,14 @@ export class SceneManager {
     this.renderer.autoClear = false;
     // The trace impostors bake offscreen (cache rebuild, 3D depth pre-pass) before any canvas pass
     // renders, or a mid-loop render-target switch would drop the composited result.
-    const frame: TraceFrame = { renderer: this.renderer, camera, state, snapshot, traceLines: this.scenes.traceLines, occluders: this.occluders };
+    const frame: TraceFrame = { renderer: this.renderer, camera, state, snapshot, trace: this.scenes.trace, occluders: this.occluders };
     let impostor: TracePassImpostor | null = null;
     for (const candidate of this.traceImpostors) {
       impostor = candidate.prepare(frame);
       if (impostor) break;
     }
     for (const pass of RENDER_PASSES) {
-      const substitute = pass === "traceLines" ? impostor : null;
+      const substitute = pass === "trace" ? impostor : null;
       const scene = substitute?.scene ?? this.scenes[pass];
       if (drawsNothing(scene)) continue;
       this.renderer.render(scene, substitute?.camera ?? camera);

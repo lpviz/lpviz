@@ -17,8 +17,7 @@ import { PolytopeBaseLayer } from "@/three/layers/PolytopeBaseLayer";
 import { PolytopeRubberBandLayer } from "@/three/layers/PolytopeRubberBandLayer";
 import { PolytopeVerticesLayer } from "@/three/layers/PolytopeVerticesLayer";
 import { SolverStartLayer } from "@/three/layers/SolverStartLayer";
-import { TraceLineLayer } from "@/three/layers/TraceLineLayer";
-import { TracePointsLayer } from "@/three/layers/TracePointsLayer";
+import { TraceLayer } from "@/three/layers/TraceLayer";
 
 export function mountCanvasGL(parent: HTMLElement) {
   const canvas = el("canvas", { className: "canvas-stage__gl-canvas", attrs: { tabindex: "0" } });
@@ -37,8 +36,7 @@ export function mountCanvasGL(parent: HTMLElement) {
     new ObjectiveLayer(),
     new ConstraintHighlightLayer(),
     new PolytopeVerticesLayer(),
-    new TraceLineLayer(),
-    new TracePointsLayer(),
+    new TraceLayer(),
     new EllipsoidLayer(),
     new IterateLineLayer(),
     new IteratePointsLayer(),
