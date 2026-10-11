@@ -1,4 +1,10 @@
-import { CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, ShaderMaterial, type Texture } from "three";
+import { type Camera, CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, type Scene, ShaderMaterial, type Texture, WebGLRenderTarget, type WebGLRenderer } from "three";
+
+// how long after its last change a view counts as moving, for both trace impostors
+export const VIEW_SETTLE_MS = 160;
+
+/** What a trace impostor substitutes for the pass: its quad scene, and the camera to draw it with (the pass's own when absent). */
+export type TracePassImpostor = { scene: Scene; camera?: Camera };
 
 // Rendering translucent strokes onto a transparent black target yields
 // premultiplied alpha, so the composite uses (ONE, ONE_MINUS_SRC_ALPHA).
@@ -46,6 +52,47 @@ export class CompositeQuad {
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();
+  }
+}
+
+// The offscreen target a composite quad maps: rebuilt when the size or the sample count asked for
+// differs, rendered into with the bound target restored afterwards, released with the quad unmapped.
+export class OffscreenTarget {
+  private target: WebGLRenderTarget | null = null;
+
+  constructor(
+    private readonly quad: CompositeQuad,
+    private readonly options: { depthBuffer: boolean },
+  ) {}
+
+  /** The target as it stands, or null between targets. */
+  get current(): WebGLRenderTarget | null {
+    return this.target;
+  }
+
+  ensure(width: number, height: number, samples: number): WebGLRenderTarget {
+    if (!this.target || this.target.width !== width || this.target.height !== height || this.target.samples !== samples) {
+      this.target?.dispose();
+      this.target = new WebGLRenderTarget(width, height, { samples, depthBuffer: this.options.depthBuffer, stencilBuffer: false });
+      this.quad.setMap(this.target.texture);
+    }
+    return this.target;
+  }
+
+  /** Run `render` into the target (cleared first when asked) and restore whatever target was bound. */
+  renderInto(renderer: WebGLRenderer, clear: boolean, render: () => void): void {
+    const previous = renderer.getRenderTarget();
+    renderer.setRenderTarget(this.target);
+    if (clear) renderer.clear();
+    render();
+    renderer.setRenderTarget(previous);
+  }
+
+  release(): void {
+    if (!this.target) return;
+    this.target.dispose();
+    this.target = null;
+    this.quad.setMap(null);
   }
 }
 

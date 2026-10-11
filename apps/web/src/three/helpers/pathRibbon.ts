@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, UnsignedByteType, Vector2 } from "three";
+import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, Vector2 } from "three";
 import { applyHugeBounds } from "./hugeBounds";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
@@ -138,15 +138,14 @@ export type PathRibbonStyle = {
 
 const WHITE = new Color(1, 1, 1);
 
-// A TEX_WIDTH x rows RGBA texture, reused in place when large enough
+// A TEX_WIDTH x rows float RGBA texture, reused in place when large enough
 // (grow-only): solver steps replace paths dozens of times per second, and
 // allocating a texture per step churns both the GC and the GL driver.
-function ensureTexture(texture: DataTexture | null, rows: number, type: typeof FloatType | typeof UnsignedByteType): DataTexture {
+function ensureTexture(texture: DataTexture | null, rows: number): DataTexture {
   if (texture && texture.image.height >= rows) return texture;
   texture?.dispose();
-  const length = TEX_WIDTH * rows * 4;
   // a DataTexture samples nearest and never mipmaps by default, as a lookup table should
-  return new DataTexture(type === FloatType ? new Float32Array(length) : new Uint8Array(length), TEX_WIDTH, rows, RGBAFormat, type);
+  return new DataTexture(new Float32Array(TEX_WIDTH * rows * 4), TEX_WIDTH, rows, RGBAFormat, FloatType);
 }
 
 // bound when a ribbon has no per-point colors, keeping a single program
@@ -198,10 +197,10 @@ export class PathRibbon {
     this.material.depthWrite = enabled;
   }
 
-  // points: per-point [x, y, z]; colors: optional per-point linear RGBA bytes.
-  setPath(points: Float32Array, pointCount: number, colors?: Uint8Array | null): void {
+  // points: per-point [x, y, z]; colors: optional per-point linear RGB.
+  setPath(points: Float32Array, pointCount: number, colors?: Float32Array | null): void {
     const rows = Math.max(1, Math.ceil(pointCount / TEX_WIDTH));
-    this.texture = ensureTexture(this.texture, rows, FloatType);
+    this.texture = ensureTexture(this.texture, rows);
     const data = this.texture.image.data as Float32Array;
     for (let i = 0; i < pointCount; i++) {
       data[i * 4] = points[i * 3]!;
@@ -218,8 +217,14 @@ export class PathRibbon {
     // with per-point colors the uniform must not tint them
     (this.material.uniforms.color!.value as Color).copy(colors ? WHITE : this.baseColor);
     if (colors) {
-      this.colorTexture = ensureTexture(this.colorTexture, rows, UnsignedByteType);
-      (this.colorTexture.image.data as Uint8Array).set(colors.subarray(0, pointCount * 4));
+      this.colorTexture = ensureTexture(this.colorTexture, rows);
+      const rgba = this.colorTexture.image.data as Float32Array;
+      for (let i = 0; i < pointCount; i++) {
+        rgba[i * 4] = colors[i * 3]!;
+        rgba[i * 4 + 1] = colors[i * 3 + 1]!;
+        rgba[i * 4 + 2] = colors[i * 3 + 2]!;
+        rgba[i * 4 + 3] = 1;
+      }
       this.colorTexture.needsUpdate = true;
       this.material.uniforms.colorTex!.value = this.colorTexture;
       this.material.uniforms.useVertexColor!.value = 1;

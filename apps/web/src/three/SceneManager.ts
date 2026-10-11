@@ -195,21 +195,14 @@ export class SceneManager {
     // drop the composited result. The cache wins when it applies; the 3D
     // compositor is consulted only for a pass that has something to draw.
     const traceLines = this.scenes.traceLines;
-    const cached = this.traceCache.prepare(this.renderer, traceLines);
-    const composited = cached || nothingVisible(traceLines) ? null : this.trace3D.prepare(this.renderer, camera, traceLines, [this.scenes.transparent, this.scenes.foreground]);
+    const impostor =
+      this.traceCache.prepare(this.renderer, traceLines) ??
+      (nothingVisible(traceLines) ? null : this.trace3D.prepare(this.renderer, camera, traceLines, [this.scenes.transparent, this.scenes.foreground]));
     for (const pass of RENDER_PASSES) {
-      let scene = this.scenes[pass];
-      let passCamera = camera;
-      if (pass === "traceLines" && cached) {
-        scene = cached;
-      } else if (pass === "traceLines" && composited) {
-        scene = composited;
-        passCamera = this.trace3D.camera;
-      }
-      if (nothingVisible(scene)) {
-        continue;
-      }
-      this.renderer.render(scene, passCamera);
+      const substitute = pass === "traceLines" ? impostor : null;
+      const scene = substitute?.scene ?? this.scenes[pass];
+      if (nothingVisible(scene)) continue;
+      this.renderer.render(scene, substitute?.camera ?? camera);
     }
     this.renderer.autoClear = true;
   }
