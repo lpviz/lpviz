@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { State } from "@/features/core/store";
 import type { Vec } from "@lpviz/math/types";
-import { computeEditorRegionForState, type EditorTransition, getEditorContext, getEditorTransition } from "./editorSession";
+import { clickAt, computeEditorRegionForState, deleteVertex, type EditorTransition, finishOpen, getEditorContext, insertOnEdge } from "./editorSession";
 import { freshEditorState } from "./editorState";
 
-// Characterization tests for the pure editor FSM: they pin its behaviour. getEditorTransition reads
-// only editor fields, so a fresh editor state under the patch suffices.
+// Characterization tests for the pure editor FSM: they pin its behaviour. The transitions read only
+// editor fields, so a fresh editor state under the patch suffices.
 const st = (o: Partial<State>): State => ({ ...freshEditorState(), ...o }) as unknown as State;
 
 const TRI: Vec[] = [
@@ -15,7 +15,7 @@ const TRI: Vec[] = [
 ];
 
 // a click, with the close threshold every click test uses
-const click = (state: State, point: Vec) => getEditorTransition(state, { kind: "click", point, closeThreshold: 0.5 });
+const click = (state: State, point: Vec) => clickAt(state, point, 0.5);
 // the edit a transition is, or a failure naming what it was instead
 const edited = (t: EditorTransition) => {
   if (t.kind !== "edit") throw new Error(t.kind);
@@ -43,7 +43,7 @@ describe("getEditorContext.session", () => {
   });
 });
 
-describe("getEditorTransition: click", () => {
+describe("clickAt", () => {
   test("first click adds a draft vertex", () => {
     const t = click(st({}), [1, 2]);
     expect(t).toEqual({
@@ -98,16 +98,12 @@ describe("getEditorTransition: click", () => {
   });
 });
 
-describe("getEditorTransition: finish-open", () => {
+describe("finishOpen", () => {
   test("fewer than 2 vertices is a noop", () => {
-    expect(
-      getEditorTransition(st({ vertices: [[0, 0]] }), {
-        kind: "finish-open",
-      }).kind,
-    ).toBe("noop");
+    expect(finishOpen(st({ vertices: [[0, 0]] })).kind).toBe("noop");
   });
   test("convex chain finishes as an open region", () => {
-    const t = getEditorTransition(
+    const t = finishOpen(
       st({
         vertices: [
           [0, 0],
@@ -115,13 +111,12 @@ describe("getEditorTransition: finish-open", () => {
           [6, 3],
         ],
       }),
-      { kind: "finish-open" },
     );
     const result = edited(t);
     expect(result.completionMode).toBe("open");
   });
   test("non-convex chain is rejected", () => {
-    const t = getEditorTransition(
+    const t = finishOpen(
       st({
         vertices: [
           [0, 0],
@@ -130,16 +125,15 @@ describe("getEditorTransition: finish-open", () => {
           [6, 0],
         ],
       }),
-      { kind: "finish-open" },
     );
     expect(t.kind).toBe("reject-nonconvex");
     if (t.kind === "reject-nonconvex") expect(t.reason).toContain("nonconvex");
   });
 });
 
-describe("getEditorTransition: delete-vertex", () => {
+describe("deleteVertex", () => {
   test("drafting delete removes the vertex, stays draft", () => {
-    const t = getEditorTransition(
+    const t = deleteVertex(
       st({
         vertices: [
           [0, 0],
@@ -147,7 +141,7 @@ describe("getEditorTransition: delete-vertex", () => {
           [2, 3],
         ],
       }),
-      { kind: "delete-vertex", deleteIndex: 1 },
+      1,
     );
     const result = edited(t);
     expect(result.vertices).toEqual([
@@ -168,10 +162,7 @@ describe("getEditorTransition: delete-vertex", () => {
 
   test("a closed polygon loses just that vertex and stays closed", () => {
     for (const objective of [[1, 0], null] as (Vec | null)[]) {
-      const t = getEditorTransition(closedPentagon(objective), {
-        kind: "delete-vertex",
-        deleteIndex: 1,
-      });
+      const t = deleteVertex(closedPentagon(objective), 1);
       const result = edited(t);
       expect(result.vertices).toEqual([PENT[0]!, PENT[2]!, PENT[3]!, PENT[4]!]);
       expect(result.completionMode).toBe("closed");
@@ -187,16 +178,10 @@ describe("getEditorTransition: delete-vertex", () => {
   // vertices and bulged the polygon out.
   test("inserting a vertex on an edge and deleting it is a round trip", () => {
     const objectiveVector: Vec = [1, 0];
-    const inserted = edited(
-      getEditorTransition(closedPentagon(objectiveVector), {
-        kind: "insert-edge-point",
-        edgeIndex: 0,
-        point: [(PENT[0]![0] + PENT[1]![0]) / 2, (PENT[0]![1] + PENT[1]![1]) / 2],
-      }),
-    );
+    const inserted = edited(insertOnEdge(closedPentagon(objectiveVector), 0, [(PENT[0]![0] + PENT[1]![0]) / 2, (PENT[0]![1] + PENT[1]![1]) / 2]));
     expect(inserted.vertices).toHaveLength(6);
 
-    const deleted = edited(getEditorTransition(st({ ...inserted, objectiveVector }), { kind: "delete-vertex", deleteIndex: 1 }));
+    const deleted = edited(deleteVertex(st({ ...inserted, objectiveVector }), 1));
     expect(deleted.vertices).toEqual(PENT);
     expect(deleted.completionMode).toBe("closed");
 
@@ -209,14 +194,14 @@ describe("getEditorTransition: delete-vertex", () => {
   });
 
   test("deleting a triangle's vertex goes back to drafting the other two", () => {
-    const t = getEditorTransition(
+    const t = deleteVertex(
       st({
         vertices: TRI,
         completionMode: "closed",
         interiorPoint: [2, 1],
         objectiveVector: [1, 0],
       }),
-      { kind: "delete-vertex", deleteIndex: 2 },
+      2,
     );
     const result = edited(t);
     expect(result.vertices).toEqual([TRI[0]!, TRI[1]!]);
@@ -231,13 +216,13 @@ describe("getEditorTransition: delete-vertex", () => {
       [6, 3],
       [6, 8],
     ];
-    const t = getEditorTransition(
+    const t = deleteVertex(
       st({
         vertices: chain,
         completionMode: "open",
         objectiveVector: [1, 0],
       }),
-      { kind: "delete-vertex", deleteIndex: 1 },
+      1,
     );
     const result = edited(t);
     expect(result.vertices).toEqual([chain[0]!, chain[2]!, chain[3]!]);

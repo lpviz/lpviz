@@ -4,7 +4,7 @@ import { createEditorTools2D } from "./polygonTools";
 
 // The editor's pointer behaviour as the gesture layer sees it: one implementation per problem
 // dimension (polygonTools is the polygon editor), chosen by createEditorTools. The gesture layer
-// (ui/canvas/canvasGestures) normalizes mouse, pen and touch into these calls, in canvas
+// (ui/canvas/canvasGestures) normalizes mouse, pen and touch into these calls, in client
 // coordinates, and owns the events; nothing here touches the DOM. The keyboard shortcuts hold for
 // any editor and live in ui/canvas/canvasShortcuts.
 export type EditorTools = {

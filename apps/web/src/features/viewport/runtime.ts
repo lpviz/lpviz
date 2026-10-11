@@ -4,13 +4,12 @@ import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { onAbort } from "@/features/core/lifetime";
 import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
-import type { PointXY } from "@lpviz/math/types";
+import type { PointXY, Vec } from "@lpviz/math/types";
 import { DEFAULT_VIEW_ANGLE } from "@lpviz/viewport/defaults";
-import { poseOf } from "@lpviz/viewport/snapshot";
 import { buildPerspectivePoseFromViewAngle } from "@lpviz/viewport/perspective";
 import { buildViewport2DSnapshot, deriveViewport2DState, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D, type Viewport2DState } from "@lpviz/viewport/projection2d";
 import { toCanvasCoords3D, toLogicalCoords3D } from "@lpviz/viewport/projection3d";
-import type { ViewportPerspectivePose, ViewportZBounds } from "@lpviz/viewport/snapshot";
+import { poseOf, type ViewportPerspectivePose, type ViewportZBounds } from "@lpviz/viewport/snapshot";
 import { buildViewport2DStateFromTransitionFrame, buildViewportTransitionFrame, buildViewportTransitionPlan, transitionProgressAt, type ViewportTransitionPlan } from "@lpviz/viewport/transition";
 import {
   buildResetViewport3DView,
@@ -49,8 +48,10 @@ export type ViewportApi = {
   resetView: () => void;
   setControlsBlocked: (blocked: boolean) => void;
   set2DPanEnabled: (enabled: boolean) => void;
-  toLogicalCoords: (x: number, y: number) => PointXY;
-  toCanvasCoords: (x: number, y: number, z?: number) => PointXY;
+  /** the world point under the canvas point, snapped and, in 3D, caught by the drag's plane */
+  toLogicalCoords: (x: number, y: number) => Vec;
+  /** where the world point (drawn at height `z`) lands on the canvas */
+  toCanvasCoords: (world: Vec, z?: number) => PointXY;
   /** the world rect the view shows, padded (see visibleBounds) */
   getVisibleBounds: () => BoundingBox;
   start3DTransition: (to3D: boolean) => void;
@@ -367,12 +368,14 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
     toLogicalCoords: (x, y) => {
       const point = { x, y };
       const state = getState();
-      if (wants2DControls()) return toLogicalCoords2D(get2DControlsSnapshot(), rect, point, { snapToGrid: state.snapToGrid });
       const { editorInteraction } = state;
       const viewAnchor3D = editorInteraction.kind === "dragging" ? editorInteraction.target.viewAnchor3D : undefined;
-      return toLogicalCoords3D(ownedSnapshot, rect, point, { zScale: state.zScale, snapToGrid: state.snapToGrid, interacting: editorInteraction.kind !== "idle", viewAnchor3D });
+      const world = wants2DControls()
+        ? toLogicalCoords2D(get2DControlsSnapshot(), rect, point, { snapToGrid: state.snapToGrid })
+        : toLogicalCoords3D(ownedSnapshot, rect, point, { zScale: state.zScale, snapToGrid: state.snapToGrid, interacting: editorInteraction.kind !== "idle", viewAnchor3D });
+      return [world.x, world.y];
     },
-    toCanvasCoords: (x, y, z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),
+    toCanvasCoords: ([x, y], z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),
     getVisibleBounds: () => visibleBounds(liveSnapshot()),
     start3DTransition,
     afterTransition: (fn) => {

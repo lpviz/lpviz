@@ -34,13 +34,12 @@ export function getCanvasFromClient(viewportApi: ViewportApi, clientX: number, c
 
 export function getLogicalFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): Vec {
   const canvasPoint = getCanvasFromClient(viewportApi, clientX, clientY);
-  const { x, y } = viewportApi.toLogicalCoords(canvasPoint.x, canvasPoint.y);
-  return [x, y];
+  return viewportApi.toLogicalCoords(canvasPoint.x, canvasPoint.y);
 }
 
 // whether the world point (drawn at height z) is within `radiusPx` of the canvas point on screen
 function withinRadiusPx(viewportApi: ViewportApi, canvasPoint: PointXY, world: Vec, radiusPx: number, z?: number): boolean {
-  const drawn = viewportApi.toCanvasCoords(world[0], world[1], z);
+  const drawn = viewportApi.toCanvasCoords(world, z);
   return Math.hypot(canvasPoint.x - drawn.x, canvasPoint.y - drawn.y) <= radiusPx;
 }
 
@@ -56,9 +55,9 @@ export function findVertexNearCanvasPoint(viewportApi: ViewportApi, canvasPoint:
  * and covers most of a small region zoomed in.
  */
 export function worldDistanceForPixels(viewportApi: ViewportApi, worldPoint: Vec, pixels: number): number {
-  const canvasPoint = viewportApi.toCanvasCoords(worldPoint[0], worldPoint[1]);
+  const canvasPoint = viewportApi.toCanvasCoords(worldPoint);
   const shifted = viewportApi.toLogicalCoords(canvasPoint.x + pixels, canvasPoint.y);
-  return Math.hypot(shifted.x - worldPoint[0], shifted.y - worldPoint[1]);
+  return Math.hypot(shifted[0] - worldPoint[0], shifted[1] - worldPoint[1]);
 }
 
 /** The boundary ray within an edge's screen radius of `point`, as the index into the polytope's rays. */

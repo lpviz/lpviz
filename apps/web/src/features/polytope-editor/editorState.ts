@@ -8,10 +8,8 @@ export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; constraints: Constraint[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
 
-// In 3D a drag carries the grabbed point as its anchor: pointer rays that miss the floor plane are
-// projected onto the view-aligned plane through it instead (see toLogicalCoords3D).
-// What a drag holds, each with the 3D anchor: the grabbed point, whose view-aligned plane catches
-// pointer rays that miss the floor.
+// What a drag holds, each with its 3D anchor: the grabbed point, whose view-aligned plane catches
+// the pointer rays that miss the floor (see toLogicalCoords3D).
 export type DragTarget = (
   | { kind: "point"; index: number }
   | { kind: "constraint"; operation: ConstraintDragOperation; start: Vec; normal: Vec }

@@ -2,8 +2,8 @@ import { getState, setState } from "@/features/core/store";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { computeDrawingPhase } from "@/features/problem/selectors";
 import { nearestEdge } from "@lpviz/math/polygon";
-import { applyDragTarget, applyEditorTransition, updatePanControls, updatePointerPreview } from "./editorActions";
-import { type EditorTransition, getEditorContext, getEditorTransition } from "./editorSession";
+import { applyEditorTransition, dragPatch, updatePanControls, updatePointerPreview } from "./editorActions";
+import { clickAt, deleteVertex, type EditorTransition, getEditorContext, insertOnEdge, insertOnRay, repairHull } from "./editorSession";
 import type { DragTarget } from "./editorState";
 import type { EditorTools, EditorToolsDeps } from "./editorTools";
 import {
@@ -76,13 +76,20 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
       viewportApi.setControlsBlocked(true);
     }
 
-    const interaction = getState().editorInteraction;
+    const state = getState();
+    const interaction = state.editorInteraction;
     if (interaction.kind === "dragging") {
       if (pendingDragHistory) {
         saveHistory(pendingDragHistory);
         pendingDragHistory = null;
       }
-      applyDragTarget(interaction.target, logicalCoords, deps);
+      const { target } = interaction;
+      const patch = dragPatch(target, logicalCoords, state);
+      if (!patch) return;
+      setState(patch);
+      // the one drag that changes no geometry is the start marker's: the solver re-runs from it
+      if (DRAG_POLICY[target.kind].derives) derivePolytope();
+      else onSolverStartMoved();
       return;
     }
     updatePointerPreview(phaseSnapshot, logicalCoords);
@@ -112,7 +119,7 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
     const deleteIndex = findVertexNearCanvasPoint(viewportApi, canvasPoint, displayVertices);
     if (deleteIndex === -1) return false;
 
-    apply(getEditorTransition(state, { kind: "delete-vertex", deleteIndex }));
+    apply(deleteVertex(state, deleteIndex));
     return true;
   };
 
@@ -120,7 +127,7 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
     const state = getState();
     const logicalMouse = getLogicalFromClient(viewportApi, clientX, clientY);
     const { vertices: displayVertices, mode: displayMode } = getEditorContext(state).geometry;
-    const hullRepair = getEditorTransition(state, { kind: "repair-displayed-hull", point: logicalMouse });
+    const hullRepair = repairHull(state, logicalMouse);
     if (hullRepair.kind !== "noop") {
       apply(hullRepair);
       return;
@@ -128,7 +135,7 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
 
     const edgeIndex = nearestEdge(displayVertices, logicalMouse, worldDistanceForPixels(viewportApi, logicalMouse, EDGE_HIT_RADIUS_PX), displayMode === "closed");
     if (edgeIndex !== null) {
-      const insertion = getEditorTransition(state, { kind: "insert-edge-point", edgeIndex, point: logicalMouse });
+      const insertion = insertOnEdge(state, edgeIndex, logicalMouse);
       if (insertion.kind !== "noop") {
         apply(insertion);
         return;
@@ -137,7 +144,7 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
 
     const rayIndex = findBoundaryRayNearPoint(viewportApi, state, logicalMouse);
     if (rayIndex !== null) {
-      const insertion = getEditorTransition(state, { kind: "insert-boundary-ray-point", rayIndex, point: logicalMouse });
+      const insertion = insertOnRay(state, rayIndex, logicalMouse);
       if (insertion.kind !== "noop") apply(insertion);
     }
   };
@@ -148,7 +155,7 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
     const { session } = getEditorContext(state);
     if (session !== "drafting" && session !== "selecting-objective") return;
     const point = getLogicalFromClient(viewportApi, clientX, clientY);
-    apply(getEditorTransition(state, { kind: "click", point, closeThreshold: worldDistanceForPixels(viewportApi, point, closeHitRadiusPx) }));
+    apply(clickAt(state, point, worldDistanceForPixels(viewportApi, point, closeHitRadiusPx)));
   };
 
   updatePanControls(viewportApi);

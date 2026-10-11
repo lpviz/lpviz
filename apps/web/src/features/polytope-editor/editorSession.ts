@@ -4,13 +4,11 @@
 
 import type { State } from "@/features/core/store";
 import { type CompletionMode } from "@/features/polytope-editor/editorState";
-import { computeDrawingPhase } from "@/features/problem/selectors";
-import { derivedClosure } from "@/features/problem/selectors";
+import { computeDrawingPhase, derivedClosure } from "@/features/problem/selectors";
 import { centroid, convexHull, isConvexChain, isConvexPolygon, polygonContains, segmentProjection } from "@lpviz/math/polygon";
 import type { Vec } from "@lpviz/math/types";
 import { vecDistance } from "@lpviz/math/vec";
-import { type Polytope } from "@lpviz/polytope/polytope";
-import { derivePolytope } from "@lpviz/polytope/polytope";
+import { derivePolytope, type Polytope } from "@lpviz/polytope/polytope";
 
 type EditorRegionResult =
   | { status: "nonconvex" }
@@ -110,121 +108,73 @@ const edit = (vertices: Vec[], completionMode: CompletionMode, interiorPoint: Ve
 });
 const closeOn = (vertices: Vec[]): EditorTransition => ({ kind: "edit", result: closedOn(vertices) });
 
-export function getEditorTransition(
-  state: State,
-  action:
-    | { kind: "click"; point: Vec; closeThreshold: number }
-    | { kind: "finish-open" }
-    | { kind: "delete-vertex"; deleteIndex: number }
-    | { kind: "insert-edge-point"; edgeIndex: number; point: Vec }
-    | { kind: "insert-boundary-ray-point"; rayIndex: number; point: Vec }
-    | { kind: "repair-displayed-hull"; point: Vec },
-): EditorTransition {
-  const context = getEditorContext(state);
-  switch (action.kind) {
-    case "click": {
-      if (context.session === "selecting-objective") {
-        return {
-          kind: "select-objective",
-          objectiveVector: state.currentObjective || action.point,
-        };
-      }
+const NOOP: EditorTransition = { kind: "noop" };
+const reject = (reason: string): EditorTransition => ({ kind: "reject-nonconvex", reason });
 
-      if (context.session !== "drafting") {
-        return { kind: "noop" };
-      }
-
-      if (state.vertices.length >= 3) {
-        // closeThreshold is the world-space equivalent of a fixed pixel hit radius, so closing on
-        // the first vertex stays equally easy at any zoom (it is otherwise a tiny target when
-        // zoomed out, e.g. on mobile)
-        if (vecDistance(action.point, state.vertices[0]!) < action.closeThreshold) return closeOn(state.vertices);
-
-        if (polygonContains(state.vertices, action.point)) {
-          return edit(state.vertices, "closed", action.point);
-        }
-      }
-
-      const tentative = [...state.vertices, action.point];
-      if (tentative.length >= 3 && !isConvexPolygon(tentative)) {
-        return {
-          kind: "reject-nonconvex",
-          reason: "Adding this vertex would make the polytope nonconvex. Please choose another point.",
-        };
-      }
-
-      return edit(tentative, "draft", null);
-    }
-    case "finish-open":
-      if (context.session !== "drafting" || state.vertices.length < 2) {
-        return { kind: "noop" };
-      }
-
-      if (!isConvexChain(state.vertices)) {
-        return {
-          kind: "reject-nonconvex",
-          reason: "This open region is nonconvex. Adjust the vertices before leaving it open.",
-        };
-      }
-
-      return edit(state.vertices, "open", null);
-    case "delete-vertex": {
-      const { vertices: displayVertices, isDerivedClosed } = context.geometry;
-      const nextVertices = displayVertices.filter((_, index) => index !== action.deleteIndex);
-      const closed = isDerivedClosed || state.completionMode === "closed";
-
-      // The polygon stays closed, minus the vertex: dropping a vertex of a
-      // convex polygon keeps it convex, so there is nothing to reject. A
-      // triangle has nothing left to close and goes back to drafting.
-      if (closed && nextVertices.length >= 3) return closeOn(nextVertices);
-
-      return edit(nextVertices, closed || context.session === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
-    }
-    case "insert-edge-point": {
-      const { vertices: displayVertices, isDerivedClosed } = context.geometry;
-      const start = displayVertices[action.edgeIndex];
-      const end = displayVertices[action.edgeIndex + 1] ?? displayVertices[0];
-      if (!start || !end) {
-        return { kind: "noop" };
-      }
-
-      const { dx, dy, len2, t: projected } = segmentProjection(action.point, start, end);
-      if (len2 === 0) {
-        return { kind: "noop" };
-      }
-
-      const t = Math.max(0, Math.min(1, projected));
-      const nextVertices = displayVertices.slice();
-      nextVertices.splice(action.edgeIndex + 1, 0, [start[0] + t * dx, start[1] + t * dy]);
-
-      return isDerivedClosed ? closeOn(nextVertices) : edit(nextVertices, state.completionMode, state.interiorPoint);
-    }
-    case "insert-boundary-ray-point": {
-      if (context.session !== "editing-open") {
-        return { kind: "noop" };
-      }
-
-      const nextVertices = state.vertices.slice();
-      if (action.rayIndex === 0) {
-        nextVertices.unshift(action.point);
-      } else {
-        nextVertices.push(action.point);
-      }
-
-      return edit(nextVertices, "open", null);
-    }
-    case "repair-displayed-hull": {
-      const { vertices: displayVertices, mode } = context.geometry;
-      if (mode !== "closed" || displayVertices.length < 3) {
-        return { kind: "noop" };
-      }
-
-      if (isConvexPolygon(displayVertices) || !polygonContains(displayVertices, action.point)) {
-        return { kind: "noop" };
-      }
-
-      const hull = convexHull(displayVertices);
-      return hull.length < 3 ? { kind: "noop" } : closeOn(hull);
-    }
+// A click: the objective while one is being selected; while drafting, the region closed on its
+// first vertex, an interior point that closes it, or one more vertex when convexity allows.
+// `closeThreshold` is the world-space equivalent of a fixed pixel hit radius, so closing on the
+// first vertex stays equally easy at any zoom (it is otherwise a tiny target when zoomed out, e.g.
+// on mobile).
+export function clickAt(state: State, point: Vec, closeThreshold: number): EditorTransition {
+  const { session } = getEditorContext(state);
+  if (session === "selecting-objective") return { kind: "select-objective", objectiveVector: state.currentObjective || point };
+  if (session !== "drafting") return NOOP;
+  if (state.vertices.length >= 3) {
+    if (vecDistance(point, state.vertices[0]!) < closeThreshold) return closeOn(state.vertices);
+    if (polygonContains(state.vertices, point)) return edit(state.vertices, "closed", point);
   }
+  const tentative = [...state.vertices, point];
+  if (tentative.length >= 3 && !isConvexPolygon(tentative)) return reject("Adding this vertex would make the polytope nonconvex. Please choose another point.");
+  return edit(tentative, "draft", null);
+}
+
+/** The drafted region left open, as Enter does. */
+export function finishOpen(state: State): EditorTransition {
+  if (getEditorContext(state).session !== "drafting" || state.vertices.length < 2) return NOOP;
+  if (!isConvexChain(state.vertices)) return reject("This open region is nonconvex. Adjust the vertices before leaving it open.");
+  return edit(state.vertices, "open", null);
+}
+
+// The polygon stays closed, minus the vertex: dropping a vertex of a convex polygon keeps it
+// convex, so there is nothing to reject. A triangle has nothing left to close and goes back to
+// drafting.
+export function deleteVertex(state: State, deleteIndex: number): EditorTransition {
+  const { session, geometry } = getEditorContext(state);
+  const nextVertices = geometry.vertices.filter((_, index) => index !== deleteIndex);
+  const closed = geometry.isDerivedClosed || state.completionMode === "closed";
+  if (closed && nextVertices.length >= 3) return closeOn(nextVertices);
+  return edit(nextVertices, closed || session === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
+}
+
+/** A vertex inserted on edge `edgeIndex`, at the point's projection onto it. */
+export function insertOnEdge(state: State, edgeIndex: number, point: Vec): EditorTransition {
+  const { vertices: displayVertices, isDerivedClosed } = getEditorContext(state).geometry;
+  const start = displayVertices[edgeIndex];
+  const end = displayVertices[edgeIndex + 1] ?? displayVertices[0];
+  if (!start || !end) return NOOP;
+  const { dx, dy, len2, t: projected } = segmentProjection(point, start, end);
+  if (len2 === 0) return NOOP;
+  const t = Math.max(0, Math.min(1, projected));
+  const nextVertices = displayVertices.slice();
+  nextVertices.splice(edgeIndex + 1, 0, [start[0] + t * dx, start[1] + t * dy]);
+  return isDerivedClosed ? closeOn(nextVertices) : edit(nextVertices, state.completionMode, state.interiorPoint);
+}
+
+/** A vertex added on one of an open region's boundary rays: before the first vertex or after the last. */
+export function insertOnRay(state: State, rayIndex: number, point: Vec): EditorTransition {
+  if (getEditorContext(state).session !== "editing-open") return NOOP;
+  const nextVertices = state.vertices.slice();
+  if (rayIndex === 0) nextVertices.unshift(point);
+  else nextVertices.push(point);
+  return edit(nextVertices, "open", null);
+}
+
+/** A nonconvex closed drawing replaced by its convex hull, from a double click inside it. */
+export function repairHull(state: State, point: Vec): EditorTransition {
+  const { vertices: displayVertices, mode } = getEditorContext(state).geometry;
+  if (mode !== "closed" || displayVertices.length < 3) return NOOP;
+  if (isConvexPolygon(displayVertices) || !polygonContains(displayVertices, point)) return NOOP;
+  const hull = convexHull(displayVertices);
+  return hull.length < 3 ? NOOP : closeOn(hull);
 }
