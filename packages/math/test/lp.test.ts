@@ -1,22 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import { solveDenseSystem } from "../src/lapack";
-import { chebyshevCenter, solveSmallLp, type LpRow } from "../src/lp";
+import { boxRows, chebyshevCenter, solveSmallLp, type LpRow } from "../src/lp";
 import { lcg } from "../src/random";
 
 const BOUND = 1e4;
 
 // brute force: every candidate vertex is the intersection of n constraints
 function bruteForce(objective: number[], rows: LpRow[], n: number) {
-  const boxed: LpRow[] = [...rows];
-  for (let j = 0; j < n; j++) {
-    const upper = new Array(n + 1).fill(0);
-    upper[j] = 1;
-    upper[n] = BOUND;
-    const lower = new Array(n + 1).fill(0);
-    lower[j] = -1;
-    lower[n] = BOUND;
-    boxed.push(upper, lower);
-  }
+  const boxed: LpRow[] = [...rows, ...boxRows(new Array<number>(n).fill(-BOUND), new Array<number>(n).fill(BOUND))];
   let best = -Infinity;
   const combos: number[][] = [];
   const build = (start: number, picked: number[]) => {

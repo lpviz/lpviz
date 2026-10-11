@@ -1,8 +1,7 @@
 import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, negate, negateMatrix, transposeMatrix, weightedGram } from "@lpviz/math/blas";
-import { solveDenseSystem } from "@lpviz/math/lapack";
+import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
-import { numericLogHeader, solveFooter } from "./fmt";
-import { assertMaxit, warmStart } from "./limits";
+import { warmStart } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
 
 const SIGMA_MIN = 1e-8;
@@ -28,8 +27,6 @@ export interface IPMOptions {
 export function ipm(constraints: readonly Constraint[], objective: Float64Array, opts: IPMOptions): SolverResult {
   const { tol, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
-  assertMaxit(maxit);
-
   // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
   const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
   const A = negateMatrix(aOriginal);
@@ -39,7 +36,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   const m = A.rows;
   const n = A.cols;
 
-  const trace = new NumericTrace(n);
+  const trace = new NumericTrace(n, "µ", maxit);
 
   const x = new Float64Array(n);
   const s = new Float64Array(m).fill(1);
@@ -74,14 +71,8 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   let converged = false;
   let failureMessage: string | null = null;
   // null once the normal equations are solved, else why they could not be
-  const solve = (label: string, rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): string | null => {
-    try {
-      normal.solve(rP, rD, rC, dx, ds, dy);
-      return null;
-    } catch (error) {
-      return `IPM ${label} solve failed: ${error instanceof Error ? error.message : String(error)}`;
-    }
-  };
+  const solve = (label: string, rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): string | null =>
+    normal.solve(rP, rD, rC, dx, ds, dy) ? null : `IPM ${label} solve failed: Singular linear system`;
 
   while (trace.count < maxit) {
     matVec(A, x, ax);
@@ -148,8 +139,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
     }
   }
 
-  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, trace.count, trace.elapsedMs, "Stopped")}` : solveFooter(converged, trace.count, trace.elapsedMs);
-  return trace.result(numericLogHeader(n, "µ"), footer);
+  return trace.finish(failureMessage ? { converged: false, lead: "Stopped", before: failureMessage } : { converged });
 }
 
 //   [ A  -I   0 ] [dx]   [rP]        (primal residual)
@@ -182,7 +172,8 @@ class NormalEquations {
     weightedGram(A, (i) => y[i]! / s[i]!, M);
   }
 
-  solve(rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): void {
+  /** The step into dx, ds and dy; false when the normal matrix is singular. */
+  solve(rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): boolean {
     const { A, At, s, y, M, rhs, weighted, luScratch } = this;
     const { rows: m, cols: n } = A;
     for (let i = 0; i < m; i++) {
@@ -190,12 +181,13 @@ class NormalEquations {
     }
     matVec(At, weighted, rhs);
     for (let j = 0; j < n; j++) rhs[j]! -= rD[j]!;
-    solveDenseSystem(M, n, rhs, dx, luScratch);
+    if (!trySolveDenseSystem(M, n, rhs, dx, luScratch)) return false;
     matVec(A, dx, ds);
     for (let i = 0; i < m; i++) {
       ds[i]! -= rP[i]!;
       dy[i] = (rC[i]! - y[i]! * ds[i]!) / s[i]!;
     }
+    return true;
   }
 }
 

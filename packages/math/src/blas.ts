@@ -168,6 +168,28 @@ export function hstackMatrices(...matrices: DenseMatrix[]): DenseMatrix {
   return out;
 }
 
+/** The rows `indices` of the matrix, in that order, as a matrix of their own. */
+export function selectRows(matrix: DenseMatrix, indices: readonly number[]): DenseMatrix {
+  const { cols, data } = matrix;
+  const out = createDenseMatrix(indices.length, cols);
+  indices.forEach((source, row) => {
+    const srcOffset = source * cols;
+    const dstOffset = row * cols;
+    for (let col = 0; col < cols; col++) out.data[dstOffset + col] = data[srcOffset + col]!;
+  });
+  return out;
+}
+
+/** The columns `indices` of the matrix, in that order, into `out` (rows x indices.length, row-major). */
+export function selectColumns(matrix: DenseMatrix, indices: readonly number[], out: Float64Array): Float64Array {
+  const { rows, cols, data } = matrix;
+  const width = indices.length;
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < width; col++) out[row * width + col] = data[row * cols + indices[col]!]!;
+  }
+  return out;
+}
+
 /** Row `row` of the matrix copied into `out`. */
 export function extractRow<T extends Float64Array | number[]>(matrix: DenseMatrix, row: number, out: T): T {
   const { cols, data } = matrix;

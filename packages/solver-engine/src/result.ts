@@ -2,6 +2,9 @@
 // prints with its numeric rows as columns. Nothing downstream re-shapes them: the block is what the
 // viewport draws, and the columns are what the log formats a row from when it scrolls into view.
 
+import { numericLogHeader, solveFooter } from "./fmt";
+import { assertAtMost, MAX_ITERATIONS } from "./limits";
+
 /** The iterates as one flat block, `stride` coordinates each: iterate i is points[i * stride .. (i + 1) * stride). */
 export interface Iterates {
   points: Float64Array;
@@ -115,7 +118,18 @@ export class FloatBlock {
 /** A block of points as a result's iterates. */
 export const iteratesOf = (block: FloatBlock): Iterates => ({ points: block.finish(), count: block.count, stride: block.stride });
 
-/** The lockstep record of a run: one point and one row's measures per iterate, and the clock the footer reports. */
+/**
+ * How a run stopped, as its footer reads: converged or not, the stop's own lead when it is not the
+ * plain "Did not converge" ("Stopped", "Localizing set exhausted"), and a line before or after the
+ * standard one.
+ */
+export type Stop = { converged: boolean; lead?: string | undefined; before?: string | undefined; after?: string | undefined };
+
+/**
+ * The lockstep record of a run: one point and one row's measures per iterate, the clock the footer
+ * reports, and the log's header for the `measure` the run stops on. Asks for the iteration cap up
+ * front, so a run over it never starts.
+ */
 export class NumericTrace {
   private readonly points: FloatBlock;
   // objective, infeasibility, convergence
@@ -123,7 +137,12 @@ export class NumericTrace {
   private readonly restarts: number[] = [];
   private readonly startTime = performance.now();
 
-  constructor(stride: number) {
+  constructor(
+    stride: number,
+    private readonly measure: string,
+    maxit: number,
+  ) {
+    assertAtMost("maxit", maxit, MAX_ITERATIONS);
     this.points = new FloatBlock(stride);
   }
 
@@ -155,7 +174,18 @@ export class NumericTrace {
     this.restarts.push(this.count - 1);
   }
 
-  result(header: string, footer: string, extras: Partial<SolverResult> = {}): SolverResult {
+  /** The footer of a run that stopped as `stop` says, with the count and the clock as they stand now. */
+  footerOf({ converged, lead, before, after }: Stop): string {
+    const line = solveFooter(converged, this.count, this.elapsedMs, lead);
+    return `${before ? `${before}\n` : ""}${line}${after ? `\n${after}` : ""}`;
+  }
+
+  /** The result of a run that stopped as `stop` says. */
+  finish(stop: Stop, extras?: Partial<SolverResult>): SolverResult {
+    return this.result(this.footerOf(stop), extras);
+  }
+
+  result(footer: string, extras: Partial<SolverResult> = {}): SolverResult {
     const count = this.count;
     const { data } = this.measures;
     const objective = new Float64Array(count);
@@ -168,6 +198,7 @@ export class NumericTrace {
     }
     const restart = new Uint8Array(count);
     for (const i of this.restarts) restart[i] = 1;
+    const header = numericLogHeader(this.points.stride, this.measure);
     return { iterates: iteratesOf(this.points), convergence, log: [{ header, rows: { objective, infeasibility, convergence, restart }, footer }], ...extras };
   }
 }

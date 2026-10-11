@@ -2,11 +2,9 @@
 // separation oracle, the incumbent, the initial localization around the drawn region, the
 // lockstep record of every iterate's drawn shape, the stopping test and the footer.
 
-import { type DenseMatrix, denseFromConstraints, dot, rowDot } from "@lpviz/math/blas";
+import { type DenseMatrix, denseFromConstraints, dot, extractRow, rowDot } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { boundsOf } from "@lpviz/math/vec";
-import { numericLogHeader, solveFooter } from "./fmt";
-import { assertMaxit } from "./limits";
 import { FloatBlock, NumericTrace, type SolverResult } from "./result";
 
 const FEASIBILITY_TOLERANCE = 1e-9;
@@ -37,8 +35,6 @@ export function ellipsoidStride(n: number): number {
 export function localizingSetStride(n: number): number {
   return n === 2 ? 2 : n + 1;
 }
-
-const localizationLogHeader = (n: number) => numericLogHeader(n, "ρ");
 
 // The separation oracle every method in this family shares: the constraint
 // `x` violates by the most, or a nonpositive violation when `x` is feasible.
@@ -157,13 +153,6 @@ type Termination = "converged" | "maxit" | "infeasible" | "exhausted" | "degener
 // how the stops that are not "converged" or "maxit" read, as `[lead, explanation?]` lines
 type TerminationLines = Partial<Record<Termination, [lead: string, explanation?: string]>>;
 
-// "converged" and "maxit" read the same for every method in the family; the
-// other stops name the method's localizing set.
-function localizationFooter(termination: Termination, iterationCount: number, solveTime: number, stops: TerminationLines) {
-  const [lead, explanation] = stops[termination] ?? ["Did not converge"];
-  return `${solveFooter(termination === "converged", iterationCount, solveTime, lead)}${explanation ? `\n${explanation}` : ""}`;
-}
-
 /**
  * The family's run record: every iterate with the ellipsoid drawn around it (its n x n shape
  * matrix, packed per ellipsoidStride) and, for the cutting planes, the localizing set it was
@@ -179,8 +168,9 @@ class LocalizationTrace extends NumericTrace {
   constructor(
     private readonly n: number,
     withLocalizingSets: boolean,
+    maxit: number,
   ) {
-    super(n);
+    super(n, "ρ", maxit);
     this.ellipsoids = new FloatBlock(ellipsoidStride(n));
     this.shape = new Float64Array(this.ellipsoids.stride);
     this.localizingSets = withLocalizingSets ? [] : null;
@@ -215,10 +205,10 @@ class LocalizationTrace extends NumericTrace {
     this.record(best, bestObjective, 0, Math.max(0, upperBound - bestObjective));
   }
 
-  override result(header: string, footer: string): SolverResult {
+  override result(footer: string): SolverResult {
     const extras: Partial<SolverResult> = { ellipsoids: this.ellipsoids.finish() };
     if (this.localizingSets) Object.assign(extras, packLocalizingSets(this.localizingSets, localizingSetStride(this.n)));
-    return super.result(header, footer, extras);
+    return super.result(footer, extras);
   }
 
   private writeShape(center: Float64Array, P: Float64Array): void {
@@ -257,9 +247,13 @@ export interface LocalizationOptions {
   initialScale: number;
 }
 
+/** The oracle's answer at a query point: the objective there, the row violated by the most and by how much, and whether the point is feasible. */
+export type Query = { objectiveValue: number; worstRow: number; violation: number; feasible: boolean };
+
 /**
- * One run of a method in the family: the dense problem, the oracle, the incumbent, the trace and
- * the stopping test, so an engine holds only its own localizing set and its update of it.
+ * One run of a method in the family: the dense problem, the oracle, the incumbent, the cut an
+ * answer yields, the trace and the stopping test, so an engine holds only its own localizing set
+ * and its update of it.
  */
 export class LocalizationRun {
   readonly A: DenseMatrix;
@@ -274,25 +268,46 @@ export class LocalizationRun {
   private readonly tol: number;
 
   constructor(constraints: readonly Constraint[], objective: Float64Array, opts: LocalizationOptions, withLocalizingSets: boolean, tooFewVariables: string) {
-    assertMaxit(opts.maxit);
     const { A, b } = denseFromConstraints(constraints);
+    // the trace first: an iteration cap over the limit is refused before the variable count is
+    this.trace = new LocalizationTrace(A.cols, withLocalizingSets, opts.maxit);
     if (A.cols < 2) throw new Error(tooFewVariables);
     this.A = A;
     this.b = b;
     this.n = A.cols;
     this.c = Float64Array.from({ length: this.n }, (_, j) => objective[j] ?? 0);
     this.tol = opts.tol;
-    this.trace = new LocalizationTrace(this.n, withLocalizingSets);
     this.incumbent = new Incumbent(A, b, this.c, opts.rayShoot);
   }
 
   /** The oracle's answer at a query point, which is offered to the incumbent when feasible. */
-  query(point: Float64Array): { objectiveValue: number; worstRow: number; violation: number; feasible: boolean } {
+  query(point: Float64Array): Query {
     const objectiveValue = dot(this.c, point);
     const { row: worstRow, violation } = mostViolatedConstraint(this.A, this.b, point);
     const feasible = violation <= FEASIBILITY_TOLERANCE;
     if (feasible) this.incumbent.offer(point, objectiveValue);
     return { objectiveValue, worstRow, violation, feasible };
+  }
+
+  /**
+   * The cut an answer yields, its normal written into `normal`: the violated row itself when the
+   * point is infeasible (as deep a cut as the oracle can return), else the objective at the
+   * incumbent's level, discarding everything no better than it. The depth is how far past the
+   * point the cut's plane lies; the incumbent can be better than the point's own objective, in
+   * which case the objective cut is itself a deep cut.
+   */
+  cut({ worstRow, violation, feasible, objectiveValue }: Query, normal: Float64Array | number[]): { offset: number; depth: number } {
+    if (!feasible) {
+      extractRow(this.A, worstRow, normal);
+      return { offset: this.b[worstRow]!, depth: violation };
+    }
+    for (let j = 0; j < this.n; j++) normal[j] = -this.c[j]!;
+    return { offset: -this.incumbent.objective, depth: this.incumbent.objective - objectiveValue };
+  }
+
+  /** Record `point` as the next iterate: the shape `P` drawn around it, the answer at it, and `radius`, how much better anything still under consideration could be. */
+  record(point: Float64Array, P: Float64Array, { objectiveValue, violation }: Query, radius: number, drawn?: number[]): void {
+    this.trace.recordIterate(point, P, objectiveValue, Math.max(0, violation), radius, drawn);
   }
 
   /**
@@ -306,10 +321,15 @@ export class LocalizationRun {
     return true;
   }
 
-  /** The result: how the run ended, with the incumbent recorded as its final iterate. */
+  /**
+   * The result: how the run ended, with the incumbent recorded as its final iterate. "converged"
+   * and "maxit" read the same for every method in the family; the other stops name the method's
+   * localizing set. The footer counts the iterates before the incumbent's closing entry.
+   */
   finish(stops: TerminationLines): SolverResult {
-    const footer = localizationFooter(this.termination, this.trace.count, this.trace.elapsedMs, stops);
+    const [lead, after] = stops[this.termination] ?? [];
+    const footer = this.trace.footerOf({ converged: this.termination === "converged", lead, after });
     this.trace.closeOnIncumbent(this.incumbent, this.upperBound);
-    return this.trace.result(localizationLogHeader(this.n), footer);
+    return this.trace.result(footer);
   }
 }

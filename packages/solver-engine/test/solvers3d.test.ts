@@ -3,8 +3,7 @@ import { centralPath } from "../src/centralPath";
 import { ipm } from "../src/ipm";
 import { pdhg } from "../src/pdhg";
 import { simplex } from "../src/simplex";
-import { expectNear, footerOf, ipmOptions, lastIterate, PDHG_DEFAULTS, rowsOf } from "./fixtures";
-import { BOX, CUBE } from "./fixtures3d";
+import { BOX, CUBE, expectNear, footerOf, ipmOptions, lastIterate, lastRowOf, PDHG_DEFAULTS } from "./fixtures";
 
 describe.each([
   ["cube, maximize x + y + z", CUBE, [1, 1, 1], [4, 4, 4]],
@@ -16,8 +15,7 @@ describe.each([
     const r = ipm(constraints, obj, ipmOptions());
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     expectNear(lastIterate(r), optimum, 3);
-    const rows = rowsOf(r);
-    const lastRow = rows[rows.length - 1]!;
+    const lastRow = lastRowOf(r);
     expect(lastRow.point.length).toBe(3);
     expect(lastRow.point[2]).toBeCloseTo(optimum[2], 3);
     expect(r.log[0]!.header).toContain(" z ");
@@ -28,8 +26,7 @@ describe.each([
     const last = lastIterate(r);
     expect(last.length).toBe(3);
     optimum.forEach((value, j) => expect(Math.abs(last[j]! - value)).toBeLessThanOrEqual(1e-2));
-    const rows = rowsOf(r);
-    const lastRow = rows[rows.length - 1]!;
+    const lastRow = lastRowOf(r);
     expect(lastRow.point[2]).toBeCloseTo(last[2]!, 8);
   });
 

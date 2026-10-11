@@ -1,4 +1,4 @@
-import { createDenseMatrix, dot, extractRow, matVec, quadraticForm } from "@lpviz/math/blas";
+import { createDenseMatrix, dot, matVec, quadraticForm } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
@@ -21,7 +21,7 @@ export interface EllipsoidOptions extends LocalizationOptions {
  */
 export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: EllipsoidOptions): SolverResult {
   const run = new LocalizationRun(constraints, objective, opts, false, "The ellipsoid method requires at least two variables.");
-  const { A, c, n, trace, incumbent } = run;
+  const { c, n, trace, incumbent } = run;
   const { center, P } = initialEllipsoid(vertices, n, opts.initialScale);
   const initialCenter = center.slice();
   const initialSemiAxes = Float64Array.from({ length: n }, (_, j) => Math.sqrt(P[j * n + j]!));
@@ -32,24 +32,15 @@ export function ellipsoid(vertices: Vec[], constraints: readonly Constraint[], o
   const nextP = new Float64Array(n * n);
 
   while (trace.count < opts.maxit) {
-    const { objectiveValue, worstRow, violation, feasible } = run.query(center);
+    const answer = run.query(center);
 
     const objectiveRadius = Math.sqrt(Math.max(0, quadraticForm(P, c, n)));
-    run.upperBound = objectiveValue + objectiveRadius;
-    trace.recordIterate(center, P, objectiveValue, Math.max(0, violation), objectiveRadius);
-    if (run.converged(feasible)) break;
+    run.upperBound = answer.objectiveValue + objectiveRadius;
+    run.record(center, P, answer, objectiveRadius);
+    if (run.converged(answer.feasible)) break;
 
-    // cut normal g and its offset beta: keep { x : g'x <= g'center - beta }
-    let beta: number;
-    if (!feasible) {
-      extractRow(A, worstRow, g);
-      beta = violation;
-    } else {
-      for (let j = 0; j < n; j++) g[j] = -c[j]!;
-      // the incumbent can be better than this center's objective, in which case
-      // the objective cut is itself a deep cut
-      beta = incumbent.objective - objectiveValue;
-    }
+    // the cut's normal g and depth beta: keep { x : g'x <= g'center - beta }
+    const { depth: beta } = run.cut(answer, g);
 
     matVec(Pmatrix, g, Pg);
     const gPg = dot(Pg, g);

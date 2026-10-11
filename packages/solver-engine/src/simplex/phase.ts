@@ -1,14 +1,11 @@
-import { type DenseMatrix, extractColumn, hstackMatrices, identityMatrix } from "@lpviz/math/blas";
+import { extractColumn } from "@lpviz/math/blas";
 import { fmtIterate, fmtIteration, ITERATION_COLUMN_WIDTH, iterateHeaders } from "../fmt";
 import { MAX_ITERATIONS } from "../limits";
-import { type FloatBlock, iteratesOf, type LogSection, type SolverResult } from "../result";
+import type { FloatBlock, LogSection, SolverResult } from "../result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./basis";
 import { createCyclingGuard, type PivotRules, selectEnteringIndex, selectLeavingIndex } from "./pivotRules";
 
 export type SimplexStatus = NonNullable<SolverResult["status"]>;
-type SimplexMode = NonNullable<SolverResult["mode"]>;
-
-export const UNBOUNDED_NOTE = "LP is unbounded. No leaving variable found.";
 
 const basisString = (isBasic: readonly boolean[]) => isBasic.map((basic) => (basic ? 1 : 0)).join("");
 
@@ -27,7 +24,7 @@ export interface PhaseConfig {
 }
 
 /** What a phase hands on: how many iterates it appended and its log, and the basis and objective it ended on. */
-interface PhaseRun {
+export interface PhaseRun {
   count: number;
   log: LogSection;
   isBasic: boolean[];
@@ -89,75 +86,4 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
   const isBasic = basis.isBasic.slice();
   const footer = `Phase ${phase} finished in ${iteration} iterations – basis ${basisString(isBasic)}\n`;
   return { count, log: { header, rows, notes, footer }, isBasic, objective, status };
-}
-
-export type PhaseLog = Pick<PhaseRun, "count" | "log">;
-
-// A phase that never ran: its log is the one line saying why.
-export const skippedPhase = (reason: string): PhaseLog => ({ count: 0, log: { header: reason, rows: [] } });
-
-export function simplexResult(iterates: FloatBlock, phase1: PhaseLog, phase2: PhaseLog, status: SimplexStatus, mode: SimplexMode): SolverResult {
-  const outcome = status === "unbounded" ? "Unbounded LP" : status === "infeasible" ? "Infeasible LP" : null;
-  // a run that did not end optimal keeps Phase 2's closing line as a note and names the outcome in the footer
-  const { header, rows, notes = [], footer } = phase2.log;
-  const closing: LogSection = outcome ? { header, rows, notes: footer === undefined ? notes : [...notes, footer], footer: outcome } : phase2.log;
-  return {
-    iterates: iteratesOf(iterates),
-    // the phase of each iterate, only once there are two phases to tell apart
-    ...(phase1.count > 0 ? { phases: [...new Array<number>(phase1.count).fill(0), ...new Array<number>(phase2.count).fill(1)] } : {}),
-    log: [phase1.log, closing],
-    status,
-    mode,
-  };
-}
-
-// Drives any artificial variable still basic after Phase 1 out of the basis by swapping in the
-// lowest-index original column with a nonzero pivot. A basis repair step, deliberately
-// independent of the selected pivot rules.
-export function pivotOutArtificialVariables(phase1: StandardLp, isBasic: readonly boolean[], originalColumnCount: number, tol: number): boolean[] {
-  const { A } = phase1;
-  const column = new Float64Array(A.rows);
-  const direction = new Float64Array(A.rows);
-  const basis = new Basis(A, isBasic);
-
-  while (true) {
-    const rowIndex = basis.columns.findIndex((index) => index >= originalColumnCount);
-    if (rowIndex === -1) break;
-    let replacement = -1;
-
-    for (let j = 0; j < originalColumnCount; j++) {
-      if (basis.isBasic[j]) continue;
-      extractColumn(A, j, column);
-      basis.apply(column, direction);
-      if (Math.abs(direction[rowIndex]!) > tol) {
-        replacement = j;
-        break;
-      }
-    }
-
-    if (replacement === -1) {
-      throw new Error("Could not pivot artificial variables out of the Phase 1 basis.");
-    }
-    basis.pivot(rowIndex, direction, replacement);
-  }
-
-  const phase2Basis = basis.isBasic.slice(0, originalColumnCount);
-  if (phase2Basis.filter(Boolean).length !== A.rows) {
-    throw new Error("Phase 1 did not produce a valid Phase 2 basis.");
-  }
-  return phase2Basis;
-}
-
-// The Phase-1 problem for {columns(gamma) x = gamma ∘ b, x >= 0}: rows are
-// flipped so the right-hand side is nonnegative, one artificial column per row
-// is appended, the objective is -sum(artificials) and they form the first basis.
-export function phase1Problem(b: Float64Array, columnsOf: (gamma: Float64Array) => DenseMatrix) {
-  const gamma = Float64Array.from(b, (value) => (value < 0 ? -1 : 1));
-  const flippedB = Float64Array.from(b, (value, index) => value * gamma[index]!);
-  const columns = columnsOf(gamma);
-  const { rows, cols } = columns;
-  const lp: StandardLp = { A: hstackMatrices(columns, identityMatrix(rows)), b: flippedB, c: new Float64Array(cols + rows).fill(-1, cols) };
-  const isBasic: boolean[] = new Array<boolean>(cols + rows).fill(false);
-  for (let i = 0; i < rows; i++) isBasic[cols + i] = true;
-  return { columns, lp, isBasic };
 }

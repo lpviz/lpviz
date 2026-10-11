@@ -1,3 +1,4 @@
+import { boxRows } from "@lpviz/math/lp";
 import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
@@ -18,6 +19,7 @@ import {
   largePolygon,
   iterateAt,
   lastIterate,
+  lastRowOf,
   LOCALIZATION_DEFAULTS,
   logText,
   objectiveValue,
@@ -60,7 +62,7 @@ const GUARDED_ROW = /^\s*\d+d /m;
 describe("pdhg", () => {
   test("eq-mode rows report the recovered (x, y), not the split variable", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...PDHG_DEFAULTS, ineq: false });
-    const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
+    const lastRow = lastRowOf(r);
     const last = lastIterate(r);
     expect(lastRow.point[0]).toBeCloseTo(last[0]!, 8);
     expect(lastRow.point[1]).toBeCloseTo(last[1]!, 8);
@@ -71,7 +73,7 @@ describe("pdhg", () => {
   test("ineq mode records the converged iterate", () => {
     const r = pdhg(SQUARE, Float64Array.of(1, 1), { ...PDHG_DEFAULTS, ineq: true });
     expect(footerOf(r).startsWith("Converged")).toBe(true);
-    const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
+    const lastRow = lastRowOf(r);
     expect(lastRow.convergence).toBeLessThanOrEqual(1e-4);
     expect(r.iterates.count).toBe(rowsOf(r).length);
     expect(r.iterates.count).toBe(r.convergence!.length);
@@ -354,7 +356,7 @@ describe("ellipsoid", () => {
     const objective = Float64Array.of(1, 2);
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, objective, opts());
     const last = lastIterate(r);
-    const lastRow = rowsOf(r)[rowsOf(r).length - 1]!;
+    const lastRow = lastRowOf(r);
     const expected = bruteForceOptimum(objective, SQUARE_VERTICES);
     const got = objectiveValue(objective, last);
     // the incumbent is feasible, so it can never beat the optimum, and the gap
@@ -442,12 +444,7 @@ describe("centralPath", () => {
   });
 
   test("stays finite on a sliver region", () => {
-    const sliverLines: Constraint[] = [
-      [1, 0, -4],
-      [-1, 0, 4.001],
-      [0, 1, -4],
-      [0, -1, 6],
-    ];
+    const sliverLines = boxRows([-4.001, -6], [-4, -4]);
     const sliverVertices: Vec[] = [
       [-4.001, -6],
       [-4, -6],
@@ -493,8 +490,7 @@ describe("draggable start point", () => {
       [3, 7], // far outside (infeasible start)
     ]) {
       const r = ipm(SQUARE, Float64Array.of(1, 1), ipmOpts(start));
-      expect(iterateAt(r, 0)[0]!).toBeCloseTo(start[0]!, 12);
-      expect(iterateAt(r, 0)[1]!).toBeCloseTo(start[1]!, 12);
+      expectNear(iterateAt(r, 0), start, 12);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
       const last = lastIterate(r);
       expectNear(last, [-4, -4], 3);
@@ -536,8 +532,7 @@ describe("draggable start point", () => {
         ineq: true,
         startPoint: start,
       });
-      expect(iterateAt(r, 0)[0]!).toBeCloseTo(start[0]!, 12);
-      expect(iterateAt(r, 0)[1]!).toBeCloseTo(start[1]!, 12);
+      expectNear(iterateAt(r, 0), start, 12);
       expect(footerOf(r).startsWith("Converged")).toBe(true);
       const last = lastIterate(r);
       expectNear(last, [-4, -4], 2);
@@ -550,8 +545,7 @@ describe("draggable start point", () => {
       ineq: false,
       startPoint: [-5.5, -4.5],
     });
-    expect(iterateAt(r, 0)[0]!).toBeCloseTo(-5.5, 12);
-    expect(iterateAt(r, 0)[1]!).toBeCloseTo(-4.5, 12);
+    expectNear(iterateAt(r, 0), [-5.5, -4.5], 12);
     expect(footerOf(r).startsWith("Converged")).toBe(true);
     const last = lastIterate(r);
     expectNear(last, [-4, -4], 2);
@@ -577,9 +571,7 @@ describe("draggable start point", () => {
     expect(r.status).toBe("optimal");
     expect(phase1Count(r)).toBe(0);
     expect(r.log[0]!.header).toContain("warm start");
-    const first = iterateAt(r, 0);
-    expect(first[0]!).toBeCloseTo(-6, 6);
-    expect(first[1]!).toBeCloseTo(-6, 6);
+    expectNear(iterateAt(r, 0), [-6, -6], 6);
     const last = lastIterate(r);
     expectNear(last, [-4, -4], 6);
   });

@@ -3,18 +3,15 @@
 // only on its seed and options.
 
 import { expect } from "bun:test";
+import { trySolveDenseSystem } from "@lpviz/math/lapack";
+import { boxRows } from "@lpviz/math/lp";
 import type { Rng } from "@lpviz/math/random";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "@lpviz/polytope/constraints";
 import type { NumericRow, NumericRows, SolverResult } from "../src/result";
 
 // square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
-export const SQUARE: Constraint[] = [
-  [1, 0, -4],
-  [-1, 0, 6],
-  [0, 1, -4],
-  [0, -1, 6],
-];
+export const SQUARE: Constraint[] = boxRows([-6, -6], [-4, -4]);
 export const SQUARE_VERTICES: Vec[] = [
   [-6, -6],
   [-4, -6],
@@ -35,18 +32,21 @@ export const STRIP_HULL: Vec[] = [
   [-1, 5],
 ];
 // x <= 1 and x >= 2: an empty region
-export const EMPTY: Constraint[] = [
-  [1, 0, 1],
-  [-1, 0, -2],
-  [0, 1, 1],
-  [0, -1, 1],
-];
+export const EMPTY: Constraint[] = boxRows([2, -1], [1, 1]);
 export const EMPTY_HULL: Vec[] = [
   [1, 1],
   [2, 1],
   [2, -1],
   [1, -1],
 ];
+
+// cube centered at the origin: |x| <= 4, |y| <= 4, |z| <= 4
+export const CUBE: Constraint[] = boxRows([-4, -4, -4], [4, 4, 4]);
+// asymmetric box: x in [-2, 1], y in [-3, 2], z in [-4, 3]
+export const BOX: Constraint[] = boxRows([-2, -3, -4], [1, 2, 3]);
+// the box with its (1, 2, 3) corner sliced off, so a random objective can land
+// on a non-axis-aligned facet
+export const SLICED_BOX: Constraint[] = [...BOX, [1, 1, 1, 4]];
 
 export const PDHG_DEFAULTS = { halpern: false, maxit: 2000, eta: 0.25, tau: 0.25, tol: 1e-4, colorByBasis: false };
 export const ipmOptions = (alphaMax = 0.9, maxit = 200) => ({ tol: 1e-6, maxit, alphaMax, correctorThreshold: 0.9 });
@@ -62,14 +62,43 @@ export const expectNear = (point: ArrayLike<number>, expected: readonly number[]
   expected.forEach((value, j) => expect(point[j]!).toBeCloseTo(value, digits));
 };
 
+// by how much the point breaks a·x ≤ b (negative inside)
+const excess = (row: Constraint, point: ArrayLike<number>) => {
+  let lhs = 0;
+  for (let j = 0; j < row.length - 1; j++) lhs += row[j]! * point[j]!;
+  return lhs - row[row.length - 1]!;
+};
+
 /** Every constraint a·x ≤ b holds at the point, to `tol`. */
 export const expectFeasible = (constraints: readonly Constraint[], point: ArrayLike<number>, tol: number) => {
-  for (const row of constraints) {
-    let lhs = 0;
-    for (let j = 0; j < row.length - 1; j++) lhs += row[j]! * point[j]!;
-    expect(lhs).toBeLessThanOrEqual(row[row.length - 1]! + tol);
-  }
+  for (const row of constraints) expect(excess(row, point)).toBeLessThanOrEqual(tol);
 };
+
+/** Every vertex of `{a·x ≤ b}` by brute force: each feasible point where `n` of the rows meet, in the rows' order. */
+export function verticesOf(rows: readonly Constraint[], n: number): Vec[] {
+  const out: Vec[] = [];
+  const pick = (start: number, chosen: Constraint[]) => {
+    if (chosen.length < n) {
+      for (let i = start; i < rows.length; i++) pick(i + 1, [...chosen, rows[i]!]);
+      return;
+    }
+    const point = new Float64Array(n);
+    // the rows may not meet in a point
+    if (
+      !trySolveDenseSystem(
+        Float64Array.from(chosen.flatMap((row) => row.slice(0, n))),
+        n,
+        Float64Array.from(chosen, (row) => row[n]!),
+        point,
+      )
+    )
+      return;
+    const p = Array.from(point) as Vec;
+    if (rows.every((row) => excess(row, p) <= 1e-6) && !out.some((v) => Math.hypot(...v.map((value, j) => value - p[j]!)) < 1e-7)) out.push(p);
+  };
+  pick(0, []);
+  return out;
+}
 
 // The edges of a convex hull as inward-pointing unit-normal constraints.
 export const polygonConstraints = (hull: Vec[]): Constraint[] => constraintsFromChain(hull, true);
@@ -125,6 +154,7 @@ export const rowsOf = (r: SolverResult): NumericRow[] => {
     convergence: convergence[i]!,
   }));
 };
+export const lastRowOf = (r: SolverResult): NumericRow => rowsOf(r)[r.iterates.count - 1]!;
 export const footerOf = (r: SolverResult) => r.log[0]!.footer ?? "";
 // Every line of every section, as the panel prints them.
 export const logText = (r: SolverResult) => r.log.flatMap(({ header, rows, notes = [], footer = "" }) => [header, ...(rows as string[]), ...notes, footer]).join("");

@@ -1,6 +1,7 @@
 import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
+import { computeQueryPoint } from "../src/barrierCenters";
 import { QUERY_POINTS, cuttingPlane, type CuttingPlaneOptions, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
 import {
@@ -70,10 +71,11 @@ describe("cuttingPlane", () => {
     const expected = bruteForceOptimum(objective, SQUARE_VERTICES);
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
+      const rows = rowsOf(r);
       // objective at the query point plus rho upper-bounds the optimum at every
       // iteration, which is what makes the stopping gap a certificate
-      for (let i = 0; i < rowsOf(r).length; i++) {
-        expect(rowsOf(r)[i]!.objective + r.convergence![i]!).toBeGreaterThanOrEqual(expected - 1e-6);
+      for (let i = 0; i < rows.length; i++) {
+        expect(rows[i]!.objective + r.convergence![i]!).toBeGreaterThanOrEqual(expected - 1e-6);
       }
       expect(r.convergence![r.convergence!.length - 1]!).toBeLessThan(r.convergence![0]!);
     }
@@ -90,9 +92,10 @@ describe("cuttingPlane", () => {
         const angle = (k / 8) * 2 * Math.PI;
         const objective = Float64Array.of(Math.cos(angle), Math.sin(angle));
         const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
-        for (let i = 1; i < rowsOf(r).length - 1; i++) {
-          const previous = rowsOf(r)[i - 1]!.objective + r.convergence![i - 1]!;
-          const current = rowsOf(r)[i]!.objective + r.convergence![i]!;
+        const rows = rowsOf(r);
+        for (let i = 1; i < rows.length - 1; i++) {
+          const previous = rows[i - 1]!.objective + r.convergence![i - 1]!;
+          const current = rows[i]!.objective + r.convergence![i]!;
           expect(current).toBeLessThanOrEqual(previous + 1e-9);
         }
       }
@@ -125,25 +128,8 @@ describe("cuttingPlane", () => {
       [0, -1, 2],
       [1, 1, 4],
     ];
-    const x = Float64Array.of(0.3, -0.2);
-    let h11 = 0;
-    let h12 = 0;
-    let h22 = 0;
-    const slacks = rows.map((row) => row[2]! - row[0]! * x[0]! - row[1]! * x[1]!);
-    rows.forEach((row, i) => {
-      const w = 1 / (slacks[i]! * slacks[i]!);
-      h11 += row[0]! * row[0]! * w;
-      h12 += row[0]! * row[1]! * w;
-      h22 += row[1]! * row[1]! * w;
-    });
-    const det = h11 * h22 - h12 * h12;
-    const inv = { a11: h22 / det, a12: -h12 / det, a22: h11 / det };
-    let total = 0;
-    rows.forEach((row, i) => {
-      const quad = inv.a11 * row[0]! * row[0]! + 2 * inv.a12 * row[0]! * row[1]! + inv.a22 * row[1]! * row[1]!;
-      total += quad / (slacks[i]! * slacks[i]!);
-    });
-    expect(total).toBeCloseTo(2, 10);
+    const { leverage } = computeQueryPoint("volumetric", rows, 2)!;
+    expect(leverage!.reduce((total, score) => total + score, 0)).toBeCloseTo(2, 10);
   });
 
   test("an empty region terminates instead of spinning", () => {

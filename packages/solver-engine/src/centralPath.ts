@@ -4,7 +4,7 @@ import { centroid } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { findStrictFeasiblePoint } from "@lpviz/polytope/halfSpaces";
 import { fmtExpUnsigned, fmtIterate, formatMilliseconds, iterateHeaders, logColumnWidths } from "./fmt";
-import { MAX_PATH_POINTS } from "./limits";
+import { assertAtMost, MAX_PATH_POINTS } from "./limits";
 import { FloatBlock, iteratesOf, type SolverResult } from "./result";
 
 const MIN_STEP_SIZE = 1e-10;
@@ -38,9 +38,7 @@ export interface CentralPathOptions {
 export function centralPath(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CentralPathOptions): SolverResult {
   const { niter, interiorPoint } = opts;
 
-  if (niter > MAX_PATH_POINTS) {
-    throw new Error(`niter > ${MAX_PATH_POINTS} not allowed`);
-  }
+  assertAtMost("niter", niter, MAX_PATH_POINTS);
 
   const startTime = performance.now();
   const { A, b } = denseFromConstraints(constraints);

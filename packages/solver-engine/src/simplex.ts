@@ -1,15 +1,16 @@
 // Two-phase simplex on `max c'x s.t. Ax <= b`: this file is the entry, the warm start and the dual
-// mode; the basis, the pivot rules and a phase's walk are in simplex/.
+// mode; the basis, the pivot rules, a phase's walk and the two-phase sequence are in simplex/.
 
-import { createDenseMatrix, denseFromConstraints, type DenseMatrix, diagonalMatrix, extractRow, hstackMatrices, negate, negateMatrix, rowDot, scaleRows, transposeMatrix } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, negate, rowDot, scaleRows, selectRows, transposeMatrix } from "@lpviz/math/blas";
 import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { warmStart } from "./limits";
 import { FloatBlock, type SolverResult } from "./result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./simplex/basis";
-import { type PhaseConfig, type PhaseLog, phase1Problem, pivotOutArtificialVariables, simplexPhase, simplexResult, type SimplexStatus, skippedPhase, UNBOUNDED_NOTE } from "./simplex/phase";
+import type { PhaseConfig } from "./simplex/phase";
 import { type PivotRuleOptions, resolvePivotRules } from "./simplex/pivotRules";
-import { splitStandardForm, unsplit } from "./standardForm";
+import { phase1Problem, runTwoPhase, simplexResult, skippedPhase, UNBOUNDED_NOTE } from "./simplex/twoPhase";
+import { splitBasisColumns, splitMatrix, splitStandardForm, unsplit } from "./standardForm";
 
 export { ENTERING_RULES, type EnteringRule, LEAVING_RULES, type LeavingRule, MAX_CONSECUTIVE_DEGENERATE_PIVOTS } from "./simplex/pivotRules";
 
@@ -54,15 +55,16 @@ function primalPointFromDualBasis(A: DenseMatrix, b: Float64Array, columns: read
     return Float64Array.of(x, y);
   }
 
-  const matrix = new Float64Array(n * n);
-  const rhs = new Float64Array(n);
-  for (let row = 0; row < n; row++) {
-    const source = support[row]!;
-    extractRow(A, source, matrix.subarray(row * n, (row + 1) * n));
-    rhs[row] = b[source]!;
-  }
   const point = new Float64Array(n);
-  if (!trySolveDenseSystem(matrix, n, rhs, point)) return new Float64Array(n);
+  if (
+    !trySolveDenseSystem(
+      selectRows(A, support).data,
+      n,
+      Float64Array.from(support, (row) => b[row]!),
+      point,
+    )
+  )
+    return new Float64Array(n);
   return point.every(Number.isFinite) ? point : new Float64Array(n);
 }
 
@@ -70,23 +72,18 @@ function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array,
   const { tol, pivotRules } = cfg;
   const dual = dropRedundantRows(transposeMatrix(A), Float64Array.from(objective), tol);
   const cDual = negate(b);
-  const { columns: aPhase2, lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
+  const phase1 = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
   const iterates = new FloatBlock(A.cols);
   const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, iterates, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
 
-  const phase1 = simplexPhase(phase1Lp, phase1Basis, { ...config, phase: 1 });
-
-  if (Math.abs(phase1.objective) > tol) {
+  // An unbounded dual means the primal LP being visualized is infeasible.
+  const run = runTwoPhase(phase1, { A: phase1.columns, b: phase1.lp.b, c: cDual }, config, { phase2UnboundedNote: "Dual LP is unbounded: the LP is infeasible." });
+  if (!run.phase2) {
     // The dual LP is infeasible; the region is non-empty (emptiness is rejected before the
     // solver runs), so by LP duality the primal is unbounded. Still plot the Phase 1 trajectory.
-    return simplexResult(iterates, phase1, skippedPhase("The dual LP is infeasible, so the primal LP is unbounded.\n"), "unbounded", "dual");
+    return simplexResult(iterates, run.phase1, skippedPhase("The dual LP is infeasible, so the primal LP is unbounded.\n"), "unbounded", "dual");
   }
-
-  const phase2Basis = pivotOutArtificialVariables(phase1Lp, phase1.isBasic, aPhase2.cols, tol);
-  // An unbounded dual means the primal LP being visualized is infeasible.
-  const phase2 = simplexPhase({ A: aPhase2, b: phase1Lp.b, c: cDual }, phase2Basis, { ...config, phase: 2, unboundedNote: "Dual LP is unbounded: the LP is infeasible." });
-  const status: SimplexStatus = phase2.status === "unbounded" ? "infeasible" : phase2.status;
-  return simplexResult(iterates, phase1, phase2, status, "dual");
+  return simplexResult(iterates, run.phase1, run.phase2, run.phase2.status === "unbounded" ? "infeasible" : run.phase2.status, "dual");
 }
 
 // Rows of the dual system that are identically zero with a zero right-hand side are redundant
@@ -104,14 +101,7 @@ function dropRedundantRows(A: DenseMatrix, b: Float64Array, tol: number): { A: D
     if (!allZero || Math.abs(b[row]!) > tol) kept.push(row);
   }
   if (kept.length === A.rows) return { A, b };
-  const reduced = createDenseMatrix(kept.length, A.cols);
-  for (let dstRow = 0; dstRow < kept.length; dstRow++) {
-    const srcOffset = kept[dstRow]! * A.cols;
-    for (let col = 0; col < A.cols; col++) {
-      reduced.data[dstRow * A.cols + col] = A.data[srcOffset + col]!;
-    }
-  }
-  return { A: reduced, b: Float64Array.from(kept, (row) => b[row]!) };
+  return { A: selectRows(A, kept), b: Float64Array.from(kept, (row) => b[row]!) };
 }
 
 // Turn a user-supplied vertex of {Ax <= b} into a feasible Phase-2 basis for [A, -A, I]. Returns
@@ -121,22 +111,18 @@ function dropRedundantRows(A: DenseMatrix, b: Float64Array, tol: number): { A: D
 function warmStartBasis(A: DenseMatrix, b: Float64Array, phase2: StandardLp, vertex: readonly number[], tol: number): boolean[] | null {
   const m = A.rows;
   const n = A.cols;
-  const active: number[] = [];
+  const active = new Set<number>();
   for (let i = 0; i < m; i++) {
     const slack = b[i]! - rowDot(A, i, vertex);
     const scale = 1 + Math.abs(b[i]!);
     if (slack < -tol * scale) return null; // infeasible point
-    if (slack <= tol * scale) active.push(i);
+    if (slack <= tol * scale) active.add(i);
   }
   // one split coordinate per dimension + one slack per inactive row totals m exactly when
   // |active| = n; interior points and degenerate corners fall back to Phase 1
-  if (active.length !== n) return null;
+  if (active.size !== n) return null;
 
-  const isBasic: boolean[] = new Array<boolean>(phase2.A.cols).fill(false);
-  for (let j = 0; j < n; j++) isBasic[vertex[j]! >= 0 ? j : n + j] = true;
-  const activeSet = new Set(active);
-  for (let i = 0; i < m; i++) if (!activeSet.has(i)) isBasic[2 * n + i] = true;
-
+  const isBasic = splitBasisColumns(vertex, active, m);
   try {
     const scratch = phaseScratch(phase2);
     const solution = basicSolution(phase2, new Basis(phase2.A, isBasic), scratch, false);
@@ -169,28 +155,14 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
 
   // Phase 1 works on [A⁺, -A⁺, diag(γ)] with the rows flipped nonnegative;
   // Phase 2 on the split standard form [A, -A, I] of the original rows.
-  const { lp: phase1Lp, isBasic: phase1Basis } = phase1Problem(b, (gamma) => {
-    const aPositive = scaleRows(A, gamma);
-    return hstackMatrices(aPositive, negateMatrix(aPositive), diagonalMatrix(gamma));
-  });
+  const phase1 = phase1Problem(b, (gamma) => splitMatrix(scaleRows(A, gamma), gamma));
   const split = splitStandardForm(A, c);
   const phase2Lp: StandardLp = { A: split.A, b, c: split.c };
   const iterates = new FloatBlock(n);
   const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: n, iterates, pointOf: (x) => unsplit(x, n), unboundedNote: UNBOUNDED_NOTE };
 
   const vertex = warmStart(startVertex, n);
-  const warmBasis = vertex ? warmStartBasis(A, b, phase2Lp, vertex, tol) : null;
-  let phase1: PhaseLog = skippedPhase("Skipped — warm start from the dragged start vertex.\n");
-  let phase2Basis = warmBasis;
-  if (!phase2Basis) {
-    const run = simplexPhase(phase1Lp, phase1Basis, { ...config, phase: 1 });
-    // The Phase-1 objective equals -(sum of artificial values), so a negative
-    // optimum means no feasible point exists.
-    if (run.objective < -tol) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
-    phase1 = run;
-    phase2Basis = pivotOutArtificialVariables(phase1Lp, run.isBasic, phase2Lp.A.cols, tol);
-  }
-
-  const phase2 = simplexPhase(phase2Lp, phase2Basis, { ...config, phase: 2 });
-  return simplexResult(iterates, phase1, phase2, phase2.status, "primal");
+  const run = runTwoPhase(phase1, phase2Lp, config, { warmBasis: vertex ? warmStartBasis(A, b, phase2Lp, vertex, tol) : null });
+  if (!run.phase2) throw new Error("Problem infeasible (Phase-1 optimum is negative: no feasible point exists)");
+  return simplexResult(iterates, run.phase1, run.phase2, run.phase2.status, "primal");
 }

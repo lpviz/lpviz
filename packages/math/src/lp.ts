@@ -10,6 +10,8 @@
 // The randomization is seeded, not ambient: the same problem must produce the
 // same answer every time, or the objective-rotation animation would jitter.
 
+import type { Constraint } from "./types";
+
 const VIOLATION_TOLERANCE = 1e-9;
 const DEGENERATE_COEFFICIENT = 1e-12;
 // the one seed every solve shuffles with, so the same problem always gets the same answer
@@ -17,6 +19,23 @@ const SEED = 1;
 
 // Each row is [a_0, ..., a_{n-1}, b], meaning a'x <= b.
 export type LpRow = readonly number[];
+
+/** The box `lo <= x <= hi` as rows, two per axis in index order: the upper bound, then the lower. */
+export function boxRows(lo: ArrayLike<number>, hi: ArrayLike<number>): Constraint[] {
+  const n = lo.length;
+  const rows: Constraint[] = [];
+  for (let j = 0; j < n; j++) {
+    const upper = new Array<number>(n + 1).fill(0);
+    upper[j] = 1;
+    upper[n] = hi[j]!;
+    const lower = new Array<number>(n + 1).fill(0);
+    lower[j] = -1;
+    lower[n] = -lo[j]!;
+    // two or more variables keep a row the shape of a constraint
+    rows.push(upper as Constraint, lower as Constraint);
+  }
+  return rows;
+}
 
 type SmallLpResult = { status: "optimal"; x: Float64Array; value: number } | { status: "infeasible" };
 

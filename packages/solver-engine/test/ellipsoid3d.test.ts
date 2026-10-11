@@ -3,8 +3,21 @@ import { describe, expect, test } from "bun:test";
 import { QUERY_POINTS, cuttingPlane } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
 import { ellipsoidStride, localizingSetStride } from "../src/localization";
-import { bruteForceOptimum, footerOf, lastIterate, LOCALIZATION_DEFAULTS, objectiveValue, rowsOf, SQUARE, SQUARE_VERTICES } from "./fixtures";
-import { BOX, SLICED_BOX, satisfiesAll, verticesOf } from "./fixtures3d";
+import {
+  BOX,
+  bruteForceOptimum,
+  expectFeasible,
+  footerOf,
+  lastIterate,
+  LOCALIZATION_DEFAULTS,
+  objectiveValue,
+  randomObjective,
+  rowsOf,
+  SLICED_BOX,
+  SQUARE,
+  SQUARE_VERTICES,
+  verticesOf,
+} from "./fixtures";
 
 const shared = { ...LOCALIZATION_DEFAULTS, maxit: 2000 };
 
@@ -13,16 +26,16 @@ describe("ellipsoid family in three variables", () => {
     ["box", BOX],
     ["sliced box", SLICED_BOX],
   ] as const) {
-    const vertices = verticesOf(planes);
+    const vertices = verticesOf(planes, 3);
     test(`ellipsoid method finds the optimum of the ${name}`, () => {
       const rand = lcg(11);
       for (let t = 0; t < 12; t++) {
-        const c = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2, rand() * 4 - 2);
+        const c = randomObjective(rand, 3);
         const r = ellipsoid(vertices, planes, c, { ...shared, deepCuts: true });
         expect(footerOf(r).startsWith("Converged")).toBe(true);
         const last = lastIterate(r);
         expect(last.length).toBe(3);
-        expect(satisfiesAll(planes, last)).toBe(true);
+        expectFeasible(planes, last, 1e-6);
         expect(objectiveValue(c, last)).toBeCloseTo(bruteForceOptimum(c, vertices), 3);
         // packed layout: centre (3) + upper triangle of P (6)
         expect(r.ellipsoids!.length).toBe(r.iterates.count * ellipsoidStride(3));
@@ -34,12 +47,12 @@ describe("ellipsoid family in three variables", () => {
     test(`every query point finds the optimum of the ${name}`, () => {
       const rand = lcg(23);
       for (let t = 0; t < 6; t++) {
-        const c = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2, rand() * 4 - 2);
+        const c = randomObjective(rand, 3);
         for (const queryPoint of QUERY_POINTS) {
           const r = cuttingPlane(vertices, planes, c, { ...shared, queryPoint });
           const last = lastIterate(r);
           expect(last.length).toBe(3);
-          expect(satisfiesAll(planes, last)).toBe(true);
+          expectFeasible(planes, last, 1e-6);
           expect(objectiveValue(c, last)).toBeCloseTo(bruteForceOptimum(c, vertices), 3);
           // the localizing set is emitted as half-spaces (stride 4) and only ever gains
           // cuts, starting from the six faces of the box

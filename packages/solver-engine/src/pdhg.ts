@@ -3,10 +3,9 @@
 
 import { denseFromConstraints, denseOperator, dot, infinityNorm, type LinearOperator, maxAbsDifference, negate } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
-import { numericLogHeader, solveFooter } from "./fmt";
-import { assertMaxit, warmStart } from "./limits";
+import { warmStart } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
-import { splitCost, splitOperator, unsplit } from "./standardForm";
+import { slackOffset, splitCost, splitOperator, splitPoint, unsplit } from "./standardForm";
 
 const BASIS_THRESHOLD = 1e-10;
 const BASIS_HASH_MULTIPLIER = 33;
@@ -105,7 +104,7 @@ function pdhgCore(A: LinearOperator, b: Float64Array, c: Float64Array, x0: Float
 
   const { rows: m, cols: n } = A;
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
-  const slackOffset = n - m;
+  const slacks = slackOffset(dimension);
   // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode (the trace copies it)
   const point = new Float64Array(dimension);
   const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk : unsplit(xk, dimension, point));
@@ -138,7 +137,7 @@ function pdhgCore(A: LinearOperator, b: Float64Array, c: Float64Array, x0: Float
 
   let epsilonK = kkt.of(xk, yk);
 
-  const trace = new NumericTrace(dimension);
+  const trace = new NumericTrace(dimension, "eps", maxit);
   const basisHashes: number[] = [];
   const restartIndices: number[] = [];
 
@@ -146,7 +145,7 @@ function pdhgCore(A: LinearOperator, b: Float64Array, c: Float64Array, x0: Float
   const basisHash = () => {
     let hash = 0;
     for (let i = 0; i < m; i++) {
-      hash = (hash * BASIS_HASH_MULTIPLIER + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slackOffset + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
+      hash = (hash * BASIS_HASH_MULTIPLIER + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slacks + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
     }
     return hash;
   };
@@ -236,17 +235,12 @@ function pdhgCore(A: LinearOperator, b: Float64Array, c: Float64Array, x0: Float
     }
   }
 
-  const footer = solveFooter(epsilonK <= tol, trace.count, trace.elapsedMs);
-  return trace.result(numericLogHeader(dimension, "eps"), footer, {
-    phases: colorByBasis ? basisHashes : undefined,
-    restartIndices: halpern ? restartIndices : undefined,
-  });
+  return trace.finish({ converged: epsilonK <= tol }, { phases: colorByBasis ? basisHashes : undefined, restartIndices: halpern ? restartIndices : undefined });
 }
 
 /** PDHG on `max objective'x s.t. Ax ≤ b`, directly (ineq) or on the split standard form (eq). */
 export function pdhg(constraints: readonly Constraint[], objective: Float64Array, opts: PDHGOptions): SolverResult {
   const { startPoint, ...core } = opts;
-  assertMaxit(core.maxit);
 
   const { A, b } = denseFromConstraints(constraints);
   const nOrig = A.cols;
@@ -261,19 +255,8 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
 
   // the split form's matrix is applied without being formed (see splitOperator)
   const c = splitCost(cost, A.rows);
-  // Warm start mapped into the split variables chi = [x^+; x^-; s] >= 0:
-  // x^+ - x^- = x0 exactly, so the displayed first iterate is the chosen
-  // point. The slack block stays at the cold start's zeros — like the cold
-  // start, the equality residual is left for the iteration to close — and
-  // chi0 >= 0 (the splitting's hard constraint) holds by construction.
-  let chi0: Float64Array | undefined;
-  if (x0) {
-    chi0 = new Float64Array(c.length);
-    for (let j = 0; j < nOrig; j++) {
-      const value = x0[j]!;
-      if (value >= 0) chi0[j] = value;
-      else chi0[nOrig + j] = -value;
-    }
-  }
-  return pdhgCore(splitOperator(A), b, c, chi0, nOrig, core);
+  // A warm start maps into the split variables with its slacks at the cold start's zeros: like the
+  // cold start, the equality residual is left for the iteration to close, and chi0 >= 0 (the
+  // splitting's hard constraint) holds by construction.
+  return pdhgCore(splitOperator(A), b, c, x0 && splitPoint(x0, A.rows), nOrig, core);
 }

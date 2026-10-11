@@ -1,4 +1,4 @@
-import { createDenseMatrix, type DenseMatrix, dot, matVec, transposeMatrix } from "@lpviz/math/blas";
+import { createDenseMatrix, type DenseMatrix, dot, matVec, selectColumns, transposeMatrix } from "@lpviz/math/blas";
 import { invertDenseMatrix, solveDenseSystem } from "@lpviz/math/lapack";
 
 /** An LP in standard form, `max c'x s.t. Ax = b, x >= 0`, as a simplex phase walks it. */
@@ -47,13 +47,8 @@ export class Basis {
   }
 
   refactor(): void {
-    const { m, A } = this;
-    for (let col = 0; col < m; col++) {
-      const source = this.columns[col]!;
-      for (let row = 0; row < m; row++) {
-        this.matrix[row * m + col] = A.data[row * A.cols + source]!;
-      }
-    }
+    const { m } = this;
+    selectColumns(this.A, this.columns, this.matrix);
     invertDenseMatrix(this.matrix, m, this.inverse, this.work);
     this.transposed = null;
     this.pivotsSinceRefactor = 0;
@@ -67,14 +62,7 @@ export class Basis {
   /** out = B⁻ᵀ v by a direct solve; see solveExact. */
   solveTransposeExact(v: Float64Array, out: Float64Array): Float64Array {
     const { m } = this;
-    if (!this.transposed) {
-      this.transposed = new Float64Array(m * m);
-      for (let row = 0; row < m; row++) {
-        for (let col = 0; col < m; col++) {
-          this.transposed[col * m + row] = this.matrix[row * m + col]!;
-        }
-      }
-    }
+    this.transposed ??= transposeMatrix(createDenseMatrix(m, m, this.matrix)).data;
     return solveDenseSystem(this.transposed, m, v, out, this.work);
   }
 

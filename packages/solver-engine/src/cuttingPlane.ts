@@ -1,6 +1,5 @@
-import { extractRow } from "@lpviz/math/blas";
 import type { DenseMatrix } from "@lpviz/math/blas";
-import { type LpRow, solveSmallLp } from "@lpviz/math/lp";
+import { boxRows, type LpRow, solveSmallLp } from "@lpviz/math/lp";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { computeQueryPoint, LP_BOUND, type QueryPoint } from "./barrierCenters";
 import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
@@ -35,33 +34,22 @@ export interface CuttingPlaneOptions extends LocalizationOptions {
  */
 export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
   const run = new LocalizationRun(constraints, objective, opts, true, "The cutting-plane query points require at least two variables.");
-  const { A, b, c, n, trace, incumbent } = run;
+  const { A, c, n, trace, incumbent } = run;
   const { center: boxCenter, halfExtents } = regionBoundingBox(vertices, n, opts.initialScale);
 
   // the initial localizing set: the same inflated bounding box the ellipsoid
   // method circumscribes, kept as a box here, two half-spaces per axis
-  const localizing: number[][] = [];
   const lo = new Float64Array(n);
   const hi = new Float64Array(n);
   for (let j = 0; j < n; j++) {
     lo[j] = boxCenter[j]! - halfExtents[j]!;
     hi[j] = boxCenter[j]! + halfExtents[j]!;
-    const upper = new Array<number>(n + 1).fill(0);
-    upper[j] = 1;
-    upper[n] = hi[j]!;
-    const lower = new Array<number>(n + 1).fill(0);
-    lower[j] = -1;
-    lower[n] = -lo[j]!;
-    localizing.push(upper, lower);
   }
-  const boxRowCount = localizing.length;
-  // the drawn localizing set is the clipped box polygon for two variables and
-  // the half-space list itself otherwise (see localizingSetStride)
-  const boxPolygon = n === 2 ? [lo[0]!, lo[1]!, hi[0]!, lo[1]!, hi[0]!, hi[1]!, lo[0]!, hi[1]!] : null;
+  const set = new LocalizingSet(lo, hi);
   const objectiveRow = Array.from(c);
 
   while (trace.count < opts.maxit) {
-    const query = computeQueryPoint(opts.queryPoint, localizing, n);
+    const query = computeQueryPoint(opts.queryPoint, set.rows, n);
     if (!query) {
       run.termination = "exhausted";
       break;
@@ -69,39 +57,28 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     const point = query.point;
 
     if (opts.queryPoint === "volumetric" && query.leverage) {
-      dropRedundantCuts(localizing, boxRowCount, query.leverage);
+      set.dropBelow(query.leverage);
     }
 
-    const { objectiveValue, worstRow, violation, feasible } = run.query(point);
+    const answer = run.query(point);
 
     // rho keeps the meaning it has for the ellipsoid method: how much better
     // than the query point anything still under consideration could be
-    const bound = solveSmallLp(objectiveRow, localizing, LP_BOUND);
+    const bound = solveSmallLp(objectiveRow, set.rows, LP_BOUND);
     if (bound.status === "infeasible") {
       run.termination = "exhausted";
       break;
     }
     run.upperBound = bound.value;
-    const objectiveRadius = Math.max(0, bound.value - objectiveValue);
+    const objectiveRadius = Math.max(0, bound.value - answer.objectiveValue);
 
-    // the localizing set as it stood when this point was queried: the box, cut
-    // by everything learned so far
-    const drawn = boxPolygon ? clippedBox(boxPolygon, localizing, boxRowCount) : localizing.flat();
-    trace.recordIterate(point, query.P, objectiveValue, Math.max(0, violation), objectiveRadius, drawn);
-    if (run.converged(feasible)) break;
+    // drawn as the set stood when this point was queried
+    run.record(point, query.P, answer, objectiveRadius, set.drawn());
+    if (run.converged(answer.feasible)) break;
 
     const cut = new Array<number>(n + 1);
-    if (!feasible) {
-      // the violated constraint itself, which is as deep a cut as the oracle
-      // can return
-      extractRow(A, worstRow, cut);
-      cut[n] = b[worstRow]!;
-    } else {
-      // discard everything no better than the incumbent
-      for (let j = 0; j < n; j++) cut[j] = -c[j]!;
-      cut[n] = -incumbent.objective;
-    }
-    localizing.push(cut);
+    cut[n] = run.cut(answer, cut).offset;
+    set.add(cut);
   }
 
   // Both of these are claims of optimality, and both are wrong when the
@@ -116,15 +93,47 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
   });
 }
 
-// The box polygon clipped by every cut learned so far (the box's own rows are the polygon already).
-function clippedBox(boxPolygon: number[], localizing: number[][], boxRowCount: number): number[] {
-  let polygon = boxPolygon;
-  for (let i = boxRowCount; i < localizing.length; i++) {
-    const cut = localizing[i]!;
-    polygon = clipBoxPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
-    if (polygon.length === 0) break;
+// The localizing set: the initial box, cut by everything learned so far. Its rows feed the query
+// points and the bound LP; Vaidya drops a cut whose leverage score falls below the threshold,
+// never one of the box's own rows, which is what keeps the set bounded. It draws itself as the box
+// polygon clipped by every cut for two variables and as the half-space list itself otherwise (see
+// localizingSetStride).
+class LocalizingSet {
+  readonly rows: number[][];
+  private readonly boxRowCount: number;
+  private readonly boxPolygon: number[] | null;
+
+  constructor(lo: Float64Array, hi: Float64Array) {
+    this.rows = boxRows(lo, hi);
+    this.boxRowCount = this.rows.length;
+    this.boxPolygon = lo.length === 2 ? [lo[0]!, lo[1]!, hi[0]!, lo[1]!, hi[0]!, hi[1]!, lo[0]!, hi[1]!] : null;
   }
-  return polygon === boxPolygon ? [...boxPolygon] : polygon;
+
+  add(cut: number[]): void {
+    this.rows.push(cut);
+  }
+
+  dropBelow(leverage: Float64Array): void {
+    const { rows } = this;
+    if (rows.length !== leverage.length) return;
+    for (let i = rows.length - 1; i >= this.boxRowCount; i--) {
+      if (leverage[i]! < VAIDYA_DROP_LEVERAGE) rows.splice(i, 1);
+    }
+  }
+
+  /** The set as it stands, as the result draws it. */
+  drawn(): number[] {
+    const { rows, boxPolygon } = this;
+    if (!boxPolygon) return rows.flat();
+    // the box's own rows are the polygon already
+    let polygon = boxPolygon;
+    for (let i = this.boxRowCount; i < rows.length; i++) {
+      const cut = rows[i]!;
+      polygon = clipBoxPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
+      if (polygon.length === 0) break;
+    }
+    return polygon === boxPolygon ? [...boxPolygon] : polygon;
+  }
 }
 
 // Sutherland-Hodgman clip of the box polygon against `a'x <= b`. Its own arithmetic, kept apart
@@ -164,12 +173,4 @@ function objectiveIsUnbounded(A: DenseMatrix, c: Float64Array): boolean {
   }
   const best = solveSmallLp(Array.from(c), cone, 1);
   return best.status === "optimal" && best.value > RECESSION_TOLERANCE * Math.hypot(...c);
-}
-
-// Never drops the initial box, which is what keeps the localizing set bounded.
-function dropRedundantCuts(rows: number[][], boxRowCount: number, leverage: Float64Array): void {
-  if (rows.length !== leverage.length) return;
-  for (let i = rows.length - 1; i >= boxRowCount; i--) {
-    if (leverage[i]! < VAIDYA_DROP_LEVERAGE) rows.splice(i, 1);
-  }
 }
