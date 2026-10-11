@@ -3,7 +3,9 @@ import type { LazyList } from "@/features/solver/solverState";
 import type { ResultTextBlock } from "@/features/solver/types";
 import { el } from "@/ui/dom";
 
-export const rowEl = (block: ResultTextBlock) => el("div", { className: block.className, text: block.text, attrs: block.index !== undefined ? { "data-index": String(block.index) } : {} });
+// how the panel styles each kind of line
+const BLOCK_CLASS: Record<ResultTextBlock["kind"], string> = { header: "iterate-header", row: "iterate-item", note: "iterate-item-nohover", footer: "iterate-footer" };
+export const rowEl = (block: ResultTextBlock) => el("div", { className: BLOCK_CLASS[block.kind], text: block.text, attrs: block.index !== undefined ? { "data-index": String(block.index) } : {} });
 
 // The font is sized so the widest line fits the panel: the stylesheet's size, the monospace
 // glyph width as a fraction of it, and the range the fit may land in.
@@ -69,11 +71,7 @@ export function mountVirtualRows(sc: HTMLElement, blocks: LazyList<ResultTextBlo
   let windowEnd = -1;
   const fillWindow = () => {
     if (rowHeight <= 0) {
-      const first = blocks.at(0)!;
-      const probe = el("div", {
-        className: first.className,
-        text: first.text,
-      });
+      const probe = rowEl(blocks.at(0)!);
       rowsEl.append(probe);
       rowHeight = probe.offsetHeight || FALLBACK_ROW_HEIGHT_PX;
       probe.remove();
