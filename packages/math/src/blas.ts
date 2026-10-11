@@ -54,6 +54,25 @@ export function dot(a: Float64Array, b: Float64Array) {
   return sum;
 }
 
+/** A matrix as an iterative solver applies it: out = A v and out = Aᵀ v, however A is stored. */
+export interface LinearOperator {
+  rows: number;
+  cols: number;
+  apply(vector: Float64Array, out: Float64Array): void;
+  applyTranspose(vector: Float64Array, out: Float64Array): void;
+}
+
+/** A dense matrix as an operator, its transpose kept for row dot products (see transposeMatrix). */
+export function denseOperator(matrix: DenseMatrix): LinearOperator {
+  const transposed = transposeMatrix(matrix);
+  return {
+    rows: matrix.rows,
+    cols: matrix.cols,
+    apply: (vector, out) => matVec(matrix, vector, out),
+    applyTranspose: (vector, out) => matVec(transposed, vector, out),
+  };
+}
+
 export function matVec(matrix: DenseMatrix, vector: Float64Array, out: Float64Array) {
   const { rows, cols, data } = matrix;
   for (let i = 0; i < rows; i++) {
