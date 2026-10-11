@@ -4,6 +4,7 @@ import { DEFAULT_SOLVER_SETTINGS, type SolverMode, type SolverSettings } from "@
 import type { Vec } from "@lpviz/math/types";
 import { zeroVec } from "@lpviz/math/vec";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { Iterates } from "@lpviz/solver-engine/result";
 
 /** A line of the result panel: what it is (the panel decides how each kind looks), its text, and a row's iterate index. */
 export type ResultTextBlock = {
@@ -25,15 +26,11 @@ export type LazyList<T> = {
 export type ResultView =
   { kind: "usage" } | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number } | { kind: "virtual"; header: string; footer: string; rows: LazyList<ResultTextBlock>; maxLineChars: number };
 
-// Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
-// `stride` the problem's dimension. `lift[i]` is the height the 3D view raises iterate `i` above the
-// floor (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One
-// array per solve, not one Float64Array per iterate: millions of live objects is what a major GC
-// must mark.
-export interface IteratePath {
-  points: Float64Array;
-  count: number;
-  stride: number;
+// The engine's flat iterate block (iterate `i` at [i*stride .. i*stride+stride), `stride` the
+// problem's dimension) with `lift[i]`, the height the 3D view raises iterate `i` above the floor
+// (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One array per
+// solve, not one Float64Array per iterate: millions of live objects is what a major GC must mark.
+export interface IteratePath extends Iterates {
   lift: Float64Array | null;
 }
 

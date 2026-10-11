@@ -110,8 +110,9 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const At = transposeMatrix(A);
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
   const slackOffset = n - m;
-  // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
-  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, dimension));
+  // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode (the trace copies it)
+  const point = new Float64Array(dimension);
+  const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk : unsplit(xk, dimension, point));
   const kkt = new KktError(A, At, b, c, ineq);
 
   let xk = new Float64Array(n);
@@ -141,7 +142,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
 
   let epsilonK = kkt.of(xk, yk);
 
-  const trace = new NumericTrace();
+  const trace = new NumericTrace(dimension);
   const basisHashes: number[] = [];
   const restartIndices: number[] = [];
 

@@ -12,9 +12,8 @@ export function splitStandardForm(A: DenseMatrix, cost: Float64Array): { A: Dens
   return { A: hstackMatrices(A, negateMatrix(A), identityMatrix(A.rows)), c };
 }
 
-/** The original variables x = x⁺ − x⁻ of a split-form point. */
-export function unsplit(chi: Float64Array, n: number): Float64Array {
-  const point = new Float64Array(n);
+/** The original variables x = x⁺ − x⁻ of a split-form point, into `point`. */
+export function unsplit(chi: Float64Array, n: number, point = new Float64Array(n)): Float64Array {
   for (let j = 0; j < n; j++) {
     point[j] = (chi[j] ?? 0) - (chi[n + j] ?? 0);
   }

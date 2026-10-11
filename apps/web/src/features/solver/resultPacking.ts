@@ -1,102 +1,48 @@
 import { formatNumericRow } from "@lpviz/solver-engine/fmt";
 import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
-import type { LogSection, NumericRow, SolverLog, SolverResult } from "@lpviz/solver-engine/result";
-import type {
-  PackedLogSection,
-  PackedRows,
-  ResultLogSection,
-  LazyRows,
-  UnpackedSolverResult,
-  SolverWireResponse,
-  SolverWireSuccess,
-  SolverWorkerPayload,
-  SolverWorkerResponse,
-  VirtualResultRow,
-} from "./types";
+import type { Iterates, LogSection, NumericRows, SolverResult } from "@lpviz/solver-engine/result";
+import type { LazyRows, ResultLogSection, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse, UnpackedSolverResult, VirtualResultRow } from "./types";
 
-// The worker packs everything numeric into a few large typed arrays and transfers their buffers
-// (zero copy): structured-cloning tens of thousands of small arrays and row objects costs tens of
-// main-thread milliseconds per solve. The iterate buffer holds coordinates only; the height the 3D
-// view lifts each iterate by (the solver's convergence measure: PDHG's `eps`, IPM's `mu`, the
-// ellipsoid's `rho`, the central path's barrier term) travels as its own column. PDHG's residual is
-// numerically tiny, so it is scaled to share IPM's visual range. Display tuning only, never fed
-// back into the math.
+// The worker's reply is the engine's result with its buffers transferred (zero copy): the flat
+// iterate block, the log's numeric columns and whatever the solver drew. No per-iterate object
+// exists on either side; structured-cloning tens of thousands of them cost tens of main-thread
+// milliseconds per solve. The height the 3D view lifts each iterate by is the solver's convergence
+// measure (PDHG's `eps`, IPM's `mu`, the ellipsoid's `rho`, the central path's barrier term);
+// PDHG's is numerically tiny, so it is scaled to share IPM's visual range. Display tuning only,
+// never fed back into the math.
 const PDHG_EPS_Z_LIFT = 500;
 
-function liftOf(solver: SolverWorkerPayload["solver"], convergence: number[]): (index: number) => number {
-  return solver === "pdhg" ? (index) => PDHG_EPS_Z_LIFT * (convergence[index] ?? 0) : (index) => convergence[index] ?? 0;
-}
+const liftOf = (solver: SolverWorkerPayload["solver"], convergence: Float64Array | undefined): Float64Array | undefined =>
+  convergence && (solver === "pdhg" ? Float64Array.from(convergence, (eps) => PDHG_EPS_Z_LIFT * eps) : convergence);
 
-// One flat buffer of coordinates, `stride` (the problem's dimension) per iterate, and the lift per
-// iterate for the solvers that have one.
-function packIterations(entries: Float64Array[], stride: number, lift: ((index: number) => number) | null): { points: Float64Array; lift: Float64Array | null } {
-  const points = new Float64Array(entries.length * stride);
-  for (let i = 0; i < entries.length; i++) {
-    const entry = entries[i]!;
-    for (let k = 0; k < stride; k++) points[i * stride + k] = entry[k] ?? 0;
-  }
-  const lifts = lift ? new Float64Array(entries.length) : null;
-  if (lifts && lift) for (let i = 0; i < entries.length; i++) lifts[i] = lift(i);
-  return { points, lift: lifts };
-}
-
-// Row i of a numeric section is iterate i + 1 in every engine, so the iteration
-// column is regenerated on the client instead of transferred.
-function packRows(rows: NumericRow[]): PackedRows {
-  const count = rows.length;
-  const stride = rows[0]!.point.length;
-  const cols: PackedRows = {
-    coords: new Float64Array(count * stride),
-    stride,
-    objective: new Float64Array(count),
-    infeasibility: new Float64Array(count),
-    convergence: new Float64Array(count),
-    restart: new Uint8Array(count),
-  };
-  for (let i = 0; i < count; i++) {
-    const row = rows[i]!;
-    cols.coords.set(row.point, i * stride);
-    cols.objective[i] = row.objective;
-    cols.infeasibility[i] = row.infeasibility;
-    cols.convergence[i] = row.convergence;
-    if (row.restart) cols.restart[i] = 1;
-  }
-  return cols;
-}
-
-// an empty section passes through as the empty array: nothing to pack
-const isNumericRows = (rows: LogSection["rows"]): rows is NumericRow[] => rows.length > 0 && typeof rows[0] !== "string";
-
-function packLog(log: SolverLog): PackedLogSection[] {
-  return log.map(({ header, rows, notes, footer }: LogSection) => ({ header, rows: isNumericRows(rows) ? packRows(rows) : rows, notes, footer }));
-}
+// an empty section passes through as the empty array: nothing to format
+const isNumericRows = (rows: LogSection["rows"]): rows is NumericRows => !Array.isArray(rows);
 
 export function packSolverResponse(id: number, request: SolverWorkerPayload, result: SolverResult): { wire: SolverWireSuccess; transfer: ArrayBuffer[] } {
-  const { convergence, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = result;
-  const stride = request.objective.length;
-  const { points, lift } = packIterations(result.iterates, stride, convergence ? liftOf(request.solver, convergence) : null);
-  const log = packLog(result.log);
-  const transfer: ArrayBufferLike[] = [points.buffer];
-  if (lift) transfer.push(lift.buffer);
-  for (const { rows } of log) {
-    if (!Array.isArray(rows)) transfer.push(rows.coords.buffer, rows.objective.buffer, rows.infeasibility.buffer, rows.convergence.buffer, rows.restart.buffer);
-  }
-  if (ellipsoids) transfer.push(ellipsoids.buffer);
-  // empty buffers are not worth a transfer, and skipping them keeps a
-  // detached zero-length array from ever reaching the client
-  if (localizingSetPoints?.length) transfer.push(localizingSetPoints.buffer);
-  if (localizingSetOffsets?.length) transfer.push(localizingSetOffsets.buffer);
-  // none of these arrays is ever backed by a SharedArrayBuffer
-  return {
-    wire: { id, success: true, iterates: points, stride, lift: lift ?? undefined, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets },
-    transfer: transfer as ArrayBuffer[],
+  const { iterates, convergence, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = result;
+  const lift = liftOf(request.solver, convergence);
+  // a buffer transfers once however many views share it (the lift is the convergence column for
+  // every solver but PDHG); an empty one is not worth a transfer, and skipping it keeps a detached
+  // zero-length array from ever reaching the client
+  const buffers = new Set<ArrayBufferLike>();
+  const transfer = (array: Float64Array | Uint8Array | Uint32Array | undefined) => {
+    if (array?.length) buffers.add(array.buffer);
   };
+  transfer(iterates.points);
+  transfer(lift);
+  for (const { rows } of log) {
+    if (isNumericRows(rows)) for (const column of Object.values(rows)) transfer(column);
+  }
+  transfer(ellipsoids);
+  transfer(localizingSetPoints);
+  transfer(localizingSetOffsets);
+  // none of these arrays is ever backed by a SharedArrayBuffer
+  return { wire: { id, success: true, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets }, transfer: [...buffers] as ArrayBuffer[] };
 }
 
-// Row objects materialize lazily from the packed columns: only rows that
-// actually render (a screenful) are ever built, instead of one object per
-// iteration per solve.
-function lazyRows({ coords, stride, objective, infeasibility, convergence, restart }: PackedRows): LazyRows {
+// Row objects materialize lazily from the columns: only rows that actually render (a screenful)
+// are ever built, instead of one object per iteration per solve.
+function lazyRows({ objective, infeasibility, convergence, restart }: NumericRows, { points, stride }: Iterates): LazyRows {
   const length = objective.length;
   return {
     length,
@@ -105,7 +51,7 @@ function lazyRows({ coords, stride, objective, infeasibility, convergence, resta
         ? {
             iteration: index + 1,
             restart: restart[index] === 1,
-            point: coords.subarray(index * stride, (index + 1) * stride),
+            point: points.subarray(index * stride, (index + 1) * stride),
             objective: objective[index]!,
             infeasibility: infeasibility[index]!,
             convergence: convergence[index]!,
@@ -114,18 +60,17 @@ function lazyRows({ coords, stride, objective, infeasibility, convergence, resta
   };
 }
 
-function unpackSection({ header, rows, notes, footer }: PackedLogSection): ResultLogSection {
-  return { header, rows: Array.isArray(rows) ? rows : lazyRows(rows), notes, footer };
+function unpackSection({ header, rows, notes, footer }: LogSection, iterates: Iterates): ResultLogSection {
+  return { header, rows: isNumericRows(rows) ? lazyRows(rows, iterates) : rows, notes, footer };
 }
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
-  const { id, iterates, stride, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
+  const { id, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
+  const { stride } = iterates;
   const result: UnpackedSolverResult = {
-    // the packed iterations are already a flat block in one transferred buffer, so the iterate
-    // path is that buffer verbatim: no per-iterate object exists on this side
-    iterates: { points: iterates, count: Math.floor(iterates.length / stride), stride, lift: lift ?? null },
-    log: log.map(unpackSection),
+    iterates: { ...iterates, lift: lift ?? null },
+    log: log.map((section) => unpackSection(section, iterates)),
     phases,
     restartIndices,
   };

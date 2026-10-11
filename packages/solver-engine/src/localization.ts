@@ -7,7 +7,7 @@ import type { Constraint, Vec } from "@lpviz/math/types";
 import { boundsOf } from "@lpviz/math/vec";
 import { numericLogHeader, solveFooter } from "./fmt";
 import { assertMaxit } from "./limits";
-import { NumericTrace, type SolverResult } from "./result";
+import { FloatBlock, NumericTrace, type SolverResult } from "./result";
 
 const FEASIBILITY_TOLERANCE = 1e-9;
 // below this the objective is parallel to the face and never blocks the ray
@@ -171,27 +171,27 @@ function localizationFooter(termination: Termination, iterationCount: number, so
  * under consideration could be.
  */
 class LocalizationTrace extends NumericTrace {
-  readonly stride: number;
-  private readonly ellipsoids: Float64Array;
+  private readonly ellipsoids: FloatBlock;
+  // one ellipsoid as the block takes it
+  private readonly shape: Float64Array;
   private readonly localizingSets: number[][] | null;
 
   constructor(
-    maxit: number,
     private readonly n: number,
     withLocalizingSets: boolean,
   ) {
-    super();
-    this.stride = ellipsoidStride(n);
-    // one ellipsoid slot spare for the incumbent appended at the end
-    this.ellipsoids = new Float64Array((maxit + 1) * this.stride);
+    super(n);
+    this.ellipsoids = new FloatBlock(ellipsoidStride(n));
+    this.shape = new Float64Array(this.ellipsoids.stride);
     this.localizingSets = withLocalizingSets ? [] : null;
   }
 
   /** Record the point `x` with the shape matrix `P` drawn around it, queried from `localizingSet`. */
   recordIterate(x: Float64Array, P: Float64Array, objective: number, infeasibility: number, rho: number, localizingSet?: number[]): void {
-    this.writeEllipsoid(this.count * this.stride, x, P);
+    this.writeShape(x, P);
+    this.ellipsoids.push(this.shape);
     if (localizingSet) this.localizingSets?.push(localizingSet);
-    this.record(x.slice(), objective, infeasibility, rho);
+    this.record(x, objective, infeasibility, rho);
   }
 
   /**
@@ -204,34 +204,29 @@ class LocalizationTrace extends NumericTrace {
   closeOnIncumbent(incumbent: Incumbent, upperBound: number): void {
     if (!incumbent.found) return;
     const { point: best, objective: bestObjective } = incumbent;
-    const previous = this.iterates[this.count - 1];
+    const previous = this.count > 0 ? this.pointAt(this.count - 1) : null;
     if (previous && best.every((value, j) => Math.abs(previous[j]! - value) < INCUMBENT_MERGE_TOLERANCE)) {
       return;
     }
     if (previous) {
-      const base = this.count * this.stride;
-      this.ellipsoids.copyWithin(base, base - this.stride, base);
+      this.ellipsoids.repeatLast();
       this.localizingSets?.push([...this.localizingSets[this.count - 1]!]);
     }
-    this.record(best.slice(), bestObjective, 0, Math.max(0, upperBound - bestObjective));
+    this.record(best, bestObjective, 0, Math.max(0, upperBound - bestObjective));
   }
 
   override result(header: string, footer: string): SolverResult {
-    const extras: Partial<SolverResult> = {
-      // sliced, not a subarray: the packed response transfers this buffer, and a
-      // view would drag the whole maxit-sized allocation across with it
-      ellipsoids: this.ellipsoids.slice(0, this.count * this.stride),
-    };
+    const extras: Partial<SolverResult> = { ellipsoids: this.ellipsoids.finish() };
     if (this.localizingSets) Object.assign(extras, packLocalizingSets(this.localizingSets, localizingSetStride(this.n)));
     return super.result(header, footer, extras);
   }
 
-  private writeEllipsoid(base: number, center: Float64Array, P: Float64Array): void {
-    const { n, ellipsoids } = this;
-    for (let j = 0; j < n; j++) ellipsoids[base + j] = center[j]!;
-    let at = base + n;
+  private writeShape(center: Float64Array, P: Float64Array): void {
+    const { n, shape } = this;
+    for (let j = 0; j < n; j++) shape[j] = center[j]!;
+    let at = n;
     for (let j = 0; j < n; j++) {
-      for (let k = j; k < n; k++) ellipsoids[at++] = P[j * n + k]!;
+      for (let k = j; k < n; k++) shape[at++] = P[j * n + k]!;
     }
   }
 }
@@ -287,7 +282,7 @@ export class LocalizationRun {
     this.n = A.cols;
     this.c = Float64Array.from({ length: this.n }, (_, j) => objective[j] ?? 0);
     this.tol = opts.tol;
-    this.trace = new LocalizationTrace(opts.maxit, this.n, withLocalizingSets);
+    this.trace = new LocalizationTrace(this.n, withLocalizingSets);
     this.incumbent = new Incumbent(A, b, this.c, opts.rayShoot);
   }
 

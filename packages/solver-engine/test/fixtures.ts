@@ -6,7 +6,7 @@ import { expect } from "bun:test";
 import type { Rng } from "@lpviz/math/random";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "@lpviz/polytope/constraints";
-import type { NumericRow, SolverResult } from "../src/result";
+import type { NumericRow, NumericRows, SolverResult } from "../src/result";
 
 // square around (-5,-5): x <= -4, x >= -6, y <= -4, y >= -6
 export const SQUARE: Constraint[] = [
@@ -106,12 +106,25 @@ export const objectiveValue = (c: ArrayLike<number>, p: ArrayLike<number>) => {
 // the optimum of a bounded LP is attained at a vertex
 export const bruteForceOptimum = (c: ArrayLike<number>, vertices: readonly Vec[]) => Math.max(...vertices.map((v) => objectiveValue(c, v)));
 
-export const lastIterate = (r: { iterates: Float64Array[] }) => r.iterates[r.iterates.length - 1]!;
+/** Iterate `i` of a result, as a view into its block. */
+export const iterateAt = ({ iterates: { points, stride } }: Pick<SolverResult, "iterates">, i: number) => points.subarray(i * stride, (i + 1) * stride);
+export const lastIterate = (r: Pick<SolverResult, "iterates">) => iterateAt(r, r.iterates.count - 1);
 
 // How many of a simplex run's iterates belong to Phase 1 (its `phases` are absent when none do).
 export const phase1Count = (r: SolverResult) => (r.phases ?? []).filter((phase) => phase === 0).length;
-// A single-section result's log: its numeric rows and its footer text.
-export const rowsOf = (r: SolverResult) => r.log[0]!.rows as NumericRow[];
+// A single-section result's log: its numeric rows, materialized from the columns as the client
+// would, and its footer text.
+export const rowsOf = (r: SolverResult): NumericRow[] => {
+  const { objective, infeasibility, restart, convergence } = r.log[0]!.rows as NumericRows;
+  return Array.from(objective, (value, i) => ({
+    iteration: i + 1,
+    restart: restart[i] === 1,
+    point: iterateAt(r, i),
+    objective: value,
+    infeasibility: infeasibility[i]!,
+    convergence: convergence[i]!,
+  }));
+};
 export const footerOf = (r: SolverResult) => r.log[0]!.footer ?? "";
 // Every line of every section, as the panel prints them.
 export const logText = (r: SolverResult) => r.log.flatMap(({ header, rows, notes = [], footer = "" }) => [header, ...(rows as string[]), ...notes, footer]).join("");

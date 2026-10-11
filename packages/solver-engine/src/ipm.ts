@@ -39,7 +39,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   const m = A.rows;
   const n = A.cols;
 
-  const trace = new NumericTrace();
+  const trace = new NumericTrace(n);
 
   const x = new Float64Array(n);
   const s = new Float64Array(m).fill(1);
@@ -99,7 +99,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
     const gap = Math.abs(pObj - dot(b, y)) / (1 + Math.abs(pObj));
     const pRes = infinityNorm(rP);
 
-    trace.record(x.slice(), -pObj, pRes, mu);
+    trace.record(x, -pObj, pRes, mu);
 
     if (pRes <= tol && infinityNorm(rD) <= tol && gap <= tol) {
       converged = true;
