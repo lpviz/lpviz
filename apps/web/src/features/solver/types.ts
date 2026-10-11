@@ -5,7 +5,7 @@ import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
 import type { IPMOptions } from "@lpviz/solver-engine/ipm";
 import type { PDHGOptions } from "@lpviz/solver-engine/pdhg";
-import type { LogSection, NumericRow } from "@lpviz/solver-engine/result";
+import type { LogSection, NumericRow, SolverResult } from "@lpviz/solver-engine/result";
 import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
 
 // ---------- request ----------
@@ -42,18 +42,16 @@ export type PackedRows = {
 
 export type PackedLogSection = Omit<LogSection, "rows"> & { rows: string[] | PackedRows };
 
-export type SolverWireSuccess = {
+// what a solver drew besides its iterates, as the engine returns it
+type DrawnByResult = Pick<SolverResult, "phases" | "restartIndices" | "ellipsoids" | "localizingSetPoints" | "localizingSetOffsets">;
+
+export type SolverWireSuccess = DrawnByResult & {
   id: number;
   success: true;
   iterates: Float64Array;
   stride: number;
   lift?: Float64Array | undefined;
   log: PackedLogSection[];
-  phases?: number[] | undefined;
-  restartIndices?: number[] | undefined;
-  ellipsoids?: Float64Array | undefined;
-  localizingSetPoints?: Float64Array | undefined;
-  localizingSetOffsets?: Uint32Array | undefined;
 };
 
 type SolverWorkerError = { id: number; success: false; error: string };
@@ -72,11 +70,9 @@ export type ResultLogSection = Omit<LogSection, "rows"> & { rows: LazyRows };
 
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.
-export type UnpackedSolverResult = {
+export type UnpackedSolverResult = Pick<SolverResult, "phases" | "restartIndices"> & {
   iterates: IteratePath;
   log: ResultLogSection[];
-  phases?: number[] | undefined;
-  restartIndices?: number[] | undefined;
   ellipsoids?: EllipsoidPath | undefined;
   localizingSets?: LocalizingSetPath | undefined;
 };

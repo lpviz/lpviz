@@ -130,7 +130,7 @@ function ensureSharedIndex(pointCount: number): BufferAttribute {
   return sharedIndex;
 }
 
-export type PathRibbonStyle = {
+type PathRibbonStyle = {
   color: string;
   opacity: number;
   linewidth: number;

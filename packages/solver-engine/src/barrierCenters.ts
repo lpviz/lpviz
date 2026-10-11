@@ -22,7 +22,7 @@ export const LP_BOUND = 1e6;
 export const QUERY_POINTS = ["chebyshev", "analytic", "volumetric"] as const;
 export type QueryPoint = (typeof QUERY_POINTS)[number];
 
-export type QueryResult = {
+type QueryResult = {
   point: Float64Array;
   // The ellipsoid drawn for this iterate as its n x n shape matrix, *inscribed* at the query point
   // (the ellipsoid method's is a covering ellipsoid): a local measure of room, not the region still

@@ -277,7 +277,6 @@ export class LocalizationRun {
   upperBound = Infinity;
   termination: Termination = "maxit";
   private readonly tol: number;
-  private readonly startTime = performance.now();
 
   constructor(constraints: readonly Constraint[], objective: Float64Array, opts: LocalizationOptions, withLocalizingSets: boolean, tooFewVariables: string) {
     assertMaxit(opts.maxit);
@@ -314,7 +313,7 @@ export class LocalizationRun {
 
   /** The result: how the run ended, with the incumbent recorded as its final iterate. */
   finish(stops: TerminationLines): SolverResult {
-    const footer = localizationFooter(this.termination, this.trace.count, performance.now() - this.startTime, stops);
+    const footer = localizationFooter(this.termination, this.trace.count, this.trace.elapsedMs, stops);
     this.trace.closeOnIncumbent(this.incumbent, this.upperBound);
     return this.trace.result(localizationLogHeader(this.n), footer);
   }

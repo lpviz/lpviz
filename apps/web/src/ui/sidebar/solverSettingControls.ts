@@ -10,7 +10,7 @@ const NUMBER_FORMAT = new Intl.NumberFormat("en-US");
 const fmt = (value: number) => NUMBER_FORMAT.format(value);
 export const fixed = (digits: number) => (value: number) => value.toFixed(digits);
 
-export type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
+type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
 type MaxitSettingKey = Extract<keyof SolverSettings, `maxit${string}`>;
 type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: string; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
 // writes one setting, then re-solves if the section's solver is the active one

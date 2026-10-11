@@ -57,7 +57,7 @@ function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array
   delete (geo as unknown as { _maxInstanceCount?: number })._maxInstanceCount;
 }
 
-export type FatLineStyle = { color: string; linewidth: number; opacity?: number; renderOrder: number };
+type FatLineStyle = { color: string; linewidth: number; opacity?: number; renderOrder: number };
 
 // A fat line (screen-space width) that owns its geometry: drawn from segment endpoint triples
 // with the material of the view's depth mode, hidden between draws. The line counterpart of
