@@ -1,6 +1,6 @@
 import { getState } from "@/features/core/store";
+import type { EditorTools } from "@/features/polytope-editor/editorTools";
 import { swallow } from "@/ui/dom";
-import type { EditorTools } from "./editorTools";
 
 const DOUBLE_TAP_MS = 350;
 // a finger held this long without drifting is a press-and-hold, the touch form of a right-click
@@ -64,7 +64,7 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
   // moving on does not drag whatever now sits at the deleted vertex's index. A hold that found
   // nothing leaves its drag alone, since a finger often pauses before it moves.
   const hold = (event: PointerEvent) => {
-    if (editor.handleContextMenu(event)) endDrag(event);
+    if (editor.handleContextMenu(event.clientX, event.clientY)) endDrag(event);
   };
 
   const registerTap = (clientX: number, clientY: number) => {
@@ -90,7 +90,7 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
     if (press.pointerType === "mouse" || press.moved || press.held || wasDragging) return;
     const doubled = registerTap(event.clientX, event.clientY);
     if (press.pointerType === "touch") {
-      if (!doubled) editor.handleClick(event);
+      if (!doubled) editor.handleClick(event.clientX, event.clientY);
       return;
     }
     if (doubled) swallow(event);
@@ -185,10 +185,17 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
   // text selection or loupe on a long press, no double-tap zoom, no scroll, and no synthetic
   // click (the pointer events above carry the gesture; a tap is clicked from them).
   canvas.addEventListener("touchstart", (event) => event.preventDefault(), { passive: false, signal });
-  canvas.addEventListener("contextmenu", (event) => editor.handleContextMenu(event), capture);
+  // an edit under the context menu takes the event; otherwise the browser's menu opens
+  canvas.addEventListener(
+    "contextmenu",
+    (event) => {
+      if (editor.handleContextMenu(event.clientX, event.clientY)) swallow(event);
+    },
+    capture,
+  );
   canvas.addEventListener("dblclick", (event) => editor.handleDoubleClickAt(event.clientX, event.clientY), { signal });
   // the browser's click follows every mouse press; one that follows a drag, a pan or a double tap is not a click
-  canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event)), { signal });
+  canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event.clientX, event.clientY)), { signal });
 
   return () => {
     cancelHold();
