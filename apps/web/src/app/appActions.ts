@@ -120,7 +120,7 @@ export function createAppActions({
         highlightIndex: null,
         highlightIteratePathIndex: null,
         editorInteraction: { kind: "idle" },
-        lastCompletedInteraction: "none",
+        clickFollowsDrag: false,
         rotateObjectiveMode: false,
         // any in-flight replay was already stopped by stopMotion() above;
         // clearing `replayActive` here without cancelling its RAF loop would

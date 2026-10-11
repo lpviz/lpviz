@@ -73,8 +73,8 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
 
   const handleClick = (event: MouseEvent) => {
     const state = getState();
-    if (state.lastCompletedInteraction !== "none") {
-      setState({ lastCompletedInteraction: "none" });
+    if (state.clickFollowsDrag) {
+      setState({ clickFollowsDrag: false });
       return;
     }
 

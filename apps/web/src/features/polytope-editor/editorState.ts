@@ -6,7 +6,6 @@ import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
-type CompletedInteraction = "none" | "dragged-point" | "dragged-objective" | "dragged-constraint" | "dragged-start";
 export type DrawingPhase = "empty" | "sketching_polytope" | "awaiting_objective" | "objective_preview" | "ready_for_solvers";
 type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; constraints: Constraint[] } | { kind: "open-vertices"; vertexIndices: [number, number] };
 
@@ -54,7 +53,8 @@ export type EditorState = {
   snapToGrid: boolean;
   highlightIndex: number | null;
   editorInteraction: EditorInteractionState;
-  lastCompletedInteraction: CompletedInteraction;
+  /** a drag just ended, so the click the browser sends after its lift is not a click */
+  clickFollowsDrag: boolean;
 };
 
 // The field a reset leaves alone: the dimension is fixed for the session when the app boots.
@@ -75,7 +75,7 @@ export function freshEditorState(): Omit<EditorState, keyof EditorRuntimeState> 
     snapToGrid: false,
     highlightIndex: null,
     editorInteraction: { kind: "idle" },
-    lastCompletedInteraction: "none",
+    clickFollowsDrag: false,
   };
 }
 
@@ -97,7 +97,6 @@ export const EDITOR_DIRTY: Partial<Record<keyof EditorState, (s: Pick<ViewportSt
   vertices: () => POLYTOPE_DIRTY,
   polytope: () => POLYTOPE_DIRTY,
   completionMode: () => POLYTOPE_DIRTY,
-  interiorPoint: () => POLYTOPE_DIRTY,
   objectiveVector: objectiveDirty,
   currentObjective: objectiveDirty,
   objectiveHidden: () => ({ objective: true }),

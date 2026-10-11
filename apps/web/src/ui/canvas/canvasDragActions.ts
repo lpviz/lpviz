@@ -1,16 +1,9 @@
-import { getState, setState, type State } from "@/features/core/store";
+import { getState, setState } from "@/features/core/store";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { applyDragTarget, updatePanControls, updatePointerPreview } from "@/features/polytope-editor/editorActions";
-import { computeDrawingPhase, type DragTarget } from "@/features/polytope-editor/editorState";
+import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient } from "@/features/polytope-editor/hitTesting";
 import type { EditorToolsDeps } from "./editorTools";
-
-const DRAG_COMPLETION: Record<DragTarget["kind"], State["lastCompletedInteraction"]> = {
-  point: "dragged-point",
-  constraint: "dragged-constraint",
-  "solver-start": "dragged-start",
-  objective: "dragged-objective",
-};
 
 // The drag lifecycle: start (hit test + pending-drag), move (threshold, then
 // apply) and end, plus the undo-history entry captured at the start and
@@ -32,10 +25,7 @@ export function createDragActions(deps: EditorToolsDeps) {
 
   const cleanup = () => {
     pendingDragHistory = null;
-    setState({
-      editorInteraction: { kind: "idle" },
-      lastCompletedInteraction: "none",
-    });
+    setState({ editorInteraction: { kind: "idle" }, clickFollowsDrag: false });
     restoreViewportControls();
     requestAnimationFrame(restoreViewportControls);
   };
@@ -64,7 +54,7 @@ export function createDragActions(deps: EditorToolsDeps) {
         target,
         dragStartPos: { x: clientX, y: clientY },
       },
-      lastCompletedInteraction: "none",
+      clickFollowsDrag: false,
     });
     pendingDragHistory = captureHistoryEntry(state);
     if (target.kind === "point") {
@@ -107,10 +97,7 @@ export function createDragActions(deps: EditorToolsDeps) {
   const handleDragEnd = () => {
     const interaction = getState().editorInteraction;
     if (interaction.kind === "dragging") {
-      setState({
-        editorInteraction: { kind: "idle" },
-        lastCompletedInteraction: DRAG_COMPLETION[interaction.target.kind],
-      });
+      setState({ editorInteraction: { kind: "idle" }, clickFollowsDrag: true });
       // a moved start marker changes no geometry, and re-sending the polytope
       // would reset any accumulated trace (comparing paths from different
       // starts is the point of dragging it)
