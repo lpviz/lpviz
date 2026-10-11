@@ -23,7 +23,7 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
     // fit() reads layout (clientWidth); keep it ahead of the DOM writes below
     fit(view.kind === "usage" ? 0 : view.maxLineChars);
     refillVirtualWindow = null;
-    result.className = view.kind === "virtual" ? "virtualized" : "";
+    result.classList.toggle("virtualized", view.kind === "virtual");
     result.replaceChildren();
     hover.forgetHoveredRow();
     if (view.kind === "usage") {

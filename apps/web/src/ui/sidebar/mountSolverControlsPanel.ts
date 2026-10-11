@@ -29,7 +29,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppA
   // re-solves if its solver is the active one
   function buildSettings(mode: SolverMode): SettingsSync {
     settingsSlot.replaceChildren();
-    const sec = el("div", { className: "settings-section is-block" });
+    const sec = el("div", { className: "settings-section" });
     settingsSlot.append(sec);
     return buildSolverSection(mode, sec, {
       set: (key) => (v) => {
@@ -42,7 +42,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppA
   function render(state: State) {
     const readyForSolvers = isReadyForSolvers(state);
     for (const [mode, b] of buttons) {
-      b.className = state.solverMode === mode ? "button-active" : "";
+      b.classList.toggle("button-active", state.solverMode === mode);
       b.disabled = !readyForSolvers || !isSolverSelectable(state, mode);
     }
     if (renderedMode !== state.solverMode) {

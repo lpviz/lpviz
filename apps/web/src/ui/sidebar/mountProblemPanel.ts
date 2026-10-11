@@ -46,11 +46,11 @@ export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions,
   let lastItemsKey: unknown[] | null = null;
   function render(state: State) {
     const objectiveActive = hasObjective(state);
-    nullState.style.display = state.vertices.length === 0 && state.objectiveVector === null && state.currentObjective === null ? "" : "none";
-    maximize.className = state.completionMode !== "draft" && objectiveActive ? "is-block" : "is-hidden";
-    objective.className = objectiveActive ? "objective-item objective-active" : "";
+    nullState.hidden = !(state.vertices.length === 0 && state.objectiveVector === null && state.currentObjective === null);
+    maximize.hidden = !(state.completionMode !== "draft" && objectiveActive);
+    objective.classList.toggle("objective-item", objectiveActive);
     objective.textContent = formatObjectiveDisplay(state.objectiveVector);
-    subjectTo.className = hasRegion(state) ? "is-block" : "is-hidden";
+    subjectTo.hidden = !hasRegion(state);
 
     // objective-only updates (every rotation step) must not rebuild the
     // constraint rows; rebuild only when their source actually changed

@@ -35,12 +35,8 @@ select {
   font-family: inherit;
 }
 
-.is-hidden {
+[hidden] {
   display: none !important;
-}
-
-.is-block {
-  display: block !important;
 }
 
 #objectiveDisplay,
@@ -87,9 +83,6 @@ select {
 
 #sidebar button:disabled,
 #sidebar button.button-active {
-  background-color: #fafafa;
-  color: #333;
-  border-color: #333;
   transform: translateY(2px);
   box-shadow:
     0 2px 0 #333,
@@ -331,7 +324,6 @@ select {
 .controlPanel .range {
   margin-top: 10px;
   margin-bottom: 10px;
-  width: 100%;
 }
 
 .controlPanel .log-slider-control {
@@ -505,8 +497,6 @@ select {
   opacity: 0.1;
   /* opacity only: scaling a 4px stripe pattern even by 1% resamples it and ghosts the text underneath (visible in Firefox) */
   animation: pulse 5s linear infinite;
-  pointer-events: none;
-  overflow: hidden;
 }
 
 #result,
@@ -575,7 +565,6 @@ select {
 #subjectTo {
   text-align: left;
   font-size: 1.2rem;
-  display: none;
 }
 
 #nullStateMessage {
@@ -636,10 +625,6 @@ select {
 .iterate-footer {
   margin-bottom: 20px;
   padding-top: 5px;
-}
-
-.objective-active {
-  color: #eee;
 }
 
 #result.virtualized {
@@ -733,13 +718,11 @@ select {
   /* centred over the canvas, beside the sidebar */
   left: calc(var(--sidebar-width) + (100vw - var(--sidebar-width)) / 2);
   z-index: 90;
-  display: block;
   width: 44px;
   height: 28px;
   overflow: hidden;
   box-sizing: border-box;
   transform: translateX(-50%);
-  pointer-events: auto;
   background: rgba(250, 250, 250, 0.94);
   border: 1px solid #333;
   border-top: 0;
@@ -814,7 +797,7 @@ select {
   overflow-x: auto;
   overflow-y: hidden;
   box-sizing: border-box;
-  height: 96px;
+  height: var(--gallery-expanded-height);
   opacity: 0;
   pointer-events: none;
   transform: translateX(-18px);
@@ -1277,7 +1260,6 @@ select {
   }
 
   .problem-gallery__items {
-    height: 88px;
     padding: 6px;
     padding-top: 20px;
   }
@@ -1297,13 +1279,11 @@ select {
   #sidebar {
     top: auto;
     bottom: 0;
-    left: 0;
     width: 100vw;
     height: var(--mobile-sidebar-height, 42dvh);
     border-right: 0;
     border-top: 1px solid #bbb;
     box-shadow: 0 -8px 18px rgba(0, 0, 0, 0.12);
-    text-align: center;
   }
 
   #sidebarContent {
@@ -1324,7 +1304,6 @@ select {
   }
 
   #terminal-container {
-    display: block;
     flex: 0 0 120px;
     min-height: 120px;
     max-height: 120px;
@@ -1366,11 +1345,6 @@ select {
     max-height: calc(100dvh - var(--mobile-sidebar-height, 42dvh) - 76px);
     margin-bottom: 8px;
     padding: 12px 14px;
-  }
-
-  .controlPanel,
-  .controlPanel .settings-section {
-    text-align: center;
   }
 
   #sidebar button,
