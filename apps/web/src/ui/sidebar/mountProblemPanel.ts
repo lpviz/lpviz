@@ -49,7 +49,6 @@ export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions,
     nullState.hidden = !(state.vertices.length === 0 && state.objectiveVector === null && state.currentObjective === null);
     maximize.hidden = !(state.completionMode !== "draft" && objectiveActive);
     objective.classList.toggle("objective-item", objectiveActive);
-    objective.classList.toggle("objective-active", objectiveActive);
     objective.textContent = formatObjectiveDisplay(state.objectiveVector);
     subjectTo.hidden = !hasRegion(state);
 

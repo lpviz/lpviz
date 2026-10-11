@@ -18,7 +18,6 @@ export function createLayout(root: HTMLElement, actions: Pick<AppActions, "setSi
   const getViewportSidebarWidth = () => (mobileLayout ? 0 : sidebarWidth);
   const applyGeometry = () => {
     mobileLayout = mobileQuery.matches;
-    root.classList.toggle("mobile-layout", mobileLayout);
     root.style.setProperty("--mobile-sidebar-height", `${mobileSidebarHeight}px`);
     root.style.setProperty("--sidebar-width", `${getViewportSidebarWidth()}px`);
     actions.setSidebarWidth(getViewportSidebarWidth());
