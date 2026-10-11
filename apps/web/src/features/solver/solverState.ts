@@ -5,10 +5,9 @@ import type { Vec } from "@lpviz/math/types";
 import { zeroVec } from "@lpviz/math/vec";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
 
-type ResultTextBlockClassName = "iterate-header" | "iterate-item" | "iterate-item-nohover" | "iterate-footer";
-
+/** A line of the result panel: what it is (the panel decides how each kind looks), its text, and a row's iterate index. */
 export type ResultTextBlock = {
-  className: ResultTextBlockClassName;
+  kind: "header" | "row" | "note" | "footer";
   text: string;
   index?: number | undefined;
 };

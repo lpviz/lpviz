@@ -1,19 +1,11 @@
-import type { EllipsoidQueryPoint, SolverMode } from "@/features/solver/solverSettings";
-import { ENTERING_RULES, LEAVING_RULES, type EnteringRule, type LeavingRule } from "@lpviz/solver-engine/simplex";
+import type { SolverMode, SolverSettings } from "@/features/solver/solverSettings";
 import { checkboxRow, fixed, group, labeledSelect, maxitSlider, numberSlider, type SectionContext, type SettingControl } from "./solverSettingControls";
 
-// The rule vocabulary comes from the engine; a Record turns a rule without a
-// label into a compile error.
-const ENTERING_RULE_LABELS: Record<EnteringRule, string> = { coeff: "Dantzig", first: "Bland (low)", last: "Bland (high)" };
-const LEAVING_RULE_LABELS: Record<LeavingRule, string> = { first: "Lowest index", last: "Highest index" };
-const ENTERING_RULE_OPTIONS = ENTERING_RULES.map((value) => [value, ENTERING_RULE_LABELS[value]] as const);
-const LEAVING_RULE_OPTIONS = LEAVING_RULES.map((value) => [value, LEAVING_RULE_LABELS[value]] as const);
-const QUERY_POINT_OPTIONS = [
-  ["ellipsoid", "Ellipsoid"],
-  ["chebyshev", "Chebyshev"],
-  ["analytic", "Analytic"],
-  ["volumetric", "Volumetric"],
-] as const satisfies readonly (readonly [EllipsoidQueryPoint, string])[];
+// The labels of each select's vocabulary (the settings table has the values); a Record turns a
+// value without a label into a compile error.
+const ENTERING_RULE_LABELS: Record<SolverSettings["simplexEnteringRule"], string> = { coeff: "Dantzig", first: "Bland (low)", last: "Bland (high)" };
+const LEAVING_RULE_LABELS: Record<SolverSettings["simplexLeavingRule"], string> = { first: "Lowest index", last: "Highest index" };
+const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> = { ellipsoid: "Ellipsoid", chebyshev: "Chebyshev", analytic: "Analytic", volumetric: "Volumetric" };
 
 export type SettingsSync = SettingControl["sync"];
 
@@ -33,7 +25,7 @@ const pdhgSection = (ctx: SectionContext): SettingControl[] => [
 const ellipsoidSection = (ctx: SectionContext): SettingControl[] => [
   numberSlider(ctx, { key: "ellipsoidInitialScale", min: "1.05", max: "4", step: "0.05", label: "Initial ellipsoid size:", format: fixed(2) }),
   maxitSlider(ctx, "maxitSliderEllipsoid", "maxitEllipsoid"),
-  group("settings-inline-row", [labeledSelect(ctx, "ellipsoidQueryPoint", "Query point:", QUERY_POINT_OPTIONS)]),
+  group("settings-inline-row", [labeledSelect(ctx, "ellipsoidQueryPoint", "Query point:", QUERY_POINT_LABELS)]),
   // the cut shape options belong to the ellipsoid update itself; the
   // other query points localize with a polyhedron and never form one
   checkboxRow(ctx, { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" }, (next, key) => next.ellipsoidQueryPoint === "ellipsoid" || key === "ellipsoidRayShoot"),
@@ -42,7 +34,7 @@ const ellipsoidSection = (ctx: SectionContext): SettingControl[] => [
 const simplexSection = (ctx: SectionContext): SettingControl[] => [
   checkboxRow(ctx, { simplexDualMode: "Dual simplex mode" }),
   // label + dropdown on one line, selects aligned via a 2-column grid
-  group("settings-select-grid", [labeledSelect(ctx, "simplexEnteringRule", "Entering:", ENTERING_RULE_OPTIONS), labeledSelect(ctx, "simplexLeavingRule", "Leaving:", LEAVING_RULE_OPTIONS)]),
+  group("settings-select-grid", [labeledSelect(ctx, "simplexEnteringRule", "Entering:", ENTERING_RULE_LABELS), labeledSelect(ctx, "simplexLeavingRule", "Leaving:", LEAVING_RULE_LABELS)]),
 ];
 
 const centralSection = (ctx: SectionContext): SettingControl[] => [

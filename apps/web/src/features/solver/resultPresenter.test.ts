@@ -46,7 +46,7 @@ describe("rotation row window", () => {
     expect(blocks).toHaveLength(20);
     expect(indices().slice(0, 11)).toEqual([...Array(11).keys()]);
     expect(blocks[11]!.index).toBeUndefined();
-    expect(blocks[11]!.className).toBe("iterate-item-nohover");
+    expect(blocks[11]!.kind).toBe("note");
     expect(blocks[11]!.text).toContain("31 iterations not shown");
     expect(indices().slice(12)).toEqual([42, 43, 44, 45, 46, 47, 48, 49]);
     expect(blocks[19]!.text.trimStart().startsWith("50 ")).toBe(true);

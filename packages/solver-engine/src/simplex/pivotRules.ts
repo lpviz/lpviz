@@ -28,8 +28,8 @@ export type PivotRules = { entering: EnteringRule; leaving: LeavingRule };
 // termination guarantee.
 const BLAND_RULES: PivotRules = { entering: "first", leaving: "first" };
 
-export const isEnteringRule = (value: unknown): value is EnteringRule => (ENTERING_RULES as readonly unknown[]).includes(value);
-export const isLeavingRule = (value: unknown): value is LeavingRule => (LEAVING_RULES as readonly unknown[]).includes(value);
+const isEnteringRule = (value: unknown): value is EnteringRule => (ENTERING_RULES as readonly unknown[]).includes(value);
+const isLeavingRule = (value: unknown): value is LeavingRule => (LEAVING_RULES as readonly unknown[]).includes(value);
 
 export type PivotRuleOptions = {
   /** Entering-variable pivot rule (see ENTERING_RULES). Defaults to "first" (Bland). */

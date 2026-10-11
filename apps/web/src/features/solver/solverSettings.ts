@@ -1,6 +1,6 @@
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
 import type { QueryPoint } from "@lpviz/solver-engine/cuttingPlane";
-import type { EnteringRule, LeavingRule } from "@lpviz/solver-engine/simplex";
+import { ENTERING_RULES, type EnteringRule, LEAVING_RULES, type LeavingRule } from "@lpviz/solver-engine/simplex";
 
 // Index order is the share link's wire identity (compactUrl): only ever append.
 export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
@@ -41,6 +41,9 @@ export type SolverSettings = {
 
 export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, value: SolverSettings[K]) => void;
 
+/** The settings a `<select>` chooses from a vocabulary. */
+export type SelectSettingKey = { [K in keyof SolverSettings]: SolverSettings[K] extends string ? K : never }[keyof SolverSettings];
+
 // how a setting travels in a share link: its slot is its identity on the wire, so a slot never
 // changes or is reused; a new shared setting takes the next free one
 type SettingWire = { slot: number; codec: "bool" | "int" | { scaled: number } | { enumeration: readonly string[] } };
@@ -49,6 +52,8 @@ type SettingSpec<V> = {
   default: V;
   /** the solver whose panel shows it and whose links carry it; "global": every link; "local": never shared */
   owner: SolverMode | "global" | "local";
+  /** a select's vocabulary in the panel's order (the wire's order is its codec's); a link's value must be one of them */
+  values?: [V] extends [string] ? readonly V[] : never;
   /** absent for a setting that links do not carry */
   wire?: SettingWire;
   /** its key in a link from before the compact codec (see legacyLink) */
@@ -64,8 +69,8 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   maxitIPM: { default: 1000, owner: "ipm", wire: { slot: 2, codec: "int" }, legacyKey: "i" },
   simplexDualMode: { default: false, owner: "simplex", wire: { slot: 3, codec: "bool" }, legacyKey: "d" },
   // the pivot rules have no slot yet: a link does not carry them (a codec bump, to be its own decision)
-  simplexEnteringRule: { default: "first", owner: "simplex", legacyKey: "E" },
-  simplexLeavingRule: { default: "first", owner: "simplex", legacyKey: "L" },
+  simplexEnteringRule: { default: "first", owner: "simplex", values: ENTERING_RULES, legacyKey: "E" },
+  simplexLeavingRule: { default: "first", owner: "simplex", values: LEAVING_RULES, legacyKey: "L" },
   pdhgEta: { default: 0.25, owner: "pdhg", wire: { slot: 4, codec: { scaled: 1e4 } }, legacyKey: "e" },
   pdhgTau: { default: 0.25, owner: "pdhg", wire: { slot: 5, codec: { scaled: 1e4 } }, legacyKey: "t" },
   maxitPDHG: { default: 1000, owner: "pdhg", wire: { slot: 6, codec: "int" }, legacyKey: "p" },
@@ -77,7 +82,7 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   ellipsoidDeepCuts: { default: true, owner: "ellipsoid", wire: { slot: 12, codec: "bool" }, legacyKey: "u" },
   ellipsoidRayShoot: { default: true, owner: "ellipsoid", wire: { slot: 13, codec: "bool" }, legacyKey: "z" },
   // every lowercase legacy letter is taken; uppercase never collides with them
-  ellipsoidQueryPoint: { default: "ellipsoid", owner: "ellipsoid", wire: { slot: 14, codec: { enumeration: QUERY_POINTS } }, legacyKey: "Q" },
+  ellipsoidQueryPoint: { default: "ellipsoid", owner: "ellipsoid", values: QUERY_POINTS, wire: { slot: 14, codec: { enumeration: QUERY_POINTS } }, legacyKey: "Q" },
   ellipsoidInitialScale: { default: 1.5, owner: "ellipsoid", wire: { slot: 15, codec: { scaled: 1e4 } }, legacyKey: "w" },
   objectiveAngleStep: { default: 0.1, owner: "global", wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
   objectiveRotationSpeed: { default: 1, owner: "global", wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
@@ -88,6 +93,20 @@ const SOLVER_SETTING_KEYS = Object.keys(SOLVER_SETTING_SPECS) as (keyof SolverSe
 
 // exported so share links can omit any setting still at its default
 export const DEFAULT_SOLVER_SETTINGS = Object.fromEntries(SOLVER_SETTING_KEYS.map((key) => [key, SOLVER_SETTING_SPECS[key].default])) as SolverSettings;
+
+/** A select's vocabulary, in the panel's order. */
+export const settingValues = <K extends SelectSettingKey>(key: K): readonly SolverSettings[K][] => SOLVER_SETTING_SPECS[key].values as readonly SolverSettings[K][];
+
+/**
+ * Whether an untrusted value may be stored under `key`: one of a select's values, else the
+ * default's shape (a finite number, a boolean). Anything else would blank a `<select>` or throw
+ * inside the settings panel's store subscriber.
+ */
+export function isSettingValue<K extends keyof SolverSettings>(key: K, value: unknown): value is SolverSettings[K] {
+  const { default: fallback, values } = SOLVER_SETTING_SPECS[key];
+  if (values) return (values as readonly unknown[]).includes(value);
+  return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
+}
 
 /** The settings a share link may carry (every one but the local replay length). */
 export type ShareSettings = Partial<Omit<SolverSettings, "replayDurationMs">>;

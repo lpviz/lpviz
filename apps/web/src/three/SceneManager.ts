@@ -1,6 +1,4 @@
 import { singleFrame } from "@/features/core/timers";
-import { subscribeCurrentMouse } from "@/features/core/currentMouse";
-import { getState } from "@/features/core/store";
 import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer } from "three";
@@ -69,12 +67,6 @@ export class SceneManager {
       }
     });
     this.resizeObserver.observe(canvas);
-
-    // the sketch cursor moves the rubber band while a region is being drawn
-    subscribeCurrentMouse(() => {
-      const state = getState();
-      if (state.completionMode === "draft" && state.vertices.length > 0) this.invalidate({ polytope: true });
-    }, this.subscriptions.signal);
   }
 
   private setSize(width: number, height: number): void {

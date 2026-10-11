@@ -1,7 +1,7 @@
 import type { State } from "@/features/core/store";
 import { COMPLETION_MODES, type CompletionMode } from "@/features/polytope-editor/editorState";
 import {
-  DEFAULT_SOLVER_SETTINGS,
+  isSettingValue,
   SHARED_SETTING_KEYS,
   SOLVER_MODES,
   sharedSettingKeys,
@@ -13,7 +13,6 @@ import {
 import type { Vec } from "@lpviz/math/types";
 import { type Dimension, vecFrom } from "@lpviz/math/vec";
 import { clampZScale } from "@lpviz/viewport/defaults";
-import { isEnteringRule, isLeavingRule } from "@lpviz/solver-engine/simplex";
 
 export type SharedAppState = {
   /** how many coordinates every point carries; absent in links from before the 3-variable editor (two) */
@@ -39,23 +38,12 @@ export function collectShareSettings(settings: SolverSettings, mode: SolverMode)
   return shared;
 }
 
-// The share payload is untrusted. A value reaches the store only when it has
-// the default's shape: a finite number, a boolean, or one of the engine's rule
-// names. Anything else is dropped so a hand-edited link can neither blank a
-// <select> nor throw inside the settings panel's store subscriber.
-function isValidSharedSetting<K extends SharedSettingKey>(key: K, value: unknown): value is SolverSettings[K] {
-  if (key === "simplexEnteringRule") return isEnteringRule(value);
-  if (key === "simplexLeavingRule") return isLeavingRule(value);
-  const fallback: unknown = DEFAULT_SOLVER_SETTINGS[key];
-  return typeof fallback === "number" ? Number.isFinite(value) : typeof value === typeof fallback;
-}
-
-/** The shared settings worth keeping: unknown keys and malformed values are dropped. */
+/** The shared settings worth keeping: the payload is untrusted, so unknown keys and values a setting cannot hold are dropped. */
 export function validSharedSettings(settings: ShareSettings): ShareSettings {
   const valid: ShareSettings = {};
   const keep = <K extends SharedSettingKey>(key: K) => {
     const value: unknown = settings[key];
-    if (isValidSharedSetting(key, value)) valid[key] = value;
+    if (isSettingValue(key, value)) valid[key] = value;
   };
   for (const key of SHARED_SETTING_KEYS) keep(key);
   return valid;

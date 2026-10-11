@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
 import { messageBlocks } from "@/features/solver/resultPresenter";
-import type { SolverMode } from "@/features/solver/solverSettings";
+import { type SolverMode } from "@/features/solver/solverSettings";
 import { displayedSolverStartPoint } from "@/features/solver/solverState";
 import type { Problem, ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
@@ -15,12 +15,30 @@ export type SolverControl = {
   buildRequest: (state: State) => SolverWorkerPayload | null;
 };
 
-// the problem every request carries and the region it came from, or null while the drawing has
-// no region or no objective
-function solvableProblem(state: State): { polytope: Polytope; problem: Problem } | null {
+// the problem every request carries and the region it came from
+type Solvable = { polytope: Polytope; problem: Problem };
+
+// null while the drawing has no region or no objective
+function solvableProblem(state: State): Solvable | null {
   if (!state.objectiveVector || !hasConstraints(state.polytope)) return null;
   return { polytope: state.polytope, problem: { constraints: state.polytope.constraints, objective: Float64Array.from(state.objectiveVector) } };
 }
+
+// What a mode asks of the problem beyond a region with an objective: what it says of an empty
+// region (pdhg runs on one), any further reason not to run, and the request it builds.
+type SolverSpec = {
+  emptyRegion?: string;
+  alsoBlocked?: (state: State) => ResultRenderPayload | null;
+  request: (state: State, solvable: Solvable) => SolverWorkerPayload;
+};
+
+const control = ({ emptyRegion, alsoBlocked, request }: SolverSpec): SolverControl => ({
+  blocker: (s) => (emptyRegion !== undefined && isEmptyRegion(s) ? emptyRegionBlock(emptyRegion) : (alsoBlocked?.(s) ?? null)),
+  buildRequest: (s) => {
+    const solvable = solvableProblem(s);
+    return solvable && request(s, solvable);
+  },
+});
 
 // The points the ellipsoid family builds its initial localization around. A
 // bounded region's vertices are its polytope's. An unbounded region's polytope
@@ -47,64 +65,55 @@ const unboundedObjectiveBlock = messageBlocks(
 );
 
 export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
-  central: {
-    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Central Path requires a feasible region.") : hasUnboundedObjectiveDirection(s) ? unboundedObjectiveBlock : null),
-    buildRequest: (s) => {
-      const solvable = solvableProblem(s);
-      if (!solvable) return null;
-      return {
-        solver: "central",
-        vertices: solvable.polytope.vertices,
-        ...solvable.problem,
-        niter: iterations(s.solverSettings.centralPathIter),
-      };
-    },
-  },
-  ipm: {
-    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
-    buildRequest: (s) => {
-      const solvable = solvableProblem(s);
-      if (!solvable) return null;
+  central: control({
+    emptyRegion: "Central Path requires a feasible region.",
+    alsoBlocked: (s) => (hasUnboundedObjectiveDirection(s) ? unboundedObjectiveBlock : null),
+    request: (s, { polytope, problem }) => ({
+      solver: "central",
+      vertices: polytope.vertices,
+      ...problem,
+      niter: iterations(s.solverSettings.centralPathIter),
+    }),
+  }),
+  ipm: control({
+    emptyRegion: "IPM requires a feasible region.",
+    request: (s, { problem }) => {
       const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
       return {
         solver: "ipm",
-        ...solvable.problem,
+        ...problem,
         ...(startPoint ? { startPoint } : {}),
         alphaMax: settings.alphaMax,
         correctorThreshold: settings.correctorThreshold,
         maxit: iterations(settings.maxitIPM),
       };
     },
-  },
-  simplex: {
-    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("Simplex requires a valid feasible region.") : null),
-    buildRequest: (s) => {
-      const solvable = solvableProblem(s);
-      if (!solvable) return null;
+  }),
+  simplex: control({
+    emptyRegion: "Simplex requires a valid feasible region.",
+    request: (s, { problem }) => {
       // simplex consumes the start as a vertex (the marker snaps to one); dual mode ignores it
       const startVertex = requestedStartPoint(s);
       return {
         solver: "simplex",
-        ...solvable.problem,
+        ...problem,
         ...(startVertex ? { startVertex } : {}),
         dual: s.solverSettings.simplexDualMode,
         enteringRule: s.solverSettings.simplexEnteringRule,
         leavingRule: s.solverSettings.simplexLeavingRule,
       };
     },
-  },
-  ellipsoid: {
-    blocker: (s) => (isEmptyRegion(s) ? emptyRegionBlock("The ellipsoid method requires a feasible region.") : null),
-    buildRequest: (s) => {
-      const solvable = solvableProblem(s);
-      if (!solvable) return null;
+  }),
+  ellipsoid: control({
+    emptyRegion: "The ellipsoid method requires a feasible region.",
+    request: (s, { problem }) => {
       const settings = s.solverSettings;
       return {
         solver: "ellipsoid",
         // the drawn region bounds the initial ellipsoid (or box)
         vertices: regionBoundingVertices(s),
-        ...solvable.problem,
+        ...problem,
         maxit: iterations(settings.maxitEllipsoid),
         deepCuts: settings.ellipsoidDeepCuts,
         rayShoot: settings.ellipsoidRayShoot,
@@ -112,17 +121,14 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         initialScale: settings.ellipsoidInitialScale,
       };
     },
-  },
-  pdhg: {
-    blocker: () => null,
-    buildRequest: (s) => {
-      const solvable = solvableProblem(s);
-      if (!solvable) return null;
+  }),
+  pdhg: control({
+    request: (s, { problem }) => {
       const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
       return {
         solver: "pdhg",
-        ...solvable.problem,
+        ...problem,
         ...(startPoint ? { startPoint } : {}),
         ineq: settings.pdhgIneqMode,
         halpern: settings.pdhgHalpernMode,
@@ -132,7 +138,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         colorByBasis: settings.pdhgColorByBasis,
       };
     },
-  },
+  }),
 };
 
 /** The control of the solver mode the store has selected. */

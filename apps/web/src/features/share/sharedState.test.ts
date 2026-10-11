@@ -29,6 +29,7 @@ describe("shared solver settings", () => {
           simplexDualMode: "yes",
           simplexEnteringRule: "bogus",
           simplexLeavingRule: {},
+          ellipsoidQueryPoint: "nowhere",
           alphaMax: NaN,
           maxitIPM: "100",
           objectiveRotationSpeed: "fast",

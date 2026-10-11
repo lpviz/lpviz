@@ -26,39 +26,30 @@ export function renderPayload(log: ResultLogSection[]): ResultRenderPayload {
   return { type: "blocks", blocks: phaseBlocks(log) };
 }
 
-function phaseBlocks(log: ResultLogSection[]): ResultTextBlock[] {
-  const createBlock = (className: ResultTextBlock["className"], text: string, index?: number): ResultTextBlock => ({
-    className,
-    text: normalizeLog(text),
-    index,
-  });
+const block = (kind: ResultTextBlock["kind"], text: string, index?: number): ResultTextBlock => ({ kind, text, index });
 
+function phaseBlocks(log: ResultLogSection[]): ResultTextBlock[] {
   const blocks: ResultTextBlock[] = [];
   // a row's index is its iterate's position in the whole path
   let offset = 0;
   log.forEach(({ header, rows, notes = [], footer }, phase) => {
-    blocks.push(createBlock("iterate-header", `Phase ${phase + 1}\n${header}`));
-    for (let i = 0; i < rows.length; i++) blocks.push(createBlock("iterate-item", formatVirtualResultRow(rows.at(i)!), offset + i));
-    for (const note of notes) blocks.push(createBlock("iterate-item-nohover", note));
-    if (footer) blocks.push(createBlock("iterate-footer", footer));
+    blocks.push(block("header", normalizeLog(`Phase ${phase + 1}\n${header}`)));
+    for (let i = 0; i < rows.length; i++) blocks.push(block("row", normalizeLog(formatVirtualResultRow(rows.at(i)!)), offset + i));
+    for (const note of notes) blocks.push(block("note", normalizeLog(note)));
+    if (footer) blocks.push(block("footer", normalizeLog(footer)));
     offset += rows.length;
   });
   return blocks;
 }
 
 const getMaxLineChars = (constraints: string[]) => constraints.reduce((m, line) => Math.max(m, ...line.split("\n").map((l) => l.length)), 0);
-const createVirtualBlock = (row: VirtualResultRow, index: number): ResultTextBlock => ({
-  className: "iterate-item",
-  text: formatVirtualResultRow(row),
-  index,
-});
-const createResultBlock = (className: ResultTextBlock["className"], text: string): ResultTextBlock => ({ className, text });
+const rowBlock = (row: VirtualResultRow, index: number): ResultTextBlock => block("row", formatVirtualResultRow(row), index);
 const USAGE: ResultView = { kind: "usage" };
 
 /** A two-line result: a header and the one line under it (why a solver did not run, or its error). */
 export const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
   type: "blocks",
-  blocks: [createResultBlock("iterate-header", header), createResultBlock("iterate-item-nohover", message)],
+  blocks: [block("header", header), block("note", message)],
 });
 
 export type ResultPresenter = {
@@ -99,11 +90,11 @@ export function createResultPresenter(): ResultPresenter {
       const blockAt = (index: number): ResultTextBlock | undefined => {
         if (index < 0 || index >= rowCount) return undefined;
         if (windowed && index === headCount) {
-          return createResultBlock("iterate-item-nohover", `    ⋯ ${hiddenCount} iterations not shown while rotating ⋯ `);
+          return block("note", `    ⋯ ${hiddenCount} iterations not shown while rotating ⋯ `);
         }
         const sourceIndex = windowed && index > headCount ? rows.length - (rowCount - index) : index;
         const row = rows.at(sourceIndex);
-        return row === undefined ? undefined : createVirtualBlock(row, sourceIndex);
+        return row === undefined ? undefined : rowBlock(row, sourceIndex);
       };
       // Rows are fixed-width; sampling three avoids formatting all of them
       // (100k at max settings) just to measure the widest line.
