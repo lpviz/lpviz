@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { getState } from "@/features/core/store";
-import { createResultPresenter } from "./resultPresenter";
-import type { VirtualResultPayload } from "./types";
+import { createResultPresenter, type VirtualResultPayload } from "./resultPresenter";
 
 const run = (count: number): VirtualResultPayload => ({
-  type: "virtual",
+  kind: "virtual",
   header: " Iter        x        y        Obj     Infeas          ρ",
   footer: `Converged in ${count} iterations`,
   rows: {

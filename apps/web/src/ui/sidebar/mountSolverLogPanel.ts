@@ -1,4 +1,5 @@
-import type { AppContext } from "@/app/appContext";
+import { DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
+import type { AppActions } from "@/app/appActions";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
@@ -6,12 +7,12 @@ import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
 import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
 
-export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
+export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppActions, "setIterateHighlight" | "finishOpenRegion">) {
   const frame = el("div", { id: "terminal-container" });
   const result = el("div", { id: "result" });
   frame.append(result, el("div", { id: "terminal-window" }));
   parent.append(frame);
-  const hover = createSolverLogHover(result, (index) => ctx.actions.setIterateHighlight(index));
+  const hover = createSolverLogHover(result, (index) => actions.setIterateHighlight(index));
   const fit = createResultFit(result);
   // Set while a virtualized result is mounted, so a panel that changes height
   // can re-window without a full re-render (see the size observer below).
@@ -26,7 +27,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     result.replaceChildren();
     hover.forgetHoveredRow();
     if (view.kind === "usage") {
-      result.append(usageHint(state, ctx.actions.finishOpenRegion), desktopNote());
+      result.append(usageHint(state, actions.finishOpenRegion), desktopNote());
       return;
     }
     if (view.kind === "blocks") {
@@ -35,7 +36,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     }
     result.append(el("div", { className: "iterate-header", text: view.header }));
     const sc = el("div", { className: "iterate-scroll" });
-    result.append(sc, el("div", { className: "iterate-footer", text: view.footer ?? "" }));
+    result.append(sc, el("div", { className: "iterate-footer", text: view.footer }));
     if (view.rows.length === 0) sc.append(el("div", { className: "iterate-item-nohover", text: "No iterations available." }));
     else refillVirtualWindow = mountVirtualRows(sc, view.rows, result);
     hover.scheduleHoverSync();
@@ -52,7 +53,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   // while a (potentially huge) solver result is mounted.
   const hintSync = new AbortController();
   on(
-    ["vertices", "completionMode", "objectiveVector", "currentObjective"],
+    DRAWING_PHASE_KEYS,
     () => {
       const state = getState();
       if (state.result.kind === "usage") render(state);

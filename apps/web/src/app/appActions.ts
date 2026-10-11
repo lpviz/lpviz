@@ -6,6 +6,7 @@ import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportApi } from "@/features/viewport/runtime";
+import { clampZScale } from "@lpviz/viewport/defaults";
 
 // the solver actions the UI panels call directly
 const SOLVER_ACTION_KEYS = [
@@ -20,8 +21,8 @@ const SOLVER_ACTION_KEYS = [
   "stopMotion",
 ] as const;
 
-// The action table the UI panels call: the solver actions above, the view actions, and the
-// app-level composites.
+// The action table the UI calls, its one way of changing the app: the solver actions above, the
+// editor's toggles, the view actions, and the app-level composites.
 export type AppActions = Pick<SolverActions, (typeof SOLVER_ACTION_KEYS)[number]> & {
   share: () => void;
   /** back to an empty canvas, with every setting at its default, after the person confirms */
@@ -29,9 +30,12 @@ export type AppActions = Pick<SolverActions, (typeof SOLVER_ACTION_KEYS)[number]
   loadGalleryProblem: (problem: GalleryProblem) => void;
   /** finish the drafted region as an open one, as Enter does; the console's link, for a finger */
   finishOpenRegion: () => void;
+  toggleSnapToGrid: () => void;
+  toggleObjectiveHidden: () => void;
   zoomToFit: () => void;
   resetView: () => void;
   toggle3D: () => void;
+  /** the 3D height scale, clamped to its range */
   setZScale: (value: number) => void;
   /** pixels along the top of the canvas an overlay covers (the open gallery), which zoom-to-fit keeps clear */
   setTopInset: (px: number) => void;
@@ -131,12 +135,14 @@ export function createAppActions({
       window.requestAnimationFrame(() => zoomToFit());
     },
     finishOpenRegion: () => finishOpenRegion(editor),
+    toggleSnapToGrid: () => setState({ snapToGrid: !getState().snapToGrid }),
+    toggleObjectiveHidden: () => setState({ objectiveHidden: !getState().objectiveHidden }),
 
     // ---- the view ----
     resetView,
     toggle3D,
     zoomToFit,
-    setZScale: (value) => setState({ zScale: value }),
+    setZScale: (value) => setState({ zScale: clampZScale(value) }),
     setTopInset: (px) => {
       topInset = Math.max(0, px);
     },

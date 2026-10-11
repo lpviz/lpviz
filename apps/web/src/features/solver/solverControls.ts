@@ -1,9 +1,9 @@
 import { getState, type State } from "@/features/core/store";
 import { hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
-import { messageBlocks } from "@/features/solver/resultPresenter";
+import { messageBlocks, type ResultRenderPayload } from "@/features/solver/resultPresenter";
 import { type SolverMode } from "@/features/solver/solverSettings";
 import { displayedSolverStartPoint } from "@/features/solver/solverState";
-import type { Problem, ResultRenderPayload, SolverWorkerPayload } from "@/features/solver/types";
+import type { Problem, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
 

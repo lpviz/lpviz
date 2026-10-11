@@ -1,6 +1,6 @@
 import { singleFrame } from "@/features/core/timers";
 import type { LazyList } from "@/features/solver/solverState";
-import type { ResultTextBlock } from "@/features/solver/types";
+import type { ResultTextBlock } from "@/features/solver/solverState";
 import { el } from "@/ui/dom";
 
 // how the panel styles each kind of line

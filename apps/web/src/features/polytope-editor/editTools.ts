@@ -20,9 +20,7 @@ export function createEditActions(
       return true;
     }
 
-    const {
-      geometry: { vertices: displayVertices },
-    } = getEditorContext(state);
+    const { vertices: displayVertices } = getEditorContext(state).geometry;
     const deleteIndex = findVertexNearCanvasPoint(viewportApi, canvasPoint, displayVertices);
     if (deleteIndex === -1) return false;
 
@@ -33,9 +31,7 @@ export function createEditActions(
   const handleDoubleClickAt = (clientX: number, clientY: number) => {
     const state = getState();
     const logicalMouse = getLogicalFromClient(viewportApi, clientX, clientY);
-    const {
-      geometry: { vertices: displayVertices, mode: displayMode },
-    } = getEditorContext(state);
+    const { vertices: displayVertices, mode: displayMode } = getEditorContext(state).geometry;
     const hullRepair = getEditorTransition(state, { kind: "repair-displayed-hull", point: logicalMouse });
     if (hullRepair.kind !== "noop") {
       applyEditorTransition(hullRepair);
@@ -67,7 +63,7 @@ export function createEditActions(
 
     // a click only sketches or places the objective; editing a finished region is drags and double-clicks
     const { session } = getEditorContext(state);
-    if (session.kind !== "drafting" && session.kind !== "selecting-objective") return;
+    if (session !== "drafting" && session !== "selecting-objective") return;
     const point = getLogicalFromClient(viewportApi, clientX, clientY);
     applyEditorTransition(getEditorTransition(state, { kind: "click", point, closeThreshold: worldDistanceForPixels(viewportApi, point, closeHitRadiusPx) }));
   };

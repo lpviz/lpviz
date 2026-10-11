@@ -26,11 +26,11 @@ const TRI: Vec[] = [
 
 describe("getEditorContext.session", () => {
   test("empty/sketching → drafting", () => {
-    expect(getEditorContext(st({})).session.kind).toBe("drafting");
-    expect(getEditorContext(st({ vertices: TRI })).session.kind).toBe("drafting");
+    expect(getEditorContext(st({})).session).toBe("drafting");
+    expect(getEditorContext(st({ vertices: TRI })).session).toBe("drafting");
   });
   test("finished region, no objective → selecting-objective", () => {
-    expect(getEditorContext(st({ vertices: TRI, completionMode: "closed" })).session.kind).toBe("selecting-objective");
+    expect(getEditorContext(st({ vertices: TRI, completionMode: "closed" })).session).toBe("selecting-objective");
   });
   test("closed with objective → editing-closed", () => {
     expect(
@@ -40,7 +40,7 @@ describe("getEditorContext.session", () => {
           completionMode: "closed",
           objectiveVector: [1, 0],
         }),
-      ).session.kind,
+      ).session,
     ).toBe("editing-closed");
   });
 });

@@ -43,11 +43,11 @@ export type EditorTransition =
       objectiveVector: Vec;
     };
 
-type EditorSession = { kind: "drafting" | "selecting-objective" | "editing-closed" | "editing-open" };
+type EditorSession = "drafting" | "selecting-objective" | "editing-closed" | "editing-open";
 
 // What the drawing shows for a session: a drafted chain, an open region's chain, or a polygon (a
 // closed region, and an open one while its objective is placed).
-const displayedMode = (session: EditorSession): CompletionMode => (session.kind === "editing-open" ? "open" : session.kind === "drafting" ? "draft" : "closed");
+const displayedMode = (session: EditorSession): CompletionMode => (session === "editing-open" ? "open" : session === "drafting" ? "draft" : "closed");
 
 // What the editor is doing with the drawing: sketching it, placing its objective, or editing a
 // finished region (whose kind decides which edits apply).
@@ -55,12 +55,12 @@ function sessionOf(state: State): EditorSession {
   switch (computeDrawingPhase(state)) {
     case "empty":
     case "sketching_polytope":
-      return { kind: "drafting" };
+      return "drafting";
     case "awaiting_objective":
     case "objective_preview":
-      return { kind: "selecting-objective" };
+      return "selecting-objective";
     case "ready_for_solvers":
-      return { kind: state.completionMode === "open" ? "editing-open" : "editing-closed" };
+      return state.completionMode === "open" ? "editing-open" : "editing-closed";
   }
 }
 
@@ -71,7 +71,7 @@ export function getEditorContext(state: State) {
   const session = sessionOf(state);
   const isDraggingGeometry = state.editorInteraction.kind === "dragging" && state.editorInteraction.target.kind !== "objective";
   // while its geometry is dragged an open chain is edited as drawn, not as the hull it closed into
-  const derived = session.kind === "editing-open" && !isDraggingGeometry ? derivedClosure(state) : null;
+  const derived = session === "editing-open" && !isDraggingGeometry ? derivedClosure(state) : null;
   const geometry = derived ? { vertices: derived, mode: "closed" as const, isDerivedClosed: true } : { vertices: state.vertices, mode: displayedMode(session), isDerivedClosed: false };
 
   return {
@@ -122,14 +122,14 @@ export function getEditorTransition(
   const context = getEditorContext(state);
   switch (action.kind) {
     case "click": {
-      if (context.session.kind === "selecting-objective") {
+      if (context.session === "selecting-objective") {
         return {
           kind: "select-objective",
           objectiveVector: state.currentObjective || action.point,
         };
       }
 
-      if (context.session.kind !== "drafting") {
+      if (context.session !== "drafting") {
         return { kind: "noop" };
       }
 
@@ -155,7 +155,7 @@ export function getEditorTransition(
       return edit(tentative, "draft", null);
     }
     case "finish-open":
-      if (context.session.kind !== "drafting" || state.vertices.length < 2) {
+      if (context.session !== "drafting" || state.vertices.length < 2) {
         return { kind: "noop" };
       }
 
@@ -168,10 +168,7 @@ export function getEditorTransition(
 
       return edit(state.vertices, "open", null);
     case "delete-vertex": {
-      const {
-        session,
-        geometry: { vertices: displayVertices, isDerivedClosed },
-      } = context;
+      const { vertices: displayVertices, isDerivedClosed } = context.geometry;
       const nextVertices = displayVertices.filter((_, index) => index !== action.deleteIndex);
       const closed = isDerivedClosed || state.completionMode === "closed";
 
@@ -180,12 +177,10 @@ export function getEditorTransition(
       // triangle has nothing left to close and goes back to drafting.
       if (closed && nextVertices.length >= 3) return closeOn(nextVertices);
 
-      return edit(nextVertices, closed || session.kind === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
+      return edit(nextVertices, closed || context.session === "drafting" || nextVertices.length < 2 ? "draft" : "open", null);
     }
     case "insert-edge-point": {
-      const {
-        geometry: { vertices: displayVertices, isDerivedClosed },
-      } = context;
+      const { vertices: displayVertices, isDerivedClosed } = context.geometry;
       const start = displayVertices[action.edgeIndex];
       const end = displayVertices[action.edgeIndex + 1] ?? displayVertices[0];
       if (!start || !end) {
@@ -204,7 +199,7 @@ export function getEditorTransition(
       return isDerivedClosed ? closeOn(nextVertices) : edit(nextVertices, state.completionMode, state.interiorPoint);
     }
     case "insert-boundary-ray-point": {
-      if (context.session.kind !== "editing-open") {
+      if (context.session !== "editing-open") {
         return { kind: "noop" };
       }
 
@@ -218,9 +213,7 @@ export function getEditorTransition(
       return edit(nextVertices, "open", null);
     }
     case "repair-displayed-hull": {
-      const {
-        geometry: { vertices: displayVertices, mode },
-      } = context;
+      const { vertices: displayVertices, mode } = context.geometry;
       if (mode !== "closed" || displayVertices.length < 3) {
         return { kind: "noop" };
       }

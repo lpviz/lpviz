@@ -1,20 +1,20 @@
-import type { AppContext } from "@/app/appContext";
+import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
 import { button, checkbox, el, range } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 
-export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext) {
+export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<AppActions, "toggleReplay" | "startRotation" | "stopMotion" | "updateSolverSetting" | "setTraceEnabled">) {
   const root = el("div", { className: "controlPanel controlPanel--compact" });
   parent.append(root);
-  const animate = button("Animate", () => ctx.actions.toggleReplay());
-  const start = button("Rotate Objective", () => ctx.actions.startRotation());
-  const stop = button("Stop Rotation", () => ctx.actions.stopMotion());
+  const animate = button("Animate", () => actions.toggleReplay());
+  const start = button("Rotate Objective", () => actions.startRotation());
+  const stop = button("Stop Rotation", () => actions.stopMotion());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation is-hidden" });
-  const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => ctx.actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
-  const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => ctx.actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
-  const trace = checkbox("traceCheckbox", (enabled) => ctx.actions.setTraceEnabled(enabled));
+  const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
+  const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
+  const trace = checkbox("traceCheckbox", (enabled) => actions.setTraceEnabled(enabled));
   const column = (className: string, text: string, control: HTMLInputElement) => el("div", { className }, [el("label", { className: "label-centered", attrs: { for: control.id }, text }), control]);
   rot.append(
     el("div", { className: "rotation-layout" }, [column("rotation-column", "Angle Step", angle), column("rotation-column", "Rotation Speed", speed), column("rotation-checkbox", "Trace", trace)]),
