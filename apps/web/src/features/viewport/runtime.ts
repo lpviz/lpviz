@@ -1,4 +1,5 @@
 import { restartableTimeout } from "@/features/core/timers";
+import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
@@ -316,6 +317,11 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     subscriptions.signal,
   );
   onViewportDirty((viewportDirty) => viewportBridge.invalidate(viewportDirty), subscriptions.signal);
+  // the sketch cursor moves the rubber band while a region is being drawn
+  subscribeCurrentMouse(() => {
+    const state = getState();
+    if (state.completionMode === "draft" && state.vertices.length > 0) viewportBridge.invalidate({ polytope: true });
+  }, subscriptions.signal);
 
   return {
     setSidebarWidth: (width) => {

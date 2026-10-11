@@ -11,7 +11,7 @@ import { type PhaseConfig, type PhaseLog, phase1Problem, pivotOutArtificialVaria
 import { type PivotRuleOptions, resolvePivotRules } from "./simplex/pivotRules";
 import { splitStandardForm, unsplit } from "./standardForm";
 
-export { ENTERING_RULES, type EnteringRule, isEnteringRule, isLeavingRule, LEAVING_RULES, type LeavingRule, MAX_CONSECUTIVE_DEGENERATE_PIVOTS } from "./simplex/pivotRules";
+export { ENTERING_RULES, type EnteringRule, LEAVING_RULES, type LeavingRule, MAX_CONSECUTIVE_DEGENERATE_PIVOTS } from "./simplex/pivotRules";
 
 export interface SimplexOptions extends PivotRuleOptions {
   tol: number;

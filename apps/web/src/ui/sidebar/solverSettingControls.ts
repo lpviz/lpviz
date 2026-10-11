@@ -1,4 +1,4 @@
-import type { SolverSettings } from "@/features/solver/solverSettings";
+import { type SelectSettingKey, settingValues, type SolverSettings } from "@/features/solver/solverSettings";
 import { checkbox, el, range } from "@/ui/dom";
 
 const MAXIT_LOG_MIN = 0;
@@ -96,8 +96,9 @@ export function checkboxRow(
   };
 }
 
-// A <label> and the <select> (id `key`) it names, for the caller to lay out.
-export function labeledSelect<K extends SettingKeys<string>>({ settings, set }: SectionContext, key: K, label: string, options: readonly (readonly [SolverSettings[K], string])[]): SettingControl {
+// A <label> and the <select> (id `key`) it names, for the caller to lay out: one option per value
+// of the setting's vocabulary, in its order, under the label given here.
+export function labeledSelect<K extends SelectSettingKey>({ settings, set }: SectionContext, key: K, label: string, labels: Record<SolverSettings[K], string>): SettingControl {
   const input = el(
     "select",
     {
@@ -108,7 +109,7 @@ export function labeledSelect<K extends SettingKeys<string>>({ settings, set }: 
         },
       },
     },
-    options.map(([value, text]) => el("option", { attrs: { value }, text })),
+    settingValues(key).map((value) => el("option", { attrs: { value }, text: labels[value] })),
   );
   input.value = settings[key];
   return { nodes: [el("label", { attrs: { for: key }, text: label }), input], sync: (next) => setInputValue(input, next[key]) };
