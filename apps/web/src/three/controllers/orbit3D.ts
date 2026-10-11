@@ -1,9 +1,9 @@
 import { get3DControlsConfig, subscribe3DControlsConfig } from "@/features/viewport/runtime/controls3d";
 import { MIN_PERSPECTIVE_DISTANCE } from "@lpviz/viewport/defaults";
 import { unitsPerPixelAtDistance } from "@lpviz/viewport/perspective";
-import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
+import { configurePerspectiveCameraFromSnapshot, zoomPerspectivePoseAtCanvasPoint } from "@lpviz/viewport/projection3d";
 import type { ViewportPerspectivePose } from "@lpviz/viewport/snapshot";
-import { Plane, Raycaster, Vector2, Vector3, type PerspectiveCamera } from "three";
+import { Vector3, type PerspectiveCamera } from "three";
 import type { SceneManager } from "../SceneManager";
 import { attachPointerGestures } from "./pointerGestures";
 
@@ -54,13 +54,6 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
   const moveDelta = new Vector3();
   const moveTarget = new Vector3();
   const zoomOffset = new Vector3();
-  const wheelAnchorAfter = new Vector3();
-  const wheelAnchorBefore = new Vector3();
-  const wheelDelta = new Vector3();
-  const wheelPlane = new Plane();
-  const wheelPlaneNormal = new Vector3();
-  const wheelPointerNdc = new Vector2();
-  const wheelRaycaster = new Raycaster();
 
   const pose = (at: Vector3): ViewportPerspectivePose => ({ position: xyz(camera.position), up: xyz(camera.up), target: xyz(at) });
 
@@ -162,35 +155,14 @@ export function attachOrbit3D(sceneManager: SceneManager, camera: PerspectiveCam
   const wheelZoom = (event: WheelEvent, dominantDelta: number) => {
     if (!enabled() || event.shiftKey) return false;
 
-    const offset = zoomOffset.subVectors(camera.position, target);
-    const distance = Math.max(MIN_PERSPECTIVE_DISTANCE, offset.length());
-    const nextDistance = clampDistance(distance * Math.pow(WHEEL_ZOOM_BASE, dominantDelta));
+    const nextDistance = clampDistance(getOrbitState().distance * Math.pow(WHEEL_ZOOM_BASE, dominantDelta));
     if (!Number.isFinite(nextDistance)) return false;
 
     const rect = canvas.getBoundingClientRect();
-    const hasCursorAnchor = rect.width > 0 && rect.height > 0 && wheelPlaneNormal.subVectors(target, camera.position).normalize().lengthSq() > 0;
-    let anchoredZoom = false;
-
-    if (hasCursorAnchor) {
-      wheelPointerNdc.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -(((event.clientY - rect.top) / rect.height) * 2 - 1));
-      wheelPlane.setFromNormalAndCoplanarPoint(wheelPlaneNormal, target);
-      camera.updateMatrixWorld();
-      wheelRaycaster.setFromCamera(wheelPointerNdc, camera);
-      anchoredZoom = wheelRaycaster.ray.intersectPlane(wheelPlane, wheelAnchorBefore) !== null;
-    }
-
-    camera.position.copy(target).add(offset.normalize().multiplyScalar(nextDistance));
-    if (anchoredZoom) {
-      camera.updateMatrixWorld();
-      wheelRaycaster.setFromCamera(wheelPointerNdc, camera);
-      if (wheelRaycaster.ray.intersectPlane(wheelPlane, wheelAnchorAfter)) {
-        wheelDelta.subVectors(wheelAnchorBefore, wheelAnchorAfter);
-        camera.position.add(wheelDelta);
-        target.add(wheelDelta);
-      }
-    }
+    const next = zoomPerspectivePoseAtCanvasPoint(config.snapshot, pose(target), rect, { x: event.clientX - rect.left, y: event.clientY - rect.top }, nextDistance);
+    camera.position.set(next.position.x, next.position.y, next.position.z);
     config.onStart?.();
-    emitPose();
+    emitPose(moveTarget.set(next.target.x, next.target.y, next.target.z));
     config.onEnd?.();
     return true;
   };
