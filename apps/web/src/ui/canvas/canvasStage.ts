@@ -1,7 +1,7 @@
 import type { AppContext } from "@/app/appContext";
-import { getState } from "@/features/core/store";
+import { createEditorTools } from "@/features/polytope-editor/editorTools";
 import { createViewportRuntime } from "@/features/viewport/runtime";
-import { attachCanvasInteractions } from "@/ui/canvas/canvasInteractions";
+import { attachCanvasGestures } from "@/ui/canvas/canvasGestures";
 import { attachCanvasShortcuts } from "@/ui/canvas/canvasShortcuts";
 import { mountCanvasGL } from "@/ui/canvas/mountCanvasGL";
 import { mountHelpButton } from "@/ui/canvas/mountHelpButton";
@@ -27,15 +27,11 @@ export function createCanvasStage(parent: HTMLElement) {
 
   const mountChrome = (ctx: AppContext) => {
     const replayDuration = mountReplayDurationOverlay(main);
-    const detachInteractions = attachCanvasInteractions({
-      viewportApi,
-      saveHistory: ctx.services.history.save,
-      derivePolytope: ctx.services.polytope.derive,
-      onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
-      // a finger needs a more forgiving target than a mouse cursor
-      closeHitRadiusPx: hasCoarsePointer() ? 24 : 12,
-    });
-    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), { ...ctx.actions, handleUndoRedo: ctx.services.history.handleUndoRedo, showReplayDuration: replayDuration.show });
+    // the editor for the problem's dimension, driven by the canvas's gestures; a finger needs a
+    // more forgiving close target than a mouse cursor
+    const tools = createEditorTools({ ...ctx.editor, closeHitRadiusPx: hasCoarsePointer() ? 24 : 12 });
+    const detachGestures = attachCanvasGestures(gl.bridge.getCanvasElement(), tools);
+    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), { ...ctx.actions, showReplayDuration: replayDuration.show });
     const gallery = mountProblemGallery(main, ctx.actions);
     const toolbar = mountToolbar(main, ctx.actions);
     const help = mountHelpButton(main, viewport);
@@ -53,7 +49,8 @@ export function createCanvasStage(parent: HTMLElement) {
     main.append(handle);
     destroyChrome = () => {
       detachShortcuts();
-      detachInteractions();
+      tools.cleanup();
+      detachGestures();
       gallery.destroy();
       toolbar.destroy();
       help.destroy();

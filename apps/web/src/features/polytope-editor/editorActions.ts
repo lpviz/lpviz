@@ -13,12 +13,15 @@ import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 // a drag holds, previewing the pointer, and the pan rule. The canvas layer decides when; this
 // module decides what.
 
-export type EditorActionDeps = {
+/** What the editor acts through: the viewport, the undo history, the derive and the solver's re-run. */
+export type EditorDeps = {
   viewportApi: ViewportApi;
   /** push an undo entry: the current state, or the one captured when a drag began */
   saveHistory: (entry?: HistoryEntry) => void;
   /** re-derive the polytope from the drawing and re-solve */
   derivePolytope: () => void;
+  /** re-solve the active solver after the start marker moved or reset */
+  onSolverStartMoved: () => void;
 };
 
 /** The 2D view pans only once the drawing is finished; while drafting, a drag is part of the sketch. */
@@ -29,7 +32,7 @@ export const updatePanControls = (viewportApi: ViewportApi) => {
 // Every accepted transition is its own undoable step; an edit also clears the derived polytope
 // for the re-derive. A rejection goes to the problem panel's message slot (the same one that
 // shows "Nonconvex"), which the next accepted edit clears: no blocking dialog.
-export function applyEditorTransition({ viewportApi, saveHistory, derivePolytope }: EditorActionDeps, transition: EditorTransition) {
+export function applyEditorTransition({ viewportApi, saveHistory, derivePolytope }: EditorDeps, transition: EditorTransition) {
   if (transition.kind === "noop") return;
   if (transition.kind === "reject-nonconvex") {
     setState({ inequalitiesMessage: transition.reason });
@@ -44,7 +47,7 @@ export function applyEditorTransition({ viewportApi, saveHistory, derivePolytope
 // Finishing the drafted region as an open one, by the Enter key or the console's link: finish-open
 // yields noop, reject-nonconvex or edit, and only an edit clears the sketch cursor and hands the
 // canvas back to panning.
-export function finishOpenRegion(deps: EditorActionDeps) {
+export function finishOpenRegion(deps: EditorDeps) {
   const finished = getEditorTransition(getState(), { kind: "finish-open" });
   applyEditorTransition(deps, finished);
   if (finished.kind !== "edit") return;
@@ -53,8 +56,6 @@ export function finishOpenRegion(deps: EditorActionDeps) {
 }
 
 // ---- drags ----
-
-type DragDeps = { derivePolytope: () => void; onSolverStartMoved: () => void };
 
 const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, derivePolytope: () => void) => {
   const delta = (logicalCoords[0] - target.start[0]) * target.normal[0] + (logicalCoords[1] - target.start[1]) * target.normal[1];
@@ -93,7 +94,7 @@ const applyConstraintDrag = (target: ConstraintDragTarget, logicalCoords: Vec, d
 };
 
 /** Moves whatever the drag holds (a vertex, a constraint, the start marker or the objective) to the pointer's logical position. */
-export function applyDragTarget(dragTarget: DragTarget, logicalCoords: Vec, { derivePolytope, onSolverStartMoved }: DragDeps) {
+export function applyDragTarget(dragTarget: DragTarget, logicalCoords: Vec, { derivePolytope, onSolverStartMoved }: Pick<EditorDeps, "derivePolytope" | "onSolverStartMoved">) {
   if (dragTarget.kind === "point") {
     const pointIndex = dragTarget.index;
     setState({

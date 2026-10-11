@@ -1,11 +1,9 @@
 import { freshState, getState, on, setState } from "@/features/core/store";
 import type { HistoryService } from "@/features/history/historyService";
-import { finishOpenRegion } from "@/features/polytope-editor/editorActions";
-import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
+import { type EditorDeps, finishOpenRegion } from "@/features/polytope-editor/editorActions";
 import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
-import type { ViewportApi } from "@/features/viewport/runtime";
 import { clampZScale } from "@lpviz/viewport/defaults";
 
 // the solver actions the UI panels call directly
@@ -30,6 +28,8 @@ export type AppActions = Pick<SolverActions, (typeof SOLVER_ACTION_KEYS)[number]
   loadGalleryProblem: (problem: GalleryProblem) => void;
   /** finish the drafted region as an open one, as Enter does; the console's link, for a finger */
   finishOpenRegion: () => void;
+  undo: () => void;
+  redo: () => void;
   toggleSnapToGrid: () => void;
   toggleObjectiveHidden: () => void;
   zoomToFit: () => void;
@@ -64,21 +64,9 @@ const afterViewTransition = (fn: () => void) => {
   );
 };
 
-export function createAppActions({
-  solver,
-  share,
-  history,
-  polytope,
-  viewportApi,
-}: {
-  solver: SolverActions;
-  share: () => void;
-  history: HistoryService;
-  polytope: PolytopeService;
-  viewportApi: ViewportApi;
-}): AppActions {
+export function createAppActions({ solver, share, history, editor }: { solver: SolverActions; share: () => void; history: HistoryService; editor: EditorDeps }): AppActions {
   let topInset = 0;
-  const editor = { viewportApi, saveHistory: history.save, derivePolytope: polytope.derive };
+  const { viewportApi } = editor;
 
   const resetView = () => viewportApi.resetView();
   const toggle3D = () => {
@@ -111,7 +99,7 @@ export function createAppActions({
       afterViewTransition(resetView);
     },
     loadGalleryProblem: (problem) => {
-      history.save();
+      editor.saveHistory();
       solver.stopMotion();
       setState({
         vertices: problem.vertices.map((v) => [...v]),
@@ -124,17 +112,18 @@ export function createAppActions({
         highlightIndex: null,
         highlightIteratePathIndex: null,
         editorInteraction: { kind: "idle" },
-        clickFollowsDrag: false,
         rotateObjectiveMode: false,
         // any in-flight replay was already stopped by stopMotion() above;
         // clearing `replayActive` here without cancelling its RAF loop would
         // leave the loop running against the freshly loaded problem
       });
       viewportApi.set2DPanEnabled(true);
-      polytope.derive();
+      editor.derivePolytope();
       window.requestAnimationFrame(() => zoomToFit());
     },
     finishOpenRegion: () => finishOpenRegion(editor),
+    undo: () => history.handleUndoRedo(false),
+    redo: () => history.handleUndoRedo(true),
     toggleSnapToGrid: () => setState({ snapToGrid: !getState().snapToGrid }),
     toggleObjectiveHidden: () => setState({ objectiveHidden: !getState().objectiveHidden }),
 

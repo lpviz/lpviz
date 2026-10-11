@@ -23,14 +23,7 @@ export type DragTarget = (
       grabOffset?: Vec;
     }
 ) & { viewAnchor3D?: PointXYZ | undefined };
-type EditorInteractionState =
-  | { kind: "idle" }
-  | {
-      kind: "pending-drag";
-      target: Extract<DragTarget, { kind: "point" | "constraint" }>;
-      dragStartPos: { x: number; y: number };
-    }
-  | { kind: "dragging"; target: DragTarget };
+type EditorInteractionState = { kind: "idle" } | { kind: "pending-drag"; target: DragTarget; dragStartPos: { x: number; y: number } } | { kind: "dragging"; target: DragTarget };
 
 // The polytope editor's slice of the store: the drawn region, the objective and the pointer interaction.
 export type EditorState = {
@@ -48,8 +41,6 @@ export type EditorState = {
   snapToGrid: boolean;
   highlightIndex: number | null;
   editorInteraction: EditorInteractionState;
-  /** a drag just ended, so the click the browser sends after its lift is not a click */
-  clickFollowsDrag: boolean;
 };
 
 // The field a reset leaves alone: the dimension is fixed for the session when the app boots.
@@ -70,7 +61,6 @@ export function freshEditorState(): Omit<EditorState, keyof EditorRuntimeState> 
     snapToGrid: false,
     highlightIndex: null,
     editorInteraction: { kind: "idle" },
-    clickFollowsDrag: false,
   };
 }
 

@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
-import type { EditorActionDeps } from "./editorActions";
-import { createEditorTools2D } from "./editorTools2d";
+import type { EditorDeps } from "./editorActions";
+import { createEditorTools2D } from "./polygonTools";
 
 // The editor's pointer behaviour as the gesture layer sees it: one implementation per problem
-// dimension (editorTools2d is the polygon editor), chosen by createEditorTools. The gesture layer
+// dimension (polygonTools is the polygon editor), chosen by createEditorTools. The gesture layer
 // (ui/canvas/canvasGestures) normalizes mouse, pen and touch into these calls, in canvas
 // coordinates, and owns the events; nothing here touches the DOM. The keyboard shortcuts hold for
 // any editor and live in ui/canvas/canvasShortcuts.
@@ -20,9 +20,7 @@ export type EditorTools = {
   cleanup: () => void;
 };
 
-export type EditorToolsDeps = EditorActionDeps & {
-  /** Re-solve the active solver after the start marker moved or reset. */
-  onSolverStartMoved: () => void;
+export type EditorToolsDeps = EditorDeps & {
   /** How close, in canvas pixels, a click must land to the first vertex to close the region. */
   closeHitRadiusPx: number;
 };

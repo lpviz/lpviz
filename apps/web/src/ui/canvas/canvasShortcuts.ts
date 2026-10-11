@@ -1,12 +1,10 @@
 import type { AppActions } from "@/app/appActions";
 import { getState } from "@/features/core/store";
-import type { HistoryService } from "@/features/history/historyService";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import { dominantWheelDelta, swallow } from "@/ui/dom";
 import { DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 
-export type CanvasShortcutDeps = Pick<AppActions, "finishOpenRegion" | "toggleSnapToGrid" | "toggleObjectiveHidden" | "setZScale" | "updateSolverSetting"> & {
-  handleUndoRedo: HistoryService["handleUndoRedo"];
+export type CanvasShortcutDeps = Pick<AppActions, "undo" | "redo" | "finishOpenRegion" | "toggleSnapToGrid" | "toggleObjectiveHidden" | "setZScale" | "updateSolverSetting"> & {
   showReplayDuration: (durationMs: number) => void;
 };
 
@@ -17,7 +15,7 @@ const isTextEntryTarget = (target: EventTarget | null) =>
 // grid), H (hide the objective), + and - (the animation's length) and, in 3D, shift+wheel (the z
 // scale).
 export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasShortcutDeps): () => void {
-  const { handleUndoRedo, showReplayDuration, finishOpenRegion, toggleSnapToGrid, toggleObjectiveHidden, setZScale, updateSolverSetting } = deps;
+  const { undo, redo, showReplayDuration, finishOpenRegion, toggleSnapToGrid, toggleObjectiveHidden, setZScale, updateSolverSetting } = deps;
   const listeners = new AbortController();
   const { signal } = listeners;
 
@@ -36,7 +34,8 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasSho
     if (isTextEntryTarget(event.target)) return;
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "z") {
       event.preventDefault();
-      handleUndoRedo(event.shiftKey);
+      if (event.shiftKey) redo();
+      else undo();
     }
     if (event.key === "Enter") {
       // let a focused button or link activate natively

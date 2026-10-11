@@ -1,13 +1,9 @@
 import type { AppActions } from "@/app/appActions";
 import type { Layout } from "@/app/layout";
-import type { HistoryService } from "@/features/history/historyService";
-import type { PolytopeService } from "@/features/polytope-editor/polytopeService";
+import type { EditorDeps } from "@/features/polytope-editor/editorActions";
 
 export type AppContext = {
   actions: AppActions;
-  services: {
-    history: HistoryService;
-    polytope: PolytopeService;
-  };
+  editor: EditorDeps;
   layout: Pick<Layout, "getViewportSidebarWidth" | "onResizeStart">;
 };
