@@ -32,6 +32,13 @@ export function computeDrawingPhase(state: Pick<EditorState, (typeof DRAWING_PHA
   return "ready_for_solvers";
 }
 
+/**
+ * Whether the 2D view pans under a single pointer: not while a polytope is being sketched (a drag
+ * is then part of the sketch) and not while the editor holds the pointer.
+ */
+export const canPan2D = (state: Pick<EditorState, (typeof DRAWING_PHASE_KEYS)[number] | "editorInteraction">): boolean =>
+  state.editorInteraction.kind === "idle" && computeDrawingPhase(state) !== "sketching_polytope";
+
 /** Nearest vertex of the feasible region, or null if there are none. */
 function nearestPolytopeVertex(state: EditorState, point: Vec): Vec | null {
   if (!hasConstraints(state.polytope)) return null;

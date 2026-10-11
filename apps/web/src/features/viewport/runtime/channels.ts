@@ -21,7 +21,6 @@ export const {
 export type Controls2DConfig = Viewport2DContext & {
   enabled: boolean;
   blocked: boolean;
-  panEnabled: boolean;
   onStateChange?: (state: Viewport2DState) => void;
   onNavigationFrame?: () => void;
 };
@@ -29,12 +28,10 @@ export type Controls2DConfig = Viewport2DContext & {
 export const {
   set: set2DControlsConfig,
   reset: reset2DControlsConfig,
-  subscribe: subscribe2DControlsConfig,
   get: get2DControlsConfig,
 } = createSignal<Controls2DConfig>({
   enabled: false,
   blocked: false,
-  panEnabled: true,
   sidebarWidth: 0,
   state: deriveViewport2DState(DEFAULT_VIEWPORT_RENDER_SNAPSHOT, 0),
   fallbackSnapshot: DEFAULT_VIEWPORT_RENDER_SNAPSHOT,

@@ -1,5 +1,4 @@
 import { getState, setState } from "@/features/core/store";
-import { updatePanControls } from "@/features/polytope-editor/editorActions";
 import { decodeSharedState, encodeSharedState } from "@/features/share/compactUrl";
 import { decodeLegacySharedState } from "@/features/share/legacyLink";
 import { buildSharedStatePatch, type SharedAppState, sharedStateOf } from "@/features/share/sharedState";
@@ -26,8 +25,6 @@ export function applyUrlParamsOnce({ viewportApi, derivePolytope }: { viewportAp
     setState({ ...buildSharedStatePatch(sharedState, current), inequalitiesMessage: null, highlightIndex: null });
     const state = getState();
     if (state.completionMode !== "draft") derivePolytope();
-    // the editor mounted over an empty drawing with the pan off; a finished one pans
-    updatePanControls(viewportApi);
     if (sharedState.is3DMode === true && !state.is3DMode) viewportApi.start3DTransition(true);
   };
   if (!params.has("s")) return;

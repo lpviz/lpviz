@@ -1,5 +1,6 @@
 import { getState } from "@/features/core/store";
-import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewport/runtime/channels";
+import { canPan2D } from "@/features/problem/selectors";
+import { get2DControlsConfig } from "@/features/viewport/runtime/channels";
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
 import type { ViewportRect } from "@lpviz/viewport/snapshot";
@@ -8,7 +9,8 @@ import { attachPointerGestures } from "./pointerGestures";
 const WHEEL_ZOOM_FACTOR = 1.05;
 
 // The 2D view's pan (any single pointer) and zoom (wheel, pinch). They read the 2D controls
-// config, act only while it owns the view, and report every move through it.
+// config, act only while it owns the view (the pan also only while the drawing lets it, see
+// canPan2D), and report every move through it.
 export function attachPanZoom2D(canvas: HTMLCanvasElement, signal: AbortSignal): void {
   // the view at the start of a pan, which each move offsets from
   let activePan: { startClientX: number; startClientY: number; targetX: number; targetY: number; scaleFactor: number; gridSpacing: number } | null = null;
@@ -18,12 +20,7 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement, signal: AbortSignal):
     const config = get2DControlsConfig();
     return config.enabled && !config.blocked;
   };
-  const canPan = () => canZoom() && get2DControlsConfig().panEnabled && getState().editorInteraction.kind === "idle";
-  // a pan in progress ends the moment the controls lose the view
-  subscribe2DControlsConfig(() => {
-    const config = get2DControlsConfig();
-    if (!config.enabled || config.blocked || !config.panEnabled) activePan = null;
-  }, signal);
+  const canPan = () => canZoom() && canPan2D(getState());
 
   const startPan = (clientX: number, clientY: number) => {
     if (!canPan()) return false;
@@ -33,8 +30,10 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement, signal: AbortSignal):
     return true;
   };
   const updatePan = (clientX: number, clientY: number) => {
+    // a pan in progress ends the moment the controls lose the view or the drawing stops panning
+    if (activePan && !canPan()) activePan = null;
+    if (!activePan) return;
     const config = get2DControlsConfig();
-    if (!activePan || !config.enabled) return;
     const unitsPerPixel = 1 / (activePan.gridSpacing * activePan.scaleFactor);
     const target = { x: activePan.targetX - (clientX - activePan.startClientX) * unitsPerPixel, y: activePan.targetY + (clientY - activePan.startClientY) * unitsPerPixel };
     config.onStateChange?.(buildViewport2DStateFromTarget(target, activePan.scaleFactor, activePan.gridSpacing, config.sidebarWidth));

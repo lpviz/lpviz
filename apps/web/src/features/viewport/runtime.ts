@@ -47,7 +47,6 @@ export type ViewportApi = {
   ) => void;
   resetView: () => void;
   setControlsBlocked: (blocked: boolean) => void;
-  set2DPanEnabled: (enabled: boolean) => void;
   /** the world point under the canvas point, snapped and, in 3D, caught by the drag's plane */
   toLogicalCoords: (x: number, y: number) => Vec;
   /** where the world point (drawn at height `z`) lands on the canvas */
@@ -281,7 +280,6 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
   set2DControlsConfig({
     enabled: false,
     blocked: controlsBlocked,
-    panEnabled: true,
     sidebarWidth,
     state: deriveViewport2DState(ownedSnapshot, sidebarWidth),
     fallbackSnapshot: ownedSnapshot,
@@ -364,7 +362,6 @@ export function createViewportRuntime({ viewportBridge, signal }: { viewportBrid
       patch2DControls({ blocked });
       if (controls3DActive) publish3DControlsConfig();
     },
-    set2DPanEnabled: (enabled) => patch2DControls({ panEnabled: enabled }),
     toLogicalCoords: (x, y) => {
       const point = { x, y };
       const state = getState();

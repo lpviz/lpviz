@@ -2,7 +2,7 @@ import { setCurrentMouse } from "@/features/core/currentMouse";
 import { getState, setState, type State } from "@/features/core/store";
 import type { HistoryEntry } from "@/features/history/historyState";
 import { type EditorTransition, finishOpen as finishOpenTransition } from "@/features/polytope-editor/editorSession";
-import { computeDrawingPhase, type DrawingPhase } from "@/features/problem/selectors";
+import type { DrawingPhase } from "@/features/problem/selectors";
 import { type DragTarget } from "@/features/polytope-editor/editorState";
 import type { ConstraintDragTarget } from "@/features/polytope-editor/hitTesting";
 import type { ViewportApi } from "@/features/viewport/runtime";
@@ -10,8 +10,7 @@ import type { Vec } from "@lpviz/math/types";
 import { verticesFromConstraints } from "@lpviz/polytope/halfSpaces";
 
 // What the editor does to the store: applying a transition, finishing an open region, moving what
-// a drag holds, previewing the pointer, and the pan rule. The canvas layer decides when; this
-// module decides what.
+// a drag holds and previewing the pointer. The canvas layer decides when; this module decides what.
 
 /** What the editor acts through: the viewport, the undo history, the derive and the solver's re-run. */
 export type EditorDeps = {
@@ -24,15 +23,10 @@ export type EditorDeps = {
   onSolverStartMoved: () => void;
 };
 
-/** The 2D view pans only once the drawing is finished; while drafting, a drag is part of the sketch. */
-export const updatePanControls = (viewportApi: ViewportApi) => {
-  viewportApi.set2DPanEnabled(computeDrawingPhase(getState()) === "ready_for_solvers");
-};
-
 // Every accepted transition is its own undoable step; an edit also clears the derived polytope
 // for the re-derive. A rejection goes to the problem panel's message slot (the same one that
 // shows "Nonconvex"), which the next accepted edit clears: no blocking dialog.
-export function applyEditorTransition({ viewportApi, saveHistory, derivePolytope }: EditorDeps, transition: EditorTransition) {
+export function applyEditorTransition({ saveHistory, derivePolytope }: EditorDeps, transition: EditorTransition) {
   if (transition.kind === "noop") return;
   if (transition.kind === "reject-nonconvex") {
     setState({ inequalitiesMessage: transition.reason });
@@ -41,18 +35,14 @@ export function applyEditorTransition({ viewportApi, saveHistory, derivePolytope
   saveHistory();
   setState(transition.kind === "edit" ? { ...transition.result, polytope: null, inequalitiesMessage: null, highlightIndex: null } : { objectiveVector: transition.objectiveVector });
   derivePolytope();
-  updatePanControls(viewportApi);
 }
 
 // Finishing the drafted region as an open one, by the Enter key or the console's link: finish-open
-// yields noop, reject-nonconvex or edit, and only an edit clears the sketch cursor and hands the
-// canvas back to panning.
+// yields noop, reject-nonconvex or edit, and only an edit clears the sketch cursor.
 export function finishOpenRegion(deps: EditorDeps) {
   const finished = finishOpenTransition(getState());
   applyEditorTransition(deps, finished);
-  if (finished.kind !== "edit") return;
-  setCurrentMouse(null);
-  deps.viewportApi.set2DPanEnabled(true);
+  if (finished.kind === "edit") setCurrentMouse(null);
 }
 
 // ---- drags ----

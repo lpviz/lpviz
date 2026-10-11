@@ -69,9 +69,6 @@ export function createAppActions({ solver, share, history, editor }: { solver: S
       solver.stopMotion();
       solver.clearComputedState();
       setState(freshState());
-      // pan is enabled on an empty canvas; the first vertex placed turns it
-      // off until the region is finished
-      viewportApi.set2DPanEnabled(true);
       const { is3DMode, isTransitioning3D } = getState();
       if (is3DMode && !isTransitioning3D) toggle3D();
       viewportApi.afterTransition(resetView);
@@ -95,7 +92,6 @@ export function createAppActions({ solver, share, history, editor }: { solver: S
         // clearing `replayActive` here without cancelling its RAF loop would
         // leave the loop running against the freshly loaded problem
       });
-      viewportApi.set2DPanEnabled(true);
       editor.derivePolytope();
       window.requestAnimationFrame(() => zoomToFit());
     },

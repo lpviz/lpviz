@@ -2,7 +2,7 @@ import { getState, setState } from "@/features/core/store";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { computeDrawingPhase } from "@/features/problem/selectors";
 import { nearestEdge } from "@lpviz/math/polygon";
-import { applyEditorTransition, dragPatch, updatePanControls, updatePointerPreview } from "./editorActions";
+import { applyEditorTransition, dragPatch, updatePointerPreview } from "./editorActions";
 import { clickAt, deleteVertex, type EditorTransition, getEditorContext, insertOnEdge, insertOnRay, repairHull } from "./editorSession";
 import type { DragTarget } from "./editorState";
 import type { EditorTools, EditorToolsDeps } from "./editorTools";
@@ -41,16 +41,13 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
   // the undo entry captured when a drag begins, saved on its first real move
   let pendingDragHistory: HistoryEntry | null = null;
 
-  const restoreViewportControls = () => {
-    viewportApi.setControlsBlocked(false);
-    updatePanControls(viewportApi);
-  };
+  const unblockViewportControls = () => viewportApi.setControlsBlocked(false);
 
   const cleanup = () => {
     pendingDragHistory = null;
     setState({ editorInteraction: { kind: "idle" } });
-    restoreViewportControls();
-    requestAnimationFrame(restoreViewportControls);
+    unblockViewportControls();
+    requestAnimationFrame(unblockViewportControls);
   };
 
   const handleDragStart = (clientX: number, clientY: number): boolean => {
@@ -158,6 +155,5 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
     apply(clickAt(state, point, worldDistanceForPixels(viewportApi, point, closeHitRadiusPx)));
   };
 
-  updatePanControls(viewportApi);
   return { handleDragStart, handleDragMove, handleDragEnd, handleClick, handleDoubleClickAt, handleContextMenu, cleanup };
 }
