@@ -4,8 +4,8 @@ import { RENDER_ORDER } from "../helpers/renderOrder";
 import type { Layer, LayerPlacement } from "../Layer";
 import { PALETTE } from "../palette";
 
-// Fragment-shader grid on a single static quad: unit constraints and axes are computed per pixel from
-// world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Constraint[] are
+// Fragment-shader grid on a single static quad: unit lines and axes are computed per pixel from
+// world coordinates, so pan/zoom/orbit and 2D/3D transitions never rebuild geometry. Lines are
 // one device pixel with derivative-based coverage, which fades the grid out instead of aliasing
 // when it gets denser than the pixel grid. The quad is kept modest (fp32 varyings wobble at deep
 // zoom when vertex coordinates are huge) and recentered onto the integer-snapped camera target

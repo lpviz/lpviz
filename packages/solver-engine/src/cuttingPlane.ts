@@ -120,14 +120,15 @@ function clippedBox(boxPolygon: number[], localizing: number[][], boxRowCount: n
   let polygon = boxPolygon;
   for (let i = boxRowCount; i < localizing.length; i++) {
     const cut = localizing[i]!;
-    polygon = clipPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
+    polygon = clipBoxPolygon(polygon, cut[0]!, cut[1]!, cut[2]!);
     if (polygon.length === 0) break;
   }
   return polygon === boxPolygon ? [...boxPolygon] : polygon;
 }
 
-// Sutherland-Hodgman clip of a convex polygon against `a'x <= b`.
-function clipPolygon(polygon: readonly number[], a0: number, a1: number, b: number): number[] {
+// Sutherland-Hodgman clip of the box polygon against `a'x <= b`. Its own arithmetic, kept apart
+// from the math package's clip: the polygon is part of the hashed localizing set.
+function clipBoxPolygon(polygon: readonly number[], a0: number, a1: number, b: number): number[] {
   const out: number[] = [];
   const count = polygon.length / 2;
   if (count === 0) return out;

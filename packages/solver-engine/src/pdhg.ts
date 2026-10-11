@@ -1,3 +1,6 @@
+// PDHG on `max c'x s.t. Ax <= b` (or its equality form), with the Halpern-anchored iteration and its
+// restarts as an option: the core walks one scheme, the wrapper sets up the problem and the start.
+
 import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, maxAbsDifference, transposedMatVec } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
@@ -149,7 +152,8 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       basisHashes.push(hash);
     }
 
-    // the parts kkt.of measured for this (xk, yk) are the row's, and the ineq step's
+    // the parts kkt.of measured for this (xk, yk) are the row's, and the ineq step's; c is the
+    // negated objective (see pdhg), so the row's objective is -c'x
     trace.record(pointOf(xk), -kkt.cTx, kkt.primal, epsilonK);
 
     if (epsilonK <= tol || trace.count === maxit) {

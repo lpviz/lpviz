@@ -116,7 +116,7 @@ export function createReplayController({
         // everything that needs a real one (EllipsoidLayer reveals that
         // iterate's localizing ellipse). The green marker does not read it —
         // it rides the interpolated head instead, so it sweeps rather than
-        // snapping — see IterateHighlightLayer.
+        // snapping — see createIterateHighlightLayer.
         ...(isIterateHoverActive() ? {} : { highlightIteratePathIndex: base }),
       });
       shownCount = count;

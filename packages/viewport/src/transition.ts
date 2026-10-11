@@ -35,21 +35,21 @@ const ZERO_VIEW_ANGLE: PointXYZ = { x: 0, y: 0, z: 0 };
 const lerp = (start: number, end: number, t: number) => start + (end - start) * t;
 const lerpPoint = (start: PointXYZ, end: PointXYZ, t: number): PointXYZ => ({ x: lerp(start.x, end.x, t), y: lerp(start.y, end.y, t), z: lerp(start.z, end.z, t) });
 
-/** Plan the switch from `snapshot` to 3D (`targetMode` true) or back to 2D, from the current 3D `viewAngle`. */
-export function buildViewportTransitionPlan({ snapshot, targetMode, viewAngle }: { snapshot: ViewportRenderSnapshot; targetMode: boolean; viewAngle: PointXYZ }): ViewportTransitionPlan {
+/** Plan the switch from `snapshot` into 3D (`to3D`) or back to 2D, from the current 3D `viewAngle`. */
+export function buildViewportTransitionPlan({ snapshot, to3D, viewAngle }: { snapshot: ViewportRenderSnapshot; to3D: boolean; viewAngle: PointXYZ }): ViewportTransitionPlan {
   const startTarget = { x: snapshot.target.x, y: snapshot.target.y, z: snapshot.target.z };
   const snapshotDistance = getPerspectiveDistanceFromSnapshot3D(snapshot);
   return {
     baseSnapshot: snapshot,
-    direction: targetMode ? "to3d" : "to2d",
-    duration: targetMode ? TRANSITION_TO_3D_MS : TRANSITION_TO_2D_MS,
-    startAngles: targetMode ? { ...ZERO_VIEW_ANGLE } : { ...viewAngle },
-    endAngles: targetMode ? { ...DEFAULT_VIEW_ANGLE } : { ...ZERO_VIEW_ANGLE },
+    direction: to3D ? "to3d" : "to2d",
+    duration: to3D ? TRANSITION_TO_3D_MS : TRANSITION_TO_2D_MS,
+    startAngles: to3D ? { ...ZERO_VIEW_ANGLE } : { ...viewAngle },
+    endAngles: to3D ? { ...DEFAULT_VIEW_ANGLE } : { ...ZERO_VIEW_ANGLE },
     startTarget,
-    endTarget: { ...startTarget, z: targetMode ? startTarget.z : 0 },
+    endTarget: { ...startTarget, z: to3D ? startTarget.z : 0 },
     // a 3D view keeps its own distance on the way back; a 2D view takes the one that shows its zoom
     perspectiveDistance:
-      !targetMode && Number.isFinite(snapshotDistance) && snapshotDistance > 0
+      !to3D && Number.isFinite(snapshotDistance) && snapshotDistance > 0
         ? Math.max(MIN_PERSPECTIVE_DISTANCE, snapshotDistance)
         : getPerspectiveDistanceForUnitsPerPixel(snapshot, snapshot.unitsPerPixel, snapshot.height),
   };

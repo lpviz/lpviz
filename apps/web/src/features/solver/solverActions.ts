@@ -25,7 +25,12 @@ export type SolverActions = {
   destroy: () => void;
 };
 
+// The solver's actions: the settings and the mode, the objective rotation and the trace it leaves
+// (the trail of earlier paths kept on the canvas; not the engine's NumericTrace), the replay and
+// the highlights.
 export function createSolverActions(): SolverActions {
+  // a replay writes highlightIteratePathIndex too, so the field alone cannot say whether the
+  // person is hovering a row; the replay asks before it yields the highlight
   let iterateHoverActive = false;
   const presenter = createResultPresenter();
 

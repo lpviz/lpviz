@@ -39,7 +39,7 @@ export function centralPath(vertices: Vec[], constraints: readonly Constraint[],
   const { niter, interiorPoint } = opts;
 
   if (niter > MAX_PATH_POINTS) {
-    throw new Error("niter > 2^10 not allowed");
+    throw new Error(`niter > ${MAX_PATH_POINTS} not allowed`);
   }
 
   const startTime = performance.now();

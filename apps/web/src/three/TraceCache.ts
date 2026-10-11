@@ -6,7 +6,7 @@ import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
-// World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
+// World-anchored impostor for the traceLines render pass in 2D mode. Trace chunks are immutable
 // once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
 // sequence number (see traceSequence.ts): appends draw only the new chunks into
 // the existing target with no clear (alpha-over of one shared color and opacity is associative,
@@ -105,7 +105,7 @@ export class TraceCache {
     this.fullRebuildNeeded = true;
   }
 
-  // Prepares the impostor for the trace-constraints pass. Returns the scene with
+  // Prepares the impostor for the traceLines pass. Returns the scene with
   // the composite quads (the caller renders it in place of the pass), or
   // null when the pass must render directly.
   prepare(renderer: WebGLRenderer, traceLinesScene: Scene): TracePassImpostor | null {

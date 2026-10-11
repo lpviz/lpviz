@@ -5,7 +5,7 @@ import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 
-// Motion-time compositor for the trace-constraints pass in 3D mode.
+// Motion-time compositor for the traceLines pass in 3D mode.
 //
 // A perspective view cannot reuse a cached billboard across frames (parallax),
 // so orbiting re-renders every trace chunk every frame. That render is fill

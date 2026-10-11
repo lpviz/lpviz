@@ -27,9 +27,21 @@ const COORDINATE_SCALE = 1e4;
 const OBJECTIVE_SCALE = 1e6;
 const Z_SCALE_SCALE = 1e3;
 
+// The flags byte (header byte 1): bits 0-1 the completion mode, 2-4 the solver mode, then one bit
+// each for the 3D view, an objective and a z scale.
+const COMPLETION_MASK = 0x03;
+const SOLVER_SHIFT = 2;
+const SOLVER_MASK = 0x07;
+const IS_3D = 0x20;
+const HAS_OBJECTIVE = 0x40;
+const HAS_Z_SCALE = 0x80;
 // Extended flags (header byte 2), added in v2 because the first flags byte has
 // no spare bit left. Only ever append.
 const HAS_SOLVER_START = 0x01;
+// more vertices than any drawing holds (a decode stops rather than allocate for a corrupt count)
+const MAX_VERTICES = 100_000;
+// a varint longer than this cannot be a number this format writes
+const MAX_VARINT_BYTES = 8;
 
 // ─── varints ────────────────────────────────────────────────────────────────
 // Written with arithmetic rather than bit operations: quantized coordinates can
@@ -53,7 +65,7 @@ type Cursor = { at: number };
 function readVarint(bytes: Uint8Array, cursor: Cursor): number {
   let result = 0;
   let shift = 1;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < MAX_VARINT_BYTES; i++) {
     if (cursor.at >= bytes.length) throw new Error("truncated varint");
     const byte = bytes[cursor.at++]!;
     result += (byte & 0x7f) * shift;
@@ -142,11 +154,11 @@ export function encodeSharedState(state: SharedAppState): string {
   // default", so an untouched marker costs no bytes and stays correct even if
   // that default later moves. Only a point the user actually dragged is pinned.
   const start = coordinates(state.solverStartPoint);
-  bytes.push(completion | (solver << 2) | (state.is3DMode ? 0x20 : 0) | (objective ? 0x40 : 0) | (hasZScale ? 0x80 : 0));
+  bytes.push(completion | (solver << SOLVER_SHIFT) | (state.is3DMode ? IS_3D : 0) | (objective ? HAS_OBJECTIVE : 0) | (hasZScale ? HAS_Z_SCALE : 0));
   bytes.push(start ? HAS_SOLVER_START : 0);
   if (version >= 3) bytes.push(dimension);
 
-  const vertices = state.vertices ?? [];
+  const { vertices } = state;
   writeVarint(bytes, vertices.length);
   const previous = new Array<number>(dimension).fill(0);
   for (const vertex of vertices) {
@@ -162,7 +174,7 @@ export function encodeSharedState(state: SharedAppState): string {
   // a world coordinate the user placed by hand, so vertex precision applies
   if (start) for (const value of start) writeZigZag(bytes, quantize(value, COORDINATE_SCALE));
 
-  const settings = state.settings ?? {};
+  const { settings } = state;
   const written: number[] = [];
   const payload: number[] = [];
   SETTINGS.forEach((codec, index) => {
@@ -199,14 +211,14 @@ export function decodeSharedState(text: string): SharedAppState | null {
     const cursor: Cursor = { at: headerLength };
 
     const flags = bytes[1]!;
-    const completionMode = COMPLETION_MODES[flags & 0x03];
-    const solverMode = SOLVER_MODES[(flags >> 2) & 0x07];
+    const completionMode = COMPLETION_MODES[flags & COMPLETION_MASK];
+    const solverMode = SOLVER_MODES[(flags >> SOLVER_SHIFT) & SOLVER_MASK];
     if (!completionMode || !solverMode) return null;
 
     const readPoint = (scale: number): Vec => vecFrom(Array.from({ length: dimension }, () => dequantize(readZigZag(bytes, cursor), scale)));
 
     const vertexCount = readVarint(bytes, cursor);
-    if (vertexCount > 100_000) return null;
+    if (vertexCount > MAX_VERTICES) return null;
     const vertices: Vec[] = [];
     const running = new Array<number>(dimension).fill(0);
     for (let i = 0; i < vertexCount; i++) {
@@ -214,8 +226,8 @@ export function decodeSharedState(text: string): SharedAppState | null {
       vertices.push(vecFrom(running.map((value) => dequantize(value, COORDINATE_SCALE))));
     }
 
-    const objective: Vec | null = (flags & 0x40) !== 0 ? readPoint(OBJECTIVE_SCALE) : null;
-    const zScale = (flags & 0x80) !== 0 ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE) : undefined;
+    const objective: Vec | null = (flags & HAS_OBJECTIVE) !== 0 ? readPoint(OBJECTIVE_SCALE) : null;
+    const zScale = (flags & HAS_Z_SCALE) !== 0 ? dequantize(readVarint(bytes, cursor), Z_SCALE_SCALE) : undefined;
     const solverStartPoint: Vec | null = (extended & HAS_SOLVER_START) !== 0 ? readPoint(COORDINATE_SCALE) : null;
 
     const settingCount = readVarint(bytes, cursor);
@@ -244,7 +256,7 @@ export function decodeSharedState(text: string): SharedAppState | null {
       settings,
       solverStartPoint,
       ...(zScale !== undefined ? { zScale } : {}),
-      ...((flags & 0x20) !== 0 ? { is3DMode: true } : {}),
+      ...((flags & IS_3D) !== 0 ? { is3DMode: true } : {}),
     };
   } catch {
     return null;

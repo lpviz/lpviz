@@ -3,10 +3,8 @@ import type { State } from "@/features/core/store";
 import type { Vec } from "@lpviz/math/types";
 import { computeEditorRegionForState, getEditorContext, getEditorTransition } from "./editorSession";
 
-// Characterization tests for the pure editor FSM. These pin today's behavior so
-// the Phase 4 interaction rework (routing drags through getEditorTransition) is
-// provably behavior-preserving. getEditorTransition reads only a handful of
-// State fields, so a minimal fixture suffices.
+// Characterization tests for the pure editor FSM: they pin its behaviour. getEditorTransition reads
+// only a handful of State fields, so a minimal fixture suffices.
 function st(o: Partial<State>): State {
   return {
     vertices: [],

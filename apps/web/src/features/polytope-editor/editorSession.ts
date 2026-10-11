@@ -1,3 +1,7 @@
+// The editor's model of the drawing: the session (what the editor is doing), the geometry it shows
+// (the drawn chain, or the closure derived for an open region that closed up), the region derived
+// from it, and the transition each edit makes.
+
 import type { State } from "@/features/core/store";
 import { type CompletionMode, computeDrawingPhase } from "@/features/polytope-editor/editorState";
 import { derivedClosure } from "@/features/problem/selectors";
@@ -41,6 +45,10 @@ export type EditorTransition =
 
 type EditorSession = { kind: "drafting" | "selecting-objective" | "editing-closed" | "editing-open" };
 
+// What the drawing shows for a session: a drafted chain, an open region's chain, or a polygon (a
+// closed region, and an open one while its objective is placed).
+const displayedMode = (session: EditorSession): CompletionMode => (session.kind === "editing-open" ? "open" : session.kind === "drafting" ? "draft" : "closed");
+
 // What the editor is doing with the drawing: sketching it, placing its objective, or editing a
 // finished region (whose kind decides which edits apply).
 function sessionOf(state: State): EditorSession {
@@ -64,9 +72,7 @@ export function getEditorContext(state: State) {
   const isDraggingGeometry = state.editorInteraction.kind === "dragging" && state.editorInteraction.target.kind !== "objective";
   // while its geometry is dragged an open chain is edited as drawn, not as the hull it closed into
   const derived = session.kind === "editing-open" && !isDraggingGeometry ? derivedClosure(state) : null;
-  const geometry = derived
-    ? { vertices: derived, mode: "closed" as const, isDerivedClosed: true }
-    : { vertices: state.vertices, mode: session.kind === "editing-open" ? ("open" as const) : session.kind === "drafting" ? ("draft" as const) : ("closed" as const), isDerivedClosed: false };
+  const geometry = derived ? { vertices: derived, mode: "closed" as const, isDerivedClosed: true } : { vertices: state.vertices, mode: displayedMode(session), isDerivedClosed: false };
 
   return {
     session,
@@ -77,6 +83,8 @@ export function getEditorContext(state: State) {
 
 export function computeEditorRegionForState(state: State): EditorRegionResult {
   const { geometry, isDraggingGeometry } = getEditorContext(state);
+  // the region's own mode, not the displayed geometry's: an open region whose objective is being
+  // placed is shown closed but is still validated as the chain it is
   const sourceMode: CompletionMode = geometry.isDerivedClosed ? "closed" : state.completionMode;
 
   const isConvex = sourceMode === "open" ? isConvexChain(geometry.vertices) : isConvexPolygon(geometry.vertices);
