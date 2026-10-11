@@ -3,16 +3,26 @@ import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { QUERY_POINTS, cuttingPlane, type CuttingPlaneOptions, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
-import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, ellipseAt, footerOf, lastIterate, objectiveValue, randomPolygon, rowsOf } from "./fixtures";
+import {
+  bruteForceOptimum,
+  ellipseAt,
+  EMPTY,
+  EMPTY_HULL,
+  expectFeasible,
+  footerOf,
+  lastIterate,
+  LOCALIZATION_DEFAULTS,
+  objectiveValue,
+  randomObjective,
+  randomPolygon,
+  rowsOf,
+  SQUARE,
+  SQUARE_VERTICES,
+  STRIP,
+  STRIP_HULL,
+} from "./fixtures";
 
-const opts = (queryPoint: QueryPoint, o: Partial<CuttingPlaneOptions> = {}) => ({
-  maxit: 500,
-  tol: 1e-6,
-  rayShoot: true,
-  initialScale: 1.5,
-  queryPoint,
-  ...o,
-});
+const opts = (queryPoint: QueryPoint, o: Partial<CuttingPlaneOptions> = {}) => ({ ...LOCALIZATION_DEFAULTS, queryPoint, ...o });
 
 describe("cuttingPlane", () => {
   test("every query point finds the optimum of random polygons", () => {
@@ -22,7 +32,7 @@ describe("cuttingPlane", () => {
       const polygon = randomPolygon(rand, { gap: 0.3, radius: 6, spread: 12 });
       if (!polygon) continue;
       const { hull, constraints } = polygon;
-      const objective = Float64Array.of(rand() * 4 - 2, rand() * 4 - 2);
+      const objective = randomObjective(rand);
       if (Math.abs(objective[0]!) + Math.abs(objective[1]!) < 0.2) continue;
       const expected = bruteForceOptimum(objective, hull);
       runs++;
@@ -41,22 +51,14 @@ describe("cuttingPlane", () => {
       for (const objective of [Float64Array.of(1, 1), Float64Array.of(-2, 0.5), Float64Array.of(0, -1)]) {
         const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
         const last = lastIterate(r);
-        for (const [a1, a2, rhs] of SQUARE) {
-          expect(a1 * last[0]! + a2 * last[1]!).toBeLessThanOrEqual(rhs + 1e-7);
-        }
+        expectFeasible(SQUARE, last, 1e-7);
       }
     }
   });
 
   test("they need far fewer iterations than the ellipsoid method", () => {
     const objective = Float64Array.of(0.8, 0.6);
-    const reference = ellipsoid(SQUARE_VERTICES, SQUARE, objective, {
-      maxit: 500,
-      tol: 1e-6,
-      deepCuts: true,
-      rayShoot: true,
-      initialScale: 1.5,
-    });
+    const reference = ellipsoid(SQUARE_VERTICES, SQUARE, objective, { ...LOCALIZATION_DEFAULTS, deepCuts: true });
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       expect(r.iterates.length).toBeLessThan(reference.iterates.length / 2);
@@ -145,20 +147,8 @@ describe("cuttingPlane", () => {
   });
 
   test("an empty region terminates instead of spinning", () => {
-    const empty: Constraint[] = [
-      [1, 0, 1],
-      [-1, 0, -2],
-      [0, 1, 1],
-      [0, -1, 1],
-    ];
-    const hull: Vec[] = [
-      [1, 1],
-      [2, 1],
-      [2, -1],
-      [1, -1],
-    ];
     for (const queryPoint of QUERY_POINTS) {
-      const r = cuttingPlane(hull, empty, Float64Array.of(1, 1), opts(queryPoint));
+      const r = cuttingPlane(EMPTY_HULL, EMPTY, Float64Array.of(1, 1), opts(queryPoint));
       expect(r.iterates.length).toBeLessThan(500);
       expect(footerOf(r).startsWith("Converged")).toBe(false);
     }
@@ -167,19 +157,9 @@ describe("cuttingPlane", () => {
   test("reports an unbounded objective instead of claiming optimality", () => {
     // x in [-1, 2], maximize y: the optimum is only bounded by the initial box,
     // never by a constraint
-    const strip: Constraint[] = [
-      [1, 0, 2],
-      [-1, 0, 1],
-    ];
-    const hull: Vec[] = [
-      [-1, -5],
-      [2, -5],
-      [2, 5],
-      [-1, 5],
-    ];
     for (const queryPoint of QUERY_POINTS) {
       for (const rayShoot of [true, false]) {
-        const r = cuttingPlane(hull, strip, Float64Array.of(0, 1), opts(queryPoint, { rayShoot }));
+        const r = cuttingPlane(STRIP_HULL, STRIP, Float64Array.of(0, 1), opts(queryPoint, { rayShoot }));
         expect(footerOf(r).startsWith("Stopped on the initial box boundary")).toBe(true);
         expect(footerOf(r)).toContain("unbounded");
       }

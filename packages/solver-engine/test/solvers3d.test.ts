@@ -3,8 +3,8 @@ import { centralPath } from "../src/centralPath";
 import { ipm } from "../src/ipm";
 import { pdhg } from "../src/pdhg";
 import { simplex } from "../src/simplex";
-import { PDHG_DEFAULTS, footerOf, ipmOptions, lastIterate, rowsOf } from "./fixtures";
-import { BOX, CUBE, expectNear } from "./fixtures3d";
+import { expectNear, footerOf, ipmOptions, lastIterate, PDHG_DEFAULTS, rowsOf } from "./fixtures";
+import { BOX, CUBE } from "./fixtures3d";
 
 describe.each([
   ["cube, maximize x + y + z", CUBE, [1, 1, 1], [4, 4, 4]],

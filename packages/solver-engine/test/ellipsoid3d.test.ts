@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { QUERY_POINTS, cuttingPlane } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
 import { ellipsoidStride, localizingSetStride } from "../src/localization";
-import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, footerOf, lastIterate, objectiveValue, rowsOf } from "./fixtures";
+import { bruteForceOptimum, footerOf, lastIterate, LOCALIZATION_DEFAULTS, objectiveValue, rowsOf, SQUARE, SQUARE_VERTICES } from "./fixtures";
 import { BOX, SLICED_BOX, satisfiesAll, verticesOf } from "./fixtures3d";
 
-const shared = { maxit: 2000, tol: 1e-6, rayShoot: true, initialScale: 1.5 };
+const shared = { ...LOCALIZATION_DEFAULTS, maxit: 2000 };
 
 describe("ellipsoid family in three variables", () => {
   for (const [name, planes] of [

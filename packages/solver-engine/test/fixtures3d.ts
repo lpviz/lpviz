@@ -1,7 +1,6 @@
 // Three-variable regions as half-spaces [a1, a2, a3, b] (a'x <= b), and the brute force to check
 // a solver's answer against their vertices.
 
-import { expect } from "bun:test";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint, Vec } from "@lpviz/math/types";
 
@@ -55,8 +54,3 @@ export function verticesOf(planes: Constraint[]): Vec[] {
       }
   return out;
 }
-
-export const expectNear = (point: ArrayLike<number>, expected: readonly number[], digits: number) => {
-  expect(point.length).toBe(expected.length);
-  expected.forEach((value, j) => expect(point[j]!).toBeCloseTo(value, digits));
-};
