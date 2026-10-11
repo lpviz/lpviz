@@ -2,7 +2,7 @@ import type { AppActions } from "@/app/appActions";
 import { getState } from "@/features/core/store";
 import type { HistoryService } from "@/features/history/historyService";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
-import { swallow } from "@/ui/dom";
+import { dominantWheelDelta, swallow } from "@/ui/dom";
 import { DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 
 export type CanvasShortcutDeps = Pick<AppActions, "finishOpenRegion" | "toggleSnapToGrid" | "toggleObjectiveHidden" | "setZScale" | "updateSolverSetting"> & {
@@ -70,7 +70,7 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasSho
     swallow(event);
 
     const zoomFactor = 1.05;
-    const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    const dominantDelta = dominantWheelDelta(event);
     if (dominantDelta === 0) return;
 
     setZScale((zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor));

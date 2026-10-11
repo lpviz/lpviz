@@ -106,7 +106,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   // the 2D controls fall back to the owned snapshot, so every reassignment of it is also published to them
   const setOwnedSnapshot = (snapshot: ViewportRenderSnapshot) => {
     ownedSnapshot = snapshot;
-    patch2DControls({ sidebarWidth, fallbackSnapshot: snapshot });
+    patch2DControls({ fallbackSnapshot: snapshot });
   };
   const adoptPlanarSnapshot = () => setOwnedSnapshot(get2DControlsSnapshot());
   // a 2D state the controls or a fit produced: adopt it as the owned snapshot and publish it
@@ -115,7 +115,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     setOwnedSnapshot(buildViewport2DSnapshot({ state, sidebarWidth, fallbackSnapshot: ownedSnapshot }, rect));
     publishSnapshot(ownedSnapshot);
   };
-  const sync2DControls = (enabled: boolean) => patch2DControls({ enabled, blocked: controlsBlocked, sidebarWidth, fallbackSnapshot: ownedSnapshot });
+  const sync2DControls = (enabled: boolean) => patch2DControls({ enabled, blocked: controlsBlocked, fallbackSnapshot: ownedSnapshot });
 
   // ---- navigation: store.isNavigatingViewport is set while a gesture moves the view and
   // cleared VIEWPORT_NAVIGATION_IDLE_MS after its last frame ----
@@ -192,7 +192,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   const renderTransitionFrame = (plan: ViewportTransitionPlan, progress: number) => {
     const frame = buildViewportTransitionFrame(plan, progress, rect);
     if (plan.direction === "to2d") {
-      patch2DControls({ sidebarWidth, fallbackSnapshot: frame.snapshot, state: buildViewport2DStateFromTransitionFrame(plan, frame, rect, sidebarWidth) });
+      patch2DControls({ fallbackSnapshot: frame.snapshot, state: buildViewport2DStateFromTransitionFrame(plan, frame, rect, sidebarWidth) });
     }
     ownedSnapshot = frame.snapshot;
     return frame;

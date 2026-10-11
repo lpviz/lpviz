@@ -1,3 +1,4 @@
+import { settingRange } from "@/features/solver/solverSettings";
 import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { hasObjective, hasRegion } from "@/features/problem/selectors";
@@ -12,8 +13,8 @@ export function mountAnimationControlsPanel(parent: HTMLElement, actions: Pick<A
   const stop = button("Stop Rotation", () => actions.stopMotion());
   root.append(el("div", { className: "button-group" }, [animate]), el("div", { className: "button-group" }, [start, stop]));
   const rot = el("div", { className: "objective-rotation", attrs: { hidden: "" } });
-  const angle = range("objectiveAngleStepSlider", "0.01", "0.5", "0.01", (v) => actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
-  const speed = range("objectiveRotationSpeedSlider", "0.2", "3", "0.1", (v) => actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
+  const angle = range("objectiveAngleStepSlider", ...settingRange("objectiveAngleStep"), (v) => actions.updateSolverSetting("objectiveAngleStep", parseFloat(v)));
+  const speed = range("objectiveRotationSpeedSlider", ...settingRange("objectiveRotationSpeed"), (v) => actions.updateSolverSetting("objectiveRotationSpeed", parseFloat(v)));
   const trace = checkbox("traceCheckbox", (enabled) => actions.setTraceEnabled(enabled));
   const column = (className: string, text: string, control: HTMLInputElement) => el("div", { className }, [el("label", { className: "label-centered", attrs: { for: control.id }, text }), control]);
   rot.append(

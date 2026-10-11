@@ -1,4 +1,4 @@
-import { swallow } from "@/ui/dom";
+import { dominantWheelDelta, swallow } from "@/ui/dom";
 import type { PointXY } from "@lpviz/math/types";
 
 type TouchPair = { center: PointXY; distance: number };
@@ -88,7 +88,7 @@ export function attachPointerGestures(canvas: HTMLCanvasElement, handlers: Point
   };
 
   const onWheel = (event: WheelEvent) => {
-    const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    const dominantDelta = dominantWheelDelta(event);
     if (dominantDelta !== 0 && handlers.wheel(event, dominantDelta)) swallow(event);
   };
 

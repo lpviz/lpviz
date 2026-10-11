@@ -150,6 +150,21 @@ function ensureTexture(texture: DataTexture | null, rows: number): DataTexture {
   return new DataTexture(new Float32Array(TEX_WIDTH * rows * 4), TEX_WIDTH, rows, RGBAFormat, FloatType);
 }
 
+// `count` xyz triples uploaded as the rgba rows of a texture at least `rows` tall (alpha 1); stale
+// texels beyond `count` are never fetched (indices clamp)
+function uploadPointTexture(texture: DataTexture | null, rows: number, source: Float32Array, count: number): DataTexture {
+  const ensured = ensureTexture(texture, rows);
+  const data = ensured.image.data as Float32Array;
+  for (let i = 0; i < count; i++) {
+    data[i * 4] = source[i * 3]!;
+    data[i * 4 + 1] = source[i * 3 + 1]!;
+    data[i * 4 + 2] = source[i * 3 + 2]!;
+    data[i * 4 + 3] = 1;
+  }
+  ensured.needsUpdate = true;
+  return ensured;
+}
+
 // bound when a ribbon has no per-point colors, keeping a single program
 const dummyColorTexture = new DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1, RGBAFormat);
 dummyColorTexture.needsUpdate = true;
@@ -203,32 +218,14 @@ export class PathRibbon {
   // points: per-point [x, y, z]; colors: optional per-point linear RGB.
   setPath(points: Float32Array, pointCount: number, colors?: Float32Array | null): void {
     const rows = Math.max(1, Math.ceil(pointCount / TEX_WIDTH));
-    this.texture = ensureTexture(this.texture, rows);
-    const data = this.texture.image.data as Float32Array;
-    for (let i = 0; i < pointCount; i++) {
-      data[i * 4] = points[i * 3]!;
-      data[i * 4 + 1] = points[i * 3 + 1]!;
-      data[i * 4 + 2] = points[i * 3 + 2]!;
-      data[i * 4 + 3] = 1;
-    }
-    // stale texels beyond pointCount are never fetched (indices clamp)
-    this.texture.needsUpdate = true;
-
+    this.texture = uploadPointTexture(this.texture, rows, points, pointCount);
     this.material.uniforms.pathTex!.value = this.texture;
     this.material.uniforms.pointCount!.value = pointCount;
 
     // with per-point colors the uniform must not tint them
     (this.material.uniforms.color!.value as Color).copy(colors ? WHITE : this.baseColor);
     if (colors) {
-      this.colorTexture = ensureTexture(this.colorTexture, rows);
-      const rgba = this.colorTexture.image.data as Float32Array;
-      for (let i = 0; i < pointCount; i++) {
-        rgba[i * 4] = colors[i * 3]!;
-        rgba[i * 4 + 1] = colors[i * 3 + 1]!;
-        rgba[i * 4 + 2] = colors[i * 3 + 2]!;
-        rgba[i * 4 + 3] = 1;
-      }
-      this.colorTexture.needsUpdate = true;
+      this.colorTexture = uploadPointTexture(this.colorTexture, rows, colors, pointCount);
       this.material.uniforms.colorTex!.value = this.colorTexture;
       this.material.uniforms.useVertexColor!.value = 1;
     } else {
