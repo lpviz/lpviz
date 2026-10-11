@@ -2,6 +2,7 @@ import { renderOrderOf, type RenderSlot } from "../Layer";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
+import type { InterleavedBufferAttribute } from "three";
 import { applyHugeBounds } from "./hugeBounds";
 import { setPathRibbonResolution } from "./pathRibbon";
 
@@ -48,11 +49,19 @@ export function setupLine<T extends LineSegments2>(line: T, slot: RenderSlot): T
   return line;
 }
 
-// setPositions() wraps its input in a brand-new interleaved buffer on every
-// call, and the renderer only deletes GL buffers on geometry dispose — a
-// replaced attribute's buffer is otherwise orphaned until the JS wrapper is
-// garbage collected. Dispose first; the new buffers upload on the next render.
+// A line with as many segments as before (the objective arrow every rotation step, a region's
+// edges while a vertex drags) writes the new endpoints into the interleaved buffer it already
+// has, one bufferSubData on the next render. Otherwise setPositions() wraps its input in a
+// brand-new interleaved buffer, and the renderer only deletes GL buffers on geometry dispose — a
+// replaced attribute's buffer is otherwise orphaned until the JS wrapper is garbage collected.
+// Dispose first; the new buffers upload on the next render.
 function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array | number[]): void {
+  const start = geo.getAttribute("instanceStart") as InterleavedBufferAttribute | undefined;
+  if (start && start.data.array.length === positions.length) {
+    (start.data.array as Float32Array).set(positions);
+    start.data.needsUpdate = true;
+    return;
+  }
   geo.dispose();
   geo.setPositions(positions);
   delete (geo as unknown as { _maxInstanceCount?: number })._maxInstanceCount;
