@@ -1,7 +1,11 @@
 import { getState, setState } from "@/features/core/store";
 import { formatVirtualResultRow } from "@/features/solver/resultPacking";
-import type { ResultView } from "@/features/solver/solverState";
-import type { ResultLogSection, ResultRenderPayload, ResultTextBlock, VirtualResultPayload, VirtualResultRow } from "@/features/solver/types";
+import type { ResultTextBlock, ResultView } from "@/features/solver/solverState";
+import type { LazyRows, ResultLogSection, VirtualResultRow } from "@/features/solver/types";
+
+/** What a solve renders: a single run as a header, lazily formatted rows and a footer, or a phased run (or a message) as blocks. */
+export type VirtualResultPayload = { kind: "virtual"; header: string; rows: LazyRows; footer: string };
+export type ResultRenderPayload = VirtualResultPayload | { kind: "blocks"; blocks: ResultTextBlock[] };
 
 // While the objective rotates the log is re-rendered on every step, so it shows
 // a window of this many rows instead of the whole run: the first rows, a gap
@@ -21,9 +25,9 @@ const normalizeLog = (value: string) => value.replace(/\n+$/g, "");
 export function renderPayload(log: ResultLogSection[]): ResultRenderPayload {
   const [section] = log;
   if (section && log.length === 1) {
-    return { type: "virtual", header: normalizeLog(section.header), rows: section.rows, footer: normalizeLog(section.footer ?? "") };
+    return { kind: "virtual", header: normalizeLog(section.header), rows: section.rows, footer: normalizeLog(section.footer ?? "") };
   }
-  return { type: "blocks", blocks: phaseBlocks(log) };
+  return { kind: "blocks", blocks: phaseBlocks(log) };
 }
 
 const block = (kind: ResultTextBlock["kind"], text: string, index?: number): ResultTextBlock => ({ kind, text, index });
@@ -48,7 +52,7 @@ const USAGE: ResultView = { kind: "usage" };
 
 /** A two-line result: a header and the one line under it (why a solver did not run, or its error). */
 export const messageBlocks = (header: string, message: string): ResultRenderPayload => ({
-  type: "blocks",
+  kind: "blocks",
   blocks: [block("header", header), block("note", message)],
 });
 
@@ -79,7 +83,7 @@ export function createResultPresenter(): ResultPresenter {
 
   const applyRender = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
     const limitVirtualRows = options.limitVirtualRows ?? getState().rotateObjectiveMode;
-    if (payload.type === "virtual") {
+    if (payload.kind === "virtual") {
       const rows = payload.rows;
       const windowed = limitVirtualRows && rows.length > ROTATE_ROW_LIMIT;
       const rowCount = windowed ? ROTATE_ROW_LIMIT : rows.length;
@@ -101,10 +105,10 @@ export function createResultPresenter(): ResultPresenter {
       const sampleBlocks = rowCount > 0 ? [blockAt(0), blockAt(rowCount >> 1), blockAt(rowCount - 1)] : [];
       show({
         kind: "virtual",
-        header: payload.header || "",
-        footer: payload.footer ?? null,
+        header: payload.header,
+        footer: payload.footer,
         rows: { length: rowCount, at: blockAt },
-        maxLineChars: getMaxLineChars([payload.header || "", ...(payload.footer ? [payload.footer] : []), ...sampleBlocks.flatMap((block) => (block ? [block.text] : []))]),
+        maxLineChars: getMaxLineChars([payload.header, payload.footer, ...sampleBlocks.flatMap((block) => (block ? [block.text] : []))]),
       });
     } else {
       show({ kind: "blocks", blocks: payload.blocks, maxLineChars: getMaxLineChars(payload.blocks.map((b) => b.text)) });
@@ -113,7 +117,7 @@ export function createResultPresenter(): ResultPresenter {
   // lastVirtualResult is the latest virtual payload, which restoreFullVirtualResult re-renders
   // without the rotation cap; a deferred render is flushed with the payload it recorded
   const render = (payload: ResultRenderPayload, options: RenderOptions = {}) => {
-    lastVirtualResult = payload.type === "virtual" ? payload : null;
+    lastVirtualResult = payload.kind === "virtual" ? payload : null;
     if (getState().isNavigatingViewport) {
       pendingRender = { payload, options };
       return;

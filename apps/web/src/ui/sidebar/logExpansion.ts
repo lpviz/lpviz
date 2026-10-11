@@ -19,6 +19,7 @@
 // sides), where the directions are, while a region is being drawn, and back to the top, where
 // the problem and the solvers are, once it is complete.
 
+import { DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
 import { getState, on } from "@/features/core/store";
 import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
 import { COARSE_POINTER_QUERY, prefersReducedMotion } from "@/ui/media";
@@ -157,7 +158,7 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     applyExpansion();
     content.scrollTo({ top: roomAbove() - gutter(), behavior: scrollBehavior() });
   };
-  on(["vertices", "completionMode", "objectiveVector", "currentObjective"], followDrawing, signal);
+  on(DRAWING_PHASE_KEYS, followDrawing, signal);
   followDrawing();
 
   return {

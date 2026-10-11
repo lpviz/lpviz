@@ -35,9 +35,9 @@ export function initialViewportRuntimeState(): ViewportRuntimeState {
 }
 
 // Which render layers a change to each viewport field repaints (merged into the store's FIELD_DIRTY).
-export const VIEWPORT_DIRTY: Partial<Record<keyof ViewportState, () => ViewportDirtyFlags>> = {
+export const VIEWPORT_DIRTY: Partial<Record<keyof ViewportState, ViewportDirtyFlags>> = {
   // zScale rescales every world-anchored layer's height; entering, leaving or being in 3D re-poses them
-  zScale: () => WORLD_ANCHORED_DIRTY,
-  is3DMode: () => WORLD_ANCHORED_DIRTY,
-  isTransitioning3D: () => WORLD_ANCHORED_DIRTY,
+  zScale: WORLD_ANCHORED_DIRTY,
+  is3DMode: WORLD_ANCHORED_DIRTY,
+  isTransitioning3D: WORLD_ANCHORED_DIRTY,
 };

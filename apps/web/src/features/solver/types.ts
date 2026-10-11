@@ -1,5 +1,5 @@
 import type { EllipsoidQueryPoint } from "./solverSettings";
-import type { EllipsoidPath, IteratePath, LazyList, LocalizingSetPath, ResultTextBlock } from "./solverState";
+import type { EllipsoidPath, IteratePath, LazyList, LocalizingSetPath } from "./solverState";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
@@ -80,21 +80,3 @@ export type UnpackedSolverResult = Pick<SolverResult, "phases" | "restartIndices
 export type SolverWorkerSuccessResponse = { id: number; success: true; result: UnpackedSolverResult };
 
 export type SolverWorkerResponse = SolverWorkerSuccessResponse | SolverWorkerError;
-
-// ---------- render ----------
-
-export type { ResultTextBlock } from "./solverState";
-
-export interface VirtualResultPayload {
-  type: "virtual";
-  header: string;
-  rows: LazyRows;
-  footer?: string | undefined;
-}
-
-interface BlocksResultPayload {
-  type: "blocks";
-  blocks: ResultTextBlock[];
-}
-
-export type ResultRenderPayload = VirtualResultPayload | BlocksResultPayload;

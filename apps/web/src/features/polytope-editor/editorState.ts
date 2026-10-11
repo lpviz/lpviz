@@ -2,7 +2,7 @@ import { showsDepth, type ViewportState } from "@/features/viewport/viewportStat
 import type { Constraint, PointXYZ, Vec } from "@lpviz/math/types";
 import { vecDistance, type Dimension } from "@lpviz/math/vec";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags, FieldDirty } from "@/features/viewport/dirtyFlags";
 
 export const COMPLETION_MODES = ["draft", "closed", "open"] as const;
 export type CompletionMode = (typeof COMPLETION_MODES)[number];
@@ -93,17 +93,20 @@ const POLYTOPE_DIRTY: ViewportDirtyFlags = {
 const objectiveDirty = (s: Pick<ViewportState, "is3DMode" | "isTransitioning3D">): ViewportDirtyFlags => (showsDepth(s) ? { polytope: true, objective: true } : { objective: true });
 
 // Which render layers a change to each editor field repaints (merged into the store's FIELD_DIRTY).
-export const EDITOR_DIRTY: Partial<Record<keyof EditorState, (s: Pick<ViewportState, "is3DMode" | "isTransitioning3D">) => ViewportDirtyFlags>> = {
-  vertices: () => POLYTOPE_DIRTY,
-  polytope: () => POLYTOPE_DIRTY,
-  completionMode: () => POLYTOPE_DIRTY,
+export const EDITOR_DIRTY: Partial<Record<keyof EditorState, FieldDirty<Pick<ViewportState, "is3DMode" | "isTransitioning3D">>>> = {
+  vertices: POLYTOPE_DIRTY,
+  polytope: POLYTOPE_DIRTY,
+  completionMode: POLYTOPE_DIRTY,
   objectiveVector: objectiveDirty,
   currentObjective: objectiveDirty,
-  objectiveHidden: () => ({ objective: true }),
-  highlightIndex: () => ({ constraints: true }),
+  objectiveHidden: { objective: true },
+  highlightIndex: { constraints: true },
 };
 
-export function computeDrawingPhase(state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective">): DrawingPhase {
+/** The fields the drawing phase is computed from; whoever follows the phase subscribes to exactly these. */
+export const DRAWING_PHASE_KEYS = ["vertices", "completionMode", "objectiveVector", "currentObjective"] as const satisfies readonly (keyof EditorState)[];
+
+export function computeDrawingPhase(state: Pick<EditorState, (typeof DRAWING_PHASE_KEYS)[number]>): DrawingPhase {
   const verticesCount = state.vertices.length;
   const regionFinished = state.completionMode !== "draft";
   const hasObjective = state.objectiveVector !== null;

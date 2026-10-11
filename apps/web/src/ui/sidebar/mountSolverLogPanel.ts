@@ -1,3 +1,4 @@
+import { DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
 import type { AppActions } from "@/app/appActions";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
@@ -35,7 +36,7 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
     }
     result.append(el("div", { className: "iterate-header", text: view.header }));
     const sc = el("div", { className: "iterate-scroll" });
-    result.append(sc, el("div", { className: "iterate-footer", text: view.footer ?? "" }));
+    result.append(sc, el("div", { className: "iterate-footer", text: view.footer }));
     if (view.rows.length === 0) sc.append(el("div", { className: "iterate-item-nohover", text: "No iterations available." }));
     else refillVirtualWindow = mountVirtualRows(sc, view.rows, result);
     hover.scheduleHoverSync();
@@ -52,7 +53,7 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
   // while a (potentially huge) solver result is mounted.
   const hintSync = new AbortController();
   on(
-    ["vertices", "completionMode", "objectiveVector", "currentObjective"],
+    DRAWING_PHASE_KEYS,
     () => {
       const state = getState();
       if (state.result.kind === "usage") render(state);

@@ -1,7 +1,7 @@
 import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { SOLVER_LABELS, type SolverMode } from "@/features/solver/solverSettings";
-import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
+import { isReadyForSolvers, isSolverSelectable, READY_FOR_SOLVERS_KEYS } from "@/features/problem/selectors";
 import { button, el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
@@ -52,7 +52,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppA
     syncSettings(state.solverSettings);
   }
 
-  const stopRender = renderOn(["solverMode", "solverSettings", "polytope", "vertices", "completionMode", "objectiveVector", "currentObjective"], render);
+  const stopRender = renderOn(["solverMode", "solverSettings", ...READY_FOR_SOLVERS_KEYS], render);
   return {
     destroy: () => {
       stopRender();

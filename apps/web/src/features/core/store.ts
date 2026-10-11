@@ -8,14 +8,14 @@ import { freshHistoryState, type HistoryState } from "@/features/history/history
 import { EDITOR_DIRTY, freshEditorState, initialEditorRuntimeState, type EditorRuntimeState, type EditorState } from "@/features/polytope-editor/editorState";
 import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverRuntimeState, type SolverState } from "@/features/solver/solverState";
 import { freshViewportState, initialViewportRuntimeState, VIEWPORT_DIRTY, type ViewportRuntimeState, type ViewportState } from "@/features/viewport/viewportState";
-import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportDirtyFlags, FieldDirty } from "@/features/viewport/dirtyFlags";
 
 export type State = EditorState & SolverState & HistoryState & ViewportState;
 
 // Which render layers a change to each store field repaints: the slices' tables merged. setState
 // derives the repaint from the changed fields; fields absent here (pure UI/solver-config state,
 // history) repaint nothing.
-const FIELD_DIRTY: Partial<Record<keyof State, (s: State) => ViewportDirtyFlags>> = {
+const FIELD_DIRTY: Partial<Record<keyof State, FieldDirty<State>>> = {
   ...EDITOR_DIRTY,
   ...SOLVER_DIRTY,
   ...VIEWPORT_DIRTY,
@@ -24,10 +24,10 @@ const FIELD_DIRTY: Partial<Record<keyof State, (s: State) => ViewportDirtyFlags>
 export function deriveViewportDirty(state: State, changedKeys: readonly (keyof State)[]): ViewportDirtyFlags | null {
   let flags: ViewportDirtyFlags | null = null;
   for (const key of changedKeys) {
-    const derive = FIELD_DIRTY[key];
-    if (!derive) continue;
+    const dirty = FIELD_DIRTY[key];
+    if (!dirty) continue;
     // build a fresh object (never mutate the shared flag constants)
-    flags = Object.assign(flags ?? {}, derive(state));
+    flags = Object.assign(flags ?? {}, typeof dirty === "function" ? dirty(state) : dirty);
   }
   return flags;
 }

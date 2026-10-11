@@ -3,7 +3,7 @@ import type { State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { NULL_STATE_LOGO_SVG } from "@/ui/logo";
-import { hasObjective, hasRegion } from "@/features/problem/selectors";
+import { hasObjective, hasRegion, READY_FOR_SOLVERS_KEYS } from "@/features/problem/selectors";
 import { formatConstraint } from "@lpviz/polytope/constraints";
 
 const VARIABLE_NAMES = ["x", "y", "z"];
@@ -78,7 +78,7 @@ export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions,
       );
     });
   }
-  const stopRender = renderOn(["completionMode", "objectiveVector", "currentObjective", "vertices", "polytope", "inequalitiesMessage"], render);
+  const stopRender = renderOn([...READY_FOR_SOLVERS_KEYS, "inequalitiesMessage"], render);
   return {
     destroy: () => {
       stopRender();

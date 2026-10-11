@@ -10,6 +10,9 @@ export type ViewportDirtyFlags = Partial<{
   iterate: boolean;
 }>;
 
+/** What a field's change repaints: a fixed set, or one the state decides (see the slices' *_DIRTY tables). */
+export type FieldDirty<S> = ViewportDirtyFlags | ((state: S) => ViewportDirtyFlags);
+
 // Repaint everything: a snapshot change that re-poses every layer.
 export const ALL_VIEWPORT_DIRTY: ViewportDirtyFlags = {
   grid: true,

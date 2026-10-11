@@ -1,5 +1,5 @@
 import type { EditorState } from "@/features/polytope-editor/editorState";
-import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
+import { computeDrawingPhase, DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
 import type { SolverMode } from "@/features/solver/solverSettings";
 import type { Vec } from "@lpviz/math/types";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/halfSpaces";
@@ -24,9 +24,11 @@ export const hasObjective = (state: Pick<EditorState, "objectiveVector">): boole
 export const derivedClosure = (state: Pick<EditorState, "completionMode" | "polytope">): Vec[] | null =>
   state.completionMode === "open" && state.polytope?.kind === "bounded" && state.polytope.vertices.length >= 3 ? state.polytope.vertices : null;
 
+/** The fields `isReadyForSolvers` reads. */
+export const READY_FOR_SOLVERS_KEYS = [...DRAWING_PHASE_KEYS, "polytope"] as const;
+
 /** The drawing is finished, derived, and has an objective: everything a solve needs. */
-export const isReadyForSolvers = (state: Pick<EditorState, "vertices" | "completionMode" | "objectiveVector" | "currentObjective" | "polytope">): boolean =>
-  computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope);
+export const isReadyForSolvers = (state: Pick<EditorState, (typeof READY_FOR_SOLVERS_KEYS)[number]>): boolean => computeDrawingPhase(state) === "ready_for_solvers" && hasConstraints(state.polytope);
 
 /** An unbounded region recedes along `direction`, so maximizing it has no optimum. */
 export const isUnboundedDirection = (state: Pick<EditorState, "polytope">, direction: Vec): boolean =>

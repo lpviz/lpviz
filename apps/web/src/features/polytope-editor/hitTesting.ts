@@ -104,7 +104,7 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
     return { kind: "point", index, viewAnchor3D: vertex ? getViewAnchor3D(state, vertex) : undefined };
   };
 
-  if (session.kind === "drafting") return vertexTarget();
+  if (session === "drafting") return vertexTarget();
 
   if (state.objectiveVector) {
     const tip = viewportApi.toCanvasCoords(state.objectiveVector[0], state.objectiveVector[1]);
@@ -132,7 +132,7 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
   const constraintTarget = (operation: ConstraintDragTarget["operation"], constraint: Constraint | undefined): DragTarget | null =>
     constraint ? { kind: "constraint", operation, start: logicalCoords, normal: [constraint[0], constraint[1]] } : null;
 
-  if (session.kind === "editing-closed" && state.vertices.length >= 3) {
+  if (session === "editing-closed" && state.vertices.length >= 3) {
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance);
     if (edgeIndex === null) return null;
     const start = state.vertices[edgeIndex]!;
@@ -141,7 +141,7 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
     return constraintTarget({ kind: "closed-line", lineIndex: edgeIndex, constraints }, constraints[edgeIndex]);
   }
 
-  if (session.kind === "editing-open" && state.vertices.length >= 2) {
+  if (session === "editing-open" && state.vertices.length >= 2) {
     const edgeIndex = nearestEdge(state.vertices, logicalCoords, edgeTolerance, false);
     if (edgeIndex !== null) return constraintTarget({ kind: "open-vertices", vertexIndices: [edgeIndex, edgeIndex + 1] }, constraints[edgeIndex]);
 

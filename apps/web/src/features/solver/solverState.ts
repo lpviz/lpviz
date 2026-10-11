@@ -23,9 +23,7 @@ export type LazyList<T> = {
 // single run as a header, a virtual list of rows and a footer. `maxLineChars` is the widest line,
 // which the panel fits its font to.
 export type ResultView =
-  | { kind: "usage" }
-  | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number }
-  | { kind: "virtual"; header: string; footer: string | null; rows: LazyList<ResultTextBlock>; maxLineChars: number };
+  { kind: "usage" } | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number } | { kind: "virtual"; header: string; footer: string; rows: LazyList<ResultTextBlock>; maxLineChars: number };
 
 // Flat, contiguous iterate coordinates: iterate `i` lives at [i*stride .. i*stride+stride), with
 // `stride` the problem's dimension. `lift[i]` is the height the 3D view raises iterate `i` above the
@@ -131,21 +129,21 @@ const ITERATE_DIRTY: ViewportDirtyFlags = { iterate: true };
 const TRACE_DIRTY: ViewportDirtyFlags = { trace: true };
 
 // Which render layers a change to each solver field repaints (merged into the store's FIELD_DIRTY).
-export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirtyFlags>> = {
+export const SOLVER_DIRTY: Partial<Record<keyof SolverState, ViewportDirtyFlags>> = {
   // the start marker renders in the iterate overlay pass
-  solverStartPoint: () => ITERATE_DIRTY,
-  solverMode: () => ITERATE_DIRTY,
-  iteratePath: () => ITERATE_DIRTY,
-  iterateEllipsoids: () => ITERATE_DIRTY,
-  iterateLocalizingSets: () => ITERATE_DIRTY,
-  iteratePhases: () => ITERATE_DIRTY,
-  iterateRestartIndices: () => ITERATE_DIRTY,
-  highlightIteratePathIndex: () => ITERATE_DIRTY,
+  solverStartPoint: ITERATE_DIRTY,
+  solverMode: ITERATE_DIRTY,
+  iteratePath: ITERATE_DIRTY,
+  iterateEllipsoids: ITERATE_DIRTY,
+  iterateLocalizingSets: ITERATE_DIRTY,
+  iteratePhases: ITERATE_DIRTY,
+  iterateRestartIndices: ITERATE_DIRTY,
+  highlightIteratePathIndex: ITERATE_DIRTY,
   // the optimum star is hidden for the duration of a replay, so starting or
   // stopping one changes what the iterate pass draws (see createIterateStarLayer)
-  replayActive: () => ITERATE_DIRTY,
-  traceBuffer: () => TRACE_DIRTY,
-  traceEnabled: () => TRACE_DIRTY,
+  replayActive: ITERATE_DIRTY,
+  traceBuffer: TRACE_DIRTY,
+  traceEnabled: TRACE_DIRTY,
 };
 
 // What the draggable start marker means to each solver: nothing (it finds its own start), any
