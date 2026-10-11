@@ -1,14 +1,13 @@
-import { getState, setState } from "@/features/core/store";
+import type { AppActions } from "@/app/appActions";
+import { getState } from "@/features/core/store";
 import type { HistoryService } from "@/features/history/historyService";
 import { stepReplayDurationMs } from "@/features/solver/replayDuration";
 import { swallow } from "@/ui/dom";
-import { clampZScale, DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
+import { DEFAULT_Z_SCALE } from "@lpviz/viewport/defaults";
 
-export type CanvasShortcutDeps = {
+export type CanvasShortcutDeps = Pick<AppActions, "finishOpenRegion" | "toggleSnapToGrid" | "toggleObjectiveHidden" | "setZScale" | "updateSolverSetting"> & {
   handleUndoRedo: HistoryService["handleUndoRedo"];
   showReplayDuration: (durationMs: number) => void;
-  /** finish the drafted region as an open one */
-  finishOpenRegion: () => void;
 };
 
 const isTextEntryTarget = (target: EventTarget | null) =>
@@ -17,7 +16,8 @@ const isTextEntryTarget = (target: EventTarget | null) =>
 // The shortcuts that hold for any editor: undo/redo, Enter (leave the region open), S (snap to
 // grid), H (hide the objective), + and - (the animation's length) and, in 3D, shift+wheel (the z
 // scale).
-export function attachCanvasShortcuts(canvas: HTMLCanvasElement, { handleUndoRedo, showReplayDuration, finishOpenRegion }: CanvasShortcutDeps): () => void {
+export function attachCanvasShortcuts(canvas: HTMLCanvasElement, deps: CanvasShortcutDeps): () => void {
+  const { handleUndoRedo, showReplayDuration, finishOpenRegion, toggleSnapToGrid, toggleObjectiveHidden, setZScale, updateSolverSetting } = deps;
   const listeners = new AbortController();
   const { signal } = listeners;
 
@@ -26,9 +26,7 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, { handleUndoRed
   const adjustReplayDuration = (direction: 1 | -1) => {
     const { solverSettings } = getState();
     const replayDurationMs = stepReplayDurationMs(solverSettings.replayDurationMs, direction);
-    if (replayDurationMs !== solverSettings.replayDurationMs) {
-      setState({ solverSettings: { ...solverSettings, replayDurationMs } });
-    }
+    if (replayDurationMs !== solverSettings.replayDurationMs) updateSolverSetting("replayDurationMs", replayDurationMs);
     showReplayDuration(replayDurationMs);
   };
 
@@ -49,14 +47,8 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, { handleUndoRed
       finishOpenRegion();
     }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
-    if (event.key.toLowerCase() === "s") {
-      const { snapToGrid } = getState();
-      setState({ snapToGrid: !snapToGrid });
-    }
-    if (event.key.toLowerCase() === "h") {
-      const { objectiveHidden } = getState();
-      setState({ objectiveHidden: !objectiveHidden });
-    }
+    if (event.key.toLowerCase() === "s") toggleSnapToGrid();
+    if (event.key.toLowerCase() === "h") toggleObjectiveHidden();
     // "=" and "_" are the unshifted/shifted twins of "+" and "-", so both
     // layouts of each key work. Checked after the modifier guard above so
     // ctrl/cmd +/- stays browser zoom.
@@ -81,8 +73,7 @@ export function attachCanvasShortcuts(canvas: HTMLCanvasElement, { handleUndoRed
     const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
     if (dominantDelta === 0) return;
 
-    const effectiveScale = (zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor);
-    setState({ zScale: clampZScale(effectiveScale) });
+    setZScale((zScale || DEFAULT_Z_SCALE) * (dominantDelta < 0 ? 1 / zoomFactor : zoomFactor));
   };
 
   window.addEventListener("keydown", onKeyDown, { capture: true, signal });

@@ -20,7 +20,7 @@ export function boot(root: HTMLElement) {
   const layout = createLayout(root, actions);
   const ctx: AppContext = { actions, services: { history, polytope }, layout };
 
-  const sidebar = mountSidebar(root, ctx);
+  const sidebar = mountSidebar(root, actions);
   stage.mountChrome(ctx);
   layout.attach();
   applyUrlParamsOnce({ viewportApi: stage.viewportApi, derivePolytope: polytope.derive });

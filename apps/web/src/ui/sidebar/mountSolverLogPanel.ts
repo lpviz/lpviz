@@ -1,4 +1,4 @@
-import type { AppContext } from "@/app/appContext";
+import type { AppActions } from "@/app/appActions";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
@@ -6,12 +6,12 @@ import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
 import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
 
-export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
+export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppActions, "setIterateHighlight" | "finishOpenRegion">) {
   const frame = el("div", { id: "terminal-container" });
   const result = el("div", { id: "result" });
   frame.append(result, el("div", { id: "terminal-window" }));
   parent.append(frame);
-  const hover = createSolverLogHover(result, (index) => ctx.actions.setIterateHighlight(index));
+  const hover = createSolverLogHover(result, (index) => actions.setIterateHighlight(index));
   const fit = createResultFit(result);
   // Set while a virtualized result is mounted, so a panel that changes height
   // can re-window without a full re-render (see the size observer below).
@@ -26,7 +26,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     result.replaceChildren();
     hover.forgetHoveredRow();
     if (view.kind === "usage") {
-      result.append(usageHint(state, ctx.actions.finishOpenRegion), desktopNote());
+      result.append(usageHint(state, actions.finishOpenRegion), desktopNote());
       return;
     }
     if (view.kind === "blocks") {

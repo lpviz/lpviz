@@ -35,11 +35,7 @@ export function createCanvasStage(parent: HTMLElement) {
       // a finger needs a more forgiving target than a mouse cursor
       closeHitRadiusPx: hasCoarsePointer() ? 24 : 12,
     });
-    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), {
-      handleUndoRedo: ctx.services.history.handleUndoRedo,
-      showReplayDuration: replayDuration.show,
-      finishOpenRegion: ctx.actions.finishOpenRegion,
-    });
+    const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), { ...ctx.actions, handleUndoRedo: ctx.services.history.handleUndoRedo, showReplayDuration: replayDuration.show });
     const gallery = mountProblemGallery(main, ctx.actions);
     const toolbar = mountToolbar(main, ctx.actions);
     const help = mountHelpButton(main, viewport);

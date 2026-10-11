@@ -1,12 +1,12 @@
-import type { AppContext } from "@/app/appContext";
+import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
-import { SOLVER_LABELS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
+import { SOLVER_LABELS, type SolverMode } from "@/features/solver/solverSettings";
 import { isReadyForSolvers, isSolverSelectable } from "@/features/problem/selectors";
 import { button, el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { buildSolverSection, type SettingsSync } from "./solverSections";
 
-export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
+export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppActions, "setActiveSolverMode" | "updateSolverSetting" | "recomputeIfModeActive">) {
   const root = el("div", { className: "controlPanel" });
   parent.append(root);
   const buttonGroup = el("div", { className: "button-group" });
@@ -14,7 +14,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   const buttons = new Map<SolverMode, HTMLButtonElement>();
   // the panel's order, the general-purpose solvers first
   for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const) {
-    const b = button(SOLVER_LABELS[mode], () => ctx.actions.setActiveSolverMode(mode), { id: `${mode}Button` });
+    const b = button(SOLVER_LABELS[mode], () => actions.setActiveSolverMode(mode), { id: `${mode}Button` });
     buttons.set(mode, b);
     buttonGroup.append(b);
   }
@@ -25,16 +25,16 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
   let renderedMode: SolverMode | null = null;
   let syncSettings: SettingsSync = () => {};
 
-  function buildSettings(mode: SolverMode, settings: SolverSettings): SettingsSync {
+  // the controls, synced from the settings by the caller; every control writes its setting, then
+  // re-solves if its solver is the active one
+  function buildSettings(mode: SolverMode): SettingsSync {
     settingsSlot.replaceChildren();
     const sec = el("div", { className: "settings-section is-block" });
     settingsSlot.append(sec);
-    // every control writes its setting, then re-solves if its solver is the active one
     return buildSolverSection(mode, sec, {
-      settings,
       set: (key) => (v) => {
-        ctx.actions.updateSolverSetting(key, v);
-        ctx.actions.recomputeIfModeActive(mode);
+        actions.updateSolverSetting(key, v);
+        actions.recomputeIfModeActive(mode);
       },
     });
   }
@@ -47,7 +47,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     }
     if (renderedMode !== state.solverMode) {
       renderedMode = state.solverMode;
-      syncSettings = buildSettings(state.solverMode, state.solverSettings);
+      syncSettings = buildSettings(state.solverMode);
     }
     syncSettings(state.solverSettings);
   }

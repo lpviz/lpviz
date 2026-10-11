@@ -1,4 +1,4 @@
-import type { AppContext } from "@/app/appContext";
+import type { AppActions } from "@/app/appActions";
 import type { State } from "@/features/core/store";
 import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
@@ -21,7 +21,7 @@ function formatObjectiveDisplay(objectiveVector: State["objectiveVector"]): stri
     .join(" ");
 }
 
-export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
+export function mountProblemPanel(parent: HTMLElement, actions: Pick<AppActions, "setConstraintHighlight">) {
   const frame = el("div", { id: "terminal-container2" });
   const topResult = el("div", { id: "topResult" });
   const nullState = el("div", { id: "nullStateMessage", attrs: { role: "img", "aria-label": "lpviz logo" }, html: NULL_STATE_LOGO_SVG });
@@ -35,9 +35,9 @@ export function mountProblemPanel(parent: HTMLElement, ctx: AppContext) {
     on: {
       mouseover: (e) => {
         const row = (e.target as HTMLElement).closest<HTMLElement>(".inequality-item");
-        if (row?.dataset.index !== undefined) ctx.actions.setConstraintHighlight(Number(row.dataset.index));
+        if (row?.dataset.index !== undefined) actions.setConstraintHighlight(Number(row.dataset.index));
       },
-      mouseleave: () => ctx.actions.setConstraintHighlight(null),
+      mouseleave: () => actions.setConstraintHighlight(null),
     },
   });
   topResult.append(nullState, maximize, objective, subjectTo, inequalities);
