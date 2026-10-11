@@ -53,12 +53,28 @@ function docsPages(): Plugin {
   };
 }
 
+// The solver worker's chunk is only requested once the bundle has run, a round trip the first
+// solve of a cold shared link then waits for; a prefetch in the head lets it download alongside
+// the bundle at idle priority, and the worker's own request finds it in the cache.
+function prefetchWorker(): Plugin {
+  return {
+    name: "prefetch-worker",
+    transformIndexHtml: {
+      order: "post",
+      handler(_html, { bundle }) {
+        const worker = Object.keys(bundle ?? {}).find((file) => /^assets\/solverWorker-[\w-]+\.js$/.test(file));
+        return worker ? [{ tag: "link", attrs: { rel: "prefetch", href: `/${worker}`, as: "script" }, injectTo: "head" }] : [];
+      },
+    },
+  };
+}
+
 export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(version) },
   resolve: {
     tsconfigPaths: true,
   },
-  plugins: [docsPages()],
+  plugins: [docsPages(), prefetchWorker()],
   build: {
     outDir: "dist",
     sourcemap: true,
