@@ -3,6 +3,7 @@ import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { configurePerspectiveCameraFromSnapshot } from "@lpviz/viewport/projection3d";
 import { poseOf, samePerspectivePose } from "@lpviz/viewport/snapshot";
 import { OrthographicCamera, PerspectiveCamera, Vector3 } from "three";
+import { TRACE_OCCLUDER_LAYER } from "../Layer";
 import type { SceneManager } from "../SceneManager";
 
 const EPS = 1e-9;
@@ -23,6 +24,9 @@ export class CameraController {
     // orientation is fixed here once; applySnapshot only moves the camera
     this.ortho.position.set(0, 0, 10);
     this.ortho.lookAt(0, 0, 0);
+    // both cameras draw the trace's occluders along with everything else (see TRACE_OCCLUDER_LAYER)
+    this.ortho.layers.enable(TRACE_OCCLUDER_LAYER);
+    this.perspective.layers.enable(TRACE_OCCLUDER_LAYER);
 
     subscribeViewportRenderSnapshot(() => {
       this.pendingSnapshot = true;

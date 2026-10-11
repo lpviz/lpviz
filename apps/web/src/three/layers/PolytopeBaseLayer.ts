@@ -9,7 +9,7 @@ import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { FatLine } from "../helpers/fatLine";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { type LayerPlacement, passOf, renderOrderOf } from "../Layer";
+import { type LayerPlacement, passOf, renderOrderOf, TRACE_OCCLUDER_LAYER } from "../Layer";
 import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
@@ -114,6 +114,8 @@ export class PolytopeBaseLayer extends LayerBase {
     this.fillMesh.frustumCulled = false;
     this.fillMesh.visible = false;
     this.object3D.add(this.normalEdges.object3D, this.highlightEdges.object3D);
+    // the floor and its edges are what hides the trace behind them in 3D
+    for (const object of [this.fillMesh, this.normalEdges.object3D, this.highlightEdges.object3D]) object.layers.enable(TRACE_OCCLUDER_LAYER);
   }
 
   // the fill renders in the transparent pass, under everything drawn on the floor; the edges above it

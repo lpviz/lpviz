@@ -20,6 +20,14 @@ const RENDER_SLOTS = {
 export type RenderPassName = keyof typeof RENDER_SLOTS;
 export type RenderSlot = (typeof RENDER_SLOTS)[RenderPassName][number];
 export const RENDER_PASSES = Object.keys(RENDER_SLOTS) as readonly RenderPassName[];
+/**
+ * The three.js layer of the geometry that occludes the trace in 3D (the polytope's fill and
+ * edges): what the trace cache primes its depth with, so that a chunk baked later is hidden where
+ * the floor is in front of it exactly as a direct draw would be. The objective arrow is not on
+ * it: it turns while the trace accumulates, and a stale arrow in the depth would notch every
+ * later chunk, so the trace draws over the arrow instead, as it does in 2D.
+ */
+export const TRACE_OCCLUDER_LAYER = 1;
 const slots = <T>(entry: (slot: RenderSlot, pass: RenderPassName, index: number) => T) =>
   Object.fromEntries(RENDER_PASSES.flatMap((pass) => RENDER_SLOTS[pass].map((slot, index) => [slot, entry(slot, pass, index)]))) as Record<RenderSlot, T>;
 /** The pass a slot renders in. */

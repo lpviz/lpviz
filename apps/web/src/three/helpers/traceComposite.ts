@@ -38,18 +38,30 @@ void main() {
 }
 `;
 
-// A size x size quad that composites an offscreen target onto the canvas;
-// the vertex shader decides where it lands (world-anchored or full-screen).
+// The unit quad lands where its transform puts it: in the world, through the camera, or, when
+// `screenSpace` is set, in clip space with no camera at all (a scale of 2 then spans the canvas).
+const QUAD_VERTEX_SHADER = /* glsl */ `
+uniform float screenSpace;
+out vec2 vUv;
+
+void main() {
+  vUv = uv;
+  gl_Position = screenSpace > 0.5 ? vec4((modelMatrix * vec4(position, 1.0)).xy, 0.0, 1.0) : projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+// A unit quad that composites an offscreen target onto the canvas, placed by its transform in
+// the world or, screen-space, over the whole canvas.
 export class CompositeQuad {
   readonly mesh: Mesh;
   private readonly material: ShaderMaterial;
 
-  constructor(vertexShader: string, size: number) {
+  constructor() {
     this.material = new ShaderMaterial({
       glslVersion: GLSL3,
-      vertexShader,
+      vertexShader: QUAD_VERTEX_SHADER,
       fragmentShader: QUAD_FRAGMENT_SHADER,
-      uniforms: { map: { value: null } },
+      uniforms: { map: { value: null }, screenSpace: { value: 0 } },
       transparent: true,
       depthTest: false,
       depthWrite: false,
@@ -57,7 +69,7 @@ export class CompositeQuad {
       blendSrc: OneFactor,
       blendDst: OneMinusSrcAlphaFactor,
     });
-    this.mesh = new Mesh(new PlaneGeometry(size, size), this.material);
+    this.mesh = new Mesh(new PlaneGeometry(1, 1), this.material);
     this.mesh.frustumCulled = false;
   }
 
@@ -66,31 +78,43 @@ export class CompositeQuad {
     this.material.uniforms.map!.value = texture;
   }
 
+  /** Anchor the quad over the `width` x `height` world rect centred at (x, y). */
+  placeInWorld(x: number, y: number, width: number, height: number): void {
+    this.material.uniforms.screenSpace!.value = 0;
+    this.mesh.position.set(x, y, 0);
+    this.mesh.scale.set(width, height, 1);
+  }
+
+  /** Spread the quad over the whole canvas, whatever the camera. */
+  placeOnScreen(): void {
+    this.material.uniforms.screenSpace!.value = 1;
+    this.mesh.position.set(0, 0, 0);
+    this.mesh.scale.set(2, 2, 1);
+  }
+
   dispose(): void {
     this.mesh.geometry.dispose();
     this.material.dispose();
   }
 }
 
-// The offscreen target a composite quad maps: rebuilt when the size or the sample count asked for
-// differs, rendered into with the bound target restored afterwards, released with the quad unmapped.
+// The offscreen target a composite quad maps: rebuilt when the size, the sample count or the
+// depth buffer asked for differs, rendered into with the bound target restored afterwards,
+// released with the quad unmapped.
 export class OffscreenTarget {
   private target: WebGLRenderTarget | null = null;
 
-  constructor(
-    private readonly quad: CompositeQuad,
-    private readonly options: { depthBuffer: boolean },
-  ) {}
+  constructor(private readonly quad: CompositeQuad) {}
 
   /** The target as it stands, or null between targets. */
   get current(): WebGLRenderTarget | null {
     return this.target;
   }
 
-  ensure(width: number, height: number, samples: number): WebGLRenderTarget {
-    if (!this.target || this.target.width !== width || this.target.height !== height || this.target.samples !== samples) {
+  ensure(width: number, height: number, samples: number, depthBuffer: boolean): WebGLRenderTarget {
+    if (!this.target || this.target.width !== width || this.target.height !== height || this.target.samples !== samples || this.target.depthBuffer !== depthBuffer) {
       this.target?.dispose();
-      this.target = new WebGLRenderTarget(width, height, { samples, depthBuffer: this.options.depthBuffer, stencilBuffer: false });
+      this.target = new WebGLRenderTarget(width, height, { samples, depthBuffer, stencilBuffer: false });
       this.quad.setMap(this.target.texture);
     }
     return this.target;

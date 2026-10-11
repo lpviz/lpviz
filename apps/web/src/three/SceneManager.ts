@@ -8,7 +8,6 @@ import { Scene, WebGLRenderer, WebGLRenderTarget } from "three";
 import { setFatLineResolution } from "./helpers/fatLine";
 import { drawsNothing, type TraceFrame, type TraceImpostor, type TracePassImpostor } from "./helpers/traceComposite";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
-import { Trace3DCompositor } from "./Trace3DCompositor";
 import { TraceCache } from "./TraceCache";
 
 type Size = { width: number; height: number; dpr: number };
@@ -26,12 +25,13 @@ export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   private layers: Layer[] = [];
-  // The trace pass renders through the first impostor that applies: in 2D a world-anchored
-  // accumulation cache (so neither camera motion nor a trace append re-renders baked chunks); while
-  // the 3D view is in motion a single-sample offscreen composite instead of the MSAA canvas.
+  // The trace pass renders through the first impostor that applies: the accumulation cache, which
+  // bakes each chunk once (world-anchored in 2D, against the view's depth in 3D) so neither a
+  // trace append nor, in 2D, camera motion re-renders baked chunks, and which composites a
+  // single-sample bake while the view moves instead of the MSAA canvas.
   private readonly traceCache = new TraceCache(() => this.invalidate("frame"));
-  private readonly traceImpostors: readonly TraceImpostor[] = [this.traceCache, new Trace3DCompositor(() => this.invalidate("frame"))];
-  // the scenes whose geometry occludes the trace
+  private readonly traceImpostors: readonly TraceImpostor[] = [this.traceCache];
+  // the scenes holding the geometry that occludes the trace in 3D (see TRACE_OCCLUDER_LAYER)
   private readonly occluders = [this.scenes.transparent, this.scenes.foreground];
 
   private camera: Camera | null = null;
