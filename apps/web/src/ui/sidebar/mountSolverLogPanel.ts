@@ -5,7 +5,7 @@ import { el } from "@/ui/dom";
 import { renderOn } from "@/ui/renderOn";
 import { desktopNote, usageHint } from "@/ui/usageTips";
 import { createSolverLogHover } from "./solverLogHover";
-import { createResultFit, mountVirtualRows, observeResultSize, rowEl } from "./solverLogVirtualRows";
+import { createResultFit, mountVirtualRows, observeResultSize, rowEl, type VirtualRows } from "./solverLogVirtualRows";
 
 export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppActions, "setIterateHighlight" | "finishOpenRegion">) {
   const frame = el("div", { id: "terminal-container" });
@@ -13,19 +13,26 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
   frame.append(result, el("div", { id: "terminal-window" }));
   parent.append(frame);
   const hover = createSolverLogHover(result, (index) => actions.setIterateHighlight(index));
-  const fit = createResultFit(result);
-  // Set while a virtualized result is mounted, so a panel that changes height
-  // can re-window without a full re-render (see the size observer below).
-  let refillVirtualWindow: (() => void) | null = null;
+  const { fit, setWidth } = createResultFit(result);
+  // The virtualized result while one is mounted: its header and footer lines and its rows, so a
+  // panel that changes height can re-window without a full re-render (see the size observer
+  // below), and the next run's result (a rotation step's) can be shown in the nodes already there.
+  let virtual: { header: HTMLElement; footer: HTMLElement; rows: VirtualRows } | null = null;
 
   function render(state: State) {
     const view = state.result;
-    // fit() reads layout (clientWidth); keep it ahead of the DOM writes below
-    fit(view.kind === "usage" ? 0 : view.maxLineChars);
-    refillVirtualWindow = null;
+    const refit = fit(view.kind === "usage" ? 0 : view.maxLineChars);
+    hover.forgetHoveredRow();
+    if (view.kind === "virtual" && virtual && view.rows.length > 0) {
+      virtual.header.textContent = view.header;
+      virtual.footer.textContent = view.footer;
+      virtual.rows.update(view.rows, refit);
+      hover.scheduleHoverSync();
+      return;
+    }
+    virtual = null;
     result.classList.toggle("virtualized", view.kind === "virtual");
     result.replaceChildren();
-    hover.forgetHoveredRow();
     if (view.kind === "usage") {
       result.append(usageHint(state, actions.finishOpenRegion), desktopNote());
       return;
@@ -34,18 +41,25 @@ export function mountSolverLogPanel(parent: HTMLElement, actions: Pick<AppAction
       result.append(el("div", {}, view.blocks.map(rowEl)));
       return;
     }
-    result.append(el("div", { className: "iterate-header", text: view.header }));
+    const header = el("div", { className: "iterate-header", text: view.header });
     const sc = el("div", { className: "iterate-scroll" });
-    result.append(sc, el("div", { className: "iterate-footer", text: view.footer }));
+    const footer = el("div", { className: "iterate-footer", text: view.footer });
+    result.append(header, sc, footer);
     if (view.rows.length === 0) sc.append(el("div", { className: "iterate-item-nohover", text: "No iterations available." }));
-    else refillVirtualWindow = mountVirtualRows(sc, view.rows, result);
+    else {
+      const rows = mountVirtualRows(sc, view.rows, result);
+      if (rows) virtual = { header, footer, rows };
+    }
     hover.scheduleHoverSync();
   }
   const stopRender = renderOn(["result"], render);
 
   const sizeObserver = observeResultSize(result, {
-    onWidthChange: () => render(getState()),
-    onHeightChange: () => refillVirtualWindow?.(),
+    onWidthChange: (width) => {
+      setWidth(width);
+      render(getState());
+    },
+    onHeightChange: () => virtual?.rows.refill(),
   });
 
   // The placeholder hint reflects the current drawing phase, so refresh it as
