@@ -3,7 +3,7 @@ import { get2DControlsConfig, subscribe2DControlsConfig } from "@/features/viewp
 import type { PointXY } from "@lpviz/math/types";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, zoomViewport2DStateAtCanvasPoint } from "@lpviz/viewport/projection2d";
 import type { ViewportRect } from "@lpviz/viewport/snapshot";
-import { touchPair } from "./touches";
+import { attachPointerGestures } from "./pointerGestures";
 
 const WHEEL_ZOOM_FACTOR = 1.05;
 
@@ -12,9 +12,6 @@ const WHEEL_ZOOM_FACTOR = 1.05;
 export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   // the view at the start of a pan, which each move offsets from
   let activePan: { startClientX: number; startClientY: number; targetX: number; targetY: number; scaleFactor: number; gridSpacing: number } | null = null;
-  let panPointerId: number | null = null;
-  // the fingers on the canvas; two of them pinch
-  const touches = new Map<number, PointXY>();
   let activePinch: { startDistance: number; startScaleFactor: number } | null = null;
 
   const canZoom = () => {
@@ -36,7 +33,6 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     activePan = { startClientX: clientX, startClientY: clientY, targetX: snapshot.target.x, targetY: snapshot.target.y, scaleFactor: config.state.scaleFactor, gridSpacing: config.state.gridSpacing };
     return true;
   };
-  const panActive = () => activePan !== null && get2DControlsConfig().enabled;
   const updatePan = (clientX: number, clientY: number) => {
     const config = get2DControlsConfig();
     if (!activePan || !config.enabled) return;
@@ -48,7 +44,6 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
   const stopPan = () => {
     if (!activePan) return false;
     activePan = null;
-    panPointerId = null;
     return true;
   };
   const zoomAt = (point: PointXY, rect: ViewportRect, scaleFactor: number) => {
@@ -59,88 +54,36 @@ export function attachPanZoom2D(canvas: HTMLCanvasElement): () => void {
     return true;
   };
 
-  // a second finger turns the gesture into a pinch; the pan it interrupts ends
-  const startPinch = () => {
-    const { distance } = touchPair(touches);
-    if (distance <= 0 || !canZoom()) return false;
-    activePinch = { startDistance: distance, startScaleFactor: get2DControlsConfig().state.scaleFactor };
-    stopPan();
-    canvas.focus();
-    return true;
-  };
-  const updatePinch = () => {
-    if (!activePinch || touches.size !== 2) return false;
-    const { center, distance } = touchPair(touches);
-    if (distance <= 0) return false;
-    const rect = canvas.getBoundingClientRect();
-    return zoomAt({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
-  };
-
-  const handlePointerDown = (event: PointerEvent) => {
-    if (event.pointerType === "touch") {
-      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      canvas.setPointerCapture(event.pointerId);
-      if (touches.size === 2) {
-        if (startPinch()) event.preventDefault();
-        return;
-      }
-      if (touches.size > 2) return;
-    }
-    if (event.button !== 0 || !event.isPrimary || !startPan(event.clientX, event.clientY)) return;
-    panPointerId = event.pointerId;
-    // with the pointer captured, the pan follows it outside the canvas
-    canvas.setPointerCapture(event.pointerId);
-    canvas.focus();
-    event.preventDefault();
-  };
-  const handlePointerMove = (event: PointerEvent) => {
-    if (event.pointerType === "touch" && touches.has(event.pointerId)) {
-      touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
-      if (activePinch) {
-        if (updatePinch()) event.preventDefault();
-        return;
-      }
-    }
-    if (panPointerId !== event.pointerId || !panActive()) return;
-    updatePan(event.clientX, event.clientY);
-    event.preventDefault();
-  };
-  const handlePointerUp = (event: PointerEvent) => {
-    if (event.pointerType === "touch") {
-      touches.delete(event.pointerId);
-      if (activePinch) {
-        activePinch = null;
-        event.preventDefault();
-        return;
-      }
-    }
-    if (panPointerId !== event.pointerId) return;
-    if (stopPan()) event.preventDefault();
-  };
-  const handleWheel = (event: WheelEvent) => {
-    const dominantDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
-    if (dominantDelta === 0) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const { state } = get2DControlsConfig();
-    if (!zoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR))) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-  };
-
-  const listeners = new AbortController();
-  const { signal } = listeners;
-  canvas.addEventListener("pointerdown", handlePointerDown, { signal });
-  canvas.addEventListener("pointermove", handlePointerMove, { signal });
-  canvas.addEventListener("pointerup", handlePointerUp, { signal });
-  canvas.addEventListener("pointercancel", handlePointerUp, { signal });
-  canvas.addEventListener("wheel", handleWheel, { passive: false, signal });
+  const detach = attachPointerGestures(canvas, {
+    dragStart: (event) => event.button === 0 && startPan(event.clientX, event.clientY),
+    dragMove: updatePan,
+    dragEnd: stopPan,
+    // a second finger turns the gesture into a pinch; the pan it interrupts ends
+    pinchStart: ({ distance }) => {
+      if (distance <= 0 || !canZoom()) return false;
+      activePinch = { startDistance: distance, startScaleFactor: get2DControlsConfig().state.scaleFactor };
+      stopPan();
+      return true;
+    },
+    pinchMove: ({ center, distance }) => {
+      if (!activePinch || distance <= 0) return;
+      const rect = canvas.getBoundingClientRect();
+      zoomAt({ x: center.x - rect.left, y: center.y - rect.top }, rect, activePinch.startScaleFactor * (distance / activePinch.startDistance));
+    },
+    pinchEnd: () => {
+      activePinch = null;
+    },
+    wheel: (event, dominantDelta) => {
+      const rect = canvas.getBoundingClientRect();
+      const { state } = get2DControlsConfig();
+      return zoomAt({ x: event.clientX - rect.left, y: event.clientY - rect.top }, rect, state.scaleFactor * (dominantDelta < 0 ? WHEEL_ZOOM_FACTOR : 1 / WHEEL_ZOOM_FACTOR));
+    },
+  });
 
   return () => {
     subscriptions.abort();
-    listeners.abort();
+    detach();
     activePan = null;
     activePinch = null;
-    touches.clear();
   };
 }
