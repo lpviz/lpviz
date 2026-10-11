@@ -111,6 +111,45 @@ export class OffscreenTarget {
   }
 }
 
+/**
+ * Whether the view is in motion, as an impostor decides it: the numbers that place the view are
+ * recorded each frame, and the view counts as moving for VIEW_SETTLE_MS after they last changed.
+ */
+export class ViewMotion {
+  private readonly last: Float64Array;
+  private lastChangeAt = -Infinity;
+
+  constructor(size: number) {
+    this.last = new Float64Array(size).fill(NaN);
+  }
+
+  /** The view's number `i` as of the last frame recorded (NaN before the first). */
+  previous(i: number): number {
+    return this.last[i]!;
+  }
+
+  /** Record this frame's view; true when it differs from the last. */
+  update(now: number, view: readonly number[]): boolean {
+    let changed = false;
+    for (let i = 0; i < view.length; i++) {
+      if (view[i] === this.last[i]) continue;
+      this.last[i] = view[i]!;
+      changed = true;
+    }
+    if (changed) this.lastChangeAt = now;
+    return changed;
+  }
+
+  moving(now: number): boolean {
+    return now - this.lastChangeAt < VIEW_SETTLE_MS;
+  }
+
+  /** Forget the view, so the next frame recorded counts as a change. */
+  reset(): void {
+    this.last.fill(NaN);
+  }
+}
+
 // Demand-driven rendering: a moving view needs one more frame once it settles
 // (the crisp exact-zoom rebuild, the direct full-quality pass, the trailing
 // fold) that nothing else would schedule. arm() is a no-op while one is

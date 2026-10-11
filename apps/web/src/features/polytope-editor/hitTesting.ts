@@ -7,7 +7,7 @@ import type { DragTarget } from "@/features/polytope-editor/editorState";
 import { displayedSolverStartPoint, iterateHeight } from "@/features/solver/solverState";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { showsDepth } from "@/features/viewport/viewportState";
-import { type BoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
+import { clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { distanceToSegment, nearestEdge } from "@lpviz/math/polygon";
 import type { Constraint, PointXY, PointXYZ, Vec } from "@lpviz/math/types";
 
@@ -25,23 +25,26 @@ const DRAG_THRESHOLD_PX = 5;
 
 export type ConstraintDragTarget = Extract<DragTarget, { kind: "constraint" }>;
 
-export function getLogicalFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): Vec {
-  const rect = viewportApi.getCanvasRect();
-  const { x, y } = viewportApi.toLogicalCoords(clientX - rect.left, clientY - rect.top);
-  return [x, y];
-}
-
 /** The pointer's position on the canvas, in CSS pixels from its top-left corner. */
 export function getCanvasFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): PointXY {
   const rect = viewportApi.getCanvasRect();
   return { x: clientX - rect.left, y: clientY - rect.top };
 }
 
+export function getLogicalFromClient(viewportApi: ViewportApi, clientX: number, clientY: number): Vec {
+  const canvasPoint = getCanvasFromClient(viewportApi, clientX, clientY);
+  const { x, y } = viewportApi.toLogicalCoords(canvasPoint.x, canvasPoint.y);
+  return [x, y];
+}
+
+// whether the world point (drawn at height z) is within `radiusPx` of the canvas point on screen
+function withinRadiusPx(viewportApi: ViewportApi, canvasPoint: PointXY, world: Vec, radiusPx: number, z?: number): boolean {
+  const drawn = viewportApi.toCanvasCoords(world[0], world[1], z);
+  return Math.hypot(canvasPoint.x - drawn.x, canvasPoint.y - drawn.y) <= radiusPx;
+}
+
 export function findVertexNearCanvasPoint(viewportApi: ViewportApi, canvasPoint: PointXY, vertices: Vec[]): number {
-  return vertices.findIndex((vertex) => {
-    const drawn = viewportApi.toCanvasCoords(vertex[0], vertex[1]);
-    return Math.hypot(canvasPoint.x - drawn.x, canvasPoint.y - drawn.y) <= VERTEX_HIT_RADIUS_PX;
-  });
+  return vertices.findIndex((vertex) => withinRadiusPx(viewportApi, canvasPoint, vertex, VERTEX_HIT_RADIUS_PX));
 }
 
 /**
@@ -57,26 +60,13 @@ export function worldDistanceForPixels(viewportApi: ViewportApi, worldPoint: Vec
   return Math.hypot(shifted.x - worldPoint[0], shifted.y - worldPoint[1]);
 }
 
-// The screen, generously padded (in pixels and again in world units): the rays are clipped to it
-// only to be tested as segments, so the box need not be tight.
-function getVisibleBounds(viewportApi: ViewportApi): BoundingBox {
-  const margin = 50;
-  const topLeft = viewportApi.toLogicalCoords(-margin, -margin);
-  const bottomRight = viewportApi.toLogicalCoords(window.innerWidth + margin, window.innerHeight + margin);
-  return {
-    minX: Math.min(topLeft.x, bottomRight.x) - margin,
-    maxX: Math.max(topLeft.x, bottomRight.x) + margin,
-    minY: Math.min(topLeft.y, bottomRight.y) - margin,
-    maxY: Math.max(topLeft.y, bottomRight.y) + margin,
-  };
-}
-
 /** The boundary ray within an edge's screen radius of `point`, as the index into the polytope's rays. */
 export function findBoundaryRayNearPoint(viewportApi: ViewportApi, state: State, point: Vec): number | null {
   const { completionMode, polytope } = state;
   if (completionMode !== "open" || !polytope?.boundaryRays?.length) return null;
 
-  const bounds = getVisibleBounds(viewportApi);
+  // the rays are clipped to the (padded) visible rect only to be tested as segments
+  const bounds = viewportApi.getVisibleBounds();
   const tolerance = worldDistanceForPixels(viewportApi, point, EDGE_HIT_RADIUS_PX);
   for (let index = 0; index < polytope.boundaryRays.length; index++) {
     const clipped = clipRayToBoundingBox(polytope.boundaryRays[index]!, bounds);
@@ -106,11 +96,8 @@ export function getDragStartTarget(viewportApi: ViewportApi, state: State, clien
 
   if (session === "drafting") return vertexTarget();
 
-  if (state.objectiveVector) {
-    const tip = viewportApi.toCanvasCoords(state.objectiveVector[0], state.objectiveVector[1]);
-    if (Math.hypot(canvasPoint.x - tip.x, canvasPoint.y - tip.y) < OBJECTIVE_TIP_HIT_RADIUS_PX) {
-      return { kind: "objective", viewAnchor3D: getViewAnchor3D(state, state.objectiveVector) };
-    }
+  if (state.objectiveVector && withinRadiusPx(viewportApi, canvasPoint, state.objectiveVector, OBJECTIVE_TIP_HIT_RADIUS_PX)) {
+    return { kind: "objective", viewAnchor3D: getViewAnchor3D(state, state.objectiveVector) };
   }
 
   const startPoint = solverStartNearCanvasPoint(viewportApi, state, canvasPoint);
@@ -162,8 +149,7 @@ export function solverStartNearCanvasPoint(viewportApi: ViewportApi, state: Stat
   // iterate's height, matching SolverStartLayer
   const { iteratePath } = state;
   const z = iteratePath.count > 0 ? iterateHeight(iteratePath, 0) : undefined;
-  const marker = viewportApi.toCanvasCoords(startPoint[0], startPoint[1], z);
-  return Math.hypot(canvasPoint.x - marker.x, canvasPoint.y - marker.y) <= SOLVER_START_HIT_RADIUS_PX ? startPoint : null;
+  return withinRadiusPx(viewportApi, canvasPoint, startPoint, SOLVER_START_HIT_RADIUS_PX, z) ? startPoint : null;
 }
 
 export function exceedsDragThreshold(state: State, clientX: number, clientY: number): boolean {

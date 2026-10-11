@@ -1,7 +1,7 @@
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, drawsNothing, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
+import { CompositeQuad, drawsNothing, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS, ViewMotion } from "./helpers/traceComposite";
 
 // Motion-time compositor for the traceLines pass in 3D mode.
 //
@@ -36,9 +36,8 @@ export class Trace3DCompositor implements TraceImpostor {
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
   private readonly target = new OffscreenTarget(this.quad, { depthBuffer: true });
   private materialScratch: Material[] = [];
-  // the view the last frame was composited for, as the numbers that place the camera
-  private readonly lastView = new Float64Array(13).fill(NaN);
-  private lastViewChangeAt = -Infinity;
+  // the view as the numbers that place the camera: position, up, fov, aspect, target, the z scale and flatten
+  private readonly motion = new ViewMotion(13);
   private settle: SettleTimer;
 
   constructor(requestFrame: () => void) {
@@ -54,17 +53,15 @@ export class Trace3DCompositor implements TraceImpostor {
     const { renderer, camera, snapshot, state, traceLines: traceLinesScene, occluders: occluderScenes } = frame;
     if (snapshot.mode !== "3d") {
       this.target.release();
-      this.lastView.fill(NaN);
+      this.motion.reset();
       return null;
     }
 
     const p = snapshot.perspective;
     const t = snapshot.target;
     const now = performance.now();
-    if (this.viewChanged([p.position.x, p.position.y, p.position.z, p.up.x, p.up.y, p.up.z, p.fov, p.aspect, t.x, t.y, t.z, state.zScale, snapshot.transitionZMultiplier])) {
-      this.lastViewChangeAt = now;
-    }
-    const moving = state.isTransitioning3D || now - this.lastViewChangeAt < VIEW_SETTLE_MS;
+    this.motion.update(now, [p.position.x, p.position.y, p.position.z, p.up.x, p.up.y, p.up.z, p.fov, p.aspect, t.x, t.y, t.z, state.zScale, snapshot.transitionZMultiplier]);
+    const moving = state.isTransitioning3D || this.motion.moving(now);
     if (!moving) {
       return null;
     }
@@ -83,17 +80,6 @@ export class Trace3DCompositor implements TraceImpostor {
     });
 
     return { scene: this.quadScene, camera: this.quadCamera };
-  }
-
-  // Whether `view` differs from the last one, which it then becomes.
-  private viewChanged(view: readonly number[]): boolean {
-    let changed = false;
-    for (let i = 0; i < view.length; i++) {
-      if (view[i] === this.lastView[i]) continue;
-      this.lastView[i] = view[i]!;
-      changed = true;
-    }
-    return changed;
   }
 
   private renderDepthOnly(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {

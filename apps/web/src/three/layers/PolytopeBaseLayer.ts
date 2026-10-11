@@ -1,6 +1,6 @@
 import type { State } from "@/features/core/store";
 import { derivedClosure } from "@/features/problem/selectors";
-import { UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
+import { UNBOUNDED_CLIP_BOUNDS, visibleBounds2D, visibleBoundsDeps } from "@/features/viewport/bounds";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { clipHalfPlanesToBoundingBox, clipRayToBoundingBox } from "@lpviz/math/bounds";
 import { isConvexChain, isConvexPolygon } from "@lpviz/math/polygon";
@@ -9,7 +9,6 @@ import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
 import { FatLine } from "../helpers/fatLine";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { visibleBounds2D, visibleBoundsDeps } from "../helpers/visibleBounds";
 import { type LayerPlacement, passOf, renderOrderOf } from "../Layer";
 import { PALETTE, STROKE } from "../palette";
 import { LayerBase } from "./base/LayerBase";

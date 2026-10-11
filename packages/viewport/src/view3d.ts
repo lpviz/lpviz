@@ -31,6 +31,18 @@ import {
 type Viewport3DViewState = { viewAngle: PointXYZ; target: PointXYZ; distance: number; pose: ViewportPerspectivePose };
 type ResolvedFitInsets = ReturnType<typeof resolveFitInsets>;
 
+// What a fit is computed from: the view and its insets, the point the content centres on, and the
+// viewport the insets leave.
+type Fit3D = { snapshot: ViewportRenderSnapshot; rect: ViewportRect; viewAngle: PointXYZ; insets: ResolvedFitInsets; target: PointXYZ; viewport: ReturnType<typeof getAvailableViewportSize> };
+
+/** The view `distance` from `target` along `viewAngle`. */
+const viewState = (viewAngle: PointXYZ, target: PointXYZ, distance: number): Viewport3DViewState => ({
+  viewAngle,
+  target,
+  distance,
+  pose: buildPerspectivePoseFromViewAngle(viewAngle, distance, target),
+});
+
 const DEFAULT_TARGET: PointXYZ = { x: 0, y: 0, z: 0 };
 const EPS = 1e-6;
 
@@ -39,7 +51,7 @@ const fitRelative = new Vector3();
 const clampPerspectiveDistance3D = (snapshot: ViewportRenderSnapshot, distance: number, rect?: ViewportRect) =>
   Math.min(getMaxPerspectiveDistance3D(snapshot, rect), Math.max(MIN_PERSPECTIVE_DISTANCE, distance));
 
-function getPerspectiveDistanceToFitBounds3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, bounds: BoundingBox, insets: ResolvedFitInsets) {
+function getPerspectiveDistanceToFitBounds3D({ snapshot, rect, viewport }: Fit3D, bounds: BoundingBox) {
   const width = bounds.maxX - bounds.minX;
   const height = bounds.maxY - bounds.minY;
   if (width <= 0 || height <= 0) return getDefaultPerspectiveDistance3D(snapshot, rect);
@@ -47,21 +59,11 @@ function getPerspectiveDistanceToFitBounds3D(snapshot: ViewportRenderSnapshot, r
   // The camera renders into the full viewport, so convert "fit the bounds
   // inside the available sub-rectangle" into a required units-per-pixel at
   // the target plane and derive the distance from the full-viewport FOV.
-  const viewport = getAvailableViewportSize(snapshot, rect, insets);
   const unitsPerPixel = Math.max(width / viewport.availWidth, height / viewport.availHeight);
   return getPerspectiveDistanceForUnitsPerPixel(snapshot, unitsPerPixel, viewport.height);
 }
 
-function getPerspectiveDistanceToFitBox3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  bounds: BoundingBox & ViewportZBounds,
-  target: PointXYZ,
-  viewAngle: PointXYZ,
-  insets: ResolvedFitInsets,
-) {
-  const { sidebarWidth } = insets;
-  const viewport = getAvailableViewportSize(snapshot, rect, insets);
+function getPerspectiveDistanceToFitBox3D({ snapshot, viewport, viewAngle, target, insets: { sidebarWidth } }: Fit3D, bounds: BoundingBox & ViewportZBounds) {
   const tanHalfFull = Math.max(EPS, tanHalfVerticalFov(snapshot));
   // Pixels per unit of (offset / depth): px = offset / depth * K
   const K = viewport.height / 2 / tanHalfFull;
@@ -125,14 +127,7 @@ function getPerspectiveDistanceToFitBox3D(
 // and an open gallery its top edge, so the target — what the camera looks
 // straight at — is moved left and up in the target plane by half of each, and
 // the fitted content lands centered in the part of the viewport that shows.
-function offsetTargetForVisibleViewport3D(
-  snapshot: ViewportRenderSnapshot,
-  rect: ViewportRect,
-  target: PointXYZ,
-  viewAngle: PointXYZ,
-  distance: number,
-  { sidebarWidth, topInset }: ResolvedFitInsets,
-): PointXYZ {
+function offsetTargetForVisibleViewport3D({ snapshot, rect, target, viewAngle, insets: { sidebarWidth, topInset } }: Fit3D, distance: number): PointXYZ {
   if (sidebarWidth <= 0 && topInset <= 0) {
     return target;
   }
@@ -168,7 +163,7 @@ export function buildResetViewport3DView(snapshot: ViewportRenderSnapshot, sideb
   // shift the origin target back by whatever the visible center (which
   // already accounts for the sidebar) projects to.
   const target = visibleCenter ? { x: 0 - visibleCenter.x, y: 0 - visibleCenter.y, z: 0 } : DEFAULT_TARGET;
-  return { viewAngle, target, distance, pose: buildPerspectivePoseFromViewAngle(viewAngle, distance, target) };
+  return viewState(viewAngle, target, distance);
 }
 
 /** The view that fits `rawBounds` (and, with `zBounds`, the box above them) into what the insets leave visible. */
@@ -176,19 +171,22 @@ export function fitViewport3DToBounds(
   snapshot: ViewportRenderSnapshot,
   rect: ViewportRect,
   rawBounds: BoundingBox,
-  { zBounds, ...fit }: FitInsets & { zBounds?: ViewportZBounds | undefined },
+  { zBounds, ...fitInsets }: FitInsets & { zBounds?: ViewportZBounds | undefined },
 ): Viewport3DViewState {
   // Point or axis-aligned content still deserves a recenter and zoom
   const bounds = expandDegenerateBounds(rawBounds);
-  const insets = resolveFitInsets(fit);
-  const viewAngle = getViewAngleFromSnapshot3D(snapshot);
-  const fitTarget = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2, z: 0 };
-  const unclampedDistance = zBounds
-    ? getPerspectiveDistanceToFitBox3D(snapshot, rect, { ...bounds, minZ: zBounds.minZ, maxZ: zBounds.maxZ }, fitTarget, viewAngle, insets)
-    : getPerspectiveDistanceToFitBounds3D(snapshot, rect, bounds, insets);
+  const insets = resolveFitInsets(fitInsets);
+  const fit: Fit3D = {
+    snapshot,
+    rect,
+    insets,
+    viewAngle: getViewAngleFromSnapshot3D(snapshot),
+    target: { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2, z: 0 },
+    viewport: getAvailableViewportSize(snapshot, rect, insets),
+  };
+  const unclampedDistance = zBounds ? getPerspectiveDistanceToFitBox3D(fit, { ...bounds, minZ: zBounds.minZ, maxZ: zBounds.maxZ }) : getPerspectiveDistanceToFitBounds3D(fit, bounds);
   const distance = clampPerspectiveDistance3D(snapshot, unclampedDistance, rect);
-  const target = offsetTargetForVisibleViewport3D(snapshot, rect, fitTarget, viewAngle, distance, insets);
-  return { viewAngle, target, distance, pose: buildPerspectivePoseFromViewAngle(viewAngle, distance, target) };
+  return viewState(fit.viewAngle, offsetTargetForVisibleViewport3D(fit, distance), distance);
 }
 
 /** The 3D snapshot of a camera pose, keeping the 2D zoom fields in step with the camera's distance. */

@@ -100,30 +100,6 @@ export function orthographicFor(width: number, height: number, unitsPerPixel: nu
   };
 }
 
-/** A 3D snapshot: the cameras at `pose`, with the 2D zoom fields the caller derived from it. */
-export function perspectiveSnapshot(
-  base: ViewportRenderSnapshot,
-  pose: ViewportPerspectivePose,
-  width: number,
-  height: number,
-  scaleFactor: number,
-  unitsPerPixel: number,
-  transitionZMultiplier: number,
-): ViewportRenderSnapshot {
-  return {
-    ...base,
-    mode: "3d",
-    width,
-    height,
-    scaleFactor,
-    unitsPerPixel,
-    transitionZMultiplier,
-    target: { ...pose.target },
-    orthographic: orthographicFor(width, height, unitsPerPixel, pose.target),
-    perspective: { ...base.perspective, position: { ...pose.position }, up: { ...pose.up }, aspect: width / Math.max(1, height) },
-  };
-}
-
 export const snapPoint = (point: PointXY, snapToGrid: boolean): PointXY => (snapToGrid ? { x: Math.round(point.x), y: Math.round(point.y) } : point);
 
 /** The 2D view of the origin at scale factor 1, for a viewport of the given size. */
