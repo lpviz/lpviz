@@ -1,3 +1,4 @@
+import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import { encodeSharedState, decodeSharedState } from "./compactUrl";
 import type { SharedAppState } from "./sharedState";
@@ -9,9 +10,6 @@ import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/pro
 
 const MAX_OPTIMUM_ERROR = 0.001;
 const ROUND_TRIPS = 10;
-
-// Seedable LCG from solvers.test.ts
-const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // Random convex polygon on a circle (same approach as solvers.test.ts)
 function randomConvexPolygon(rand: () => number) {

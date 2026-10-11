@@ -1,8 +1,9 @@
+import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import { QUERY_POINTS, cuttingPlane } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
 import { ellipsoidStride, localizingSetStride } from "../src/localization";
-import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, footerOf, lastIterate, lcg, objectiveValue, rowsOf } from "./fixtures";
+import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, footerOf, lastIterate, objectiveValue, rowsOf } from "./fixtures";
 import { BOX, SLICED_BOX, satisfiesAll, verticesOf } from "./fixtures3d";
 
 const shared = { maxit: 2000, tol: 1e-6, rayShoot: true, initialScale: 1.5 };

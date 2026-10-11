@@ -1,8 +1,9 @@
+import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { QUERY_POINTS, cuttingPlane, type CuttingPlaneOptions, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
-import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, ellipseAt, footerOf, lastIterate, lcg, objectiveValue, randomPolygon, rowsOf } from "./fixtures";
+import { SQUARE, SQUARE_VERTICES, bruteForceOptimum, ellipseAt, footerOf, lastIterate, objectiveValue, randomPolygon, rowsOf } from "./fixtures";
 
 const opts = (queryPoint: QueryPoint, o: Partial<CuttingPlaneOptions> = {}) => ({
   maxit: 500,

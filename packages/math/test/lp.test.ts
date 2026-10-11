@@ -1,10 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { solveDenseSystem } from "../src/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "../src/lp";
+import { lcg } from "../src/random";
 
 const BOUND = 1e4;
-
-const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // brute force: every candidate vertex is the intersection of n constraints
 function bruteForce(objective: number[], rows: LpRow[], n: number) {

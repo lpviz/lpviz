@@ -1,3 +1,4 @@
+import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { centralPath } from "../src/centralPath";
@@ -15,7 +16,6 @@ import {
   ipmOptions,
   largePolygon,
   lastIterate,
-  lcg,
   logText,
   objectiveValue,
   phase1Count,

@@ -23,8 +23,6 @@ export const SQUARE_VERTICES: Vec[] = [
 export const PDHG_DEFAULTS = { halpern: false, maxit: 2000, eta: 0.25, tau: 0.25, tol: 1e-4, colorByBasis: false };
 export const ipmOptions = (alphaMax = 0.9, maxit = 200) => ({ tol: 1e-6, maxit, alphaMax, correctorThreshold: 0.9 });
 
-export const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
-
 // The edges of a convex hull as inward-pointing unit-normal constraints.
 export const polygonConstraints = (hull: Vec[]): Constraint[] => constraintsFromChain(hull, true);
 
