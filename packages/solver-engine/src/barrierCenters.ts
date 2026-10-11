@@ -78,8 +78,9 @@ function logBarrier(rows: LpRow[], x: Float64Array, n: number): number {
   return value;
 }
 
-// sum_i w_i a_i a_i' as a dense symmetric n x n matrix
-function weightedGram(rows: LpRow[], weight: (i: number) => number, n: number): Float64Array {
+// sum_i w_i a_i a_i' as a dense symmetric n x n matrix, over the upper triangle then mirrored. Its own
+// product order, kept apart from the math package's weightedGram: the query point is hashed output.
+function rowsGram(rows: LpRow[], weight: (i: number) => number, n: number): Float64Array {
   const H = new Float64Array(n * n);
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]!;
@@ -95,7 +96,7 @@ function weightedGram(rows: LpRow[], weight: (i: number) => number, n: number): 
 }
 
 // H(x) = sum a_i a_i' / s_i^2
-const barrierGram = (rows: LpRow[], slacks: Float64Array, n: number) => weightedGram(rows, (i) => 1 / (slacks[i]! * slacks[i]!), n);
+const barrierGram = (rows: LpRow[], slacks: Float64Array, n: number) => rowsGram(rows, (i) => 1 / (slacks[i]! * slacks[i]!), n);
 
 // ½ log det H(x), Vaidya's volumetric barrier
 function volumetricBarrier(rows: LpRow[], x: Float64Array, n: number): number {
@@ -121,7 +122,7 @@ function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean, n: nu
     leverage[i] = symmetricQuadraticForm(inverse, rows[i]!, n) / (slacks[i]! * slacks[i]!);
   }
   if (!weighted) return { metric: H, leverage, slacks };
-  return { metric: weightedGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), leverage, slacks };
+  return { metric: rowsGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), leverage, slacks };
 }
 
 // Damped Newton on a self-concordant barrier: full steps once the Newton

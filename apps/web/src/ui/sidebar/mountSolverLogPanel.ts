@@ -17,8 +17,8 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   // can re-window without a full re-render (see the size observer below).
   let refillVirtualWindow: (() => void) | null = null;
 
-  function render(s: State) {
-    const view = s.result;
+  function render(state: State) {
+    const view = state.result;
     // fit() reads layout (clientWidth); keep it ahead of the DOM writes below
     fit(view.kind === "usage" ? 0 : view.maxLineChars);
     refillVirtualWindow = null;
@@ -26,7 +26,7 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
     result.replaceChildren();
     hover.forgetHoveredRow();
     if (view.kind === "usage") {
-      result.append(usageHint(s, ctx.actions.finishOpenRegion), desktopNote());
+      result.append(usageHint(state, ctx.actions.finishOpenRegion), desktopNote());
       return;
     }
     if (view.kind === "blocks") {
@@ -54,8 +54,8 @@ export function mountSolverLogPanel(parent: HTMLElement, ctx: AppContext) {
   on(
     ["vertices", "completionMode", "objectiveVector", "currentObjective"],
     () => {
-      const s = getState();
-      if (s.result.kind === "usage") render(s);
+      const state = getState();
+      if (state.result.kind === "usage") render(state);
     },
     hintSync.signal,
   );

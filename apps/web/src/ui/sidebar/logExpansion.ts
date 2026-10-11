@@ -53,7 +53,7 @@ function terminalConsumesWheel(target: Element | null, delta: number): boolean {
   return false;
 }
 
-// Firefox reports constraints, and some setups report pages; normalize to pixels so
+// Firefox reports lines, and some setups report pages; normalize to pixels so
 // one notch means the same thing everywhere.
 function wheelDeltaPixels(event: WheelEvent, viewportHeight: number): number {
   if (event.deltaMode === WheelEvent.DOM_DELTA_LINE) {
@@ -104,8 +104,8 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     if (delta < 0 && expansion <= 0) return;
 
     const next = Math.min(roomAbove(), Math.max(0, expansion + delta));
-    const applied = next - expansion;
-    if (applied === 0) return;
+    const step = next - expansion;
+    if (step === 0) return;
 
     // Read scrollTop before the resize: shrinking can make the browser clamp
     // it, and a relative step from the clamped value would move twice as far.
@@ -117,7 +117,7 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     // more than n). Growing only ever happens from the bottom, so pin it there;
     // shrinking keeps its relative step since it can start away from the bottom.
     const maxScroll = content.scrollHeight - content.clientHeight;
-    content.scrollTop = applied > 0 ? maxScroll : Math.min(maxScroll, scrollTop + applied);
+    content.scrollTop = step > 0 ? maxScroll : Math.min(maxScroll, scrollTop + step);
     event.preventDefault();
   };
 

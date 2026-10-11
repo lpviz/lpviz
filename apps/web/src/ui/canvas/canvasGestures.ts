@@ -38,10 +38,11 @@ const guarded = (tools: PointerTools) => ({
   handleContextMenu: unlessTransitioning(tools.handleContextMenu),
 });
 
-// The editor's drag handlers behind the store's navigation guard, plus the tap and double-tap
-// detection for touch and pen (a mouse gets the browser's dblclick instead).
+// The editor's handlers as a press reaches them (a move while the viewport navigates is not the
+// editor's), plus the tap and double-tap detection for touch and pen (a mouse gets the browser's
+// dblclick instead).
 function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickState) {
-  const release = (event: Event) => {
+  const endDrag = (event: Event) => {
     const wasInteracting = getState().editorInteraction.kind !== "idle";
     editor.handleDragEnd();
     if (wasInteracting) swallow(event);
@@ -63,7 +64,7 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
   // moving on does not drag whatever now sits at the deleted vertex's index. A hold that found
   // nothing leaves its drag alone, since a finger often pauses before it moves.
   const hold = (event: PointerEvent) => {
-    if (editor.handleContextMenu(event)) release(event);
+    if (editor.handleContextMenu(event)) endDrag(event);
   };
 
   const registerTap = (clientX: number, clientY: number) => {
@@ -83,9 +84,9 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
   // tap, and a second tap in quick succession is a double tap. A touch has no browser click (its
   // touch events are cancelled, see attachCanvasGestures), so a single touch tap is clicked here;
   // a pen's browser click follows and is suppressed when the tap completed a double tap.
-  const end = (event: PointerEvent, press: Press) => {
+  const endPress = (event: PointerEvent, press: Press) => {
     const wasDragging = getState().editorInteraction.kind === "dragging";
-    release(event);
+    endDrag(event);
     if (press.pointerType === "mouse" || press.moved || press.held || wasDragging) return;
     const doubled = registerTap(event.clientX, event.clientY);
     if (press.pointerType === "touch") {
@@ -95,7 +96,7 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
     if (doubled) swallow(event);
   };
 
-  return { start, move, hold, release, end };
+  return { start, move, hold, endDrag, endPress };
 }
 
 // Pointer-gesture normalization for the canvas: registers every listener (the press, then the
@@ -165,7 +166,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
       cancelHold();
       const ended = press;
       press = null;
-      bridge.end(event, ended);
+      bridge.endPress(event, ended);
     },
     capture,
   );
@@ -176,7 +177,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
       cancelHold();
       // end the drag like a lift would, or the editor stays "dragging" with the viewport controls blocked
       press = null;
-      bridge.release(event);
+      bridge.endDrag(event);
     },
     capture,
   );

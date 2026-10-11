@@ -39,7 +39,7 @@ describe("shared solver settings", () => {
   });
 
   test("keys that are not settings are ignored", () => {
-    expect(applied(untrusted({ bogus: 1, replaySpeed: 5 }))).toEqual({});
+    expect(applied(untrusted({ bogus: 1, replayDurationMs: 5 }))).toEqual({});
   });
 
   test("a link carries the global settings and the active solver's own", () => {

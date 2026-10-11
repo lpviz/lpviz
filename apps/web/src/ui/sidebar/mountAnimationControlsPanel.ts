@@ -20,22 +20,22 @@ export function mountAnimationControlsPanel(parent: HTMLElement, ctx: AppContext
     el("div", { className: "rotation-layout" }, [column("rotation-column", "Angle Step", angle), column("rotation-column", "Rotation Speed", speed), column("rotation-checkbox", "Trace", trace)]),
   );
   root.append(rot);
-  function render(s: State) {
-    const regionDerived = hasRegion(s);
-    const hasSolution = (s.originalIteratePath?.count ?? 0) > 0;
-    const isRotating = s.rotateObjectiveMode;
-    const isAnimating = s.replayActive && !isRotating;
+  function render(state: State) {
+    const regionDerived = hasRegion(state);
+    const hasSolution = (state.originalIteratePath?.count ?? 0) > 0;
+    const isRotating = state.rotateObjectiveMode;
+    const isAnimating = state.replayActive && !isRotating;
 
     // the same button stops the replay it started, so it stays enabled while
     // one is playing; its label carries the mode, matching "Stop Rotation"
     animate.textContent = isAnimating ? "Stop Animation" : "Animate";
     animate.disabled = !regionDerived || !hasSolution || isRotating;
-    start.disabled = !regionDerived || !hasObjective(s) || isAnimating || isRotating;
+    start.disabled = !regionDerived || !hasObjective(state) || isAnimating || isRotating;
     stop.disabled = !isRotating;
     rot.className = isRotating ? "objective-rotation is-block" : "objective-rotation is-hidden";
-    trace.checked = s.traceEnabled;
-    angle.value = String(s.solverSettings.objectiveAngleStep);
-    speed.value = String(s.solverSettings.objectiveRotationSpeed);
+    trace.checked = state.traceEnabled;
+    angle.value = String(state.solverSettings.objectiveAngleStep);
+    speed.value = String(state.solverSettings.objectiveRotationSpeed);
   }
   const stopRender = renderOn(["polytope", "originalIteratePath", "objectiveVector", "rotateObjectiveMode", "replayActive", "traceEnabled", "solverSettings"], render);
   return {

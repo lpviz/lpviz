@@ -16,11 +16,14 @@ type Size = { width: number; height: number; dpr: number };
 const MAX_DPR = 3;
 const clampDpr = () => Math.min(MAX_DPR, Math.max(1, window.devicePixelRatio));
 
+// The demand-driven render loop: a frame per invalidation, in which the ticks run, the layers
+// named dirty rebuild (every layer when all are), and the passes render in order, the trace pass
+// through an impostor when one applies.
 export class SceneManager {
   readonly scenes = Object.fromEntries(RENDER_PASSES.map((pass) => [pass, new Scene()])) as Record<RenderPassName, Scene>;
   readonly renderer: WebGLRenderer;
   private layers: Layer[] = [];
-  // The trace-constraints pass renders through an impostor when one applies: in 2D
+  // The traceLines pass renders through an impostor when one applies: in 2D
   // a world-anchored accumulation cache (so neither camera motion nor a trace
   // append re-renders baked chunks); while the 3D view is in motion a
   // single-sample offscreen composite instead of the MSAA canvas.
@@ -28,7 +31,8 @@ export class SceneManager {
   private trace3D = new Trace3DCompositor(() => this.invalidate("frame"));
 
   private camera: Camera | null = null;
-  private dirty = true;
+  // a frame is wanted; a tick or a layer update can want another mid-frame
+  private frameRequested = true;
   private layersDirty: "all" | ViewportDirtyFlags | null = "all";
   private rafId: number | null = null;
   private resizeObserver: ResizeObserver | null = null;
@@ -95,22 +99,20 @@ export class SceneManager {
     }
     this.rafId = null;
 
-    if (!this.dirty) {
+    if (!this.frameRequested) {
       return;
     }
-    this.dirty = false;
+    this.frameRequested = false;
 
     for (const tick of this.ticks) {
       tick();
     }
 
     if (this.layersDirty) {
-      const dirty = this.layersDirty === "all" ? null : this.layersDirty;
+      const only = this.layersDirty === "all" ? null : this.layersDirty;
       this.layersDirty = null;
       for (const layer of this.layers) {
-        if (dirty && layer.invalidationKeys.every((key) => !dirty[key])) {
-          continue;
-        }
+        if (only && layer.invalidationKeys.every((key) => !only[key])) continue;
         layer.update();
       }
     }
@@ -119,7 +121,7 @@ export class SceneManager {
       this.renderScenes(this.camera);
     }
 
-    if (this.dirty) {
+    if (this.frameRequested) {
       this.scheduleFrame();
     }
   };
@@ -135,7 +137,7 @@ export class SceneManager {
       // chunk sequence numbers, so trace/iterate dirt needs no cache flush
       this.layersDirty = { ...this.layersDirty, ...repaint };
     }
-    this.dirty = true;
+    this.frameRequested = true;
     this.scheduleFrame();
   }
 

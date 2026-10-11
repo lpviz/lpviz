@@ -16,7 +16,7 @@ type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: st
 // writes one setting, then re-solves if the section's solver is the active one
 type SettingUpdater = <K extends keyof SolverSettings>(key: K) => (v: SolverSettings[K]) => void;
 // what a solver section is built from: the settings to show and the updater its controls write through
-export type SectionContext = { st: SolverSettings; set: SettingUpdater };
+export type SectionContext = { settings: SolverSettings; set: SettingUpdater };
 
 /** One control of a solver section: the nodes it adds and how it follows the settings. */
 export type SettingControl = { nodes: Node[]; sync: (settings: SolverSettings) => void };
@@ -44,16 +44,16 @@ export function group(className: string, controls: SettingControl[]): SettingCon
 
 // A slider (id `<key>Slider`) with a live readout: <label>text " " <span></label>,
 // the input, and a <br> unless `br` is false.
-export function numberSlider({ st, set }: SectionContext, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
+export function numberSlider({ settings, set }: SectionContext, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
   const id = key + "Slider";
-  const span = el("span", { text: format(st[key]) });
+  const span = el("span", { text: format(settings[key]) });
   const update = set(key);
   const input = range(id, min, max, step, (v) => {
     const next = parse(v);
     span.textContent = format(next);
     update(next);
   });
-  input.value = String(st[key]);
+  input.value = String(settings[key]);
   const text = el("label", { attrs: { for: id } });
   text.append(label, " ", span);
   const nodes: Node[] = [text, input];
@@ -70,14 +70,14 @@ export function numberSlider({ st, set }: SectionContext, { key, min, max, step,
 // one <label>text " "<input type=checkbox></label> per entry, in order; `applies` greys out the
 // boxes that the current settings make moot
 export function checkboxRow(
-  { st, set }: SectionContext,
+  { settings, set }: SectionContext,
   labels: Partial<Record<SettingKeys<boolean>, string>>,
   applies?: (settings: SolverSettings, key: SettingKeys<boolean>) => boolean,
 ): SettingControl {
   const row = el("div", { className: "settings-checkbox-row" });
   const boxes = (Object.entries(labels) as [SettingKeys<boolean>, string][]).map(([key, label]) => {
     const box = checkbox(key, set(key));
-    box.checked = st[key];
+    box.checked = settings[key];
     const wrap = el("label", { attrs: { for: key }, text: label + " " }, [box]);
     row.append(wrap);
     return { key, box, wrap };
@@ -97,20 +97,20 @@ export function checkboxRow(
 }
 
 // A <label> and the <select> (id `key`) it names, for the caller to lay out.
-export function labeledSelect<K extends SettingKeys<string>>({ st, set }: SectionContext, key: K, label: string, options: readonly (readonly [SolverSettings[K], string])[]): SettingControl {
+export function labeledSelect<K extends SettingKeys<string>>({ settings, set }: SectionContext, key: K, label: string, options: readonly (readonly [SolverSettings[K], string])[]): SettingControl {
   const input = el(
     "select",
     { attrs: { id: key, autocomplete: "off" } },
     options.map(([value, text]) => el("option", { attrs: { value }, text })),
   );
   input.addEventListener("change", () => set(key)(input.value as SolverSettings[K]));
-  input.value = st[key];
+  input.value = settings[key];
   return { nodes: [el("label", { attrs: { for: key }, text: label }), input], sync: (next) => setInputValue(input, next[key]) };
 }
 
 // A log-scale slider for an iteration cap, with the decades marked under it.
-export function maxitSlider({ st, set }: SectionContext, id: string, key: MaxitSettingKey): SettingControl {
-  const span = el("span", { text: fmt(st[key]) });
+export function maxitSlider({ settings, set }: SectionContext, id: string, key: MaxitSettingKey): SettingControl {
+  const span = el("span", { text: fmt(settings[key]) });
   const update = set(key);
   const input = range(id, String(MAXIT_LOG_MIN), String(MAXIT_LOG_MAX), String(MAXIT_LOG_STEP), (v) => {
     const maxit = sliderValueToMaxit(v);
@@ -118,7 +118,7 @@ export function maxitSlider({ st, set }: SectionContext, id: string, key: MaxitS
     update(maxit);
   });
   input.classList.add("log-slider");
-  input.value = String(maxitToSliderValue(st[key]));
+  input.value = String(maxitToSliderValue(settings[key]));
   const wrap = el("div", { className: "log-slider-control" });
   const label = el("label", { attrs: { for: id }, text: "Maximum iterations:" });
   label.append(" ", span);

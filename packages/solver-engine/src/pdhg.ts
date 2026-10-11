@@ -1,3 +1,6 @@
+// PDHG on `max c'x s.t. Ax <= b` (or its equality form), with the Halpern-anchored iteration and its
+// restarts as an option: the core walks one scheme, the wrapper sets up the problem and the start.
+
 import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, maxAbsDifference, transposedMatVec } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
@@ -139,51 +142,59 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const restartIndices: number[] = [];
   const startTime = performance.now();
 
-  while (trace.count < maxit) {
-    if (colorByBasis) {
-      // ineq: which duals are active; eq: which slacks are at their bound
-      let hash = 0;
-      for (let i = 0; i < m; i++) {
-        hash = (hash * BASIS_HASH_MULTIPLIER + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slackOffset + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
-      }
-      basisHashes.push(hash);
+  // the active set as one number: ineq, which duals are active; eq, which slacks are at their bound
+  const basisHash = () => {
+    let hash = 0;
+    for (let i = 0; i < m; i++) {
+      hash = (hash * BASIS_HASH_MULTIPLIER + ((ineq ? yk[i]! > BASIS_THRESHOLD : Math.abs(xk[slackOffset + i]!) <= BASIS_THRESHOLD) ? 1 : 0)) >>> 0;
     }
+    return hash;
+  };
+  // one PDHG step from (xk, yk) into (nextX, nextY): the dual takes the projected, extrapolated
+  // step in ineq mode, the primal in eq mode
+  const stepInequality = () => {
+    // y_{k+1} = [y_k + τ(Ax_k - b)]_+
+    // ỹ_k = y_{k+1} + (y_{k+1} - y_k)
+    for (let i = 0; i < m; i++) {
+      const candidate = yk[i]! + tau * (kkt.ax[i]! - b[i]!);
+      nextY[i] = candidate > 0 ? candidate : 0;
+      extrapolated[i] = 2 * nextY[i]! - yk[i]!;
+    }
+    // x_{k+1} = x_k - η(c + A^T ỹ_k)
+    transposedMatVec(A, extrapolated, atYScratch);
+    for (let i = 0; i < n; i++) {
+      nextX[i] = xk[i]! - eta * (c[i]! + atYScratch[i]!);
+    }
+  };
+  const stepEquality = () => {
+    // x_{k+1} = [x_k - η(c + A^T y_k)]_+
+    // x̃_k = x_{k+1} + (x_{k+1} - x_k)
+    transposedMatVec(A, yk, atYScratch);
+    for (let i = 0; i < n; i++) {
+      const candidate = xk[i]! - eta * (c[i]! + atYScratch[i]!);
+      nextX[i] = candidate > 0 ? candidate : 0;
+      extrapolated[i] = 2 * nextX[i]! - xk[i]!;
+    }
+    // y_{k+1} = y_k + τ(Ax̃_k - b)
+    matVec(A, extrapolated, axExtrapolated);
+    for (let i = 0; i < m; i++) {
+      nextY[i] = yk[i]! + tau * (axExtrapolated[i]! - b[i]!);
+    }
+  };
 
-    // the parts kkt.of measured for this (xk, yk) are the row's, and the ineq step's
+  while (trace.count < maxit) {
+    if (colorByBasis) basisHashes.push(basisHash());
+
+    // the parts kkt.of measured for this (xk, yk) are the row's, and the ineq step's; c is the
+    // negated objective (see pdhg), so the row's objective is -c'x
     trace.record(pointOf(xk), -kkt.cTx, kkt.primal, epsilonK);
 
     if (epsilonK <= tol || trace.count === maxit) {
       break;
     }
 
-    if (ineq) {
-      // y_{k+1} = [y_k + τ(Ax_k - b)]_+
-      // ỹ_k = y_{k+1} + (y_{k+1} - y_k)
-      for (let i = 0; i < m; i++) {
-        const candidate = yk[i]! + tau * (kkt.ax[i]! - b[i]!);
-        nextY[i] = candidate > 0 ? candidate : 0;
-        extrapolated[i] = 2 * nextY[i]! - yk[i]!;
-      }
-      // x_{k+1} = x_k - η(c + A^T ỹ_k)
-      transposedMatVec(A, extrapolated, atYScratch);
-      for (let i = 0; i < n; i++) {
-        nextX[i] = xk[i]! - eta * (c[i]! + atYScratch[i]!);
-      }
-    } else {
-      // x_{k+1} = [x_k - η(c + A^T y_k)]_+
-      // x̃_k = x_{k+1} + (x_{k+1} - x_k)
-      transposedMatVec(A, yk, atYScratch);
-      for (let i = 0; i < n; i++) {
-        const candidate = xk[i]! - eta * (c[i]! + atYScratch[i]!);
-        nextX[i] = candidate > 0 ? candidate : 0;
-        extrapolated[i] = 2 * nextX[i]! - xk[i]!;
-      }
-      // y_{k+1} = y_k + τ(Ax̃_k - b)
-      matVec(A, extrapolated, axExtrapolated);
-      for (let i = 0; i < m; i++) {
-        nextY[i] = yk[i]! + tau * (axExtrapolated[i]! - b[i]!);
-      }
-    }
+    if (ineq) stepInequality();
+    else stepEquality();
 
     if (halpern) {
       const fixedPointError = Math.max(maxAbsDifference(xk, nextX), maxAbsDifference(yk, nextY));

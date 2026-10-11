@@ -25,7 +25,12 @@ export type SolverActions = {
   destroy: () => void;
 };
 
+// The solver's actions: the settings and the mode, the objective rotation and the trace it leaves
+// (the trail of earlier paths kept on the canvas; not the engine's NumericTrace), the replay and
+// the highlights.
 export function createSolverActions(): SolverActions {
+  // a replay writes highlightIteratePathIndex too, so the field alone cannot say whether the
+  // person is hovering a row; the replay asks before it yields the highlight
   let iterateHoverActive = false;
   const presenter = createResultPresenter();
 
@@ -40,9 +45,9 @@ export function createSolverActions(): SolverActions {
   const { solve, clearComputedState } = createSolveRunner({ presenter, replay });
   const rotation = createRotationController({ solve, syncTraceCapacity });
   const stopMotion = () => {
-    const s = getState();
-    const wasRotating = s.rotateObjectiveMode;
-    if (!wasRotating && !s.replayActive) return;
+    const state = getState();
+    const wasRotating = state.rotateObjectiveMode;
+    if (!wasRotating && !state.replayActive) return;
     replay.cancel();
     rotation.cancel();
     setState({
@@ -52,13 +57,13 @@ export function createSolverActions(): SolverActions {
     if (wasRotating) presenter.restoreFullVirtualResult();
   };
   const handleProblemChange = () => {
-    const s = getState();
-    if (!isReadyForSolvers(s)) {
+    const state = getState();
+    if (!isReadyForSolvers(state)) {
       stopMotion();
       clearComputedState();
       return;
     }
-    if (!s.rotateObjectiveMode) {
+    if (!state.rotateObjectiveMode) {
       resetTraceState();
       void solve();
       return;

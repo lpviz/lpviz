@@ -130,15 +130,15 @@ function buildTranscript() {
             }
           }
 
-          for (const targetMode of [true, false]) {
-            const plan = buildViewportTransitionPlan({ snapshot: snap, targetMode, viewAngle });
-            record(`${key} plan ${targetMode}`, plan);
+          for (const to3D of [true, false]) {
+            const plan = buildViewportTransitionPlan({ snapshot: snap, to3D, viewAngle });
+            record(`${key} plan ${to3D}`, plan);
             for (const progress of [-0.5, 0, 0.25, 0.5, 1, 1.5]) {
               const frame = buildViewportTransitionFrame(plan, progress, rect);
               snapshots.push(frame.snapshot);
-              record(`${key} frame ${targetMode} ${progress}`, frame);
+              record(`${key} frame ${to3D} ${progress}`, frame);
               for (const sidebar of SIDEBARS) {
-                record(`${key} frame2d ${targetMode} ${progress} ${sidebar}`, buildViewport2DStateFromTransitionFrame(plan, frame, rect, sidebar));
+                record(`${key} frame2d ${to3D} ${progress} ${sidebar}`, buildViewport2DStateFromTransitionFrame(plan, frame, rect, sidebar));
               }
             }
           }

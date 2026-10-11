@@ -36,14 +36,14 @@ export function createReplayController({
   };
 
   const start = () => {
-    const snap = getState();
-    if (snap.rotateObjectiveMode) return;
-    const orig = snap.originalIteratePath;
+    const state = getState();
+    if (state.rotateObjectiveMode) return;
+    const orig = state.originalIteratePath;
     const total = orig.count;
     const stride = orig.stride;
     if (total === 0) return;
-    const origPhases = snap.originalIteratePhases;
-    const durationMs = clampReplayDurationMs(snap.solverSettings.replaySpeed);
+    const origPhases = state.originalIteratePhases;
+    const durationMs = clampReplayDurationMs(state.solverSettings.replayDurationMs);
 
     // One copy of the path per replay, never per frame: the sweep only ever rewrites the `stride`
     // floats (and the lift) of the moving head, so every point behind it is still the solver's own data.
@@ -116,7 +116,7 @@ export function createReplayController({
         // everything that needs a real one (EllipsoidLayer reveals that
         // iterate's localizing ellipse). The green marker does not read it —
         // it rides the interpolated head instead, so it sweeps rather than
-        // snapping — see IterateHighlightLayer.
+        // snapping — see createIterateHighlightLayer.
         ...(isIterateHoverActive() ? {} : { highlightIteratePathIndex: base }),
       });
       shownCount = count;

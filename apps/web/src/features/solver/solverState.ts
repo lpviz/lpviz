@@ -143,7 +143,7 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, () => ViewportDirty
   iterateRestartIndices: () => ITERATE_DIRTY,
   highlightIteratePathIndex: () => ITERATE_DIRTY,
   // the optimum star is hidden for the duration of a replay, so starting or
-  // stopping one changes what the iterate pass draws (see IterateStarLayer)
+  // stopping one changes what the iterate pass draws (see createIterateStarLayer)
   replayActive: () => ITERATE_DIRTY,
   traceBuffer: () => TRACE_DIRTY,
   traceEnabled: () => TRACE_DIRTY,

@@ -20,7 +20,7 @@ type IterateMarkerConfig = {
 };
 
 // One sprite at a single iterate of the path: the star on the optimum and the hover highlight
-// differ only in texture, size, pass and which index they pick.
+// differ only in shape, size, pass and which index they pick.
 class IterateMarkerLayer extends PointCloudLayer {
   private readonly selectIndex: IterateMarkerConfig["selectIndex"];
   private readonly selectorDeps: IterateMarkerConfig["selectorDeps"];

@@ -31,7 +31,6 @@ export type ViewportApi = {
   setSidebarWidth: (width: number) => void;
   zoomToFit: (
     bounds: BoundingBox,
-    padding?: number,
     zBounds?: ViewportZBounds,
     // pixels along the top edge covered by an overlay (the open gallery)
     topInset?: number,
@@ -41,7 +40,7 @@ export type ViewportApi = {
   set2DPanEnabled: (enabled: boolean) => void;
   toLogicalCoords: (x: number, y: number) => PointXY;
   toCanvasCoords: (x: number, y: number, z?: number) => PointXY;
-  start3DTransition: (targetMode: boolean) => void;
+  start3DTransition: (to3D: boolean) => void;
   getCanvasElement: () => HTMLCanvasElement;
   getCanvasRect: () => DOMRect;
 };
@@ -63,6 +62,10 @@ export type ViewportRuntime = ViewportApi & {
  * publish through it; the 2D controls build theirs from their own state and fall back to it). It
  * is an immutable VALUE: only the reference is ever reassigned, always to a freshly built
  * snapshot, which is what makes publishSnapshot's prev/next diff meaningful.
+ *
+ * Three snapshots are in play: the owned one (held here), the live one (`liveSnapshot()`: what the
+ * view shows now, which is the 2D controls' own while they are wanted) and the published one (what
+ * the canvas reads, kept in runtime/snapshot.ts).
  */
 export function createViewportRuntime({ viewportBridge }: { viewportBridge: ViewportBridge }): ViewportRuntime {
   let ownedSnapshot: ViewportRenderSnapshot = { ...DEFAULT_VIEWPORT_RENDER_SNAPSHOT };
@@ -107,15 +110,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     setOwnedSnapshot(buildViewport2DSnapshot({ state, sidebarWidth, fallbackSnapshot: ownedSnapshot }, rect));
     publishSnapshot(ownedSnapshot);
   };
-  const sync2DControls = (enabled: boolean, { syncStateFromSnapshot = false }: { syncStateFromSnapshot?: boolean } = {}) => {
-    patch2DControls({
-      enabled,
-      blocked: controlsBlocked,
-      sidebarWidth,
-      fallbackSnapshot: ownedSnapshot,
-      ...(syncStateFromSnapshot ? { state: deriveViewport2DState(ownedSnapshot, sidebarWidth) } : {}),
-    });
-  };
+  const sync2DControls = (enabled: boolean) => patch2DControls({ enabled, blocked: controlsBlocked, sidebarWidth, fallbackSnapshot: ownedSnapshot });
 
   // ---- navigation: store.isNavigatingViewport is set while a gesture moves the view and
   // cleared VIEWPORT_NAVIGATION_IDLE_MS after its last frame ----
@@ -181,10 +176,11 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     if (controls3DActive && options.syncControls) publish3DControlsConfig({ syncFromSnapshot: true });
     publishSnapshot(ownedSnapshot);
   };
-  const sync3DControls = (enabled: boolean, options: { syncFromSnapshot?: boolean } = {}) => {
+  // the controls that take the view re-pose their camera from the snapshot they take it with
+  const sync3DControls = (enabled: boolean) => {
     controls3DActive = enabled;
     if (enabled) rebuild3DSnapshot();
-    publish3DControlsConfig({ syncFromSnapshot: enabled && options.syncFromSnapshot });
+    publish3DControlsConfig({ syncFromSnapshot: enabled });
   };
 
   // ---- the transition: owns the snapshot from begin to complete ----
@@ -202,7 +198,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
     ownedSnapshot = frame.snapshot;
     return frame;
   };
-  const beginTransition = (targetMode: boolean) => {
+  const start3DTransition = (to3D: boolean) => {
     if (getState().isTransitioning3D) return;
 
     // If the user was actively panning, the navigation-end timeout will fire
@@ -224,10 +220,10 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       sync3DControls(false);
     }
 
-    const plan = buildViewportTransitionPlan({ snapshot: baseSnapshot, targetMode, viewAngle });
+    const plan = buildViewportTransitionPlan({ snapshot: baseSnapshot, to3D, viewAngle });
     transitionPlan = plan;
     transitionProgress = 0;
-    setState({ isTransitioning3D: true, is3DMode: targetMode, viewAngle: { ...plan.startAngles } });
+    setState({ isTransitioning3D: true, is3DMode: to3D, viewAngle: { ...plan.startAngles } });
     publishSnapshot(renderTransitionFrame(plan, 0).snapshot);
 
     transitionRun += 1;
@@ -296,8 +292,8 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
   });
   setOwnedSnapshot(initialSnapshot(get2DControlsSnapshot()));
   controls2DActive = wants2DControls();
-  sync2DControls(controls2DActive, { syncStateFromSnapshot: controls2DActive });
-  sync3DControls(wants3DControls(), { syncFromSnapshot: wants3DControls() });
+  sync2DControls(controls2DActive);
+  sync3DControls(wants3DControls());
   publishSnapshot(liveSnapshot());
 
   const subscriptions = new AbortController();
@@ -310,7 +306,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       if (next2DActive === controls2DActive && !changed3D) return;
 
       sync2DControls(next2DActive);
-      if (changed3D) sync3DControls(next3DActive, { syncFromSnapshot: next3DActive });
+      if (changed3D) sync3DControls(next3DActive);
       controls2DActive = next2DActive;
 
       // the transition owns the snapshot until it completes; don't let a mode
@@ -332,15 +328,15 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       patch2DControls({ sidebarWidth: width });
       refreshCanvasRect();
     },
-    zoomToFit: (bounds, padding, zBounds, topInset) => {
+    zoomToFit: (bounds, zBounds, topInset) => {
       if (wants2DControls()) {
-        adopt2DState(fitViewport2DToBounds(get2DControlsConfig(), rect, bounds, { padding, topInset }));
+        adopt2DState(fitViewport2DToBounds(get2DControlsConfig(), rect, bounds, { topInset }));
         return;
       }
       const state = getState();
       if (state.isTransitioning3D) return;
       const scaledZ = zBounds ? { minZ: (zBounds.minZ * state.zScale) / 100, maxZ: (zBounds.maxZ * state.zScale) / 100 } : undefined;
-      applyPerspectivePose(fitViewport3DToBounds(ownedSnapshot, rect, bounds, { sidebarWidth, padding, zBounds: scaledZ, topInset }).pose, { syncControls: true });
+      applyPerspectivePose(fitViewport3DToBounds(ownedSnapshot, rect, bounds, { sidebarWidth, zBounds: scaledZ, topInset }).pose, { syncControls: true });
     },
     resetView: () => {
       setState({ viewAngle: { ...DEFAULT_VIEW_ANGLE } });
@@ -366,7 +362,7 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
       return toLogicalCoords3D(ownedSnapshot, rect, point, { zScale: state.zScale, snapToGrid: state.snapToGrid, interacting: editorInteraction.kind !== "idle", viewAnchor3D });
     },
     toCanvasCoords: (x, y, z) => (wants2DControls() ? toCanvasCoords2D(get2DControlsSnapshot(), rect, { x, y }) : toCanvasCoords3D(ownedSnapshot, rect, { x, y }, z, getState().zScale)),
-    start3DTransition: beginTransition,
+    start3DTransition,
     getCanvasElement: () => viewportBridge.getCanvasElement(),
     getCanvasRect: () => rect,
     destroy: () => {

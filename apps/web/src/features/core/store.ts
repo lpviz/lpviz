@@ -1,3 +1,9 @@
+// The store: one immutable state value, patched by setState, read by getState. Listeners register
+// per field (`on`) and a patch notifies each listener once, after the whole patch is applied, however
+// many of its keys changed; a listener that patches the store during that delivery is drained in the
+// same round, so every listener sees a settled state. The render layers listen through
+// onViewportDirty, which fires after the field listeners with what the patch repaints.
+
 import { freshHistoryState, type HistoryState } from "@/features/history/historyState";
 import { EDITOR_DIRTY, freshEditorState, initialEditorRuntimeState, type EditorRuntimeState, type EditorState } from "@/features/polytope-editor/editorState";
 import { freshSolverState, initialSolverRuntimeState, SOLVER_DIRTY, type SolverRuntimeState, type SolverState } from "@/features/solver/solverState";

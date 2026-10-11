@@ -6,7 +6,7 @@ import { bakePathRibbons } from "./helpers/pathRibbon";
 import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
-// World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
+// World-anchored impostor for the traceLines render pass in 2D mode. Trace chunks are immutable
 // once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
 // sequence number (see traceSequence.ts): appends draw only the new chunks into
 // the existing target with no clear (alpha-over of one shared color and opacity is associative,
@@ -105,17 +105,9 @@ export class TraceCache {
     this.fullRebuildNeeded = true;
   }
 
-  // Prepares the impostor for the trace-constraints pass. Returns the scene with
-  // the composite quads (the caller renders it in place of the pass), or
-  // null when the pass must render directly.
-  prepare(renderer: WebGLRenderer, traceLinesScene: Scene): TracePassImpostor | null {
-    const snapshot = getViewportRenderSnapshot();
-    if (snapshot.mode !== "2d" || getState().isTransitioning3D) {
-      // keep a stale billboard from surviving a round trip through 3D
-      this.fullRebuildNeeded = true;
-      return null;
-    }
-
+  // The live chunks (into liveMeshes) and the range of their sequence numbers, or null when the
+  // pass draws nothing.
+  private collectLiveChunks(traceLinesScene: Scene): { minSeq: number; maxSeq: number } | null {
     const live = this.liveMeshes;
     live.length = 0;
     let minSeq = Infinity;
@@ -127,32 +119,12 @@ export class TraceCache {
       if (seq < minSeq) minSeq = seq;
       if (seq > maxSeq) maxSeq = seq;
     });
-    if (live.length === 0) {
-      this.fullRebuildNeeded = true;
-      this.quad.mesh.visible = false;
-      this.trailingQuad.mesh.visible = false;
-      this.trailing.release();
-      return null;
-    }
+    return live.length === 0 ? null : { minSeq, maxSeq };
+  }
 
-    const width = snapshot.width || 1;
-    const height = snapshot.height || 1;
-    const unitsPerPixel = snapshot.unitsPerPixel;
-    const dpr = renderer.getPixelRatio();
-    const pixelWidth = Math.min(MAX_CACHE_DIMENSION, Math.ceil(width * CACHE_MARGIN * dpr));
-    const pixelHeight = Math.min(MAX_CACHE_DIMENSION, Math.ceil(height * CACHE_MARGIN * dpr));
-    const halfVisibleWidth = (width * unitsPerPixel) / 2;
-    const halfVisibleHeight = (height * unitsPerPixel) / 2;
-    const centerX = snapshot.target.x;
-    const centerY = snapshot.target.y;
-
-    const panContained =
-      centerX + halfVisibleWidth <= this.cachedCenterX + this.cachedHalfWidth &&
-      centerX - halfVisibleWidth >= this.cachedCenterX - this.cachedHalfWidth &&
-      centerY + halfVisibleHeight <= this.cachedCenterY + this.cachedHalfHeight &&
-      centerY - halfVisibleHeight >= this.cachedCenterY - this.cachedHalfHeight;
-
-    const now = performance.now();
+  // Evictions and view motion, as the rebuild policy reads them: whether chunks were evicted
+  // recently, and whether the view moved recently (with the pan velocity that leads a rebuild).
+  private trackMotion(now: number, minSeq: number, unitsPerPixel: number, centerX: number, centerY: number): { evicting: boolean; viewMoving: boolean } {
     if (minSeq > this.lastMinSeq && this.lastMinSeq >= 0) {
       this.lastEvictionAt = now;
     }
@@ -173,6 +145,50 @@ export class TraceCache {
       this.panVelocityX = 0;
       this.panVelocityY = 0;
     }
+    return { evicting, viewMoving };
+  }
+
+  // Prepares the impostor for the traceLines pass. Returns the scene with
+  // the composite quads (the caller renders it in place of the pass), or
+  // null when the pass must render directly.
+  prepare(renderer: WebGLRenderer, traceLinesScene: Scene): TracePassImpostor | null {
+    const snapshot = getViewportRenderSnapshot();
+    if (snapshot.mode !== "2d" || getState().isTransitioning3D) {
+      // keep a stale billboard from surviving a round trip through 3D
+      this.fullRebuildNeeded = true;
+      return null;
+    }
+
+    const chunks = this.collectLiveChunks(traceLinesScene);
+    if (!chunks) {
+      this.fullRebuildNeeded = true;
+      this.quad.mesh.visible = false;
+      this.trailingQuad.mesh.visible = false;
+      this.trailing.release();
+      return null;
+    }
+    const { minSeq, maxSeq } = chunks;
+    const live = this.liveMeshes;
+
+    const width = snapshot.width || 1;
+    const height = snapshot.height || 1;
+    const unitsPerPixel = snapshot.unitsPerPixel;
+    const dpr = renderer.getPixelRatio();
+    const pixelWidth = Math.min(MAX_CACHE_DIMENSION, Math.ceil(width * CACHE_MARGIN * dpr));
+    const pixelHeight = Math.min(MAX_CACHE_DIMENSION, Math.ceil(height * CACHE_MARGIN * dpr));
+    const halfVisibleWidth = (width * unitsPerPixel) / 2;
+    const halfVisibleHeight = (height * unitsPerPixel) / 2;
+    const centerX = snapshot.target.x;
+    const centerY = snapshot.target.y;
+
+    const panContained =
+      centerX + halfVisibleWidth <= this.cachedCenterX + this.cachedHalfWidth &&
+      centerX - halfVisibleWidth >= this.cachedCenterX - this.cachedHalfWidth &&
+      centerY + halfVisibleHeight <= this.cachedCenterY + this.cachedHalfHeight &&
+      centerY - halfVisibleHeight >= this.cachedCenterY - this.cachedHalfHeight;
+
+    const now = performance.now();
+    const { evicting, viewMoving } = this.trackMotion(now, minSeq, unitsPerPixel, centerX, centerY);
     const zoomRatio = this.cachedUnitsPerPixel > 0 ? this.cachedUnitsPerPixel / unitsPerPixel : 1;
     const zoomDeferred = unitsPerPixel !== this.cachedUnitsPerPixel && viewMoving && zoomRatio < ZOOM_REBUILD_RATIO && zoomRatio > 1 / ZOOM_REBUILD_RATIO;
     const panDeferred =

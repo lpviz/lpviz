@@ -19,19 +19,19 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     buttonGroup.append(b);
   }
 
-  const settings = el("div");
-  root.append(settings);
+  const settingsSlot = el("div");
+  root.append(settingsSlot);
 
   let renderedMode: SolverMode | null = null;
   let syncSettings: SettingsSync = () => {};
 
-  function buildSettings(mode: SolverMode, st: SolverSettings): SettingsSync {
-    settings.replaceChildren();
+  function buildSettings(mode: SolverMode, settings: SolverSettings): SettingsSync {
+    settingsSlot.replaceChildren();
     const sec = el("div", { className: "settings-section is-block" });
-    settings.append(sec);
+    settingsSlot.append(sec);
     // every control writes its setting, then re-solves if its solver is the active one
     return buildSolverSection(mode, sec, {
-      st,
+      settings,
       set: (key) => (v) => {
         ctx.actions.updateSolverSetting(key, v);
         ctx.actions.recomputeIfModeActive(mode);
@@ -39,17 +39,17 @@ export function mountSolverControlsPanel(parent: HTMLElement, ctx: AppContext) {
     });
   }
 
-  function render(s: State) {
-    const readyForSolvers = isReadyForSolvers(s);
+  function render(state: State) {
+    const readyForSolvers = isReadyForSolvers(state);
     for (const [mode, b] of buttons) {
-      b.className = s.solverMode === mode ? "button-active" : "";
-      b.disabled = !readyForSolvers || !isSolverSelectable(s, mode);
+      b.className = state.solverMode === mode ? "button-active" : "";
+      b.disabled = !readyForSolvers || !isSolverSelectable(state, mode);
     }
-    if (renderedMode !== s.solverMode) {
-      renderedMode = s.solverMode;
-      syncSettings = buildSettings(s.solverMode, s.solverSettings);
+    if (renderedMode !== state.solverMode) {
+      renderedMode = state.solverMode;
+      syncSettings = buildSettings(state.solverMode, state.solverSettings);
     }
-    syncSettings(s.solverSettings);
+    syncSettings(state.solverSettings);
   }
 
   const stopRender = renderOn(["solverMode", "solverSettings", "polytope", "vertices", "completionMode", "objectiveVector", "currentObjective"], render);

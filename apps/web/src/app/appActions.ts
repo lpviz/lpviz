@@ -6,7 +6,6 @@ import type { GalleryProblem } from "@/features/problem-gallery/problems";
 import type { SolverActions } from "@/features/solver/solverActions";
 import { collectZoomFitBounds, UNBOUNDED_CLIP_BOUNDS } from "@/features/viewport/bounds";
 import type { ViewportApi } from "@/features/viewport/runtime";
-import { DEFAULT_FIT_PADDING } from "@lpviz/viewport/defaults";
 
 // the solver actions the UI panels call directly
 const SOLVER_ACTION_KEYS = [
@@ -88,7 +87,7 @@ export function createAppActions({
     const isOpenUnbounded = state.completionMode === "open" && state.polytope?.kind === "unbounded";
     const zoomFit = collectZoomFitBounds(state);
     if (!zoomFit && !isOpenUnbounded) return;
-    viewportApi.zoomToFit(isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : zoomFit!.bounds, DEFAULT_FIT_PADDING, zoomFit?.zBounds, topInset);
+    viewportApi.zoomToFit(isOpenUnbounded ? UNBOUNDED_CLIP_BOUNDS : zoomFit!.bounds, zoomFit?.zBounds, topInset);
   };
 
   return {
@@ -121,7 +120,7 @@ export function createAppActions({
         highlightIndex: null,
         highlightIteratePathIndex: null,
         editorInteraction: { kind: "idle" },
-        lastCompletedInteraction: "none",
+        clickFollowsDrag: false,
         rotateObjectiveMode: false,
         // any in-flight replay was already stopped by stopMotion() above;
         // clearing `replayActive` here without cancelling its RAF loop would

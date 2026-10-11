@@ -15,7 +15,7 @@ const TEX_WIDTH_MASK = TEX_WIDTH - 1;
 const TEX_WIDTH_SHIFT = 12;
 
 // Shared by reference across every ribbon material; updated on resize via
-// setSharedLineResolution (CSS pixels, matching LineMaterial).
+// setFatLineResolution (CSS pixels, matching LineMaterial).
 const sharedResolution = new Vector2(1, 1);
 export function setPathRibbonResolution(width: number, height: number): void {
   sharedResolution.set(width, height);

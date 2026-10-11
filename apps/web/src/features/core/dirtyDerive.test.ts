@@ -10,7 +10,7 @@ function st(o: Partial<State>): State {
 
 describe("deriveViewportDirty (field -> layers)", () => {
   test("polytope-group fields repaint polytope + constraints + objective", () => {
-    for (const key of ["vertices", "polytope", "completionMode", "interiorPoint"] as const) {
+    for (const key of ["vertices", "polytope", "completionMode"] as const) {
       expect(deriveViewportDirty(st({}), [key])).toEqual({
         polytope: true,
         constraints: true,
@@ -66,6 +66,8 @@ describe("deriveViewportDirty (field -> layers)", () => {
   test("pure UI / solver-config fields repaint nothing", () => {
     expect(deriveViewportDirty(st({}), ["result"])).toBeNull();
     expect(deriveViewportDirty(st({}), ["maxTraceCount"])).toBeNull();
+    // kept for the 3-variable port's central path; nothing draws it yet
+    expect(deriveViewportDirty(st({}), ["interiorPoint"])).toBeNull();
   });
 
   test("the start marker repaints the iterate overlay", () => {

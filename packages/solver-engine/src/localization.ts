@@ -91,7 +91,7 @@ class Incumbent {
     return this.objective > -Infinity;
   }
 
-  /** Offer a feasible `x` whose objective value is `objectiveValue`. */
+  /** A feasible `x`, with the objective the oracle already computed for it: adopted when it beats the incumbent. */
   offer(x: Float64Array, objectiveValue: number): void {
     if (objectiveValue > this.objective) {
       this.objective = objectiveValue;
