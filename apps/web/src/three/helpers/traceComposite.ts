@@ -1,3 +1,4 @@
+import { restartableTimeout } from "@/features/core/timers";
 import { type Camera, CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, type Scene, ShaderMaterial, type Texture, WebGLRenderTarget, type WebGLRenderer } from "three";
 
 // how long after its last change a view counts as moving, for both trace impostors
@@ -101,7 +102,7 @@ export class OffscreenTarget {
 // fold) that nothing else would schedule. arm() is a no-op while one is
 // pending.
 export class SettleTimer {
-  private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly timer = restartableTimeout();
 
   constructor(
     private readonly requestFrame: () => void,
@@ -109,17 +110,10 @@ export class SettleTimer {
   ) {}
 
   arm(): void {
-    if (this.timer !== null) return;
-    this.timer = setTimeout(() => {
-      this.timer = null;
-      this.requestFrame();
-    }, this.delayMs);
+    if (!this.timer.pending) this.timer.schedule(this.requestFrame, this.delayMs);
   }
 
   dispose(): void {
-    if (this.timer !== null) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
+    this.timer.clear();
   }
 }

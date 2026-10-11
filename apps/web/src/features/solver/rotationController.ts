@@ -1,3 +1,4 @@
+import { singleFrame } from "@/features/core/timers";
 import { getState, setState } from "@/features/core/store";
 import type { Vec } from "@lpviz/math/types";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/halfSpaces";
@@ -39,7 +40,7 @@ export type RotationController = {
 // set, steps the objective by one angle increment and re-solves, with at most one solve in
 // flight at a time.
 export function createRotationController({ solve, syncTraceCapacity }: { solve: () => Promise<void>; syncTraceCapacity: () => void }): RotationController {
-  let rafId: number | null = null;
+  const frame = singleFrame();
   let lastFrameTime: number | null = null;
   let elapsedMs = 0;
   let inFlight = false;
@@ -50,9 +51,8 @@ export function createRotationController({ solve, syncTraceCapacity }: { solve: 
   let direction: RotationDirection = 1;
 
   const ensureLoop = () => {
-    if (!getState().rotateObjectiveMode || rafId !== null) return;
+    if (!getState().rotateObjectiveMode || frame.pending) return;
     const tick = (timestamp: number) => {
-      rafId = null;
       if (!getState().rotateObjectiveMode) return;
       if (lastFrameTime === null) lastFrameTime = timestamp;
       else {
@@ -64,9 +64,9 @@ export function createRotationController({ solve, syncTraceCapacity }: { solve: 
         elapsedMs = 0;
         void step();
       }
-      if (getState().rotateObjectiveMode) rafId = requestAnimationFrame(tick);
+      if (getState().rotateObjectiveMode) frame.request(tick);
     };
-    rafId = requestAnimationFrame(tick);
+    frame.request(tick);
   };
 
   const step = async () => {
@@ -100,8 +100,7 @@ export function createRotationController({ solve, syncTraceCapacity }: { solve: 
     },
     cancel: () => {
       session++;
-      if (rafId !== null) cancelAnimationFrame(rafId);
-      rafId = null;
+      frame.cancel();
       lastFrameTime = null;
       elapsedMs = 0;
       inFlight = false;

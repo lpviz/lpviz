@@ -1,3 +1,4 @@
+import { singleFrame } from "@/features/core/timers";
 import { subscribeCurrentMouse } from "@/features/core/currentMouse";
 import { getState } from "@/features/core/store";
 import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags";
@@ -34,7 +35,7 @@ export class SceneManager {
   // a frame is wanted; a tick or a layer update can want another mid-frame
   private frameRequested = true;
   private layersDirty: "all" | ViewportDirtyFlags | null = "all";
-  private rafId: number | null = null;
+  private frame = singleFrame();
   private resizeObserver: ResizeObserver | null = null;
   private subscriptions = new AbortController();
   private disposed = false;
@@ -87,21 +88,11 @@ export class SceneManager {
   }
 
   private scheduleFrame(): void {
-    if (this.disposed || this.rafId !== null) {
-      return;
-    }
-    this.rafId = requestAnimationFrame(this.loop);
+    if (!this.disposed) this.frame.request(this.loop);
   }
 
   private loop = (): void => {
-    if (this.disposed) {
-      return;
-    }
-    this.rafId = null;
-
-    if (!this.frameRequested) {
-      return;
-    }
+    if (this.disposed || !this.frameRequested) return;
     this.frameRequested = false;
 
     for (const tick of this.ticks) {
@@ -167,11 +158,7 @@ export class SceneManager {
     }
     this.disposed = true;
 
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
-
+    this.frame.cancel();
     this.resizeObserver?.disconnect();
     this.resizeObserver = null;
     this.subscriptions.abort();

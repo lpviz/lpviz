@@ -100,10 +100,16 @@ export function checkboxRow(
 export function labeledSelect<K extends SettingKeys<string>>({ settings, set }: SectionContext, key: K, label: string, options: readonly (readonly [SolverSettings[K], string])[]): SettingControl {
   const input = el(
     "select",
-    { attrs: { id: key, autocomplete: "off" } },
+    {
+      attrs: { id: key, autocomplete: "off" },
+      on: {
+        change() {
+          set(key)(this.value as SolverSettings[K]);
+        },
+      },
+    },
     options.map(([value, text]) => el("option", { attrs: { value }, text })),
   );
-  input.addEventListener("change", () => set(key)(input.value as SolverSettings[K]));
   input.value = settings[key];
   return { nodes: [el("label", { attrs: { for: key }, text: label }), input], sync: (next) => setInputValue(input, next[key]) };
 }

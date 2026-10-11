@@ -1,3 +1,4 @@
+import { restartableTimeout } from "@/features/core/timers";
 import { formatReplayDuration } from "@/features/solver/replayDuration";
 import { el } from "@/ui/dom";
 
@@ -24,20 +25,16 @@ export function mountReplayDurationOverlay(parent: HTMLElement) {
 
   // One timer, restarted on every press, is what makes the readout fade out
   // shortly after the *last* press rather than shortly after the first
-  let hideTimer: number | null = null;
+  const hide = restartableTimeout();
 
   return {
     show: (durationMs: number) => {
       value.textContent = formatReplayDuration(durationMs);
       root.classList.add("is-visible");
-      if (hideTimer !== null) window.clearTimeout(hideTimer);
-      hideTimer = window.setTimeout(() => {
-        hideTimer = null;
-        root.classList.remove("is-visible");
-      }, VISIBLE_MS);
+      hide.schedule(() => root.classList.remove("is-visible"), VISIBLE_MS);
     },
     destroy: () => {
-      if (hideTimer !== null) window.clearTimeout(hideTimer);
+      hide.clear();
       root.remove();
     },
   };

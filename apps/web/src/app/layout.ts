@@ -71,17 +71,17 @@ export function createLayout(root: HTMLElement, actions: Pick<AppActions, "setSi
     applyGeometry();
   };
 
+  const attached = new AbortController();
   return {
     getViewportSidebarWidth,
     onResizeStart,
     attach: () => {
-      window.addEventListener("resize", onResize);
-      mobileQuery.addEventListener("change", onResize);
+      window.addEventListener("resize", onResize, { signal: attached.signal });
+      mobileQuery.addEventListener("change", onResize, { signal: attached.signal });
     },
     destroy: () => {
       activeResize?.abort();
-      window.removeEventListener("resize", onResize);
-      mobileQuery.removeEventListener("change", onResize);
+      attached.abort();
     },
   };
 }

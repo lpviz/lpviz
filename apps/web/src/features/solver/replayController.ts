@@ -1,3 +1,4 @@
+import { singleFrame } from "@/features/core/timers";
 import { getState, setState } from "@/features/core/store";
 import { clampReplayDurationMs } from "@/features/solver/replayDuration";
 
@@ -18,11 +19,10 @@ export function createReplayController({
   // the user hovering a log row owns the highlight; the replay yields it
   isIterateHoverActive: () => boolean;
 }): ReplayController {
-  let rafId: number | null = null;
+  const frame = singleFrame();
 
   const cancel = () => {
-    if (rafId !== null) cancelAnimationFrame(rafId);
-    rafId = null;
+    frame.cancel();
     const state = getState();
     if (!state.replayActive) return;
     // Stopping mid-sweep must leave exactly the picture a completed replay leaves: the whole path
@@ -64,7 +64,6 @@ export function createReplayController({
 
     const startTime = performance.now();
     const tick = (timestamp: number) => {
-      rafId = null;
       // whoever stopped the replay cleared the flag; a frame that was already
       // queued must not keep mutating the store or drawing after that
       if (!getState().replayActive) return;
@@ -120,9 +119,9 @@ export function createReplayController({
       });
       shownCount = count;
       // a listener of the patch above may have cancelled us mid-frame
-      if (getState().replayActive) rafId = requestAnimationFrame(tick);
+      if (getState().replayActive) frame.request(tick);
     };
-    rafId = requestAnimationFrame(tick);
+    frame.request(tick);
   };
 
   return {

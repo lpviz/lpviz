@@ -1,3 +1,4 @@
+import { singleFrame } from "@/features/core/timers";
 // Hover sync for the solver log: which .iterate-item the pointer is over is
 // resolved from the pointer position (elementFromPoint) on a RAF, so a scroll
 // or a re-render under a resting pointer updates the highlight too.
@@ -5,7 +6,7 @@ export function createSolverLogHover(result: HTMLElement, setIterateHighlight: (
   let pointerInsideResult = false;
   let pointerX = 0;
   let pointerY = 0;
-  let hoverRafId: number | null = null;
+  const hoverSync = singleFrame();
   let currentHoveredRow: HTMLElement | null = null;
 
   const setHoveredRow = (next: HTMLElement | null) => {
@@ -17,25 +18,18 @@ export function createSolverLogHover(result: HTMLElement, setIterateHighlight: (
     setIterateHighlight(idx !== undefined && idx !== "" ? Number(idx) : null);
   };
   const syncHoverState = () => {
-    hoverRafId = null;
-    if (!pointerInsideResult) {
-      return;
-    }
+    if (!pointerInsideResult) return;
     const element = document.elementFromPoint(pointerX, pointerY);
     const row = element instanceof Element ? element.closest<HTMLElement>(".iterate-item") : null;
     setHoveredRow(row && result.contains(row) ? row : null);
   };
   const scheduleHoverSync = () => {
-    if (!pointerInsideResult || hoverRafId !== null) return;
-    hoverRafId = requestAnimationFrame(syncHoverState);
+    if (pointerInsideResult) hoverSync.request(syncHoverState);
   };
   const clearHoverState = () => {
     pointerInsideResult = false;
     setHoveredRow(null);
-    if (hoverRafId !== null) {
-      cancelAnimationFrame(hoverRafId);
-      hoverRafId = null;
-    }
+    hoverSync.cancel();
   };
   result.addEventListener("pointerenter", (e) => {
     pointerInsideResult = true;
