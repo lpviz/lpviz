@@ -9,6 +9,7 @@ import { mountProblemGallery } from "@/ui/canvas/mountProblemGallery";
 import { mountReplayDurationOverlay } from "@/ui/canvas/mountReplayDurationOverlay";
 import { mountToolbar } from "@/ui/canvas/mountToolbar";
 import { el } from "@/ui/dom";
+import { hasCoarsePointer } from "@/ui/media";
 
 // The canvas stage, in two steps. The GL canvas and its viewport runtime come first: the app's
 // actions drive the runtime, and the sidebar, which precedes the stage in the document, holds
@@ -31,6 +32,8 @@ export function createCanvasStage(parent: HTMLElement) {
       saveHistory: ctx.services.history.save,
       derivePolytope: ctx.services.polytope.derive,
       onSolverStartMoved: () => ctx.actions.recomputeIfModeActive(getState().solverMode),
+      // a finger needs a more forgiving target than a mouse cursor
+      closeHitRadiusPx: hasCoarsePointer() ? 24 : 12,
     });
     const detachShortcuts = attachCanvasShortcuts(gl.bridge.getCanvasElement(), {
       handleUndoRedo: ctx.services.history.handleUndoRedo,

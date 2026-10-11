@@ -1,32 +1,20 @@
 import { getState, setState } from "@/features/core/store";
-import { type EditorTransition, getEditorContext, getEditorTransition } from "@/features/polytope-editor/editorSession";
-import {
-  EDGE_HIT_RADIUS_PX,
-  findBoundaryRayNearPoint,
-  findVertexNearCanvasPoint,
-  getCanvasFromClient,
-  getLogicalFromClient,
-  solverStartNearCanvasPoint,
-  worldDistanceForPixels,
-} from "@/features/polytope-editor/hitTesting";
-import { swallow } from "@/ui/dom";
-import { hasCoarsePointer } from "@/ui/media";
 import { nearestEdge } from "@lpviz/math/polygon";
+import { type EditorTransition, getEditorContext, getEditorTransition } from "./editorSession";
 import type { EditorToolsDeps } from "./editorTools";
+import { EDGE_HIT_RADIUS_PX, findBoundaryRayNearPoint, findVertexNearCanvasPoint, getCanvasFromClient, getLogicalFromClient, solverStartNearCanvasPoint, worldDistanceForPixels } from "./hitTesting";
 
 // The polygon editor's click, double-click and context-menu edits.
-export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<EditorToolsDeps, "viewportApi" | "onSolverStartMoved">, applyEditorTransition: (transition: EditorTransition) => void) {
-  // How close (in screen pixels) a click must land to the first vertex to close
-  // the region. A finger needs a more forgiving target than a mouse cursor.
-  const CLOSE_HIT_RADIUS_PX = hasCoarsePointer() ? 24 : 12;
-
-  const handleContextMenu = (event: MouseEvent) => {
+export function createEditActions(
+  { viewportApi, onSolverStartMoved, closeHitRadiusPx }: Pick<EditorToolsDeps, "viewportApi" | "onSolverStartMoved" | "closeHitRadiusPx">,
+  applyEditorTransition: (transition: EditorTransition) => void,
+) {
+  const handleContextMenu = (clientX: number, clientY: number) => {
     const state = getState();
-    const canvasPoint = getCanvasFromClient(viewportApi, event.clientX, event.clientY);
+    const canvasPoint = getCanvasFromClient(viewportApi, clientX, clientY);
 
     // right-clicking the start marker resets it to the solver default
     if (state.solverStartPoint && solverStartNearCanvasPoint(viewportApi, state, canvasPoint)) {
-      swallow(event);
       setState({ solverStartPoint: null });
       onSolverStartMoved();
       return true;
@@ -38,7 +26,6 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
     const deleteIndex = findVertexNearCanvasPoint(viewportApi, canvasPoint, displayVertices);
     if (deleteIndex === -1) return false;
 
-    swallow(event);
     applyEditorTransition(getEditorTransition(state, { kind: "delete-vertex", deleteIndex }));
     return true;
   };
@@ -71,7 +58,7 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
     }
   };
 
-  const handleClick = (event: MouseEvent) => {
+  const handleClick = (clientX: number, clientY: number) => {
     const state = getState();
     if (state.clickFollowsDrag) {
       setState({ clickFollowsDrag: false });
@@ -81,8 +68,8 @@ export function createEditActions({ viewportApi, onSolverStartMoved }: Pick<Edit
     // a click only sketches or places the objective; editing a finished region is drags and double-clicks
     const { session } = getEditorContext(state);
     if (session.kind !== "drafting" && session.kind !== "selecting-objective") return;
-    const point = getLogicalFromClient(viewportApi, event.clientX, event.clientY);
-    applyEditorTransition(getEditorTransition(state, { kind: "click", point, closeThreshold: worldDistanceForPixels(viewportApi, point, CLOSE_HIT_RADIUS_PX) }));
+    const point = getLogicalFromClient(viewportApi, clientX, clientY);
+    applyEditorTransition(getEditorTransition(state, { kind: "click", point, closeThreshold: worldDistanceForPixels(viewportApi, point, closeHitRadiusPx) }));
   };
 
   return { handleContextMenu, handleDoubleClickAt, handleClick };

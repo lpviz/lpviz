@@ -1,9 +1,9 @@
 import { getState, setState } from "@/features/core/store";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
-import { applyDragTarget, updatePanControls, updatePointerPreview } from "@/features/polytope-editor/editorActions";
-import { computeDrawingPhase } from "@/features/polytope-editor/editorState";
-import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient } from "@/features/polytope-editor/hitTesting";
+import { applyDragTarget, updatePanControls, updatePointerPreview } from "./editorActions";
+import { computeDrawingPhase } from "./editorState";
 import type { EditorToolsDeps } from "./editorTools";
+import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient } from "./hitTesting";
 
 // The drag lifecycle: start (hit test + pending-drag), move (threshold, then
 // apply) and end, plus the undo-history entry captured at the start and

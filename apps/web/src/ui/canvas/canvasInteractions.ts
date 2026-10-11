@@ -1,15 +1,7 @@
-import { getState } from "@/features/core/store";
+import { createEditorTools, type EditorToolsDeps } from "@/features/polytope-editor/editorTools";
 import { attachCanvasGestures } from "./canvasGestures";
-import type { EditorTools, EditorToolsDeps } from "./editorTools";
-import { createEditorTools2D } from "./editorTools2d";
 
-// The editor tools for the problem's dimension. A 3-variable editor plugs in here.
-function createEditorTools(deps: EditorToolsDeps): EditorTools {
-  const { dimension } = getState();
-  if (dimension !== 2) throw new Error(`No editor for ${dimension}-variable problems yet.`);
-  return createEditorTools2D(deps);
-}
-
+/** The editor for the problem's dimension, driven by the canvas's gestures; returns the detach. */
 export function attachCanvasInteractions(deps: EditorToolsDeps): () => void {
   const tools = createEditorTools(deps);
   const detachGestures = attachCanvasGestures(deps.viewportApi.getCanvasElement(), tools);
