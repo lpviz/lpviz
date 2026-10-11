@@ -2,23 +2,15 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writeIteratePositions } from "../helpers/iteratePositions";
 import { phasesCovering, writePhaseColors } from "../helpers/phaseColors";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
-import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
+import { PALETTE, SPRITE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
 
 // Square markers on the iterates where PDHG restarted (a subset of the path).
 export class IterateRestartPointsLayer extends PointCloudLayer {
+  override readonly invalidationKeys = ["iterate"] as const;
+
   constructor() {
-    super({
-      color: PALETTE.iterate,
-      pixelSize: ITERATE_POINT_PIXEL_SIZE * 1.4,
-      shape: "square",
-      renderOrder: RENDER_ORDER.iterateRestartPoints,
-      renderPass: "trace",
-      invalidationKeys: ["iterate"],
-      vertexColors: true,
-    });
+    super({ color: PALETTE.iterate, pixelSize: SPRITE.iterate * 1.4, shape: "square", slot: "iterateRestartPoints", vertexColors: true });
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {

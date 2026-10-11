@@ -2,7 +2,7 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
 import { viewShowsMode } from "../../helpers/sceneVisibility";
-import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
+import { type Layer, type LayerPlacement, passOf, type RenderSlot } from "../../Layer";
 
 // Template-method base for data-driven layers: a subclass declares the inputs whose reference
 // change requires a rebuild via `dependencies()`, and the base `Object.is`-compares the tuple
@@ -13,13 +13,14 @@ import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 // inputs come in from the scene manager and are handed down.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
-  readonly renderPass: RenderPassName = "foreground";
+  /** the slot `object3D` draws in (see RENDER_SLOTS); a layer with more objects overrides `placements` */
+  abstract readonly slot: RenderSlot;
   abstract readonly invalidationKeys: Layer["invalidationKeys"];
 
   private deps: readonly unknown[] | null = null;
 
   placements(): readonly LayerPlacement[] {
-    return [{ object3D: this.object3D, pass: this.renderPass }];
+    return [{ object3D: this.object3D, pass: passOf[this.slot] }];
   }
 
   update(state: State, snap: ViewportRenderSnapshot): void {

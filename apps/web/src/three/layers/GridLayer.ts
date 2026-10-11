@@ -1,8 +1,7 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Color, DoubleSide, GLSL3, Mesh, PlaneGeometry, ShaderMaterial } from "three";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import type { Layer, LayerPlacement } from "../Layer";
+import { type Layer, type LayerPlacement, passOf, renderOrderOf } from "../Layer";
 import { PALETTE } from "../palette";
 
 // Fragment-shader grid on a single static quad: unit lines and axes are computed per pixel from
@@ -65,13 +64,13 @@ export class GridLayer implements Layer {
       side: DoubleSide,
     });
     const mesh = new Mesh(new PlaneGeometry(GRID_HALF_EXTENT * 2, GRID_HALF_EXTENT * 2), this.material);
-    mesh.renderOrder = RENDER_ORDER.grid;
+    mesh.renderOrder = renderOrderOf.grid;
     mesh.frustumCulled = false;
     this.object3D = mesh;
   }
 
   placements(): readonly LayerPlacement[] {
-    return [{ object3D: this.object3D, pass: "background" }];
+    return [{ object3D: this.object3D, pass: passOf.grid }];
   }
 
   update(_state: State, snap: ViewportRenderSnapshot): void {

@@ -2,24 +2,15 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writeIteratePositions } from "../helpers/iteratePositions";
 import { phasesCovering, writePhaseColors } from "../helpers/phaseColors";
-import { RENDER_ORDER } from "../helpers/renderOrder";
-import { PALETTE } from "../palette";
+import { PALETTE, SPRITE } from "../palette";
 import { PointCloudLayer } from "./base/PointCloudLayer";
-
-export const ITERATE_POINT_PIXEL_SIZE = 8;
 
 // The solved iterate path as a point cloud, optionally colored by solver phase.
 export class IteratePointsLayer extends PointCloudLayer {
+  override readonly invalidationKeys = ["iterate"] as const;
+
   constructor() {
-    super({
-      color: PALETTE.iterate,
-      pixelSize: ITERATE_POINT_PIXEL_SIZE,
-      shape: "disc",
-      renderOrder: RENDER_ORDER.iteratePoints,
-      renderPass: "trace",
-      invalidationKeys: ["iterate"],
-      vertexColors: true,
-    });
+    super({ color: PALETTE.iterate, pixelSize: SPRITE.iterate, shape: "disc", slot: "iteratePoints", vertexColors: true });
   }
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {

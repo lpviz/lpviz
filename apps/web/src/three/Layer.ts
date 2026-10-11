@@ -5,10 +5,27 @@ import type { Object3D } from "three";
 
 type LayerInvalidationKey = keyof ViewportDirtyFlags;
 
-// The render passes in painter's-algorithm order — the single source of truth
-// for both the pass names and the order SceneManager renders them in.
-export const RENDER_PASSES = ["background", "transparent", "foreground", "vertices", "traceLines", "trace", "overlay"] as const;
-export type RenderPassName = (typeof RENDER_PASSES)[number];
+// Everything the scene draws, as a slot in a pass, in painter's order: the passes render in this
+// order (each is its own scene), and within a pass a slot draws over the slots before it. The one
+// place the scene's layering is stated.
+const RENDER_SLOTS = {
+  background: ["grid"],
+  transparent: ["polytopeFill"],
+  foreground: ["polytopeEdges", "objective", "constraintHighlight"],
+  vertices: ["polytopeVertices"],
+  traceLines: ["traceLine"],
+  trace: ["tracePoints", "ellipsoid", "iterateLine", "iteratePoints", "iterateRestartPoints", "iterateHighlight"],
+  overlay: ["iterateStar", "solverStart"],
+} as const;
+export type RenderPassName = keyof typeof RENDER_SLOTS;
+export type RenderSlot = (typeof RENDER_SLOTS)[RenderPassName][number];
+export const RENDER_PASSES = Object.keys(RENDER_SLOTS) as readonly RenderPassName[];
+const slots = <T>(entry: (slot: RenderSlot, pass: RenderPassName, index: number) => T) =>
+  Object.fromEntries(RENDER_PASSES.flatMap((pass) => RENDER_SLOTS[pass].map((slot, index) => [slot, entry(slot, pass, index)]))) as Record<RenderSlot, T>;
+/** The pass a slot renders in. */
+export const passOf = slots((_, pass) => pass);
+/** A slot's order within its pass, which three sorts a scene by before anything else. */
+export const renderOrderOf = slots((_, _pass, index) => index);
 
 /** One of a layer's objects and the pass it renders in. */
 export type LayerPlacement = {

@@ -1,3 +1,4 @@
+import { renderOrderOf, type RenderSlot } from "../Layer";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
@@ -40,8 +41,8 @@ export function lineGeometry(): LineSegmentsGeometry {
 
 // Every fat-line object in the app: never frustum-culled (its geometry's
 // bounds are fake) and hidden until its first draw.
-export function setupLine<T extends LineSegments2>(line: T, renderOrder: number): T {
-  line.renderOrder = renderOrder;
+export function setupLine<T extends LineSegments2>(line: T, slot: RenderSlot): T {
+  line.renderOrder = renderOrderOf[slot];
   line.frustumCulled = false;
   line.visible = false;
   return line;
@@ -57,7 +58,7 @@ function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array
   delete (geo as unknown as { _maxInstanceCount?: number })._maxInstanceCount;
 }
 
-type FatLineStyle = { color: string; linewidth: number; opacity?: number; renderOrder: number };
+type FatLineStyle = { color: string; linewidth: number; opacity?: number; slot: RenderSlot };
 
 // A fat line (screen-space width) that owns its geometry: drawn from segment endpoint triples
 // with the material of the view's depth mode, hidden between draws. The line counterpart of
@@ -66,7 +67,7 @@ export class FatLine {
   readonly object3D: LineSegments2;
 
   constructor(private readonly style: FatLineStyle) {
-    this.object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(style.color, style.linewidth, false, style.opacity)), style.renderOrder);
+    this.object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(style.color, style.linewidth, false, style.opacity)), style.slot);
   }
 
   /** Upload the segments and show them; `color` overrides the style's for an accent. */

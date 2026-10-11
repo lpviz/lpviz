@@ -1,3 +1,4 @@
+import { renderOrderOf, type RenderSlot } from "../Layer";
 import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, Vector2 } from "three";
 import { applyHugeBounds } from "./hugeBounds";
 
@@ -134,6 +135,7 @@ type PathRibbonStyle = {
   color: string;
   opacity: number;
   linewidth: number;
+  slot: RenderSlot;
 };
 
 const WHITE = new Color(1, 1, 1);
@@ -188,6 +190,7 @@ export class PathRibbon {
     this.geometry = new BufferGeometry();
     applyHugeBounds(this.geometry);
     this.mesh = new Mesh(this.geometry, this.material);
+    this.mesh.renderOrder = renderOrderOf[style.slot];
     this.mesh.frustumCulled = false;
     this.mesh.visible = false;
   }
