@@ -1,3 +1,4 @@
+import { singleFrame } from "@/features/core/timers";
 import type { LazyList } from "@/features/solver/solverState";
 import type { ResultTextBlock } from "@/features/solver/types";
 import { el } from "@/ui/dom";
@@ -90,18 +91,8 @@ export function mountVirtualRows(sc: HTMLElement, blocks: LazyList<ResultTextBlo
     rowsEl.replaceChildren(fragment);
   };
 
-  let scrollRafId: number | null = null;
-  sc.addEventListener(
-    "scroll",
-    () => {
-      if (scrollRafId !== null) return;
-      scrollRafId = requestAnimationFrame(() => {
-        scrollRafId = null;
-        fillWindow();
-      });
-    },
-    { passive: true },
-  );
+  const refill = singleFrame();
+  sc.addEventListener("scroll", () => refill.request(fillWindow), { passive: true });
   fillWindow();
   return fillWindow;
 }

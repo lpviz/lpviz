@@ -1,3 +1,4 @@
+import { restartableTimeout } from "@/features/core/timers";
 import { getState } from "@/features/core/store";
 import type { EditorTools } from "@/features/polytope-editor/editorTools";
 import { swallow } from "@/ui/dom";
@@ -110,11 +111,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
   const { signal } = listeners;
   const capture = { capture: true, signal };
   let press: Press | null = null;
-  let holdTimer: number | null = null;
-  const cancelHold = () => {
-    if (holdTimer !== null) clearTimeout(holdTimer);
-    holdTimer = null;
-  };
+  const hold = restartableTimeout();
 
   canvas.addEventListener(
     "pointerdown",
@@ -130,10 +127,9 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
         // pointer may already be gone
       }
       bridge.start(event);
-      cancelHold();
+      hold.clear();
       if (event.pointerType === "touch") {
-        holdTimer = window.setTimeout(() => {
-          holdTimer = null;
+        hold.schedule(() => {
           if (press !== started || started.moved) return;
           started.held = true;
           bridge.hold(event);
@@ -150,7 +146,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
         const slop = press.pointerType === "touch" ? TOUCH_TAP_SLOP_PX : POINTER_TAP_SLOP_PX;
         press.moved = Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) > slop;
         clicks.lastPressMoved = press.moved;
-        if (press.moved) cancelHold();
+        if (press.moved) hold.clear();
       }
       // a finger has no hover: while nothing is being dragged, its moves preview nothing (a moved
       // touch places no vertex, so a sketch cursor following it would be left pointing nowhere)
@@ -163,7 +159,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
     "pointerup",
     (event) => {
       if (press?.pointerId !== event.pointerId) return;
-      cancelHold();
+      hold.clear();
       const ended = press;
       press = null;
       bridge.endPress(event, ended);
@@ -174,7 +170,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
     "pointercancel",
     (event) => {
       if (press?.pointerId !== event.pointerId) return;
-      cancelHold();
+      hold.clear();
       // end the drag like a lift would, or the editor stays "dragging" with the viewport controls blocked
       press = null;
       bridge.endDrag(event);
@@ -198,7 +194,7 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
   canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event.clientX, event.clientY)), { signal });
 
   return () => {
-    cancelHold();
+    hold.clear();
     listeners.abort();
   };
 }

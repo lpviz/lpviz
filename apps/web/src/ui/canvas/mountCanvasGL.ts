@@ -1,3 +1,4 @@
+import { el } from "@/ui/dom";
 import type { ViewportBridge } from "@/features/viewport/types";
 import { SceneManager } from "@/three/SceneManager";
 import { CameraController } from "@/three/controllers/CameraController";
@@ -20,9 +21,7 @@ import { TraceLineLayer } from "@/three/layers/TraceLineLayer";
 import { TracePointsLayer } from "@/three/layers/TracePointsLayer";
 
 export function mountCanvasGL(parent: HTMLElement) {
-  const canvas = document.createElement("canvas");
-  canvas.className = "canvas-stage__gl-canvas";
-  canvas.tabIndex = 0;
+  const canvas = el("canvas", { className: "canvas-stage__gl-canvas", attrs: { tabindex: "0" } });
   parent.append(canvas);
   const mgr = new SceneManager(canvas);
   // the transition's tick runs before the camera's, so a frame it publishes is posed the same frame

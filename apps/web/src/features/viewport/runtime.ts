@@ -1,3 +1,4 @@
+import { restartableTimeout } from "@/features/core/timers";
 import { getState, on, onViewportDirty, setState } from "@/features/core/store";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { PointXY } from "@lpviz/math/types";
@@ -114,30 +115,24 @@ export function createViewportRuntime({ viewportBridge }: { viewportBridge: View
 
   // ---- navigation: store.isNavigatingViewport is set while a gesture moves the view and
   // cleared VIEWPORT_NAVIGATION_IDLE_MS after its last frame ----
-  let navigationIdleTimeout: number | null = null;
+  const navigationIdle = restartableTimeout();
   // the 2D or the 3D controls own navigation whenever no transition runs
   const controlsOwnNavigation = () => !getState().isTransitioning3D;
   const setNavigating = (active: boolean) => {
     if (getState().isNavigatingViewport !== active) setState({ isNavigatingViewport: active });
   };
-  const clearNavigationTimeout = () => {
-    if (navigationIdleTimeout !== null) clearTimeout(navigationIdleTimeout);
-    navigationIdleTimeout = null;
-  };
   const beginNavigation = () => {
     if (!controlsOwnNavigation()) return;
-    clearNavigationTimeout();
+    navigationIdle.clear();
     setNavigating(true);
   };
   const scheduleNavigationEnd = () => {
-    clearNavigationTimeout();
-    navigationIdleTimeout = window.setTimeout(() => {
-      navigationIdleTimeout = null;
+    navigationIdle.schedule(() => {
       if (controlsOwnNavigation()) setNavigating(false);
     }, VIEWPORT_NAVIGATION_IDLE_MS);
   };
   const clearActiveNavigation = () => {
-    clearNavigationTimeout();
+    navigationIdle.clear();
     setNavigating(false);
   };
   const onNavigationFrame = () => {

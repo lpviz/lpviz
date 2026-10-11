@@ -121,7 +121,9 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     event.preventDefault();
   };
 
-  sidebar.addEventListener("wheel", onWheel, { passive: false });
+  const listeners = new AbortController();
+  const { signal } = listeners;
+  sidebar.addEventListener("wheel", onWheel, { passive: false, signal });
 
   // The room above changes with the window and the active solver's settings;
   // re-clamp rather than leave the log taller than there is room for.
@@ -137,7 +139,7 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     applyExpansion();
   });
   observer.observe(content);
-  coarsePointer.addEventListener("change", applyExpansion);
+  coarsePointer.addEventListener("change", applyExpansion, { signal });
 
   // the sidebar follows the drawing on a touch device (see the header); the expansion is applied
   // first so the log's top can reach the sidebar's
@@ -155,15 +157,12 @@ export function createSidebarLogExpansion({ sidebar, content, logPanel }: { side
     applyExpansion();
     content.scrollTo({ top: roomAbove() - gutter(), behavior: scrollBehavior() });
   };
-  const subscriptions = new AbortController();
-  on(["vertices", "completionMode", "objectiveVector", "currentObjective"], followDrawing, subscriptions.signal);
+  on(["vertices", "completionMode", "objectiveVector", "currentObjective"], followDrawing, signal);
   followDrawing();
 
   return {
     destroy: () => {
-      subscriptions.abort();
-      sidebar.removeEventListener("wheel", onWheel);
-      coarsePointer.removeEventListener("change", applyExpansion);
+      listeners.abort();
       observer.disconnect();
       logPanel.style.minHeight = "";
     },

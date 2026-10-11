@@ -57,6 +57,8 @@ export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppAction
   // the stylesheet lays the strip out; the item count is the one number it cannot know
   root.style.setProperty("--gallery-items", String(GALLERY_PROBLEMS.length));
   parent.append(root);
+  // aborted by the first click anywhere, the toggle's included: it disarms the auto-open below
+  const armed = new AbortController();
   const toggle = el("button", {
     className: "problem-gallery__toggle",
     attrs: {
@@ -68,7 +70,7 @@ export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppAction
     on: {
       click: (e) => {
         e.stopPropagation();
-        disarmAutoOpen();
+        armed.abort();
         expanded = !expanded;
         render();
       },
@@ -110,31 +112,30 @@ export function mountProblemGallery(parent: HTMLElement, actions: Pick<AppAction
   const onVisibility = () => {
     for (const r of reshuffles) r.setRunning(expanded);
   };
-  document.addEventListener("visibilitychange", onVisibility);
-  // the auto-open: a timer that opens the strip, cancelled by the first click anywhere
-  let autoOpen: number | null = window.setTimeout(() => {
-    autoOpen = null;
-    disarmAutoOpen();
+  const listeners = new AbortController();
+  document.addEventListener("visibilitychange", onVisibility, { signal: listeners.signal });
+  // the auto-open: a timer that opens the strip, disarmed by the first click anywhere
+  const autoOpen = setTimeout(() => {
+    armed.abort();
     expanded = true;
     render();
   }, IDLE);
-  function firstClick() {
-    disarmAutoOpen();
-    expanded = false;
-    render();
-  }
-  function disarmAutoOpen() {
-    if (autoOpen !== null) clearTimeout(autoOpen);
-    autoOpen = null;
-    document.removeEventListener("click", firstClick);
-  }
-  document.addEventListener("click", firstClick);
+  armed.signal.addEventListener("abort", () => clearTimeout(autoOpen));
+  document.addEventListener(
+    "click",
+    () => {
+      armed.abort();
+      expanded = false;
+      render();
+    },
+    { signal: armed.signal },
+  );
   render();
   return {
     destroy: () => {
-      disarmAutoOpen();
+      armed.abort();
+      listeners.abort();
       for (const r of reshuffles) r.stop();
-      document.removeEventListener("visibilitychange", onVisibility);
       root.remove();
     },
   };
