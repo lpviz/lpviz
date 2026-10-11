@@ -1,5 +1,5 @@
 import type { State } from "@/features/core/store";
-import { displayedSolverStartPoint } from "@/features/solver/solverState";
+import { displayedSolverStartPoint } from "@/features/problem/selectors";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iterateHeightOrFloor } from "../helpers/iteratePositions";
 import { PointCloud } from "../helpers/pointCloud";

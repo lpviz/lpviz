@@ -1,66 +1,7 @@
-import { nearestPolytopeVertex, type EditorState } from "@/features/polytope-editor/editorState";
-import { hasFeasibleRegion, isReadyForSolvers } from "@/features/problem/selectors";
 import { DEFAULT_SOLVER_SETTINGS, type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
+import { type EllipsoidPath, EMPTY_ITERATE_PATH, type IteratePath, type LocalizingSetPath, type ResultView } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
-import { zeroVec } from "@lpviz/math/vec";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
-import type { Iterates } from "@lpviz/solver-engine/result";
-
-/** A line of the result panel: what it is (the panel decides how each kind looks), its text, and a row's iterate index. */
-export type ResultTextBlock = {
-  kind: "header" | "row" | "note" | "footer";
-  text: string;
-  index?: number | undefined;
-};
-
-// Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
-// scrolled into view; plain arrays satisfy this shape.
-export type LazyList<T> = {
-  length: number;
-  at(index: number): T | undefined;
-};
-
-// What the result panel shows: the usage hint before any solve, a phased run as text blocks, or a
-// single run as a header, a virtual list of rows and a footer. `maxLineChars` is the widest line,
-// which the panel fits its font to.
-export type ResultView =
-  { kind: "usage" } | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number } | { kind: "virtual"; header: string; footer: string; rows: LazyList<ResultTextBlock>; maxLineChars: number };
-
-// The engine's flat iterate block (iterate `i` at [i*stride .. i*stride+stride), `stride` the
-// problem's dimension) with `lift[i]`, the height the 3D view raises iterate `i` above the floor
-// (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One array per
-// solve, not one Float64Array per iterate: millions of live objects is what a major GC must mark.
-export interface IteratePath extends Iterates {
-  lift: Float64Array | null;
-}
-
-export const EMPTY_ITERATE_PATH: IteratePath = {
-  points: new Float64Array(0),
-  count: 0,
-  stride: 2,
-  lift: null,
-};
-
-// The ellipsoid family's per-iteration shape, parallel to the iterate path: element `i` is the
-// center followed by the upper triangle of the symmetric shape matrix P of
-// { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
-// for two variables; see @lpviz/solver-engine/localization). Null for every other solver.
-export interface EllipsoidPath {
-  data: Float64Array;
-  count: number;
-  stride: number;
-}
-
-// The cutting-plane query points' localizing set per iteration: element `i` spans
-// points[offsets[i] * stride .. offsets[i + 1] * stride), a closed polygon's [x, y] vertices for two
-// variables (stride 2) and the half-spaces [a1..an, b] of the polyhedron otherwise (stride n + 1).
-// Null for the ellipsoid method, whose localizing set is the ellipse already in EllipsoidPath.
-export interface LocalizingSetPath {
-  points: Float64Array;
-  offsets: Uint32Array;
-  count: number;
-  stride: number;
-}
 
 // The solver's slice of the store: the result panel, the solve and its iterates, and the trace.
 export type SolverState = {
@@ -142,37 +83,3 @@ export const SOLVER_DIRTY: Partial<Record<keyof SolverState, ViewportDirtyFlags>
   traceBuffer: TRACE_DIRTY,
   traceEnabled: TRACE_DIRTY,
 };
-
-// What the draggable start marker means to each solver: nothing (it finds its own start), any
-// point, or the region vertex nearest the point (a simplex iterate is a vertex). Dual simplex has
-// no safe start-point interpretation: a primal point only determines a dual-feasible basis when it
-// is already optimal.
-const START_POINT: Record<SolverMode, (settings: SolverSettings) => "none" | "free" | "vertex"> = {
-  central: () => "none",
-  ellipsoid: () => "none",
-  ipm: () => "free",
-  pdhg: () => "free",
-  simplex: (settings) => (settings.simplexDualMode ? "none" : "vertex"),
-};
-
-/**
- * The start the solver would use: the dragged point (snapped to the nearest region vertex when the
- * solver walks vertices), or the solver default when nothing has been dragged yet. The default is
- * the origin for all three: IPM and PDHG begin there, and Phase-1 simplex's first displayed
- * iterate is the origin too (all structural variables start nonbasic). Null when the solver finds
- * its own start or the problem is not solvable, which is when the marker is hidden.
- */
-export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
-  if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return null;
-  const meaning = START_POINT[state.solverMode](state.solverSettings);
-  if (meaning === "none") return null;
-  const point = state.solverStartPoint;
-  if (!point) return zeroVec(state.dimension);
-  return meaning === "vertex" ? (nearestPolytopeVertex(state, point) ?? point) : point;
-}
-
-// The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the
-// solver's lift above the floor (zero for a solver drawn flat).
-export function iterateHeight(path: IteratePath, index: number): number {
-  return path.stride >= 3 ? path.points[index * path.stride + 2]! : (path.lift?.[index] ?? 0);
-}

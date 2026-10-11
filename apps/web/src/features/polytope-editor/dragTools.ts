@@ -1,7 +1,7 @@
 import { getState, setState } from "@/features/core/store";
 import { captureHistoryEntry, type HistoryEntry } from "@/features/history/historyState";
 import { applyDragTarget, updatePanControls, updatePointerPreview } from "./editorActions";
-import { computeDrawingPhase } from "./editorState";
+import { computeDrawingPhase } from "@/features/problem/selectors";
 import type { EditorToolsDeps } from "./editorTools";
 import { exceedsDragThreshold, getDragStartTarget, getLogicalFromClient } from "./hitTesting";
 

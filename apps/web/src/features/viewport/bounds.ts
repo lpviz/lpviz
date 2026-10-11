@@ -1,7 +1,7 @@
 import { type PointXY } from "@lpviz/math/types";
 import { type ViewportRenderSnapshot } from "@/features/viewport/types";
 import { projectCanvasPointToWorldPlane } from "@lpviz/viewport/projection3d";
-import { iterateHeight, type IteratePath } from "@/features/solver/solverState";
+import { iterateHeight, type IteratePath } from "@/features/solver/types";
 import type { BoundingBox } from "@lpviz/math/bounds";
 import type { Vec } from "@lpviz/math/types";
 

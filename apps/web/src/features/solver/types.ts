@@ -1,5 +1,4 @@
 import type { EllipsoidQueryPoint } from "./solverSettings";
-import type { EllipsoidPath, IteratePath, LazyList, LocalizingSetPath } from "./solverState";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
@@ -7,6 +6,70 @@ import type { IPMOptions } from "@lpviz/solver-engine/ipm";
 import type { PDHGOptions } from "@lpviz/solver-engine/pdhg";
 import type { Iterates, LogSection, NumericRow, SolverResult } from "@lpviz/solver-engine/result";
 import type { SimplexOptions } from "@lpviz/solver-engine/simplex";
+
+// ---------- the store's shapes ----------
+
+/** A line of the result panel: what it is (the panel decides how each kind looks), its text, and a row's iterate index. */
+export type ResultTextBlock = {
+  kind: "header" | "row" | "note" | "footer";
+  text: string;
+  index?: number | undefined;
+};
+
+// Result rows format lazily on access, so a 100k-iteration solve never formats rows that are not
+// scrolled into view; plain arrays satisfy this shape.
+export type LazyList<T> = {
+  length: number;
+  at(index: number): T | undefined;
+};
+
+// What the result panel shows: the usage hint before any solve, a phased run as text blocks, or a
+// single run as a header, a virtual list of rows and a footer. `maxLineChars` is the widest line,
+// which the panel fits its font to.
+export type ResultView =
+  { kind: "usage" } | { kind: "blocks"; blocks: ResultTextBlock[]; maxLineChars: number } | { kind: "virtual"; header: string; footer: string; rows: LazyList<ResultTextBlock>; maxLineChars: number };
+
+// The engine's flat iterate block (iterate `i` at [i*stride .. i*stride+stride), `stride` the
+// problem's dimension) with `lift[i]`, the height the 3D view raises iterate `i` above the floor
+// (the solver's convergence measure, see resultPacking); null for solvers drawn flat. One array per
+// solve, not one Float64Array per iterate: millions of live objects is what a major GC must mark.
+export interface IteratePath extends Iterates {
+  lift: Float64Array | null;
+}
+
+export const EMPTY_ITERATE_PATH: IteratePath = {
+  points: new Float64Array(0),
+  count: 0,
+  stride: 2,
+  lift: null,
+};
+
+// The ellipsoid family's per-iteration shape, parallel to the iterate path: element `i` is the
+// center followed by the upper triangle of the symmetric shape matrix P of
+// { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
+// for two variables; see @lpviz/solver-engine/localization). Null for every other solver.
+export interface EllipsoidPath {
+  data: Float64Array;
+  count: number;
+  stride: number;
+}
+
+// The cutting-plane query points' localizing set per iteration: element `i` spans
+// points[offsets[i] * stride .. offsets[i + 1] * stride), a closed polygon's [x, y] vertices for two
+// variables (stride 2) and the half-spaces [a1..an, b] of the polyhedron otherwise (stride n + 1).
+// Null for the ellipsoid method, whose localizing set is the ellipse already in EllipsoidPath.
+export interface LocalizingSetPath {
+  points: Float64Array;
+  offsets: Uint32Array;
+  count: number;
+  stride: number;
+}
+
+// The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the
+// solver's lift above the floor (zero for a solver drawn flat).
+export function iterateHeight(path: IteratePath, index: number): number {
+  return path.stride >= 3 ? path.points[index * path.stride + 2]! : (path.lift?.[index] ?? 0);
+}
 
 // ---------- request ----------
 

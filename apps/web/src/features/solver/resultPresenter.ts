@@ -1,6 +1,6 @@
 import { getState, setState } from "@/features/core/store";
 import { formatVirtualResultRow } from "@/features/solver/resultPacking";
-import type { ResultTextBlock, ResultView } from "@/features/solver/solverState";
+import type { ResultTextBlock, ResultView } from "@/features/solver/types";
 import type { LazyRows, ResultLogSection, VirtualResultRow } from "@/features/solver/types";
 
 /** What a solve renders: a single run as a header, lazily formatted rows and a footer, or a phased run (or a message) as blocks. */

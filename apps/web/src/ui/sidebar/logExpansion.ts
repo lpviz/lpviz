@@ -19,9 +19,9 @@
 // sides), where the directions are, while a region is being drawn, and back to the top, where
 // the problem and the solvers are, once it is complete.
 
-import { DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
+import { DRAWING_PHASE_KEYS } from "@/features/problem/selectors";
 import { getState, on } from "@/features/core/store";
-import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
+import { computeDrawingPhase, type DrawingPhase } from "@/features/problem/selectors";
 import { COARSE_POINTER_QUERY, prefersReducedMotion } from "@/ui/media";
 
 const LINE_HEIGHT_PX = 16;

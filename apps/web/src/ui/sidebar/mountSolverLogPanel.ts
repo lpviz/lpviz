@@ -1,4 +1,4 @@
-import { DRAWING_PHASE_KEYS } from "@/features/polytope-editor/editorState";
+import { DRAWING_PHASE_KEYS } from "@/features/problem/selectors";
 import type { AppActions } from "@/app/appActions";
 import { getState, on, type State } from "@/features/core/store";
 import { el } from "@/ui/dom";

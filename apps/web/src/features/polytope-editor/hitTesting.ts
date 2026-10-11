@@ -4,7 +4,8 @@
 import type { State } from "@/features/core/store";
 import { getEditorContext } from "@/features/polytope-editor/editorSession";
 import type { DragTarget } from "@/features/polytope-editor/editorState";
-import { displayedSolverStartPoint, iterateHeight } from "@/features/solver/solverState";
+import { displayedSolverStartPoint } from "@/features/problem/selectors";
+import { iterateHeight } from "@/features/solver/types";
 import type { ViewportApi } from "@/features/viewport/runtime";
 import { showsDepth } from "@/features/viewport/viewportState";
 import { clipRayToBoundingBox } from "@lpviz/math/bounds";

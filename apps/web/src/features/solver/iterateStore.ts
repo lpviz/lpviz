@@ -1,8 +1,7 @@
 // The store writes that adopt, clear and trace a solve's iterate path.
 
 import { getState, setState, type State } from "@/features/core/store";
-import { EMPTY_ITERATE_PATH, type IteratePath } from "./solverState";
-import type { UnpackedSolverResult } from "./types";
+import { EMPTY_ITERATE_PATH, type IteratePath, type UnpackedSolverResult } from "./types";
 
 type IterateResult = Pick<UnpackedSolverResult, "iterates" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets">;
 

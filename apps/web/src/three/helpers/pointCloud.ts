@@ -1,4 +1,4 @@
-import type { IteratePath } from "@/features/solver/solverState";
+import type { IteratePath } from "@/features/solver/types";
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Points, PointsMaterial } from "three";
 import { placeInSlot, type RenderSlot } from "../Layer";
 import { applyHugeBounds } from "./hugeBounds";

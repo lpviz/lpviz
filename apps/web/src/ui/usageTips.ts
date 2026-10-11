@@ -1,5 +1,5 @@
 import type { State } from "@/features/core/store";
-import { computeDrawingPhase, type DrawingPhase } from "@/features/polytope-editor/editorState";
+import { computeDrawingPhase, type DrawingPhase } from "@/features/problem/selectors";
 import { el } from "@/ui/dom";
 import { hasCoarsePointer } from "@/ui/media";
 
