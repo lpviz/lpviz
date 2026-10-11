@@ -4,7 +4,7 @@
 import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, maxAbsDifference, transposedMatVec } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
-import { assertMaxit } from "./limits";
+import { assertMaxit, warmStart } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
 import { splitStandardForm, unsplit } from "./standardForm";
 
@@ -140,7 +140,6 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const trace = new NumericTrace();
   const basisHashes: number[] = [];
   const restartIndices: number[] = [];
-  const startTime = performance.now();
 
   // the active set as one number: ineq, which duals are active; eq, which slacks are at their bound
   const basisHash = () => {
@@ -236,7 +235,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
     }
   }
 
-  const footer = solveFooter(epsilonK <= tol, trace.count, performance.now() - startTime);
+  const footer = solveFooter(epsilonK <= tol, trace.count, trace.elapsedMs);
   return trace.result(numericLogHeader(dimension, "eps"), footer, {
     phases: colorByBasis ? basisHashes : undefined,
     restartIndices: halpern ? restartIndices : undefined,
@@ -250,7 +249,8 @@ export function pdhg(constraints: readonly Constraint[], objective: Float64Array
 
   const { A, b } = denseFromConstraints(constraints);
   const nOrig = A.cols;
-  const x0 = startPoint && startPoint.length === nOrig ? Float64Array.from(startPoint) : undefined;
+  const warm = warmStart(startPoint, nOrig);
+  const x0 = warm ? Float64Array.from(warm) : undefined;
   // max c'x is min (−c)'x
   const cost = Float64Array.from(objective, (value) => -value);
 

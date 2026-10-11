@@ -35,7 +35,7 @@ export function deriveViewportDirty(state: State, changedKeys: readonly (keyof S
 // The fields a reset leaves alone; each slice names its own (see the *RuntimeState types).
 type RuntimeState = EditorRuntimeState & ViewportRuntimeState & SolverRuntimeState;
 
-export type FreshState = Omit<State, keyof RuntimeState>;
+type FreshState = Omit<State, keyof RuntimeState>;
 
 /**
  * The starting values of everything else, composed from the slices. Fresh objects every call, so
@@ -56,7 +56,6 @@ const initialState: State = {
 
 type Listener = () => void;
 
-type StateValues<K extends keyof State> = { [P in K]: State[P] };
 type DirtyListener = (flags: ViewportDirtyFlags) => void;
 
 let values: State = initialState;
@@ -105,13 +104,13 @@ export function setState(partial: Partial<State>): void {
   for (let i = 0; i < batch.length; i++) batch[i]!(dirty);
 }
 
-export function on<K extends keyof State>(keys: readonly K[], fn: (values: StateValues<K>) => void, signal: AbortSignal): void {
+export function on<K extends keyof State>(keys: readonly K[], fn: (values: Pick<State, K>) => void, signal: AbortSignal): void {
   if (signal.aborted) return;
 
   let scheduled = false;
   const run = () => {
     scheduled = false;
-    const snap = {} as StateValues<K>;
+    const snap = {} as Pick<State, K>;
     for (const key of keys) snap[key] = values[key];
     fn(snap);
   };

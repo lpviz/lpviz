@@ -49,14 +49,20 @@ export interface SolverResult {
   mode?: "primal" | "dual" | undefined;
 }
 
-/** The lockstep record of a run: one point, one log row and one convergence measure per iterate. */
+/** The lockstep record of a run: one point, one log row and one convergence measure per iterate, and the clock the footer reports. */
 export class NumericTrace {
   readonly iterates: Float64Array[] = [];
   readonly rows: NumericRow[] = [];
   readonly convergence: number[] = [];
+  private readonly startTime = performance.now();
 
   get count(): number {
     return this.iterates.length;
+  }
+
+  /** Milliseconds since the run started recording. */
+  get elapsedMs(): number {
+    return performance.now() - this.startTime;
   }
 
   record(point: Float64Array, objective: number, infeasibility: number, convergence: number): void {

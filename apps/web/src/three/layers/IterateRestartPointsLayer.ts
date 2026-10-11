@@ -1,7 +1,7 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { writeIteratePositions } from "../helpers/iteratePositions";
-import { writePhaseColors } from "../helpers/phaseColors";
+import { phasesCovering, writePhaseColors } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { PALETTE } from "../palette";
 import { ITERATE_POINT_PIXEL_SIZE } from "./IteratePointsLayer";
@@ -32,8 +32,7 @@ export class IterateRestartPointsLayer extends PointCloudLayer {
       this.hide();
       return;
     }
-    const phases = state.iteratePhases;
-    const hasPhases = phases.length === path.count && phases.length > 0;
-    this.draw(indices.length, (pos) => writeIteratePositions(pos, path, indices.length, indices), hasPhases ? (col) => writePhaseColors(col, phases, indices, indices.length) : null);
+    const phases = phasesCovering(state.iteratePhases, path.count);
+    this.draw(indices.length, (pos) => writeIteratePositions(pos, path, indices.length, indices), phases ? (col) => writePhaseColors(col, phases, indices, indices.length) : null);
   }
 }

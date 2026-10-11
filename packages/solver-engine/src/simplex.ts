@@ -4,6 +4,7 @@
 import { createDenseMatrix, type DenseMatrix, denseFromConstraints, diagonalMatrix, hstackMatrices, negateMatrix, rowDot, scaleRows, transposeMatrix } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
+import { warmStart } from "./limits";
 import type { SolverResult } from "./result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./simplex/basis";
 import { type PhaseConfig, type PhaseLog, phase1Problem, pivotOutArtificialVariables, simplexPhase, simplexResult, type SimplexStatus, skippedPhase, UNBOUNDED_NOTE } from "./simplex/phase";
@@ -179,7 +180,8 @@ export function simplex(constraints: readonly Constraint[], objective: Float64Ar
   const phase2Lp: StandardLp = { A: split.A, b, c: split.c };
   const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: n, pointOf: (x) => unsplit(x, n), unboundedNote: UNBOUNDED_NOTE };
 
-  const warmBasis = startVertex && startVertex.length === n ? warmStartBasis(A, b, phase2Lp, startVertex, tol) : null;
+  const vertex = warmStart(startVertex, n);
+  const warmBasis = vertex ? warmStartBasis(A, b, phase2Lp, vertex, tol) : null;
   let phase1: PhaseLog = skippedPhase("Skipped — warm start from the dragged start vertex.\n");
   let phase2Basis = warmBasis;
   if (!phase2Basis) {

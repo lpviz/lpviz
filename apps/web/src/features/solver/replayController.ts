@@ -108,9 +108,8 @@ export function createReplayController({
 
       setState({
         iteratePath: { points, count, stride, lift },
-        // the phase array has to be exactly `count` long or IterateLineLayer
-        // drops phase colouring; it only changes when the head crosses an
-        // iterate, so most frames skip the slice
+        // the phases have to cover the path (phasesCovering) or the iterate layers drop phase
+        // colouring; they only change when the head crosses an iterate, so most frames skip the slice
         ...(origPhases.length > 0 && count !== shownCount ? { iteratePhases: origPhases.slice(0, count) } : {}),
         // The index tracks the last *whole* iterate the head has passed, for
         // everything that needs a real one (EllipsoidLayer reveals that

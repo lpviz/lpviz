@@ -120,7 +120,7 @@ export class Basis {
   }
 }
 
-export type PhaseScratch = ReturnType<typeof phaseScratch>;
+type PhaseScratch = ReturnType<typeof phaseScratch>;
 
 export function phaseScratch(m: number, cols: number) {
   return {

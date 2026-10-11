@@ -2,7 +2,7 @@ import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, nega
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
-import { assertMaxit } from "./limits";
+import { assertMaxit, warmStart } from "./limits";
 import { NumericTrace, type SolverResult } from "./result";
 
 const SIGMA_MIN = 1e-8;
@@ -43,12 +43,13 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   const x = new Float64Array(n);
   const s = new Float64Array(m).fill(1);
   const y = new Float64Array(m).fill(1);
-  if (startPoint && startPoint.length === n) {
+  const x0 = warmStart(startPoint, n);
+  if (x0) {
     // Relocate only the primal point and keep s = y = 1, so a start at the default position
     // reproduces the cold trajectory. x0 need not be feasible (infeasible-start method), but
     // (s, y) must stay strictly positive: the fraction-to-boundary rule only preserves the
     // positivity it starts with, and s_i*y_i = 1 keeps the initial mu on scale for sigma.
-    x.set(startPoint);
+    x.set(x0);
   }
 
   const ax = new Float64Array(m);
@@ -71,7 +72,6 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
 
   let converged = false;
   let failureMessage: string | null = null;
-  const startTime = performance.now();
   // null once the normal equations are solved, else why they could not be
   const solve = (label: string, rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): string | null => {
     try {
@@ -147,8 +147,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
     }
   }
 
-  const solveTime = performance.now() - startTime;
-  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, trace.count, solveTime, "Stopped")}` : solveFooter(converged, trace.count, solveTime);
+  const footer = failureMessage ? `${failureMessage}\n${solveFooter(false, trace.count, trace.elapsedMs, "Stopped")}` : solveFooter(converged, trace.count, trace.elapsedMs);
   return trace.result(numericLogHeader(n, "µ"), footer);
 }
 

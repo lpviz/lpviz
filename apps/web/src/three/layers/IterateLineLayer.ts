@@ -2,7 +2,7 @@ import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { iteratePositions } from "../helpers/iteratePositions";
 import { PathRibbon } from "../helpers/pathRibbon";
-import { phaseColorsOf } from "../helpers/phaseColors";
+import { phaseColorsOf, phasesCovering } from "../helpers/phaseColors";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { PALETTE } from "../palette";
 import { ZScaledLayer } from "./base/LayerBase";
@@ -32,11 +32,10 @@ export class IterateLineLayer extends ZScaledLayer {
 
   protected rebuild(state: State): void {
     const path = state.iteratePath;
-
-    const hasPhases = state.iteratePhases.length === path.count && state.iteratePhases.length > 0;
+    const phases = phasesCovering(state.iteratePhases, path.count);
     // state z: zScale and the 2D/3D transition flattening are applied via
     // object3D.scale.z, so neither rebuilds the path
-    this.ribbon.setPath(iteratePositions(path), path.count, hasPhases ? phaseColorsOf(state.iteratePhases) : null);
+    this.ribbon.setPath(iteratePositions(path), path.count, phases ? phaseColorsOf(phases) : null);
   }
 
   dispose(): void {

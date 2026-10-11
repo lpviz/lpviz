@@ -8,6 +8,13 @@ const PHASE_COLORS_LINEAR: ReadonlyArray<readonly [number, number, number]> = PH
   return [c.r, c.g, c.b] as const;
 });
 
+/**
+ * The phases when they label every one of the `count` iterates drawn, else null: a run without
+ * phases has none, and a replay slices them to the path's count (see replayController), which is
+ * one more than the dot cloud draws.
+ */
+export const phasesCovering = (phases: number[], count: number): number[] | null => (count > 0 && phases.length >= count ? phases : null);
+
 // Per-point linear RGB for `count` iterates: iterate i, or iterate indices[i]
 // when a subset of the path is drawn.
 export function writePhaseColors(out: Float32Array, phases: number[], indices: number[] | null, count: number): void {
