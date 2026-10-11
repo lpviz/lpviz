@@ -1,3 +1,4 @@
+import { onAbort } from "@/features/core/lifetime";
 import { singleFrame } from "@/features/core/timers";
 import type { LazyList } from "@/features/solver/types";
 import type { ResultTextBlock } from "@/features/solver/types";
@@ -14,8 +15,10 @@ function setRow(node: HTMLElement, block: ResultTextBlock): void {
   else delete node.dataset.index;
 }
 
-/** The rows mounted in the log: refilled when the panel's height changes, or shown another run's rows in place (re-measured when the panel's width or font changed). */
-export type VirtualRows = { refill: () => void; update: (blocks: LazyList<ResultTextBlock>, remeasure: boolean) => void };
+/** A single run as the log shows it: a header, lazily formatted rows and a footer. */
+export type VirtualView = { header: string; footer: string; rows: LazyList<ResultTextBlock> };
+/** The run mounted in the log: refilled when the panel's height changes, or shown another run in place (re-measured when the panel's width or font changed). */
+export type VirtualRows = { refill: () => void; show: (view: VirtualView, remeasure: boolean) => void };
 
 // The font is sized so the widest line fits the panel: the stylesheet's size, the monospace
 // glyph width as a fraction of it, and the range the fit may land in.
@@ -30,17 +33,32 @@ const MAX_FONT_PX = 24;
 const FALLBACK_ROW_HEIGHT_PX = 18;
 const FALLBACK_VIEW_HEIGHT_PX = 600;
 
-// Sizes the result's font to fit the widest line in its width. Nothing here reads layout: the
-// horizontal padding is static CSS read once, and the width is what the size observer last
-// reported, so a render (a rotation step's, dozens a second) forces no layout pass of its own.
-export function createResultFit(result: HTMLElement) {
+// Sizes the result's font to fit the widest line in its width, and follows the panel's size. The
+// panel is resized independently of its contents (sidebar handle, log expansion): a width change
+// needs the full re-render, since the font is sized to the width, while a height change only needs
+// the virtual window refilled, which matters because expanding the log emits a stream of height
+// changes. Nothing on the render path reads layout: the horizontal padding is static CSS read
+// once, and the width is what the observer last saw, so a render (a rotation step's, dozens a
+// second) forces no layout pass of its own.
+export function createResultFit(result: HTMLElement, { rerender, refill }: { rerender: () => void; refill: () => void }, signal: AbortSignal) {
   let cachedPadding: number | null = null;
   let width = result.clientWidth;
+  let height = result.clientHeight;
   let lastFitKey = "";
+  const observer = new ResizeObserver(() => {
+    if (result.clientWidth !== width) {
+      width = result.clientWidth;
+      height = result.clientHeight;
+      rerender();
+      return;
+    }
+    if (result.clientHeight === height) return;
+    height = result.clientHeight;
+    refill();
+  });
+  observer.observe(result);
+  onAbort(signal, () => observer.disconnect());
   return {
-    setWidth: (next: number) => {
-      width = next;
-    },
     /** Fit the font to `maxLineChars` (0 clears the fit); true when the font size changed. */
     fit: (maxLineChars: number): boolean => {
       if (maxLineChars > 0) {
@@ -70,21 +88,28 @@ export function createResultFit(result: HTMLElement) {
   };
 }
 
-// Windowed rendering: only the rows near the viewport get DOM nodes, with
-// spacer divs holding the scroll height. Materializing every row (100k at
+// Windowed rendering: the run's header, a scroll node in which only the rows near the viewport get
+// DOM nodes (spacer divs hold the scroll height), and its footer. Materializing every row (100k at
 // max solver settings) costs seconds of main-thread time per render.
 const VIRTUAL_OVERSCAN_ROWS = 20;
-// Returns the mounted rows (null without any), so a panel that changes height can re-window
-// without a full re-render, and the next run's rows (a rotation step's, dozens of times a second)
-// can take over the nodes already there instead of rebuilding them.
-export function mountVirtualRows(sc: HTMLElement, initial: LazyList<ResultTextBlock>, result: HTMLElement): VirtualRows | null {
+// Returns the mounted run, or null when it has no rows (a note says so), so a panel that changes
+// height can re-window without a full re-render, and the next run (a rotation step's, dozens of
+// times a second) can take over the nodes already there instead of rebuilding them.
+export function mountVirtualRows(result: HTMLElement, view: VirtualView): VirtualRows | null {
+  const header = rowEl({ kind: "header", text: view.header });
+  const sc = el("div", { className: "iterate-scroll" });
+  const footer = rowEl({ kind: "footer", text: view.footer });
+  result.append(header, sc, footer);
+  if (view.rows.length === 0) {
+    sc.append(el("div", { className: "iterate-item-nohover", text: "No iterations available." }));
+    return null;
+  }
   const topSpacer = el("div");
   const rowsEl = el("div", { className: "iterate-rows" });
   const bottomSpacer = el("div");
   sc.append(el("div", { className: "iterate-virtual-wrapper" }, [topSpacer, rowsEl, bottomSpacer]));
-  if (initial.length === 0) return null;
 
-  let blocks = initial;
+  let blocks = view.rows;
   let rowHeight = 0;
   // the scroll position and the view's height as last read, each read again only when it moved
   let scrollTop = 0;
@@ -135,8 +160,10 @@ export function mountVirtualRows(sc: HTMLElement, initial: LazyList<ResultTextBl
       measureView();
       fillWindow();
     },
-    update: (next, remeasure) => {
-      blocks = next;
+    show: (next, remeasure) => {
+      header.textContent = next.header;
+      footer.textContent = next.footer;
+      blocks = next.rows;
       // a fresh run reads from the top (the write alone would force a layout pass)
       if (scrollTop !== 0) sc.scrollTop = 0;
       scrollTop = 0;
@@ -148,28 +175,4 @@ export function mountVirtualRows(sc: HTMLElement, initial: LazyList<ResultTextBl
       fillWindow();
     },
   };
-}
-
-// The panel is resized independently of its contents (sidebar handle, log
-// expansion). A width change needs the full re-render, since fit() sizes the
-// font to the width; a height change only needs the virtual window refilled,
-// which matters because expanding the log emits a stream of height changes.
-export function observeResultSize(result: HTMLElement, { onWidthChange, onHeightChange }: { onWidthChange: (width: number) => void; onHeightChange: () => void }) {
-  let fittedWidth = result.clientWidth;
-  let fittedHeight = result.clientHeight;
-  const sizeObserver = new ResizeObserver(() => {
-    const width = result.clientWidth;
-    const height = result.clientHeight;
-    if (width !== fittedWidth) {
-      fittedWidth = width;
-      fittedHeight = height;
-      onWidthChange(width);
-      return;
-    }
-    if (height === fittedHeight) return;
-    fittedHeight = height;
-    onHeightChange();
-  });
-  sizeObserver.observe(result);
-  return sizeObserver;
 }
