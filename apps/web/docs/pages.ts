@@ -13,7 +13,8 @@ export interface DocsPage {
   nav: string;
   /** Link text in the neighbouring pages' pager. */
   pager: string;
-  title: string;
+  /** The document title; an article's is its social card's title under the site's name. */
+  title?: string;
   description: string;
   og: SocialCard;
   twitter: SocialCard;
@@ -43,7 +44,6 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: "simplex",
     nav: "Simplex",
     pager: "The Simplex Method",
-    title: "The Simplex Method, Visualized — lpviz Docs",
     description:
       "How the Simplex method solves linear programs by walking from vertex to vertex: two-phase setup, Bland's and Dantzig's pivot rules, degenerate pivots, and dual simplex — visualized interactively in lpviz.",
     og: {
@@ -60,7 +60,6 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: "interior-point",
     nav: "Interior Point",
     pager: "Interior Point Methods",
-    title: "Interior Point Methods, Visualized — lpviz Docs",
     description:
       "How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, and infeasible starts — visualized interactively in lpviz.",
     og: {
@@ -77,7 +76,6 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: "pdhg",
     nav: "PDHG",
     pager: "PDHG",
-    title: "PDHG for Linear Programming, Visualized — lpviz Docs",
     description:
       "How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, and basis identification — visualized in lpviz.",
     og: {
@@ -94,7 +92,6 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: "ellipsoid",
     nav: "Ellipsoid",
     pager: "The Ellipsoid Method",
-    title: "The Ellipsoid Method and Cutting Planes, Visualized — lpviz Docs",
     description:
       "How the ellipsoid method solves linear programs by shrinking a localizing set around the optimum: deep cuts, the objective ray shoot, the ρ certificate, and the Chebyshev, analytic and volumetric cutting-plane query points — visualized interactively in lpviz.",
     og: {
@@ -111,7 +108,6 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     slug: "central-path",
     nav: "Central Path",
     pager: "The Central Path",
-    title: "The Central Path and Log Barrier, Visualized — lpviz Docs",
     description:
       "The central path of a linear program: how the logarithmic barrier turns constraints into a smooth landscape, how Newton's method traces the path from analytic center to optimum, and what it reveals about interior point methods.",
     og: {

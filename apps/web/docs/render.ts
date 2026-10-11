@@ -16,6 +16,9 @@ const APP_DESCRIPTION = "Interactive web app for visualizing linear programming 
 const pagePath = (page: DocsPage): string => (page === overview ? "/docs/" : `/docs/${page.slug}`);
 const pageUrl = (page: DocsPage): string => ORIGIN + pagePath(page);
 const text = (s: string): string => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+const title = (page: DocsPage): string => page.title ?? `${page.og.title} — lpviz Docs`;
+// every article opens with its place under the overview
+const breadcrumbs = (page: DocsPage): string => (page === overview ? "" : `        <p class="breadcrumbs"><a href="${pagePath(overview)}">${text(overview.nav)}</a> / ${text(page.nav)}</p>\n`);
 
 // The page's schema.org graph: the app and its documentation collection on the overview, the
 // article and its breadcrumbs on every other page.
@@ -87,7 +90,7 @@ export function renderDocsPage(page: DocsPage): string {
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>${text(page.title)}</title>
+    <title>${text(title(page))}</title>
     <meta
       name="description"
       content="${text(page.description)}"
@@ -115,7 +118,7 @@ ${nav.join("\n")}
     </header>
     <main>
       <article>
-${body}
+${breadcrumbs(page)}${body}
         <nav class="pager" aria-label="Continue reading">
 ${pager(page)}
         </nav>
