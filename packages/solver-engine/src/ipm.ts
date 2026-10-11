@@ -1,4 +1,4 @@
-import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, negate, negateMatrix, transposedMatVec, weightedGram } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, negate, negateMatrix, transposeMatrix, weightedGram } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
@@ -33,6 +33,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
   const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
   const A = negateMatrix(aOriginal);
+  const At = transposeMatrix(A);
   const b = negate(bOriginal);
   const c = negate(objective);
   const m = A.rows;
@@ -59,7 +60,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   const rC = new Float64Array(m);
   const zeroP = new Float64Array(m);
   const zeroD = new Float64Array(n);
-  const normal = new NormalEquations(A, s, y);
+  const normal = new NormalEquations(A, At, s, y);
   const dxAff = new Float64Array(n);
   const dsAff = new Float64Array(m);
   const dyAff = new Float64Array(m);
@@ -84,7 +85,7 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
 
   while (trace.count < maxit) {
     matVec(A, x, ax);
-    transposedMatVec(A, y, aty);
+    matVec(At, y, aty);
 
     for (let i = 0; i < m; i++) {
       rP[i] = b[i]! - ax[i]! + s[i]!;
@@ -164,6 +165,7 @@ class NormalEquations {
 
   constructor(
     private readonly A: DenseMatrix,
+    private readonly At: DenseMatrix,
     private readonly s: Float64Array,
     private readonly y: Float64Array,
   ) {
@@ -181,12 +183,12 @@ class NormalEquations {
   }
 
   solve(rP: Float64Array, rD: Float64Array, rC: Float64Array, dx: Float64Array, ds: Float64Array, dy: Float64Array): void {
-    const { A, s, y, M, rhs, weighted, luScratch } = this;
+    const { A, At, s, y, M, rhs, weighted, luScratch } = this;
     const { rows: m, cols: n } = A;
     for (let i = 0; i < m; i++) {
       weighted[i] = (rC[i]! + y[i]! * rP[i]!) / s[i]!;
     }
-    transposedMatVec(A, weighted, rhs);
+    matVec(At, weighted, rhs);
     for (let j = 0; j < n; j++) rhs[j]! -= rD[j]!;
     solveDenseSystem(M, n, rhs, dx, luScratch);
     matVec(A, dx, ds);

@@ -137,7 +137,7 @@ function warmStartBasis(A: DenseMatrix, b: Float64Array, phase2: StandardLp, ver
   for (let i = 0; i < m; i++) if (!activeSet.has(i)) isBasic[2 * n + i] = true;
 
   try {
-    const scratch = phaseScratch(m, phase2.A.cols);
+    const scratch = phaseScratch(phase2);
     const solution = basicSolution(phase2, new Basis(phase2.A, isBasic), scratch, false);
     for (let i = 0; i < m; i++) {
       if (scratch.xB[i]! < -tol) return null; // basis is not primal feasible

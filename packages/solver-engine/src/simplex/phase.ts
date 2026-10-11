@@ -42,7 +42,7 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
   const iterates: Float64Array[] = [];
   const guard = createCyclingGuard(pivotRules, tol);
   const basis = new Basis(A, initialBasis);
-  const scratch = phaseScratch(basis.m, A.cols);
+  const scratch = phaseScratch(lp);
   const { xB, enterColumn, direction } = scratch;
 
   let iteration = 0;

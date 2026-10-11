@@ -90,18 +90,6 @@ export function weightedGram(matrix: DenseMatrix, weight: (row: number) => numbe
   return out;
 }
 
-export function transposedMatVec(matrix: DenseMatrix, vector: Float64Array, out: Float64Array) {
-  out.fill(0);
-  const { rows, cols, data } = matrix;
-  for (let i = 0; i < rows; i++) {
-    const scale = vector[i]!;
-    const rowOffset = i * cols;
-    for (let j = 0; j < cols; j++) {
-      out[j]! += data[rowOffset + j]! * scale;
-    }
-  }
-}
-
 export function diagonalMatrix(values: Float64Array): DenseMatrix {
   const size = values.length;
   const matrix = createDenseMatrix(size, size);

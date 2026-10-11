@@ -1,7 +1,7 @@
 // PDHG on `max c'x s.t. Ax <= b` (or its equality form), with the Halpern-anchored iteration and its
 // restarts as an option: the core walks one scheme, the wrapper sets up the problem and the start.
 
-import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, maxAbsDifference, negate, transposedMatVec } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, maxAbsDifference, negate, transposeMatrix } from "@lpviz/math/blas";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
 import { assertMaxit, warmStart } from "./limits";
@@ -50,6 +50,7 @@ class KktError {
 
   constructor(
     private readonly A: DenseMatrix,
+    private readonly At: DenseMatrix,
     private readonly b: Float64Array,
     private readonly c: Float64Array,
     private readonly ineq: boolean,
@@ -61,12 +62,12 @@ class KktError {
   }
 
   of(xk: Float64Array, yk: Float64Array): number {
-    const { A, b, c, ineq, ax, aty } = this;
+    const { A, At, b, c, ineq, ax, aty } = this;
     matVec(A, xk, ax);
     const primal = primalResidual(ax, b, ineq);
     this.primal = primal;
 
-    transposedMatVec(A, yk, aty);
+    matVec(At, yk, aty);
     let dualResidual = 0;
     for (let i = 0; i < aty.length; i++) {
       const residual = ineq ? Math.abs(c[i]! + aty[i]!) : Math.max(0, -aty[i]! - c[i]!);
@@ -104,11 +105,14 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const { ineq, maxit, eta, tau, tol, colorByBasis, halpern } = opts;
 
   const { rows: m, cols: n } = A;
+  // the transpose kept as its own matrix: a row dot product per output is faster than
+  // scattering each row's contribution across the output, and sums the same terms in the same order
+  const At = transposeMatrix(A);
   // eq mode: x is split as x = x^+ - x^- with xk = [x^+; x^-; s]
   const slackOffset = n - m;
   // the problem's own variables: all of xk in ineq mode, x^+ - x^- in eq mode
   const pointOf = (xk: Float64Array): Float64Array => (ineq ? xk.slice() : unsplit(xk, dimension));
-  const kkt = new KktError(A, b, c, ineq);
+  const kkt = new KktError(A, At, b, c, ineq);
 
   let xk = new Float64Array(n);
   // Equality duals are sign-free, so 0 is the neutral "no price information"
@@ -160,7 +164,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
       extrapolated[i] = 2 * nextY[i]! - yk[i]!;
     }
     // x_{k+1} = x_k - η(c + A^T ỹ_k)
-    transposedMatVec(A, extrapolated, atYScratch);
+    matVec(At, extrapolated, atYScratch);
     for (let i = 0; i < n; i++) {
       nextX[i] = xk[i]! - eta * (c[i]! + atYScratch[i]!);
     }
@@ -168,7 +172,7 @@ function pdhgCore(A: DenseMatrix, b: Float64Array, c: Float64Array, x0: Float64A
   const stepEquality = () => {
     // x_{k+1} = [x_k - η(c + A^T y_k)]_+
     // x̃_k = x_{k+1} + (x_{k+1} - x_k)
-    transposedMatVec(A, yk, atYScratch);
+    matVec(At, yk, atYScratch);
     for (let i = 0; i < n; i++) {
       const candidate = xk[i]! - eta * (c[i]! + atYScratch[i]!);
       nextX[i] = candidate > 0 ? candidate : 0;
