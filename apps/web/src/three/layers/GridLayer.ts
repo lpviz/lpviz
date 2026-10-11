@@ -1,4 +1,5 @@
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { Color, DoubleSide, GLSL3, Mesh, PlaneGeometry, ShaderMaterial } from "three";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import type { Layer, LayerPlacement } from "../Layer";
@@ -73,8 +74,8 @@ export class GridLayer implements Layer {
     return [{ object3D: this.object3D, pass: "background" }];
   }
 
-  update(): void {
-    const target = getViewportRenderSnapshot().target;
+  update(_state: State, snap: ViewportRenderSnapshot): void {
+    const target = snap.target;
     if (Math.abs(target.x - this.centerX) > RECENTER_THRESHOLD || Math.abs(target.y - this.centerY) > RECENTER_THRESHOLD) {
       this.centerX = Math.round(target.x);
       this.centerY = Math.round(target.y);

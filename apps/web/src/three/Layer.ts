@@ -1,4 +1,6 @@
+import type { State } from "@/features/core/store";
 import type { ViewportDirtyFlags } from "@/features/viewport/dirtyFlags";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
 
 type LayerInvalidationKey = keyof ViewportDirtyFlags;
@@ -19,6 +21,7 @@ export interface Layer {
   placements(): readonly LayerPlacement[];
   /** the dirty flags that make the layer update; a flagless invalidate updates every layer */
   readonly invalidationKeys: readonly LayerInvalidationKey[];
-  update(): void;
+  /** Bring the layer up to date with the frame's inputs, which the scene manager reads once per frame. */
+  update(state: State, snap: ViewportRenderSnapshot): void;
   dispose(): void;
 }

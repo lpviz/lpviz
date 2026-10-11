@@ -1,5 +1,4 @@
-import { getState, type State } from "@/features/core/store";
-import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
+import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import type { Object3D } from "three";
 import { viewShowsMode } from "../../helpers/sceneVisibility";
@@ -10,8 +9,8 @@ import type { Layer, LayerPlacement, RenderPassName } from "../../Layer";
 // against the previous one and calls `rebuild()` only on change. `everyFrame()` runs
 // unconditionally, for cheap transforms such as `object3D.scale.z` that must update every frame.
 // A layer the view does not show (`visibleIn`) is hidden without a rebuild, and shown and rebuilt
-// when it shows again; a rebuild that finds nothing to draw hides the layer itself. The store and
-// the render snapshot are read once per update and handed down.
+// when it shows again; a rebuild that finds nothing to draw hides the layer itself. The frame's
+// inputs come in from the scene manager and are handed down.
 export abstract class LayerBase implements Layer {
   abstract readonly object3D: Object3D;
   readonly renderPass: RenderPassName = "foreground";
@@ -23,9 +22,7 @@ export abstract class LayerBase implements Layer {
     return [{ object3D: this.object3D, pass: this.renderPass }];
   }
 
-  update(): void {
-    const state = getState();
-    const snap = getViewportRenderSnapshot();
+  update(state: State, snap: ViewportRenderSnapshot): void {
     this.everyFrame(state, snap);
     if (!this.visibleIn(state, snap)) {
       this.hide();

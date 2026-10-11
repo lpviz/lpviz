@@ -1,4 +1,6 @@
 import { restartableTimeout } from "@/features/core/timers";
+import type { State } from "@/features/core/store";
+import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { type Camera, CustomBlending, GLSL3, Mesh, OneFactor, OneMinusSrcAlphaFactor, PlaneGeometry, type Scene, ShaderMaterial, type Texture, WebGLRenderTarget, type WebGLRenderer } from "three";
 
 // how long after its last change a view counts as moving, for both trace impostors
@@ -6,6 +8,18 @@ export const VIEW_SETTLE_MS = 160;
 
 /** What a trace impostor substitutes for the pass: its quad scene, and the camera to draw it with (the pass's own when absent). */
 export type TracePassImpostor = { scene: Scene; camera?: Camera };
+
+/** What an impostor is handed each frame: the renderer and camera, the frame's inputs, the pass's scene and the scenes that occlude it. */
+export type TraceFrame = { renderer: WebGLRenderer; camera: Camera; state: State; snapshot: ViewportRenderSnapshot; traceLines: Scene; occluders: readonly Scene[] };
+
+/** Something that may stand in for the traceLines pass: `prepare` bakes offscreen and answers with the substitute, or null to render the pass directly. */
+export interface TraceImpostor {
+  prepare(frame: TraceFrame): TracePassImpostor | null;
+  dispose(): void;
+}
+
+/** Whether a scene has nothing visible to render. */
+export const drawsNothing = (scene: Scene): boolean => scene.children.every((child) => !child.visible);
 
 // Rendering translucent strokes onto a transparent black target yields
 // premultiplied alpha, so the composite uses (ONE, ONE_MINUS_SRC_ALPHA).
