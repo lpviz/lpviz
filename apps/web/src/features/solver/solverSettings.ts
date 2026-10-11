@@ -43,6 +43,10 @@ export type SolverSettingUpdater = <K extends keyof SolverSettings>(key: K, valu
 
 /** The settings a `<select>` chooses from a vocabulary. */
 export type SelectSettingKey = { [K in keyof SolverSettings]: SolverSettings[K] extends string ? K : never }[keyof SolverSettings];
+/** The numeric settings. */
+export type NumberSettingKey = { [K in keyof SolverSettings]: SolverSettings[K] extends number ? K : never }[keyof SolverSettings];
+/** A slider's range, as its min, max and step attributes (strings, exactly as the panel writes them). */
+export type SliderRange = readonly [min: string, max: string, step: string];
 
 // how a setting travels in a share link: its slot is its identity on the wire, so a slot never
 // changes or is reused; a new shared setting takes the next free one
@@ -54,6 +58,8 @@ type SettingSpec<V> = {
   owner: SolverMode | "global" | "local";
   /** a select's vocabulary in the panel's order (the wire's order is its codec's); a link's value must be one of them */
   values?: [V] extends [string] ? readonly V[] : never;
+  /** a slider setting's range */
+  range?: [V] extends [number] ? SliderRange : never;
   /** absent for a setting that links do not carry */
   wire?: SettingWire;
   /** its key in a link from before the compact codec (see legacyLink) */
@@ -64,28 +70,28 @@ type SettingSpec<V> = {
 // codec, the legacy link reader and the per-solver link contents all derive from this table, so
 // adding a setting is one entry here (plus its control in the panel).
 const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSettings[K]> } = {
-  alphaMax: { default: 0.1, owner: "ipm", wire: { slot: 0, codec: { scaled: 1e4 } }, legacyKey: "a" },
-  correctorThreshold: { default: 0.9, owner: "ipm", wire: { slot: 1, codec: { scaled: 1e4 } }, legacyKey: "f" },
+  alphaMax: { default: 0.1, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 0, codec: { scaled: 1e4 } }, legacyKey: "a" },
+  correctorThreshold: { default: 0.9, owner: "ipm", range: ["0.001", "0.999", "0.001"], wire: { slot: 1, codec: { scaled: 1e4 } }, legacyKey: "f" },
   maxitIPM: { default: 1000, owner: "ipm", wire: { slot: 2, codec: "int" }, legacyKey: "i" },
   simplexDualMode: { default: false, owner: "simplex", wire: { slot: 3, codec: "bool" }, legacyKey: "d" },
   // the pivot rules have no slot yet: a link does not carry them (a codec bump, to be its own decision)
   simplexEnteringRule: { default: "first", owner: "simplex", values: ENTERING_RULES, legacyKey: "E" },
   simplexLeavingRule: { default: "first", owner: "simplex", values: LEAVING_RULES, legacyKey: "L" },
-  pdhgEta: { default: 0.25, owner: "pdhg", wire: { slot: 4, codec: { scaled: 1e4 } }, legacyKey: "e" },
-  pdhgTau: { default: 0.25, owner: "pdhg", wire: { slot: 5, codec: { scaled: 1e4 } }, legacyKey: "t" },
+  pdhgEta: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 4, codec: { scaled: 1e4 } }, legacyKey: "e" },
+  pdhgTau: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 5, codec: { scaled: 1e4 } }, legacyKey: "t" },
   maxitPDHG: { default: 1000, owner: "pdhg", wire: { slot: 6, codec: "int" }, legacyKey: "p" },
   pdhgIneqMode: { default: true, owner: "pdhg", wire: { slot: 7, codec: "bool" }, legacyKey: "m" },
   pdhgHalpernMode: { default: false, owner: "pdhg", wire: { slot: 8, codec: "bool" }, legacyKey: "j" },
   pdhgColorByBasis: { default: false, owner: "pdhg", wire: { slot: 9, codec: "bool" }, legacyKey: "h" },
-  centralPathIter: { default: 75, owner: "central", wire: { slot: 10, codec: "int" }, legacyKey: "c" },
+  centralPathIter: { default: 75, owner: "central", range: ["2", "100", "1"], wire: { slot: 10, codec: "int" }, legacyKey: "c" },
   maxitEllipsoid: { default: 500, owner: "ellipsoid", wire: { slot: 11, codec: "int" }, legacyKey: "n" },
   ellipsoidDeepCuts: { default: true, owner: "ellipsoid", wire: { slot: 12, codec: "bool" }, legacyKey: "u" },
   ellipsoidRayShoot: { default: true, owner: "ellipsoid", wire: { slot: 13, codec: "bool" }, legacyKey: "z" },
   // every lowercase legacy letter is taken; uppercase never collides with them
   ellipsoidQueryPoint: { default: "ellipsoid", owner: "ellipsoid", values: QUERY_POINTS, wire: { slot: 14, codec: { enumeration: QUERY_POINTS } }, legacyKey: "Q" },
-  ellipsoidInitialScale: { default: 1.5, owner: "ellipsoid", wire: { slot: 15, codec: { scaled: 1e4 } }, legacyKey: "w" },
-  objectiveAngleStep: { default: 0.1, owner: "global", wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
-  objectiveRotationSpeed: { default: 1, owner: "global", wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
+  ellipsoidInitialScale: { default: 1.5, owner: "ellipsoid", range: ["1.05", "4", "0.05"], wire: { slot: 15, codec: { scaled: 1e4 } }, legacyKey: "w" },
+  objectiveAngleStep: { default: 0.1, owner: "global", range: ["0.01", "0.5", "0.01"], wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
+  objectiveRotationSpeed: { default: 1, owner: "global", range: ["0.2", "3", "0.1"], wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
   replayDurationMs: { default: DEFAULT_REPLAY_DURATION_MS, owner: "local" },
 };
 
@@ -93,6 +99,13 @@ const SOLVER_SETTING_KEYS = Object.keys(SOLVER_SETTING_SPECS) as (keyof SolverSe
 
 // exported so share links can omit any setting still at its default
 export const DEFAULT_SOLVER_SETTINGS = Object.fromEntries(SOLVER_SETTING_KEYS.map((key) => [key, SOLVER_SETTING_SPECS[key].default])) as SolverSettings;
+
+/** A slider setting's range. */
+export function settingRange(key: NumberSettingKey): SliderRange {
+  const { range } = SOLVER_SETTING_SPECS[key];
+  if (!range) throw new Error(`${key} has no slider range`);
+  return range;
+}
 
 /** A select's vocabulary, in the panel's order. */
 export const settingValues = <K extends SelectSettingKey>(key: K): readonly SolverSettings[K][] => SOLVER_SETTING_SPECS[key].values as readonly SolverSettings[K][];

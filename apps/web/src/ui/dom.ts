@@ -1,3 +1,6 @@
+/** The wheel's delta along its dominant axis; zero when it did not move. */
+export const dominantWheelDelta = (event: WheelEvent): number => (Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX);
+
 /** Ends an event here: no default action, and no other listener sees it. */
 export const swallow = (event: Event) => {
   event.preventDefault();

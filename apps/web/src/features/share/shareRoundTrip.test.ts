@@ -6,7 +6,7 @@ import type { Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "@lpviz/polytope/constraints";
 import { simplex } from "@lpviz/solver-engine/simplex";
 import { isConvexPolygon } from "@lpviz/math/polygon";
-import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/problems";
+import { isWellProportioned, valtrPolygon } from "@/features/problem-gallery/randomPolygon";
 
 const MAX_OPTIMUM_ERROR = 0.001;
 const ROUND_TRIPS = 10;

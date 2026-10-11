@@ -5,43 +5,47 @@ import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
 import type { SolverResult } from "@lpviz/solver-engine/result";
 import { simplex } from "@lpviz/solver-engine/simplex";
-import { SOLVER_LABELS } from "./solverSettings";
+import { SOLVER_LABELS, type SolverMode } from "./solverSettings";
 import { packSolverResponse } from "./resultPacking";
 import type { SolverWorkerPayload, SolverWorkerRequest } from "./types";
 
 const DEFAULT_TOLERANCE = 1e-5;
+const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...options });
 
-// A request is an engine's options minus the shared tolerance (see SolverWorkerPayload), so the
-// rest of each one spreads straight into the engine.
+// Each mode's engine on its request, which is the engine's options minus the shared tolerance
+// (see SolverWorkerPayload), so the rest of it spreads straight in.
+const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
+  ipm: (payload) => {
+    const { solver: _, constraints, objective, ...options } = payload;
+    return ipm(constraints, objective, withTol(options));
+  },
+  simplex: (payload) => {
+    const { solver: _, constraints, objective, ...options } = payload;
+    return simplex(constraints, objective, withTol(options));
+  },
+  pdhg: (payload) => {
+    const { solver: _, constraints, objective, ...options } = payload;
+    return pdhg(constraints, objective, withTol(options));
+  },
+  central: (payload) => {
+    const { solver: _, vertices, constraints, objective, ...options } = payload;
+    return centralPath(vertices, constraints, objective, options);
+  },
+  // The ellipsoid mode covers a family: the ellipsoid method proper, plus the cutting-plane methods
+  // that localize with a polyhedron and differ in which interior point they query. They return the
+  // same shape, so everything downstream (packing, the log, the drawn ellipse) is shared.
+  ellipsoid: (payload) => {
+    const { solver: _, vertices, constraints, objective, deepCuts, queryPoint, ...options } = payload;
+    return queryPoint === "ellipsoid"
+      ? ellipsoid(vertices, constraints, objective, { ...withTol(options), deepCuts })
+      : cuttingPlane(vertices, constraints, objective, { ...withTol(options), queryPoint });
+  },
+};
+
 function executeSolver(data: SolverWorkerPayload): SolverResult {
   try {
-    switch (data.solver) {
-      case "ipm": {
-        const { solver: _, constraints, objective, ...options } = data;
-        return ipm(constraints, objective, { tol: DEFAULT_TOLERANCE, ...options });
-      }
-      case "simplex": {
-        const { solver: _, constraints, objective, ...options } = data;
-        return simplex(constraints, objective, { tol: DEFAULT_TOLERANCE, ...options });
-      }
-      case "pdhg": {
-        const { solver: _, constraints, objective, ...options } = data;
-        return pdhg(constraints, objective, { tol: DEFAULT_TOLERANCE, ...options });
-      }
-      case "central": {
-        const { solver: _, vertices, constraints, objective, ...options } = data;
-        return centralPath(vertices, constraints, objective, options);
-      }
-      case "ellipsoid": {
-        // The ellipsoid mode covers a family: the ellipsoid method proper, plus
-        // the cutting-plane methods that localize with a polyhedron and differ
-        // in which interior point they query. They return the same shape, so
-        // everything downstream — packing, the log, the drawn ellipse — is shared.
-        const { solver: _, vertices, constraints, objective, deepCuts, queryPoint, ...options } = data;
-        const shared = { tol: DEFAULT_TOLERANCE, ...options };
-        return queryPoint === "ellipsoid" ? ellipsoid(vertices, constraints, objective, { ...shared, deepCuts }) : cuttingPlane(vertices, constraints, objective, { ...shared, queryPoint });
-      }
-    }
+    // the table's entry is the one for the discriminant, which an index cannot tell TypeScript
+    return (RUN[data.solver] as (payload: SolverWorkerPayload) => SolverResult)(data);
   } catch (error) {
     console.error(`Error in ${SOLVER_LABELS[data.solver]} solver:`, error);
     throw error;

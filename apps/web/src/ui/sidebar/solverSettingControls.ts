@@ -1,4 +1,4 @@
-import { type SelectSettingKey, settingValues, type SolverSettings } from "@/features/solver/solverSettings";
+import { type NumberSettingKey, type SelectSettingKey, settingRange, settingValues, type SolverSettings } from "@/features/solver/solverSettings";
 import { checkbox, el, range } from "@/ui/dom";
 
 const MAXIT_LOG_MIN = 0;
@@ -12,7 +12,7 @@ export const fixed = (digits: number) => (value: number) => value.toFixed(digits
 
 type SettingKeys<T> = { [K in keyof SolverSettings]: SolverSettings[K] extends T ? K : never }[keyof SolverSettings];
 type MaxitSettingKey = Extract<keyof SolverSettings, `maxit${string}`>;
-type SliderSpec = { key: SettingKeys<number>; min: string; max: string; step: string; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
+type SliderSpec = { key: NumberSettingKey; label: string; format?: (v: number) => string; parse?: (v: string) => number; br?: boolean };
 // writes one setting, then re-solves if the section's solver is the active one
 type SettingUpdater = <K extends keyof SolverSettings>(key: K) => (v: SolverSettings[K]) => void;
 // what a solver section is built from: the updater its controls write through; their values come by `sync`
@@ -42,13 +42,13 @@ export function group(className: string, controls: SettingControl[]): SettingCon
   };
 }
 
-// A slider (id `<key>Slider`) with a live readout: <label>text " " <span></label>,
-// the input, and a <br> unless `br` is false.
-export function numberSlider({ set }: SectionContext, { key, min, max, step, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
+// A slider (id `<key>Slider`) over the setting's range, with a live readout: <label>text " "
+// <span></label>, the input, and a <br> unless `br` is false.
+export function numberSlider({ set }: SectionContext, { key, label, format = fixed(3), parse = parseFloat, br = true }: SliderSpec): SettingControl {
   const id = key + "Slider";
   const span = el("span");
   const update = set(key);
-  const input = range(id, min, max, step, (v) => {
+  const input = range(id, ...settingRange(key), (v) => {
     const next = parse(v);
     span.textContent = format(next);
     update(next);

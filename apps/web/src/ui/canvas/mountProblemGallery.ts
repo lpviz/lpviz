@@ -1,5 +1,6 @@
 import type { AppActions } from "@/app/appActions";
-import { GALLERY_PROBLEMS, randomConvexPolygonPreview, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
+import { GALLERY_PROBLEMS, requestRandomConvexPolygonProblem, type GalleryProblem } from "@/features/problem-gallery/problems";
+import { randomConvexPolygonPreview } from "@/features/problem-gallery/randomPolygon";
 import { el } from "@/ui/dom";
 import { prefersReducedMotion } from "@/ui/media";
 import { boundsOf } from "@lpviz/math/vec";

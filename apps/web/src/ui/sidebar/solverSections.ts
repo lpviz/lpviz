@@ -10,20 +10,20 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
 export type SettingsSync = SettingControl["sync"];
 
 const ipmSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "alphaMax", min: "0.001", max: "1", step: "0.001", label: "αmax (maximum step size ratio):" }),
-  numberSlider(ctx, { key: "correctorThreshold", min: "0.001", max: "0.999", step: "0.001", label: "Corrector threshold:" }),
+  numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }),
+  numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }),
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
 ];
 
 const pdhgSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "pdhgEta", min: "0.001", max: "0.750", step: "0.001", label: "η (primal step size factor):" }),
-  numberSlider(ctx, { key: "pdhgTau", min: "0.001", max: "0.750", step: "0.001", label: "τ (dual step size factor):" }),
+  numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }),
+  numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }),
   maxitSlider(ctx, "maxitSliderPDHG", "maxitPDHG"),
   checkboxRow(ctx, { pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }),
 ];
 
 const ellipsoidSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "ellipsoidInitialScale", min: "1.05", max: "4", step: "0.05", label: "Initial ellipsoid size:", format: fixed(2) }),
+  numberSlider(ctx, { key: "ellipsoidInitialScale", label: "Initial ellipsoid size:", format: fixed(2) }),
   maxitSlider(ctx, "maxitSliderEllipsoid", "maxitEllipsoid"),
   group("settings-inline-row", [labeledSelect(ctx, "ellipsoidQueryPoint", "Query point:", QUERY_POINT_LABELS)]),
   // the cut shape options belong to the ellipsoid update itself; the
@@ -38,7 +38,7 @@ const simplexSection = (ctx: SectionContext): SettingControl[] => [
 ];
 
 const centralSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "centralPathIter", min: "2", max: "100", step: "1", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false }),
+  numberSlider(ctx, { key: "centralPathIter", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false }),
 ];
 
 const SECTIONS: Record<SolverMode, (ctx: SectionContext) => SettingControl[]> = {

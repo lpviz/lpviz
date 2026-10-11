@@ -11,23 +11,19 @@ type ConstraintDragOperation = { kind: "closed-line"; lineIndex: number; constra
 
 // In 3D a drag carries the grabbed point as its anchor: pointer rays that miss the floor plane are
 // projected onto the view-aligned plane through it instead (see toLogicalCoords3D).
-export type DragTarget =
-  | { kind: "point"; index: number; viewAnchor3D?: PointXYZ | undefined }
-  | {
-      kind: "constraint";
-      operation: ConstraintDragOperation;
-      start: Vec;
-      normal: Vec;
-      viewAnchor3D?: PointXYZ | undefined;
-    }
-  | { kind: "objective"; viewAnchor3D?: PointXYZ | undefined }
+// What a drag holds, each with the 3D anchor: the grabbed point, whose view-aligned plane catches
+// pointer rays that miss the floor.
+export type DragTarget = (
+  | { kind: "point"; index: number }
+  | { kind: "constraint"; operation: ConstraintDragOperation; start: Vec; normal: Vec }
+  | { kind: "objective" }
   | {
       kind: "solver-start";
       // marker minus pointer-ray point at grab time: the ring can render lifted off the z = 0 drag
       // plane in 3D, so dragging moves the marker relative to the ray point instead of teleporting it
       grabOffset?: Vec;
-      viewAnchor3D?: PointXYZ | undefined;
-    };
+    }
+) & { viewAnchor3D?: PointXYZ | undefined };
 type EditorInteractionState =
   | { kind: "idle" }
   | {
