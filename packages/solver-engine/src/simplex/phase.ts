@@ -1,5 +1,5 @@
 import { type DenseMatrix, extractColumn, hstackMatrices, identityMatrix } from "@lpviz/math/blas";
-import { coordinateHeaders, fmtCoordinates, fmtExp, fmtIteration, ITERATION_COLUMN_WIDTH, logColumnWidths } from "../fmt";
+import { fmtIterate, fmtIteration, ITERATION_COLUMN_WIDTH, iterateHeaders } from "../fmt";
 import { MAX_ITERATIONS } from "../limits";
 import type { LogSection, SolverResult } from "../result";
 import { Basis, basicSolution, phaseScratch, type StandardLp } from "./basis";
@@ -36,8 +36,7 @@ interface PhaseRun {
 export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], cfg: PhaseConfig): PhaseRun {
   const { tol, pivotRules, phase, dimension, pointOf, unboundedNote } = cfg;
   const { A } = lp;
-  const widths = logColumnWidths(dimension);
-  const header = `${"Iter".padStart(ITERATION_COLUMN_WIDTH)} ${coordinateHeaders(dimension)} ${"Obj".padStart(widths.measure)} ${"basis".padEnd(A.cols)}\n`;
+  const header = `${"Iter".padStart(ITERATION_COLUMN_WIDTH)} ${iterateHeaders(dimension)} ${"basis".padEnd(A.cols)}\n`;
   const rows: string[] = [];
   const notes: string[] = [];
   const iterates: Float64Array[] = [];
@@ -66,7 +65,7 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
     objective = solution.objective;
     const point = pointOf(solution.x, basis);
     iterates.push(point);
-    rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtCoordinates(point, widths.coordinate)} ${fmtExp(objective, widths.measure, 1)} ${basisString(basis.isBasic)}\n`);
+    rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtIterate(point, objective)} ${basisString(basis.isBasic)}\n`);
 
     if (entering === -1) break;
 

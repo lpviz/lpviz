@@ -1,4 +1,4 @@
-import { type DenseMatrix, denseFromConstraints, dot, infinityNorm, matVec, negateMatrix, transposedMatVec, weightedGram } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, infinityNorm, matVec, negate, negateMatrix, transposedMatVec, weightedGram } from "@lpviz/math/blas";
 import { solveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { numericLogHeader, solveFooter } from "./fmt";
@@ -33,8 +33,8 @@ export function ipm(constraints: readonly Constraint[], objective: Float64Array,
   // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
   const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
   const A = negateMatrix(aOriginal);
-  const b = Float64Array.from(bOriginal, (value) => -value);
-  const c = Float64Array.from(objective, (value) => -value);
+  const b = negate(bOriginal);
+  const c = negate(objective);
   const m = A.rows;
   const n = A.cols;
 

@@ -1,3 +1,4 @@
+import { extractRow } from "@lpviz/math/blas";
 import type { DenseMatrix } from "@lpviz/math/blas";
 import { type LpRow, solveSmallLp } from "@lpviz/math/lp";
 import type { Constraint, Vec } from "@lpviz/math/types";
@@ -93,7 +94,7 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     if (!feasible) {
       // the violated constraint itself, which is as deep a cut as the oracle
       // can return
-      for (let j = 0; j < n; j++) cut[j] = A.data[worstRow * n + j]!;
+      extractRow(A, worstRow, cut);
       cut[n] = b[worstRow]!;
     } else {
       // discard everything no better than the incumbent
