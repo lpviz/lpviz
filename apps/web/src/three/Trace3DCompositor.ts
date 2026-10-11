@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Camera, Material, Mesh, WebGLRenderer } from "three";
-import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
+import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
+import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 
 // Motion-time compositor for the trace-constraints pass in 3D mode.
 //
@@ -22,7 +22,6 @@ import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
 // depth-writing geometry before the trace pass (polytope fill and edges,
 // objective), so chunks occlude each other and are occluded by geometry
 // exactly as they are when drawn directly.
-const VIEW_SETTLE_MS = 160;
 
 const QUAD_VERTEX_SHADER = /* glsl */ `
 out vec2 vUv;
@@ -34,10 +33,10 @@ void main() {
 `;
 
 export class Trace3DCompositor {
-  private renderTarget: WebGLRenderTarget | null = null;
   private quadScene = new Scene();
   private quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
+  private readonly target = new OffscreenTarget(this.quad, { depthBuffer: true });
   private materialScratch: Material[] = [];
   // the view the last frame was composited for, as the numbers that place the camera
   private readonly lastView = new Float64Array(13).fill(NaN);
@@ -49,13 +48,13 @@ export class Trace3DCompositor {
     this.quadScene.add(this.quad.mesh);
   }
 
-  // Returns the composite quad scene when the pass should go through the
-  // offscreen target this frame, or null to render directly.
-  prepare(renderer: WebGLRenderer, camera: Camera, traceLinesScene: Scene, occluderScenes: readonly Scene[]): Scene | null {
+  // Returns the composite quad when the pass should go through the offscreen
+  // target this frame, or null to render directly.
+  prepare(renderer: WebGLRenderer, camera: Camera, traceLinesScene: Scene, occluderScenes: readonly Scene[]): TracePassImpostor | null {
     const snapshot = getViewportRenderSnapshot();
     const state = getState();
     if (snapshot.mode !== "3d") {
-      this.releaseTarget();
+      this.target.release();
       this.lastView.fill(NaN);
       return null;
     }
@@ -75,30 +74,16 @@ export class Trace3DCompositor {
 
     const pixelWidth = Math.max(1, Math.round((snapshot.width || 1) * renderer.getPixelRatio()));
     const pixelHeight = Math.max(1, Math.round((snapshot.height || 1) * renderer.getPixelRatio()));
-    if (!this.renderTarget || this.renderTarget.width !== pixelWidth || this.renderTarget.height !== pixelHeight) {
-      this.renderTarget?.dispose();
-      this.renderTarget = new WebGLRenderTarget(pixelWidth, pixelHeight, {
-        depthBuffer: true,
-        stencilBuffer: false,
-      });
-      this.quad.setMap(this.renderTarget.texture);
-    }
+    this.target.ensure(pixelWidth, pixelHeight, 0);
+    this.target.renderInto(renderer, true, () => {
+      // depth-only pre-pass so geometry occludes chunks as in direct rendering
+      for (const scene of occluderScenes) {
+        this.renderDepthOnly(renderer, scene, camera);
+      }
+      bakePathRibbons(() => renderer.render(traceLinesScene, camera));
+    });
 
-    const previousTarget = renderer.getRenderTarget();
-    renderer.setRenderTarget(this.renderTarget);
-    renderer.clear();
-    // depth-only pre-pass so geometry occludes chunks as in direct rendering
-    for (const scene of occluderScenes) {
-      this.renderDepthOnly(renderer, scene, camera);
-    }
-    bakePathRibbons(() => renderer.render(traceLinesScene, camera));
-    renderer.setRenderTarget(previousTarget);
-
-    return this.quadScene;
-  }
-
-  get camera(): Camera {
-    return this.quadCamera;
+    return { scene: this.quadScene, camera: this.quadCamera };
   }
 
   // Whether `view` differs from the last one, which it then becomes.
@@ -129,16 +114,9 @@ export class Trace3DCompositor {
     touched.length = 0;
   }
 
-  private releaseTarget(): void {
-    if (!this.renderTarget) return;
-    this.renderTarget.dispose();
-    this.renderTarget = null;
-    this.quad.setMap(null);
-  }
-
   dispose(): void {
     this.settle.dispose();
-    this.releaseTarget();
+    this.target.release();
     this.quad.dispose();
   }
 }

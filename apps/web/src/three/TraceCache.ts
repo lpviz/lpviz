@@ -1,9 +1,9 @@
 import { getState } from "@/features/core/store";
 import { getViewportRenderSnapshot } from "@/features/viewport/runtime/snapshot";
 import type { Mesh, WebGLRenderer } from "three";
-import { OrthographicCamera, Scene, WebGLRenderTarget } from "three";
+import { OrthographicCamera, Scene } from "three";
 import { bakePathRibbons } from "./helpers/pathRibbon";
-import { CompositeQuad, SettleTimer } from "./helpers/traceComposite";
+import { CompositeQuad, OffscreenTarget, SettleTimer, type TracePassImpostor, VIEW_SETTLE_MS } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
 // World-anchored impostor for the trace-constraints render pass in 2D mode. Trace chunks are immutable
@@ -32,7 +32,6 @@ const TRAILING_HEADROOM = 16;
 const EVICTION_QUIET_MS = 500;
 // mid-gesture stroke-width drift allowed before a rebuild re-crisps anyway
 const ZOOM_REBUILD_RATIO = 1.25;
-const VIEW_SETTLE_MS = 160;
 // fast pans can escape the margin every couple of frames; mid-gesture the rebuilds are rate
 // limited (the world-anchored quads keep compositing, so only the freshly exposed strip lacks
 // trace history) and each rebuilt rect leads the pan direction to make escapes rarer
@@ -60,12 +59,12 @@ type ViewParams = {
 };
 
 export class TraceCache {
-  private renderTarget: WebGLRenderTarget | null = null;
-  private trailingTarget: WebGLRenderTarget | null = null;
   private cacheCamera = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
   private quadScene = new Scene();
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
   private trailingQuad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
+  private readonly main = new OffscreenTarget(this.quad, { depthBuffer: false });
+  private readonly trailing = new OffscreenTarget(this.trailingQuad, { depthBuffer: false });
   private fullRebuildNeeded = true;
   // live chunks with seq in [bakeStart, bakedEnd) are baked into the main
   // target; live chunks below bakeStart render through the trailing target
@@ -109,7 +108,7 @@ export class TraceCache {
   // Prepares the impostor for the trace-constraints pass. Returns the scene with
   // the composite quads (the caller renders it in place of the pass), or
   // null when the pass must render directly.
-  prepare(renderer: WebGLRenderer, traceLinesScene: Scene): Scene | null {
+  prepare(renderer: WebGLRenderer, traceLinesScene: Scene): TracePassImpostor | null {
     const snapshot = getViewportRenderSnapshot();
     if (snapshot.mode !== "2d" || getState().isTransitioning3D) {
       // keep a stale billboard from surviving a round trip through 3D
@@ -132,7 +131,7 @@ export class TraceCache {
       this.fullRebuildNeeded = true;
       this.quad.mesh.visible = false;
       this.trailingQuad.mesh.visible = false;
-      this.releaseTrailingTarget();
+      this.trailing.release();
       return null;
     }
 
@@ -180,7 +179,7 @@ export class TraceCache {
       !panContained &&
       viewMoving &&
       now - this.lastRebuildAt < PAN_REBUILD_INTERVAL_MS &&
-      this.renderTarget !== null &&
+      this.main.current !== null &&
       !this.fullRebuildNeeded &&
       pixelWidth === this.cachedPixelWidth &&
       pixelHeight === this.cachedPixelHeight &&
@@ -190,7 +189,7 @@ export class TraceCache {
     let trailingDirty = false;
     if (
       this.fullRebuildNeeded ||
-      !this.renderTarget ||
+      !this.main.current ||
       (unitsPerPixel !== this.cachedUnitsPerPixel && !zoomDeferred) ||
       pixelWidth !== this.cachedPixelWidth ||
       pixelHeight !== this.cachedPixelHeight ||
@@ -230,13 +229,13 @@ export class TraceCache {
     } else {
       if (maxSeq >= this.bakedEnd) {
         // new chunks: accumulate into the existing target without clearing
-        this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, this.bakedEnd, maxSeq + 1, false);
+        this.renderSeqRange(renderer, traceLinesScene, this.main, this.bakedEnd, maxSeq + 1, false);
         this.bakedEnd = maxSeq + 1;
       }
       if (this.bakeStart > minSeq && !evicting) {
         // evictions stopped: fold the trailing chunks into the main bake so
         // the trailing target can be released
-        this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, minSeq, this.bakeStart, false);
+        this.renderSeqRange(renderer, traceLinesScene, this.main, minSeq, this.bakeStart, false);
         this.bakeStart = minSeq;
       }
     }
@@ -249,17 +248,17 @@ export class TraceCache {
     }
 
     if (this.bakeStart > minSeq) {
-      if (trailingDirty || !this.trailingTarget || minSeq !== this.trailingStart || this.bakeStart !== this.trailingEnd) {
+      if (trailingDirty || !this.trailing.current || minSeq !== this.trailingStart || this.bakeStart !== this.trailingEnd) {
         this.renderTrailing(renderer, traceLinesScene, minSeq, this.bakeStart);
       }
       this.trailingQuad.mesh.visible = true;
     } else {
       this.trailingQuad.mesh.visible = false;
-      if (!evicting) this.releaseTrailingTarget();
+      if (!evicting) this.trailing.release();
     }
 
     this.quad.mesh.visible = this.bakedEnd > this.bakeStart;
-    return this.quadScene;
+    return { scene: this.quadScene };
   }
 
   // Temporarily hides every live chunk outside [startSeq, endSeq) — the
@@ -278,36 +277,23 @@ export class TraceCache {
     for (let i = 0; i < live.length; i++) live[i]!.visible = saved[i]!;
   }
 
-  private renderSeqRange(renderer: WebGLRenderer, traceLinesScene: Scene, target: WebGLRenderTarget, startSeq: number, endSeq: number, clear: boolean): void {
-    const previousTarget = renderer.getRenderTarget();
-    renderer.setRenderTarget(target);
-    if (clear) renderer.clear();
+  private renderSeqRange(renderer: WebGLRenderer, traceLinesScene: Scene, target: OffscreenTarget, startSeq: number, endSeq: number, clear: boolean): void {
     // screen-space line widths are computed against the cache's own viewport
-    bakePathRibbons(() => this.withSeqRangeVisible(startSeq, endSeq, () => renderer.render(traceLinesScene, this.cacheCamera)), { width: this.cachedCssWidth, height: this.cachedCssHeight });
-    renderer.setRenderTarget(previousTarget);
+    target.renderInto(renderer, clear, () =>
+      bakePathRibbons(() => this.withSeqRangeVisible(startSeq, endSeq, () => renderer.render(traceLinesScene, this.cacheCamera)), { width: this.cachedCssWidth, height: this.cachedCssHeight }),
+    );
   }
 
   private renderTrailing(renderer: WebGLRenderer, traceLinesScene: Scene, startSeq: number, endSeq: number): void {
-    if (!this.trailingTarget || this.trailingTarget.width !== this.cachedPixelWidth || this.trailingTarget.height !== this.cachedPixelHeight) {
-      this.trailingTarget?.dispose();
-      // single-sample: this target re-renders on every eviction, where the MSAA clear/resolve
-      // dominated steady-state cost on slower GL stacks; aliasing on the oldest translucent
-      // chunks is not discernible
-      this.trailingTarget = new WebGLRenderTarget(this.cachedPixelWidth, this.cachedPixelHeight, { samples: 0, depthBuffer: false, stencilBuffer: false });
-      this.trailingQuad.setMap(this.trailingTarget.texture);
-    }
-    this.renderSeqRange(renderer, traceLinesScene, this.trailingTarget, startSeq, endSeq, true);
+    // single-sample: this target re-renders on every eviction, where the MSAA clear/resolve
+    // dominated steady-state cost on slower GL stacks; aliasing on the oldest translucent
+    // chunks is not discernible
+    this.trailing.ensure(this.cachedPixelWidth, this.cachedPixelHeight, 0);
+    this.renderSeqRange(renderer, traceLinesScene, this.trailing, startSeq, endSeq, true);
     this.trailingStart = startSeq;
     this.trailingEnd = endSeq;
     this.trailingQuad.mesh.position.copy(this.quad.mesh.position);
     this.trailingQuad.mesh.scale.copy(this.quad.mesh.scale);
-  }
-
-  private releaseTrailingTarget(): void {
-    if (!this.trailingTarget) return;
-    this.trailingTarget.dispose();
-    this.trailingTarget = null;
-    this.trailingQuad.setMap(null);
   }
 
   private recache(renderer: WebGLRenderer, traceLinesScene: Scene, view: ViewParams, degrade: boolean): void {
@@ -315,15 +301,7 @@ export class TraceCache {
     // fill and resolve are what make a full rebuild blow the frame budget, and aliasing is not
     // discernible while the content or camera is churning; one crisp rebuild follows on settle
     const samples = degrade ? 0 : CACHE_SAMPLES;
-    if (!this.renderTarget || this.renderTarget.width !== view.pixelWidth || this.renderTarget.height !== view.pixelHeight || this.renderTarget.samples !== samples) {
-      this.renderTarget?.dispose();
-      this.renderTarget = new WebGLRenderTarget(view.pixelWidth, view.pixelHeight, {
-        samples,
-        depthBuffer: false,
-        stencilBuffer: false,
-      });
-      this.quad.setMap(this.renderTarget.texture);
-    }
+    this.main.ensure(view.pixelWidth, view.pixelHeight, samples);
     this.degraded = samples === 0;
 
     // world extents derived from target pixels so the cache keeps exactly
@@ -346,7 +324,7 @@ export class TraceCache {
     this.cachedCssHeight = cssHeight;
     this.cachedPixelWidth = view.pixelWidth;
     this.cachedPixelHeight = view.pixelHeight;
-    this.renderSeqRange(renderer, traceLinesScene, this.renderTarget, this.bakeStart, this.bakedEnd, true);
+    this.renderSeqRange(renderer, traceLinesScene, this.main, this.bakeStart, this.bakedEnd, true);
 
     this.quad.mesh.position.set(view.centerX, view.centerY, 0);
     this.quad.mesh.scale.set(halfWidth * 2, halfHeight * 2, 1);
@@ -361,9 +339,8 @@ export class TraceCache {
 
   dispose(): void {
     this.settle.dispose();
-    this.renderTarget?.dispose();
-    this.renderTarget = null;
-    this.releaseTrailingTarget();
+    this.main.release();
+    this.trailing.release();
     this.quad.dispose();
     this.trailingQuad.dispose();
   }
