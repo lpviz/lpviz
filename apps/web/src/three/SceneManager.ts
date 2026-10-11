@@ -3,7 +3,7 @@ import { getState } from "@/features/core/store";
 import type { ViewportDirtyFlags, Repaint } from "@/features/viewport/dirtyFlags";
 import type { Camera } from "three";
 import { Scene, WebGLRenderer } from "three";
-import { setSharedLineResolution } from "./helpers/sharedLineMaterials";
+import { setFatLineResolution } from "./helpers/fatLine";
 import { RENDER_PASSES, type Layer, type RenderPassName } from "./Layer";
 import { Trace3DCompositor } from "./Trace3DCompositor";
 import { TraceCache } from "./TraceCache";
@@ -54,7 +54,7 @@ export class SceneManager {
     this.size = { width: canvas.clientWidth, height: canvas.clientHeight, dpr };
     this.renderer.setSize(this.size.width, this.size.height, false);
     // screen-space line widths need the CSS resolution before the first render
-    setSharedLineResolution(this.size.width, this.size.height);
+    setFatLineResolution(this.size.width, this.size.height);
 
     this.resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
@@ -78,7 +78,7 @@ export class SceneManager {
     this.size = { width, height, dpr };
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(width, height, false);
-    setSharedLineResolution(width, height);
+    setFatLineResolution(width, height);
     this.invalidate();
   }
 

@@ -1,5 +1,5 @@
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import type { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { applyHugeBounds } from "./hugeBounds";
 import { setPathRibbonResolution } from "./pathRibbon";
@@ -24,7 +24,7 @@ let lastWidth = 0;
 let lastHeight = 0;
 
 // The CSS resolution every screen-space line width is computed against; set on resize.
-export function setSharedLineResolution(width: number, height: number): void {
+export function setFatLineResolution(width: number, height: number): void {
   if (width === lastWidth && height === lastHeight) return;
   lastWidth = width;
   lastHeight = height;
@@ -39,7 +39,7 @@ export function lineGeometry(): LineSegmentsGeometry {
 }
 
 // Every fat-line object in the app: never frustum-culled (its geometry's
-// bounds are fake) and hidden until its first rebuild.
+// bounds are fake) and hidden until its first draw.
 export function setupLine<T extends LineSegments2>(line: T, renderOrder: number): T {
   line.renderOrder = renderOrder;
   line.frustumCulled = false;
@@ -51,8 +51,36 @@ export function setupLine<T extends LineSegments2>(line: T, renderOrder: number)
 // call, and the renderer only deletes GL buffers on geometry dispose — a
 // replaced attribute's buffer is otherwise orphaned until the JS wrapper is
 // garbage collected. Dispose first; the new buffers upload on the next render.
-export function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array | number[]): void {
+function replaceLinePositions(geo: LineSegmentsGeometry, positions: Float32Array | number[]): void {
   geo.dispose();
   geo.setPositions(positions);
   delete (geo as unknown as { _maxInstanceCount?: number })._maxInstanceCount;
+}
+
+export type FatLineStyle = { color: string; linewidth: number; opacity?: number; renderOrder: number };
+
+// A fat line (screen-space width) that owns its geometry: drawn from segment endpoint triples
+// with the material of the view's depth mode, hidden between draws. The line counterpart of
+// PointCloud.
+export class FatLine {
+  readonly object3D: LineSegments2;
+
+  constructor(private readonly style: FatLineStyle) {
+    this.object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(style.color, style.linewidth, false, style.opacity)), style.renderOrder);
+  }
+
+  /** Upload the segments and show them; `color` overrides the style's for an accent. */
+  draw(positions: Float32Array | number[], is3D: boolean, color = this.style.color): void {
+    replaceLinePositions(this.object3D.geometry, positions);
+    this.object3D.material = lineDepthMaterial(color, this.style.linewidth, is3D, this.style.opacity);
+    this.object3D.visible = true;
+  }
+
+  hide(): void {
+    this.object3D.visible = false;
+  }
+
+  dispose(): void {
+    this.object3D.geometry.dispose();
+  }
 }

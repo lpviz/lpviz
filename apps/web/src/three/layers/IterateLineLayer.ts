@@ -37,7 +37,6 @@ export class IterateLineLayer extends ZScaledLayer {
     // state z: zScale and the 2D/3D transition flattening are applied via
     // object3D.scale.z, so neither rebuilds the path
     this.ribbon.setPath(iteratePositions(path), path.count, hasPhases ? phaseColorBytes(state.iteratePhases) : null);
-    this.object3D.visible = true;
   }
 
   dispose(): void {

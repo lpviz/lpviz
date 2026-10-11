@@ -7,10 +7,9 @@ import { isConvexChain, isConvexPolygon } from "@lpviz/math/polygon";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 import { DoubleSide, Group, Mesh, MeshBasicMaterial, Shape, ShapeGeometry } from "three";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { FatLine } from "../helpers/fatLine";
 import { RENDER_ORDER } from "../helpers/renderOrder";
 import { rendersPlanarDrawing } from "../helpers/sceneVisibility";
-import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { visibleBounds2D } from "../helpers/visibleBounds";
 import type { LayerPlacement } from "../Layer";
 import { PALETTE } from "../palette";
@@ -151,15 +150,15 @@ export class PolytopeBaseLayer extends LayerBase {
   // a nonconvex drawing is filled in the accent colour, so the rejection is visible
   private readonly nonconvexFillMaterial = translucentFill(PALETTE.accent);
   private readonly fillMesh = new Mesh(undefined, this.fillMaterial);
-  private readonly normalEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.polytopeOutline, POLYTOPE_EDGE_THICKNESS, false)), RENDER_ORDER.polyEdges);
-  private readonly highlightEdges = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.accent, POLYTOPE_EDGE_THICKNESS, false)), RENDER_ORDER.polyEdges);
+  private readonly normalEdges = new FatLine({ color: PALETTE.polytopeOutline, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
+  private readonly highlightEdges = new FatLine({ color: PALETTE.accent, linewidth: POLYTOPE_EDGE_THICKNESS, renderOrder: RENDER_ORDER.polyEdges });
 
   constructor() {
     super();
     this.fillMesh.renderOrder = RENDER_ORDER.polytopeFill;
     this.fillMesh.frustumCulled = false;
     this.fillMesh.visible = false;
-    this.object3D.add(this.normalEdges, this.highlightEdges);
+    this.object3D.add(this.normalEdges.object3D, this.highlightEdges.object3D);
   }
 
   // the fill renders in the transparent pass, under everything drawn on the floor; the edges above it
@@ -197,7 +196,6 @@ export class PolytopeBaseLayer extends LayerBase {
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    this.object3D.visible = true;
     const is3D = snap.mode === "3d";
     const result = buildPolytopeGeometry(state, snap);
 
@@ -211,22 +209,18 @@ export class PolytopeBaseLayer extends LayerBase {
       this.fillMesh.visible = false;
     }
 
-    const edges: [LineSegments2, number[], string][] = [
-      [this.normalEdges, result.normalSegments, PALETTE.polytopeOutline],
-      [this.highlightEdges, result.highlightSegments, PALETTE.accent],
-    ];
-    for (const [segs, segments, color] of edges) {
-      segs.visible = segments.length >= 6;
-      if (segs.visible) {
-        replaceLinePositions(segs.geometry, segments);
-        segs.material = lineDepthMaterial(color, POLYTOPE_EDGE_THICKNESS, is3D);
-      }
+    for (const [line, segments] of [
+      [this.normalEdges, result.normalSegments],
+      [this.highlightEdges, result.highlightSegments],
+    ] as const) {
+      if (segments.length >= 6) line.draw(segments, is3D);
+      else line.hide();
     }
   }
 
   dispose(): void {
-    this.normalEdges.geometry.dispose();
-    this.highlightEdges.geometry.dispose();
+    this.normalEdges.dispose();
+    this.highlightEdges.dispose();
     this.fillMaterial.dispose();
     this.nonconvexFillMaterial.dispose();
     this.fillMesh.geometry.dispose();

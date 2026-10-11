@@ -1,9 +1,8 @@
 import type { State } from "@/features/core/store";
 import type { ViewportRenderSnapshot } from "@/features/viewport/types";
 import { isUnboundedDirection } from "@/features/problem/selectors";
-import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { FatLine } from "../helpers/fatLine";
 import { RENDER_ORDER } from "../helpers/renderOrder";
-import { lineDepthMaterial, lineGeometry, replaceLinePositions, setupLine } from "../helpers/sharedLineMaterials";
 import { PALETTE } from "../palette";
 import { LayerBase } from "./base/LayerBase";
 
@@ -13,7 +12,8 @@ const ARROW_HALF_ANGLE = Math.PI / 6;
 const OBJECTIVE_EPSILON = 1e-3;
 
 export class ObjectiveLayer extends LayerBase {
-  readonly object3D = setupLine(new LineSegments2(lineGeometry(), lineDepthMaterial(PALETTE.objective, OBJECTIVE_LINE_THICKNESS, false)), RENDER_ORDER.objective);
+  private readonly line = new FatLine({ color: PALETTE.objective, linewidth: OBJECTIVE_LINE_THICKNESS, renderOrder: RENDER_ORDER.objective });
+  readonly object3D = this.line.object3D;
   override readonly invalidationKeys = ["objective"] as const;
 
   protected dependencies(state: State, snap: ViewportRenderSnapshot): readonly unknown[] {
@@ -26,9 +26,8 @@ export class ObjectiveLayer extends LayerBase {
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
     const target = state.objectiveVector || (state.completionMode !== "draft" && state.currentObjective ? state.currentObjective : null);
-
     if (!target || Math.hypot(target[0], target[1]) < OBJECTIVE_EPSILON) {
-      this.object3D.visible = false;
+      this.hide();
       return;
     }
 
@@ -42,15 +41,11 @@ export class ObjectiveLayer extends LayerBase {
       positions.push(target[0], target[1], 0, target[0] - headLength * Math.cos(a), target[1] - headLength * Math.sin(a), 0);
     }
 
-    replaceLinePositions(this.object3D.geometry, positions);
-
-    const isUnbounded = isUnboundedDirection(state, target);
-
-    this.object3D.material = lineDepthMaterial(isUnbounded ? PALETTE.accent : PALETTE.objective, OBJECTIVE_LINE_THICKNESS, snap.mode === "3d");
-    this.object3D.visible = true;
+    // the accent colour says the objective points where the region is unbounded
+    this.line.draw(positions, snap.mode === "3d", isUnboundedDirection(state, target) ? PALETTE.accent : PALETTE.objective);
   }
 
   dispose(): void {
-    this.object3D.geometry.dispose();
+    this.line.dispose();
   }
 }
