@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, Points, PointsMaterial } from "three";
 import { renderOrderOf, type RenderSlot } from "../Layer";
+import { cacheEncodeGlsl, sharedCacheEncode } from "./cacheEncode";
 import { applyHugeBounds } from "./hugeBounds";
 
 export type SpriteShape = "disc" | "ring" | "square" | "star";
@@ -43,7 +44,9 @@ float starDistance(vec2 p, float r, float rf) {
 // Every point sprite in the app: a fixed screen-size, depth-ignoring sprite whose shape is a
 // signed distance evaluated per fragment, with a one-device-pixel antialiased edge. Exact at any
 // size and pixel ratio and with no texture to filter, so the edge is as sharp as the pixel grid
-// allows; it rides on PointsMaterial's own size, color and vertex-color handling.
+// allows; it rides on PointsMaterial's own size, color and vertex-color handling. The output is
+// encoded by hand while the trace bakes (see cacheEncode.ts), so a sprite in a trace chunk is the
+// same pixels cached as drawn.
 function spriteMaterial(style: PointCloudStyle, color: string, vertexColors: boolean): PointsMaterial {
   const material = new PointsMaterial({
     color,
@@ -56,14 +59,18 @@ function spriteMaterial(style: PointCloudStyle, color: string, vertexColors: boo
     vertexColors,
   });
   material.onBeforeCompile = (shader) => {
-    shader.fragmentShader = shader.fragmentShader.replace("void main() {", `${STAR_DISTANCE}\nvoid main() {`).replace(
-      "#include <map_particle_fragment>",
-      /* glsl */ `
+    shader.uniforms.cacheEncode = sharedCacheEncode;
+    shader.fragmentShader = shader.fragmentShader
+      .replace("void main() {", `uniform float cacheEncode;\n${STAR_DISTANCE}\nvoid main() {`)
+      .replace(
+        "#include <map_particle_fragment>",
+        /* glsl */ `
   vec2 p = vec2(gl_PointCoord.x - 0.5, 0.5 - gl_PointCoord.y);
   float d = ${SHAPE_DISTANCE[style.shape]};
   diffuseColor.a *= clamp(0.5 - d / max(fwidth(d), 1e-5), 0.0, 1.0);
 `,
-    );
+      )
+      .replace("#include <colorspace_fragment>", `gl_FragColor = ${cacheEncodeGlsl("gl_FragColor")};`);
   };
   // one program per shape, not one per material
   material.customProgramCacheKey = () => style.shape;

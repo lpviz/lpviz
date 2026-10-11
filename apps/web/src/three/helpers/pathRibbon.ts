@@ -1,5 +1,6 @@
 import { renderOrderOf, type RenderSlot } from "../Layer";
 import { BufferAttribute, BufferGeometry, Color, DataTexture, DoubleSide, FloatType, GLSL3, Mesh, RGBAFormat, ShaderMaterial, Vector2 } from "three";
+import { cacheEncodeGlsl, sharedCacheEncode, withCacheEncode } from "./cacheEncode";
 import { applyHugeBounds } from "./hugeBounds";
 
 // Constant screen-width polyline rendering with fat-line styling at a fraction of Line2's cost:
@@ -22,23 +23,17 @@ export function setPathRibbonResolution(width: number, height: number): void {
   sharedResolution.set(width, height);
 }
 
-// Shared by reference across every ribbon material: on while ribbons bake into a render target,
-// so they write sRGB-encoded values there (three forces linearToOutputTexel to identity for
-// render targets), making baked and direct strokes pixel-identical.
-const sharedCacheEncode = { value: 0 };
-
 /**
- * Run `render` with the ribbons baking into a render target, at `resolution` when the target is
- * not the canvas's size (screen-space line widths are computed against it). Both settings are
- * restored to what they were, so the direct passes that follow see exactly what they had set.
+ * Run `render` with the trace baking into a render target (see cacheEncode.ts), at `resolution`
+ * when the target is not the canvas's size (screen-space line widths are computed against it).
+ * Both settings are restored to what they were, so the direct passes that follow see exactly what
+ * they had set.
  */
-export function bakePathRibbons(render: () => void, resolution?: { width: number; height: number }): void {
+export function bakeTrace(render: () => void, resolution?: { width: number; height: number }): void {
   const previousWidth = sharedResolution.x;
   const previousHeight = sharedResolution.y;
   if (resolution) sharedResolution.set(resolution.width, resolution.height);
-  sharedCacheEncode.value = 1;
-  render();
-  sharedCacheEncode.value = 0;
+  withCacheEncode(render);
   sharedResolution.set(previousWidth, previousHeight);
 }
 
@@ -90,9 +85,6 @@ void main() {
 }
 `;
 
-// linearToOutputTexel comes from three's standard fragment prefix and is compiled per render
-// target (sRGB encode onto the canvas, identity into render targets); cacheEncode forces the sRGB
-// encode when baking into the trace cache, sRGBTransferOETF being exactly what it aliases for the canvas.
 const FRAGMENT_SHADER = /* glsl */ `
 uniform vec3 color;
 uniform float opacity;
@@ -102,7 +94,7 @@ out vec4 outColor;
 
 void main() {
   vec4 c = vec4(color * vColor, opacity);
-  outColor = cacheEncode > 0.5 ? sRGBTransferOETF(c) : linearToOutputTexel(c);
+  outColor = ${cacheEncodeGlsl("c")};
 }
 `;
 

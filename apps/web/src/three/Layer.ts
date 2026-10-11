@@ -13,8 +13,8 @@ const RENDER_SLOTS = {
   transparent: ["polytopeFill"],
   foreground: ["polytopeEdges", "objective", "constraintHighlight"],
   vertices: ["polytopeVertices"],
-  traceLines: ["traceLine"],
-  trace: ["tracePoints", "ellipsoid", "iterateLine", "iteratePoints", "iterateRestartPoints", "iterateHighlight"],
+  trace: ["traceLine", "tracePoints"],
+  iterate: ["ellipsoid", "iterateLine", "iteratePoints", "iterateRestartPoints", "iterateHighlight"],
   overlay: ["iterateStar", "solverStart"],
 } as const;
 export type RenderPassName = keyof typeof RENDER_SLOTS;

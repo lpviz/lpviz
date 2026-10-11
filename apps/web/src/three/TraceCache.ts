@@ -1,10 +1,10 @@
-import type { Mesh, WebGLRenderer } from "three";
+import type { Object3D, WebGLRenderer } from "three";
 import { OrthographicCamera, Scene } from "three";
-import { bakePathRibbons } from "./helpers/pathRibbon";
+import { bakeTrace } from "./helpers/pathRibbon";
 import { CompositeQuad, OffscreenTarget, SettleTimer, type TraceFrame, type TraceImpostor, type TracePassImpostor, VIEW_SETTLE_MS, ViewMotion } from "./helpers/traceComposite";
 import { traceSequenceOf } from "./helpers/traceSequence";
 
-// World-anchored impostor for the traceLines render pass in 2D mode. Trace chunks are immutable
+// World-anchored impostor for the trace render pass in 2D mode. Trace chunks are immutable
 // once appended, so the offscreen target is an accumulation buffer keyed by each chunk's append
 // sequence number (see traceSequence.ts): appends draw only the new chunks into
 // the existing target with no clear (alpha-over of one shared color and opacity is associative,
@@ -79,7 +79,7 @@ export class TraceCache implements TraceImpostor {
   private panVelocityY = 0;
   private degraded = false;
   private settle: SettleTimer;
-  private liveMeshes: Mesh[] = [];
+  private liveChunks: Object3D[] = [];
   private visibilityScratch: boolean[] = [];
   private cachedUnitsPerPixel = 0;
   private cachedCenterX = 0;
@@ -101,17 +101,17 @@ export class TraceCache implements TraceImpostor {
     this.fullRebuildNeeded = true;
   }
 
-  // The live chunks (into liveMeshes) and the range of their sequence numbers, or null when the
-  // pass draws nothing.
-  private collectLiveChunks(traceLinesScene: Scene): { minSeq: number; maxSeq: number } | null {
-    const live = this.liveMeshes;
+  // The live chunks' objects (into liveChunks) and the range of their sequence numbers, or null
+  // when the pass draws nothing.
+  private collectLiveChunks(traceScene: Scene): { minSeq: number; maxSeq: number } | null {
+    const live = this.liveChunks;
     live.length = 0;
     let minSeq = Infinity;
     let maxSeq = -Infinity;
-    traceLinesScene.traverseVisible((object) => {
+    traceScene.traverseVisible((object) => {
       const seq = traceSequenceOf(object);
       if (seq === undefined) return;
-      live.push(object as Mesh);
+      live.push(object);
       if (seq < minSeq) minSeq = seq;
       if (seq > maxSeq) maxSeq = seq;
     });
@@ -142,18 +142,18 @@ export class TraceCache implements TraceImpostor {
     return { evicting, viewMoving };
   }
 
-  // Prepares the impostor for the traceLines pass. Returns the scene with
+  // Prepares the impostor for the trace pass. Returns the scene with
   // the composite quads (the caller renders it in place of the pass), or
   // null when the pass must render directly.
   prepare(frame: TraceFrame): TracePassImpostor | null {
-    const { renderer, snapshot, state, traceLines: traceLinesScene } = frame;
+    const { renderer, snapshot, state, trace: traceScene } = frame;
     if (snapshot.mode !== "2d" || state.isTransitioning3D) {
       // keep a stale billboard from surviving a round trip through 3D
       this.fullRebuildNeeded = true;
       return null;
     }
 
-    const chunks = this.collectLiveChunks(traceLinesScene);
+    const chunks = this.collectLiveChunks(traceScene);
     if (!chunks) {
       this.fullRebuildNeeded = true;
       this.quad.mesh.visible = false;
@@ -162,7 +162,7 @@ export class TraceCache implements TraceImpostor {
       return null;
     }
     const { minSeq, maxSeq } = chunks;
-    const live = this.liveMeshes;
+    const live = this.liveChunks;
 
     const width = snapshot.width || 1;
     const height = snapshot.height || 1;
@@ -222,7 +222,7 @@ export class TraceCache implements TraceImpostor {
       this.lastRebuildAt = now;
       this.recache(
         renderer,
-        traceLinesScene,
+        traceScene,
         {
           width,
           height,
@@ -239,13 +239,13 @@ export class TraceCache implements TraceImpostor {
     } else {
       if (maxSeq >= this.bakedEnd) {
         // new chunks: accumulate into the existing target without clearing
-        this.renderSeqRange(renderer, traceLinesScene, this.main, this.bakedEnd, maxSeq + 1, false);
+        this.renderSeqRange(renderer, traceScene, this.main, this.bakedEnd, maxSeq + 1, false);
         this.bakedEnd = maxSeq + 1;
       }
       if (this.bakeStart > minSeq && !evicting) {
         // evictions stopped: fold the trailing chunks into the main bake so
         // the trailing target can be released
-        this.renderSeqRange(renderer, traceLinesScene, this.main, minSeq, this.bakeStart, false);
+        this.renderSeqRange(renderer, traceScene, this.main, minSeq, this.bakeStart, false);
         this.bakeStart = minSeq;
       }
     }
@@ -259,7 +259,7 @@ export class TraceCache implements TraceImpostor {
 
     if (this.bakeStart > minSeq) {
       if (trailingDirty || !this.trailing.current || minSeq !== this.trailingStart || this.bakeStart !== this.trailingEnd) {
-        this.renderTrailing(renderer, traceLinesScene, minSeq, this.bakeStart);
+        this.renderTrailing(renderer, traceScene, minSeq, this.bakeStart);
       }
       this.trailingQuad.mesh.visible = true;
     } else {
@@ -271,42 +271,42 @@ export class TraceCache implements TraceImpostor {
     return { scene: this.quadScene };
   }
 
-  // Temporarily hides every live chunk outside [startSeq, endSeq) — the
-  // chunks live in one flat group, so toggling mesh visibility is enough.
+  // Temporarily hides every live chunk outside [startSeq, endSeq) — the chunks' objects live in
+  // one flat group, so toggling their visibility is enough.
   private withSeqRangeVisible(startSeq: number, endSeq: number, render: () => void): void {
-    const live = this.liveMeshes;
+    const live = this.liveChunks;
     const saved = this.visibilityScratch;
     saved.length = live.length;
     for (let i = 0; i < live.length; i++) {
-      const mesh = live[i]!;
-      saved[i] = mesh.visible;
-      const seq = traceSequenceOf(mesh)!;
-      if (seq < startSeq || seq >= endSeq) mesh.visible = false;
+      const object = live[i]!;
+      saved[i] = object.visible;
+      const seq = traceSequenceOf(object)!;
+      if (seq < startSeq || seq >= endSeq) object.visible = false;
     }
     render();
     for (let i = 0; i < live.length; i++) live[i]!.visible = saved[i]!;
   }
 
-  private renderSeqRange(renderer: WebGLRenderer, traceLinesScene: Scene, target: OffscreenTarget, startSeq: number, endSeq: number, clear: boolean): void {
+  private renderSeqRange(renderer: WebGLRenderer, traceScene: Scene, target: OffscreenTarget, startSeq: number, endSeq: number, clear: boolean): void {
     // screen-space line widths are computed against the cache's own viewport
     target.renderInto(renderer, clear, () =>
-      bakePathRibbons(() => this.withSeqRangeVisible(startSeq, endSeq, () => renderer.render(traceLinesScene, this.cacheCamera)), { width: this.cachedCssWidth, height: this.cachedCssHeight }),
+      bakeTrace(() => this.withSeqRangeVisible(startSeq, endSeq, () => renderer.render(traceScene, this.cacheCamera)), { width: this.cachedCssWidth, height: this.cachedCssHeight }),
     );
   }
 
-  private renderTrailing(renderer: WebGLRenderer, traceLinesScene: Scene, startSeq: number, endSeq: number): void {
+  private renderTrailing(renderer: WebGLRenderer, traceScene: Scene, startSeq: number, endSeq: number): void {
     // single-sample: this target re-renders on every eviction, where the MSAA clear/resolve
     // dominated steady-state cost on slower GL stacks; aliasing on the oldest translucent
     // chunks is not discernible
     this.trailing.ensure(this.cachedPixelWidth, this.cachedPixelHeight, 0);
-    this.renderSeqRange(renderer, traceLinesScene, this.trailing, startSeq, endSeq, true);
+    this.renderSeqRange(renderer, traceScene, this.trailing, startSeq, endSeq, true);
     this.trailingStart = startSeq;
     this.trailingEnd = endSeq;
     this.trailingQuad.mesh.position.copy(this.quad.mesh.position);
     this.trailingQuad.mesh.scale.copy(this.quad.mesh.scale);
   }
 
-  private recache(renderer: WebGLRenderer, traceLinesScene: Scene, view: ViewParams, degrade: boolean): void {
+  private recache(renderer: WebGLRenderer, traceScene: Scene, view: ViewParams, degrade: boolean): void {
     // rebuilds while the view is moving or evictions are streaming skip multisampling: the MSAA
     // fill and resolve are what make a full rebuild blow the frame budget, and aliasing is not
     // discernible while the content or camera is churning; one crisp rebuild follows on settle
@@ -334,7 +334,7 @@ export class TraceCache implements TraceImpostor {
     this.cachedCssHeight = cssHeight;
     this.cachedPixelWidth = view.pixelWidth;
     this.cachedPixelHeight = view.pixelHeight;
-    this.renderSeqRange(renderer, traceLinesScene, this.main, this.bakeStart, this.bakedEnd, true);
+    this.renderSeqRange(renderer, traceScene, this.main, this.bakeStart, this.bakedEnd, true);
 
     this.quad.mesh.position.set(view.centerX, view.centerY, 0);
     this.quad.mesh.scale.set(halfWidth * 2, halfHeight * 2, 1);
