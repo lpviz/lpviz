@@ -344,10 +344,10 @@ describe("ellipsoid", () => {
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts({ maxit: 40 }));
     expect(rowsOf(r).length).toBe(r.iterates.count);
     expect(r.convergence!.length).toBe(r.iterates.count);
-    expect(r.ellipsoids!.length).toBe(r.iterates.count * 5);
+    expect(r.ellipsoids!.data.length).toBe(r.iterates.count * 5);
     for (let i = 0; i < queriedCount(r); i++) {
-      expect(r.ellipsoids![i * 5]!).toBe(iterateAt(r, i)[0]!);
-      expect(r.ellipsoids![i * 5 + 1]!).toBe(iterateAt(r, i)[1]!);
+      expect(r.ellipsoids!.data[i * 5]!).toBe(iterateAt(r, i)[0]!);
+      expect(r.ellipsoids!.data[i * 5 + 1]!).toBe(iterateAt(r, i)[1]!);
       expect(rowsOf(r)[i]!.convergence).toBe(r.convergence![i]!);
     }
   });

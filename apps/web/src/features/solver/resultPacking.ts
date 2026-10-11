@@ -1,7 +1,6 @@
 import { formatNumericRow } from "@lpviz/solver-engine/fmt";
-import { ellipsoidStride, localizingSetStride } from "@lpviz/solver-engine/localization";
 import type { Iterates, LogSection, NumericRows, SolverResult } from "@lpviz/solver-engine/result";
-import type { LazyRows, ResultLogSection, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse, UnpackedSolverResult, VirtualResultRow } from "./types";
+import type { LazyRows, ResultLogSection, SolverWireResponse, SolverWireSuccess, SolverWorkerPayload, SolverWorkerResponse, VirtualResultRow } from "./types";
 
 // The worker's reply is the engine's result with its buffers transferred (zero copy): the flat
 // iterate block, the log's numeric columns and whatever the solver drew. No per-iterate object
@@ -19,7 +18,7 @@ const liftOf = (solver: SolverWorkerPayload["solver"], convergence: Float64Array
 const isNumericRows = (rows: LogSection["rows"]): rows is NumericRows => !Array.isArray(rows);
 
 export function packSolverResponse(id: number, request: SolverWorkerPayload, result: SolverResult): { wire: SolverWireSuccess; transfer: ArrayBuffer[] } {
-  const { iterates, convergence, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = result;
+  const { iterates, convergence, log, phases, restartIndices, ellipsoids, localizingSets } = result;
   const lift = liftOf(request.solver, convergence);
   // a buffer transfers once however many views share it (the lift is the convergence column for
   // every solver but PDHG); an empty one is not worth a transfer, and skipping it keeps a detached
@@ -33,11 +32,11 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   for (const { rows } of log) {
     if (isNumericRows(rows)) for (const column of Object.values(rows)) transfer(column);
   }
-  transfer(ellipsoids);
-  transfer(localizingSetPoints);
-  transfer(localizingSetOffsets);
+  transfer(ellipsoids?.data);
+  transfer(localizingSets?.points);
+  transfer(localizingSets?.offsets);
   // none of these arrays is ever backed by a SharedArrayBuffer
-  return { wire: { id, success: true, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets }, transfer: [...buffers] as ArrayBuffer[] };
+  return { wire: { id, success: true, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSets }, transfer: [...buffers] as ArrayBuffer[] };
 }
 
 // Row objects materialize lazily from the columns: only rows that actually render (a screenful)
@@ -66,23 +65,12 @@ function unpackSection({ header, rows, notes, footer }: LogSection, iterates: It
 
 export function unpackSolverResponse(wire: SolverWireResponse): SolverWorkerResponse {
   if (!wire.success) return wire;
-  const { id, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSetPoints, localizingSetOffsets } = wire;
-  const { stride } = iterates;
-  const result: UnpackedSolverResult = {
-    iterates: { ...iterates, lift: lift ?? null },
-    log: log.map((section) => unpackSection(section, iterates)),
-    phases,
-    restartIndices,
+  const { id, iterates, lift, log, phases, restartIndices, ellipsoids, localizingSets } = wire;
+  return {
+    id,
+    success: true,
+    result: { iterates: { ...iterates, lift: lift ?? null }, log: log.map((section) => unpackSection(section, iterates)), phases, restartIndices, ellipsoids, localizingSets },
   };
-  if (ellipsoids) {
-    const shapeStride = ellipsoidStride(stride);
-    result.ellipsoids = { data: ellipsoids, count: Math.floor(ellipsoids.length / shapeStride), stride: shapeStride };
-  }
-  // the offsets alone say how many sets there are; an empty run has none to draw
-  if (localizingSetOffsets && localizingSetOffsets.length > 1) {
-    result.localizingSets = { points: localizingSetPoints ?? new Float64Array(0), offsets: localizingSetOffsets, count: localizingSetOffsets.length - 1, stride: localizingSetStride(stride) };
-  }
-  return { id, success: true, result };
 }
 
 /** A row as the log prints it: a preformatted line, or a numeric row in the engine's columns. */

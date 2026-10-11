@@ -5,7 +5,7 @@
 import { type DenseMatrix, denseFromConstraints, dot, extractRow, rowDot } from "@lpviz/math/blas";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import { boundsOf } from "@lpviz/math/vec";
-import { FloatBlock, NumericTrace, type SolverResult } from "./result";
+import { FloatBlock, type LocalizingSetPath, NumericTrace, type SolverResult } from "./result";
 
 const FEASIBILITY_TOLERANCE = 1e-9;
 // below this the objective is parallel to the face and never blocks the ray
@@ -206,8 +206,10 @@ class LocalizationTrace extends NumericTrace {
   }
 
   override result(footer: string): SolverResult {
-    const extras: Partial<SolverResult> = { ellipsoids: this.ellipsoids.finish() };
-    if (this.localizingSets) Object.assign(extras, packLocalizingSets(this.localizingSets, localizingSetStride(this.n)));
+    const { ellipsoids } = this;
+    const extras: Partial<SolverResult> = { ellipsoids: { data: ellipsoids.finish(), count: ellipsoids.count, stride: ellipsoids.stride } };
+    // an empty run has no set to draw
+    if (this.localizingSets?.length) extras.localizingSets = packLocalizingSets(this.localizingSets, localizingSetStride(this.n));
     return super.result(footer, extras);
   }
 
@@ -223,18 +225,18 @@ class LocalizationTrace extends NumericTrace {
 
 // Flatten the per-iteration localizing sets (each a flat list of `stride`-wide entries) into the
 // result's transferable points/offsets pair.
-function packLocalizingSets(sets: readonly (readonly number[])[], stride: number): Pick<SolverResult, "localizingSetPoints" | "localizingSetOffsets"> {
+function packLocalizingSets(sets: readonly (readonly number[])[], stride: number): LocalizingSetPath {
   const total = sets.reduce((sum, set) => sum + set.length, 0);
-  const localizingSetPoints = new Float64Array(total);
-  const localizingSetOffsets = new Uint32Array(sets.length + 1);
+  const points = new Float64Array(total);
+  const offsets = new Uint32Array(sets.length + 1);
   let at = 0;
   sets.forEach((set, index) => {
-    localizingSetOffsets[index] = at / stride;
-    localizingSetPoints.set(set, at);
+    offsets[index] = at / stride;
+    points.set(set, at);
     at += set.length;
   });
-  localizingSetOffsets[sets.length] = at / stride;
-  return { localizingSetPoints, localizingSetOffsets };
+  offsets[sets.length] = at / stride;
+  return { points, offsets, count: sets.length, stride };
 }
 
 /** What the ellipsoid method and the cutting planes share in their options. */

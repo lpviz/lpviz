@@ -44,26 +44,8 @@ export const EMPTY_ITERATE_PATH: IteratePath = {
   lift: null,
 };
 
-// The ellipsoid family's per-iteration shape, parallel to the iterate path: element `i` is the
-// center followed by the upper triangle of the symmetric shape matrix P of
-// { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
-// for two variables; see @lpviz/solver-engine/localization). Null for every other solver.
-export interface EllipsoidPath {
-  data: Float64Array;
-  count: number;
-  stride: number;
-}
-
-// The cutting-plane query points' localizing set per iteration: element `i` spans
-// points[offsets[i] * stride .. offsets[i + 1] * stride), a closed polygon's [x, y] vertices for two
-// variables (stride 2) and the half-spaces [a1..an, b] of the polyhedron otherwise (stride n + 1).
-// Null for the ellipsoid method, whose localizing set is the ellipse already in EllipsoidPath.
-export interface LocalizingSetPath {
-  points: Float64Array;
-  offsets: Uint32Array;
-  count: number;
-  stride: number;
-}
+// what the ellipsoid family drew, in the shape the engine returns it (null in the store for every other solver)
+export type { EllipsoidPath, LocalizingSetPath } from "@lpviz/solver-engine/result";
 
 // The display height of iterate `index`: a 3-variable problem's third coordinate, otherwise the
 // solver's lift above the floor (zero for a solver drawn flat).
@@ -93,7 +75,7 @@ export type SolverWorkerRequest = SolverWorkerPayload & { id: number };
 // What crosses the worker boundary (see resultPacking): the engine's result as it is, the flat
 // iterate block, the log's numeric columns and what the solver drew, plus the iterates' display
 // lift. The buffers are transferred, not cloned.
-export type SolverWireSuccess = Pick<SolverResult, "iterates" | "log" | "phases" | "restartIndices" | "ellipsoids" | "localizingSetPoints" | "localizingSetOffsets"> & {
+export type SolverWireSuccess = Pick<SolverResult, "iterates" | "log" | "phases" | "restartIndices" | "ellipsoids" | "localizingSets"> & {
   id: number;
   success: true;
   lift?: Float64Array | undefined;
@@ -115,11 +97,9 @@ export type ResultLogSection = Omit<LogSection, "rows"> & { rows: LazyRows };
 
 // A worker result once unpacked: the iterate path as the store keeps it, plus
 // the log and whatever the solver drew.
-export type UnpackedSolverResult = Pick<SolverResult, "phases" | "restartIndices"> & {
-  iterates: IteratePath & Iterates;
+export type UnpackedSolverResult = Pick<SolverResult, "phases" | "restartIndices" | "ellipsoids" | "localizingSets"> & {
+  iterates: IteratePath;
   log: ResultLogSection[];
-  ellipsoids?: EllipsoidPath | undefined;
-  localizingSets?: LocalizingSetPath | undefined;
 };
 
 export type SolverWorkerSuccessResponse = { id: number; success: true; result: UnpackedSolverResult };

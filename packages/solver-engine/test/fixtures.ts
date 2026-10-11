@@ -160,7 +160,7 @@ export const footerOf = (r: SolverResult) => r.log[0]!.footer ?? "";
 export const logText = (r: SolverResult) => r.log.flatMap(({ header, rows, notes = [], footer = "" }) => [header, ...(rows as string[]), ...notes, footer]).join("");
 // The two-variable ellipse drawn for iterate `i`: its center and shape matrix (see ellipsoidStride).
 export function ellipseAt(r: SolverResult, i: number) {
-  const e = r.ellipsoids!;
+  const e = r.ellipsoids!.data;
   const base = i * 5;
   return { cx: e[base]!, cy: e[base + 1]!, p11: e[base + 2]!, p12: e[base + 3]!, p22: e[base + 4]! };
 }

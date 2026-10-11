@@ -60,15 +60,35 @@ export interface SolverResult {
   /** a phase label per iterate: simplex's phase, pdhg's basis hash */
   phases?: number[] | undefined;
   restartIndices?: number[] | undefined;
-  /** the ellipsoid family's shape per iterate, packed as ellipsoidStride(n) values (see localization.ts) */
-  ellipsoids?: Float64Array | undefined;
-  /** the cutting planes' localizing set per iterate, localizingSetStride(n) values per entry between localizingSetOffsets[i] and [i + 1] */
-  localizingSetPoints?: Float64Array | undefined;
-  localizingSetOffsets?: Uint32Array | undefined;
+  /** the ellipsoid family's shape per iterate */
+  ellipsoids?: EllipsoidPath | undefined;
+  /** the cutting planes' localizing set per iterate, once one was recorded */
+  localizingSets?: LocalizingSetPath | undefined;
   /** simplex: how the run ended */
   status?: "optimal" | "unbounded" | "infeasible" | undefined;
   /** simplex: which LP it walked */
   mode?: "primal" | "dual" | undefined;
+}
+
+// The ellipsoid family's shape per iterate, parallel to the iterates: element `i` is the center
+// followed by the upper triangle of the symmetric shape matrix P of
+// { x : (x - c)' P^-1 (x - c) <= 1 }, `stride` = ellipsoidStride(n) values ([cx, cy, p11, p12, p22]
+// for two variables; see localization.ts).
+export interface EllipsoidPath {
+  data: Float64Array;
+  count: number;
+  stride: number;
+}
+
+// The cutting planes' localizing set per iterate: element `i` spans
+// points[offsets[i] * stride .. offsets[i + 1] * stride), a closed polygon's [x, y] vertices for two
+// variables (stride 2) and the half-spaces [a1..an, b] of the polyhedron otherwise (stride n + 1).
+// The ellipsoid method records none: its localizing set is the ellipse already in EllipsoidPath.
+export interface LocalizingSetPath {
+  points: Float64Array;
+  offsets: Uint32Array;
+  count: number;
+  stride: number;
 }
 
 const INITIAL_ROWS = 256;

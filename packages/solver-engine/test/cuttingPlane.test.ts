@@ -203,7 +203,7 @@ describe("cuttingPlane", () => {
       for (let i = 0; i < 3; i++) {
         const again = run();
         expect(again.iterates.count).toBe(first.iterates.count);
-        expect([...again.ellipsoids!]).toEqual([...first.ellipsoids!]);
+        expect([...again.ellipsoids!.data]).toEqual([...first.ellipsoids!.data]);
       }
     }
   });

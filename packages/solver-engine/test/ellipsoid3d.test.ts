@@ -38,7 +38,7 @@ describe("ellipsoid family in three variables", () => {
         expectFeasible(planes, last, 1e-6);
         expect(objectiveValue(c, last)).toBeCloseTo(bruteForceOptimum(c, vertices), 3);
         // packed layout: centre (3) + upper triangle of P (6)
-        expect(r.ellipsoids!.length).toBe(r.iterates.count * ellipsoidStride(3));
+        expect(r.ellipsoids!.data.length).toBe(r.iterates.count * ellipsoidStride(3));
         expect(rowsOf(r)[0]!.point.length).toBe(3);
         expect(r.log[0]!.header).toContain(" z ");
       }
@@ -57,11 +57,11 @@ describe("ellipsoid family in three variables", () => {
           // the localizing set is emitted as half-spaces (stride 4) and only ever gains
           // cuts, starting from the six faces of the box
           expect(localizingSetStride(3)).toBe(4);
-          const offsets = r.localizingSetOffsets!;
+          const { points, offsets } = r.localizingSets!;
           const counts = Array.from({ length: offsets.length - 1 }, (_, i) => offsets[i + 1]! - offsets[i]!);
           expect(counts[0]).toBe(6);
           expect(Math.max(...counts)).toBeGreaterThan(6);
-          expect(r.localizingSetPoints!.length).toBe(offsets[offsets.length - 1]! * 4);
+          expect(points.length).toBe(offsets[offsets.length - 1]! * 4);
         }
       }
     });
@@ -71,9 +71,9 @@ describe("ellipsoid family in three variables", () => {
     expect(ellipsoidStride(2)).toBe(5);
     expect(localizingSetStride(2)).toBe(2);
     const r = ellipsoid(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), { ...shared, deepCuts: true });
-    expect(r.ellipsoids!.length).toBe(r.iterates.count * 5);
+    expect(r.ellipsoids!.data.length).toBe(r.iterates.count * 5);
     expect(rowsOf(r)[0]!.point.length).toBe(2);
     const q = cuttingPlane(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), { ...shared, queryPoint: "analytic" });
-    expect(q.localizingSetPoints!.length).toBe(q.localizingSetOffsets![q.localizingSetOffsets!.length - 1]! * 2);
+    expect(q.localizingSets!.points.length).toBe(q.localizingSets!.offsets[q.localizingSets!.count]! * 2);
   });
 });
