@@ -3,7 +3,8 @@
 import { PerspectiveCamera, Plane, Raycaster, Vector2, Vector3 } from "three";
 
 import type { PointXY, PointXYZ } from "@lpviz/math/types";
-import { getViewportSize, snapPoint, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
+import { perspectiveSnapshotAtDistance } from "./perspective";
+import { getViewportSize, snapPoint, type ViewportPerspectivePose, type ViewportRect, type ViewportRenderSnapshot } from "./snapshot";
 
 /** How a canvas point reads as a world point while the editor is driven in 3D. */
 export type Viewport3DPointerOptions = {
@@ -36,6 +37,7 @@ const projectionPlanePoint = new Vector3();
 const projectionPlane = new Plane();
 const projectedPosition = new Vector3();
 const projectionViewDir = new Vector3();
+const projectionZoomAxis = new Vector3();
 
 // Poses a camera from the snapshot: by default the package's one scratch camera, which every
 // reader configures first and nothing relies on across calls; a caller that owns a camera passes
@@ -101,17 +103,34 @@ export function toCanvasCoords3D(snapshot: ViewportRenderSnapshot, rect: Viewpor
   });
 }
 
-// Where the ray through canvas-space `point` meets the plane, or null when the
-// ray is near-parallel to it (the hit would be billions of units away: test
-// the denominator ray · normal first), misses it, or hits at a non-finite
-// point.
-function intersectCanvasRayWithPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, normal: PointXYZ, coplanarPoint: PointXYZ): PointXY | null {
+// Where the ray through canvas-space `point` meets the plane, on the package's scratch vector
+// (valid until the next call), or null when the ray is near-parallel to it (the hit would be
+// billions of units away: test the denominator ray · normal first) or misses it.
+function castCanvasRayOntoPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, normal: Vector3, coplanarPoint: PointXYZ): Vector3 | null {
   const { width, height } = getViewportSize(snapshot, rect);
   projectionRaycaster.setFromCamera(projectionPointerNdc.set((point.x / width) * 2 - 1, -((point.y / height) * 2 - 1)), configurePerspectiveCameraFromSnapshot(snapshot));
-  projectionPlane.setFromNormalAndCoplanarPoint(projectionPlaneNormal.set(normal.x, normal.y, normal.z), projectionPlanePoint.set(coplanarPoint.x, coplanarPoint.y, coplanarPoint.z));
+  projectionPlane.setFromNormalAndCoplanarPoint(normal, projectionPlanePoint.set(coplanarPoint.x, coplanarPoint.y, coplanarPoint.z));
   if (Math.abs(projectionRaycaster.ray.direction.dot(projectionPlane.normal)) < PLANE_PARALLEL_THRESHOLD) return null;
-  const hit = projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
-  return hit && Number.isFinite(projectionPointerWorld.x) && Number.isFinite(projectionPointerWorld.y) ? { x: projectionPointerWorld.x, y: projectionPointerWorld.y } : null;
+  return projectionRaycaster.ray.intersectPlane(projectionPlane, projectionPointerWorld);
+}
+
+// the plane's hit as a plane point, or null when there is none or it is not finite
+function intersectCanvasRayWithPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, normal: PointXYZ, coplanarPoint: PointXYZ): PointXY | null {
+  const hit = castCanvasRayOntoPlane(snapshot, rect, point, projectionPlaneNormal.set(normal.x, normal.y, normal.z), coplanarPoint);
+  return hit && Number.isFinite(hit.x) && Number.isFinite(hit.y) ? { x: hit.x, y: hit.y } : null;
+}
+
+// the view direction, which is the normal of every view-aligned plane
+const viewDirection = (snapshot: ViewportRenderSnapshot): Vector3 =>
+  projectionViewDir.set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z).normalize();
+
+/**
+ * The point on the view-aligned plane through `through` under the canvas `point`, or null. The
+ * plane faces the camera, so the ray cannot be parallel to it for reasonable FOVs.
+ */
+export function viewAlignedPlaneHit(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, through: PointXYZ): PointXYZ | null {
+  const hit = castCanvasRayOntoPlane(snapshot, rect, point, viewDirection(snapshot), through);
+  return hit ? { x: hit.x, y: hit.y, z: hit.z } : null;
 }
 
 export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, z = 0): PointXY | null {
@@ -121,13 +140,33 @@ export function projectCanvasPointToWorldPlane(snapshot: ViewportRenderSnapshot,
 export function toLogicalCoords3D(snapshot: ViewportRenderSnapshot, rect: ViewportRect, point: PointXY, options: Viewport3DPointerOptions): PointXY {
   let hit = projectCanvasPointToWorldPlane(snapshot, rect, point);
   if (!hit && options.viewAnchor3D) {
-    // Fallback: the view-aligned plane through the drag anchor. It is always
-    // well-conditioned because its normal points toward the camera, so the
-    // ray can never be parallel to it for reasonable FOVs.
-    const viewDir = projectionViewDir
-      .set(snapshot.target.x - snapshot.perspective.position.x, snapshot.target.y - snapshot.perspective.position.y, snapshot.target.z - snapshot.perspective.position.z)
-      .normalize();
-    hit = intersectCanvasRayWithPlane(snapshot, rect, point, viewDir, options.viewAnchor3D);
+    // a ray that misses the floor meets the view-aligned plane through the drag anchor instead
+    const anchored = viewAlignedPlaneHit(snapshot, rect, point, options.viewAnchor3D);
+    hit = anchored && Number.isFinite(anchored.x) && Number.isFinite(anchored.y) ? { x: anchored.x, y: anchored.y } : null;
   }
   return snapPoint(clamp3DInteractionPoint(hit ?? { x: snapshot.target.x, y: snapshot.target.y }, snapshot, rect, options), options.snapToGrid);
+}
+
+/**
+ * The pose after a wheel zoom to `distance` from its target that keeps the world point under the
+ * canvas `point` still: that point is read off the view-aligned plane through the target before
+ * and after the camera moves along its axis, and camera and target both shift by the difference.
+ * With nothing under the cursor, the zoom is toward the target.
+ */
+export function zoomPerspectivePoseAtCanvasPoint(base: ViewportRenderSnapshot, pose: ViewportPerspectivePose, rect: ViewportRect, point: PointXY, distance: number): ViewportPerspectivePose {
+  const axis = projectionZoomAxis.set(pose.position.x - pose.target.x, pose.position.y - pose.target.y, pose.position.z - pose.target.z);
+  const length = axis.length();
+  if (!(length > 0)) return pose;
+  axis.normalize();
+  const moved: ViewportPerspectivePose = { ...pose, position: { x: pose.target.x + axis.x * distance, y: pose.target.y + axis.y * distance, z: pose.target.z + axis.z * distance } };
+  const before = viewAlignedPlaneHit(perspectiveSnapshotAtDistance(base, pose, length, rect), rect, point, pose.target);
+  if (!before) return moved;
+  const after = viewAlignedPlaneHit(perspectiveSnapshotAtDistance(base, moved, distance, rect), rect, point, pose.target);
+  if (!after) return moved;
+  const delta = { x: before.x - after.x, y: before.y - after.y, z: before.z - after.z };
+  return {
+    position: { x: moved.position.x + delta.x, y: moved.position.y + delta.y, z: moved.position.z + delta.z },
+    up: pose.up,
+    target: { x: pose.target.x + delta.x, y: pose.target.y + delta.y, z: pose.target.z + delta.z },
+  };
 }
