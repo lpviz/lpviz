@@ -4,14 +4,14 @@ import { deriveViewportDirty, type State } from "./store";
 // Pins the field -> repainted-layers mapping that patch() derives automatically.
 // This must agree with the hand-tuned getXViewportDirtyFlags helpers (see
 // dirtyFlags.test.ts) that it replaces; the two oracles are updated together.
-function st(o: Partial<State>): State {
-  return { is3DMode: false, isTransitioning3D: false, ...o } as State;
-}
+const st = (o: Partial<State>): State => ({ is3DMode: false, isTransitioning3D: false, ...o }) as State;
+// what a change to one field repaints, in a 2D view unless said otherwise
+const dirtyOf = (key: keyof State, state: Partial<State> = {}) => deriveViewportDirty(st(state), [key]);
 
 describe("deriveViewportDirty (field -> layers)", () => {
   test("polytope-group fields repaint polytope + constraints + objective", () => {
     for (const key of ["vertices", "polytope", "completionMode"] as const) {
-      expect(deriveViewportDirty(st({}), [key])).toEqual({
+      expect(dirtyOf(key)).toEqual({
         polytope: true,
         constraints: true,
         objective: true,
@@ -21,36 +21,36 @@ describe("deriveViewportDirty (field -> layers)", () => {
 
   test("iterate fields repaint only the iterate pass", () => {
     for (const key of ["iteratePath", "iterateEllipsoids", "iteratePhases", "iterateRestartIndices", "highlightIteratePathIndex", "replayActive"] as const) {
-      expect(deriveViewportDirty(st({}), [key])).toEqual({ iterate: true });
+      expect(dirtyOf(key)).toEqual({ iterate: true });
     }
   });
 
   test("trace fields repaint only the trace pass", () => {
-    expect(deriveViewportDirty(st({}), ["traceBuffer"])).toEqual({
+    expect(dirtyOf("traceBuffer")).toEqual({
       trace: true,
     });
-    expect(deriveViewportDirty(st({}), ["traceEnabled"])).toEqual({
+    expect(dirtyOf("traceEnabled")).toEqual({
       trace: true,
     });
   });
 
   test("constraint highlight repaints only constraints", () => {
-    expect(deriveViewportDirty(st({}), ["highlightIndex"])).toEqual({
+    expect(dirtyOf("highlightIndex")).toEqual({
       constraints: true,
     });
   });
 
   test("objective change repaints objective, plus polytope in/into 3D", () => {
-    expect(deriveViewportDirty(st({}), ["objectiveVector"])).toEqual({
+    expect(dirtyOf("objectiveVector")).toEqual({
       objective: true,
     });
-    expect(deriveViewportDirty(st({ is3DMode: true }), ["objectiveVector"])).toEqual({ polytope: true, objective: true });
-    expect(deriveViewportDirty(st({ isTransitioning3D: true }), ["currentObjective"])).toEqual({ polytope: true, objective: true });
+    expect(dirtyOf("objectiveVector", { is3DMode: true })).toEqual({ polytope: true, objective: true });
+    expect(dirtyOf("currentObjective", { isTransitioning3D: true })).toEqual({ polytope: true, objective: true });
   });
 
   test("zScale, and entering or leaving 3D, repaint every world-anchored layer", () => {
     for (const key of ["zScale", "is3DMode", "isTransitioning3D"] as const) {
-      expect(deriveViewportDirty(st({}), [key])).toEqual({
+      expect(dirtyOf(key)).toEqual({
         polytope: true,
         objective: true,
         trace: true,
@@ -64,18 +64,18 @@ describe("deriveViewportDirty (field -> layers)", () => {
   });
 
   test("pure UI / solver-config fields repaint nothing", () => {
-    expect(deriveViewportDirty(st({}), ["result"])).toBeNull();
-    expect(deriveViewportDirty(st({}), ["maxTraceCount"])).toBeNull();
+    expect(dirtyOf("result")).toBeNull();
+    expect(dirtyOf("maxTraceCount")).toBeNull();
     // kept for the 3-variable port's central path; nothing draws it yet
-    expect(deriveViewportDirty(st({}), ["interiorPoint"])).toBeNull();
+    expect(dirtyOf("interiorPoint")).toBeNull();
   });
 
   test("the start marker repaints the iterate overlay", () => {
     // switching solvers shows/hides/snaps the start marker
-    expect(deriveViewportDirty(st({}), ["solverMode"])).toEqual({
+    expect(dirtyOf("solverMode")).toEqual({
       iterate: true,
     });
-    expect(deriveViewportDirty(st({}), ["solverStartPoint"])).toEqual({
+    expect(dirtyOf("solverStartPoint")).toEqual({
       iterate: true,
     });
   });

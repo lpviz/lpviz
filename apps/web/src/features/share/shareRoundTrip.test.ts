@@ -1,6 +1,7 @@
 import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
-import { encodeSharedState, decodeSharedState } from "./compactUrl";
+import { decodeSharedState, encodeSharedState } from "./compactUrl";
+import { closed, expectNear, expectVerticesNear, gallery } from "./fixtures";
 import type { SharedAppState } from "./sharedState";
 import type { Vec } from "@lpviz/math/types";
 import { constraintsFromChain } from "@lpviz/polytope/constraints";
@@ -57,106 +58,41 @@ function roundTripN(state: SharedAppState, n: number): SharedAppState {
   return current;
 }
 
-const GALLERY_PROBLEMS: SharedAppState[] = [
-  {
-    vertices: [
-      [-8, -5],
-      [-9, 4],
-      [-2, 9],
-      [7, 5],
-      [8, -4],
-    ],
-    completionMode: "closed",
-    objective: [7, 3],
-    solverMode: "simplex",
-    settings: {},
-  },
-  {
-    vertices: [
-      [0, -9],
-      [-10, 0],
-      [0, 9],
-      [10, 0],
-    ],
-    completionMode: "closed",
-    objective: [4, 8],
-    solverMode: "simplex",
-    settings: {},
-  },
-  {
-    vertices: [
-      [-12, -3],
-      [-8, 5],
-      [4, 6],
-      [12, 1],
-      [9, -5],
-      [-4, -6],
-    ],
-    completionMode: "closed",
-    objective: [9, 2],
-    solverMode: "simplex",
-    settings: {},
-  },
-  {
-    vertices: [
-      [-10, -6],
-      [-10, 6],
-      [2, 6],
-      [9, 0.25],
-      [9.25, -0.25],
-      [2, -6],
-    ],
-    completionMode: "closed",
-    objective: [10, 0.2],
-    solverMode: "simplex",
-    settings: {},
-  },
-  {
-    vertices: [
-      [-14, -4],
-      [-14, 4],
-      [14, 4],
-      [14, -4],
-    ],
-    completionMode: "closed",
-    objective: [3, 7],
-    solverMode: "simplex",
-    settings: {},
-  },
-  {
-    vertices: [
-      [-30, -0.35],
-      [-30, 0.35],
-      [30, 0.35],
-      [30, -0.35],
-    ],
-    completionMode: "closed",
-    objective: [10, 0.1],
-    solverMode: "simplex",
-    settings: {},
-  },
+// The shared region solves as the original did: as many vertices, still convex, and the simplex
+// optimum within MAX_OPTIMUM_ERROR of the original's brute-force optimum.
+function expectSolvesLike(original: SharedAppState, shared: SharedAppState) {
+  const originalOptimum = bruteForceOptimum(original.vertices, original.objective!);
+  expect(shared.vertices.length).toBe(original.vertices.length);
+  expect(isConvexPolygon(shared.vertices)).toBe(true);
+  const solved = solveForOptimum(shared.vertices, shared.objective!);
+  expect(solved).not.toBeNull();
+  expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
+  expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+}
+
+// the gallery's problems, by id so the test follows the gallery, and a diamond
+const PROBLEMS: [string, SharedAppState][] = [
+  ...["pentagon", "corridor", "tight-corner", "wide-box", "needle"].map((id): [string, SharedAppState] => [id, gallery(id)]),
+  [
+    "diamond",
+    closed(
+      [
+        [0, -9],
+        [-10, 0],
+        [0, 9],
+        [10, 0],
+      ],
+      [4, 8],
+    ),
+  ],
 ];
 
 describe("share link round-trip stability", () => {
-  test.each(GALLERY_PROBLEMS.map((p, i) => [i, p] as const))("gallery problem #%i: optimum within tolerance and polytope convex after %i round-trips", (_index, original) => {
-    if (!original.objective) throw new Error("fixture has no objective");
-    const originalOptimum = bruteForceOptimum(original.vertices, original.objective);
-
-    const final = roundTripN(original, ROUND_TRIPS);
-
-    expect(final.vertices.length).toBe(original.vertices.length);
-
-    // convexity
-    expect(isConvexPolygon(final.vertices)).toBe(true);
-
-    // optimum within tolerance
-    const solved = solveForOptimum(final.vertices, final.objective!);
-    expect(solved).not.toBeNull();
-    expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
-    expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+  test.each(PROBLEMS)("%s: optimum within tolerance and polytope convex after ten round-trips", (_name, original) => {
+    expectSolvesLike(original, roundTripN(original, ROUND_TRIPS));
   });
 
-  test("random polygons: optimum within tolerance and polytope convex after %i round-trips", () => {
+  test("random polygons: optimum within tolerance and polytope convex after ten round-trips", () => {
     const rand = lcg(42);
     let runs = 0;
     for (let t = 0; t < 60 && runs < 15; t++) {
@@ -165,61 +101,18 @@ describe("share link round-trip stability", () => {
       const objective: Vec = [rand() * 4 - 2, rand() * 4 - 2];
       if (Math.abs(objective[0]) + Math.abs(objective[1]) < 0.1) continue;
       runs++;
-
-      const original: SharedAppState = {
-        vertices,
-        completionMode: "closed",
-        objective,
-        solverMode: "simplex",
-        settings: {},
-      };
-
-      const originalOptimum = bruteForceOptimum(vertices, objective);
-      const final = roundTripN(original, ROUND_TRIPS);
-
-      expect(final.vertices.length).toBe(original.vertices.length);
-
-      expect(isConvexPolygon(final.vertices)).toBe(true);
-
-      const solved = solveForOptimum(final.vertices, final.objective!);
-      expect(solved).not.toBeNull();
-      expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
-      expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+      const original = closed(vertices, objective);
+      expectSolvesLike(original, roundTripN(original, ROUND_TRIPS));
     }
     expect(runs).toBeGreaterThan(10);
   });
 
   test("each intermediate round-trip stays convex and within tolerance", () => {
-    const original: SharedAppState = {
-      vertices: [
-        [-8, -5],
-        [-9, 4],
-        [-2, 9],
-        [7, 5],
-        [8, -4],
-      ],
-      completionMode: "closed",
-      objective: [7, 3],
-      solverMode: "simplex",
-      settings: {},
-    };
-    const originalOptimum = bruteForceOptimum(original.vertices, original.objective!);
-
+    const original = gallery("pentagon");
     let current = original;
     for (let i = 0; i < ROUND_TRIPS; i++) {
-      const encoded = encodeSharedState(current);
-      const decoded = decodeSharedState(encoded);
-      expect(decoded).not.toBeNull();
-      current = decoded!;
-
-      expect(current.vertices.length).toBe(original.vertices.length);
-
-      expect(isConvexPolygon(current.vertices)).toBe(true);
-
-      const solved = solveForOptimum(current.vertices, current.objective!);
-      expect(solved).not.toBeNull();
-      expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
-      expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+      current = roundTripN(current, 1);
+      expectSolvesLike(original, current);
     }
   });
 
@@ -235,57 +128,19 @@ describe("share link round-trip stability", () => {
         const objective: Vec = [rand() * 4 - 2, rand() * 4 - 2];
         if (Math.abs(objective[0]) + Math.abs(objective[1]) < 0.1) continue;
         runs++;
-
-        const original: SharedAppState = {
-          vertices,
-          completionMode: "closed",
-          objective,
-          solverMode: "simplex",
-          settings: {},
-        };
-
-        const originalOptimum = bruteForceOptimum(vertices, objective);
-        const final = roundTripN(original, ROUND_TRIPS);
-
-        expect(final.vertices.length).toBe(original.vertices.length);
-
-        expect(isConvexPolygon(final.vertices)).toBe(true);
-
-        const solved = solveForOptimum(final.vertices, final.objective!);
-        expect(solved).not.toBeNull();
-        expect(solved!.value).toBeGreaterThanOrEqual(originalOptimum - MAX_OPTIMUM_ERROR);
-        expect(solved!.value).toBeLessThanOrEqual(originalOptimum + MAX_OPTIMUM_ERROR);
+        const original = closed(vertices, objective);
+        expectSolvesLike(original, roundTripN(original, ROUND_TRIPS));
       }
       expect(runs).toBe(instancesPerCount);
     });
   }
 
   test("first round-trip locks the vertices (subsequent trips are no-ops)", () => {
-    const original: SharedAppState = {
-      vertices: [
-        [-8, -5],
-        [-9, 4],
-        [-2, 9],
-        [7, 5],
-        [8, -4],
-      ],
-      completionMode: "closed",
-      objective: [7, 3],
-      solverMode: "simplex",
-      settings: {},
-    };
-
+    const original = gallery("pentagon");
     const first = decodeSharedState(encodeSharedState(original))!;
     const tenth = roundTripN(original, ROUND_TRIPS);
-
     expect(first.vertices.length).toBe(original.vertices.length);
-    expect(tenth.vertices.length).toBe(original.vertices.length);
-    expect(tenth.vertices.length).toBe(first.vertices.length);
-    tenth.vertices.forEach((v, i) => {
-      expect(v[0]).toBeCloseTo(first.vertices[i]![0], 10);
-      expect(v[1]).toBeCloseTo(first.vertices[i]![1], 10);
-    });
-    expect(tenth.objective![0]).toBeCloseTo(first.objective![0], 10);
-    expect(tenth.objective![1]).toBeCloseTo(first.objective![1], 10);
+    expectVerticesNear(tenth.vertices, first.vertices, 10);
+    expectNear(tenth.objective, first.objective, 10);
   });
 });

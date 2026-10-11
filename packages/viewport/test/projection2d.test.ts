@@ -1,10 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { buildViewport2DSnapshot, buildViewport2DStateFromTarget, fitViewport2DToBounds, toCanvasCoords2D, toLogicalCoords2D, zoomViewport2DStateAtCanvasPoint } from "../src/projection2d";
-import { createDefaultViewportRenderSnapshot } from "../src/snapshot";
+import { BASE as fallback, RECT as rect } from "./fixtures";
 
 // Round-trip invariants of the 2D projection: the canvas<->world mapping, pinned.
-const rect = { width: 1200, height: 800 };
-const fallback = createDefaultViewportRenderSnapshot(rect);
 const context = (state: ReturnType<typeof buildViewport2DStateFromTarget>, fallbackSnapshot = fallback) => ({ state, sidebarWidth: 0, fallbackSnapshot });
 
 function snapshotAt(target: { x: number; y: number }, scaleFactor: number) {
