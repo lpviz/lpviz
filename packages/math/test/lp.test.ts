@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
+import { solveDenseSystem } from "../src/lapack";
 import { chebyshevCenter, solveSmallLp, type LpRow } from "../src/lp";
 
 const BOUND = 1e4;
+
+const lcg = (seed: number) => () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 
 // brute force: every candidate vertex is the intersection of n constraints
 function bruteForce(objective: number[], rows: LpRow[], n: number) {
@@ -47,22 +50,13 @@ function bruteForce(objective: number[], rows: LpRow[], n: number) {
   return best;
 }
 
+// the vertex where the picked constraints meet, or null when they are parallel
 function solveSquare(A: number[][], b: number[], n: number): number[] | null {
-  const M = A.map((row, i) => [...row, b[i]!]);
-  for (let col = 0; col < n; col++) {
-    let pivot = col;
-    for (let r = col + 1; r < n; r++) {
-      if (Math.abs(M[r]![col]!) > Math.abs(M[pivot]![col]!)) pivot = r;
-    }
-    if (Math.abs(M[pivot]![col]!) < 1e-10) return null;
-    [M[col], M[pivot]] = [M[pivot]!, M[col]!];
-    for (let r = 0; r < n; r++) {
-      if (r === col) continue;
-      const factor = M[r]![col]! / M[col]![col]!;
-      for (let c = col; c <= n; c++) M[r]![c] = M[r]![c]! - factor * M[col]![c]!;
-    }
+  try {
+    return Array.from(solveDenseSystem(Float64Array.from(A.flat()), n, Float64Array.from(b), new Float64Array(n)));
+  } catch {
+    return null;
   }
-  return Array.from({ length: n }, (_, j) => M[j]![n]! / M[j]![j]!);
 }
 
 function randomRows(count: number, n: number, rand: () => number): LpRow[] {
@@ -75,8 +69,7 @@ function randomRows(count: number, n: number, rand: () => number): LpRow[] {
 
 describe("solveSmallLp", () => {
   test("matches brute-force vertex enumeration in 2 and 3 variables", () => {
-    let seed = 17;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(17);
     for (const n of [2, 3]) {
       for (let trial = 0; trial < 30; trial++) {
         const rows = randomRows(3 + Math.floor(rand() * 6), n, rand);
@@ -92,8 +85,7 @@ describe("solveSmallLp", () => {
   });
 
   test("respects every constraint at the reported optimum", () => {
-    let seed = 91;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(91);
     for (let trial = 0; trial < 40; trial++) {
       const rows = randomRows(4 + Math.floor(rand() * 8), 2, rand);
       const objective = [rand() * 2 - 1, rand() * 2 - 1];
@@ -115,8 +107,7 @@ describe("solveSmallLp", () => {
   });
 
   test("is deterministic across repeated solves", () => {
-    let seed = 5;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(5);
     const rows = randomRows(10, 2, rand);
     const first = solveSmallLp([1, 0.3], rows, BOUND);
     for (let i = 0; i < 5; i++) {
@@ -159,8 +150,7 @@ describe("chebyshevCenter", () => {
   });
 
   test("the ball it reports actually fits inside", () => {
-    let seed = 29;
-    const rand = () => (seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+    const rand = lcg(29);
     for (let trial = 0; trial < 25; trial++) {
       const rows = randomRows(4 + Math.floor(rand() * 6), 2, rand);
       const result = chebyshevCenter(rows, 2, BOUND);
