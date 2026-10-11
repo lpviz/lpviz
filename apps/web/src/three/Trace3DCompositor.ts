@@ -31,7 +31,7 @@ void main() {
 `;
 
 export class Trace3DCompositor implements TraceImpostor {
-  private quadScene = new Scene();
+  readonly scene = new Scene();
   private quadCamera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 2);
   private readonly target = new OffscreenTarget(this.quad, { depthBuffer: true });
@@ -42,7 +42,7 @@ export class Trace3DCompositor implements TraceImpostor {
 
   constructor(requestFrame: () => void) {
     this.settle = new SettleTimer(requestFrame, VIEW_SETTLE_MS);
-    this.quadScene.add(this.quad.mesh);
+    this.scene.add(this.quad.mesh);
   }
 
   // Returns the composite quad when the pass should go through the offscreen
@@ -79,7 +79,7 @@ export class Trace3DCompositor implements TraceImpostor {
       bakeTrace(() => renderer.render(traceScene, camera));
     });
 
-    return { scene: this.quadScene, camera: this.quadCamera };
+    return { scene: this.scene, camera: this.quadCamera };
   }
 
   private renderDepthOnly(renderer: WebGLRenderer, scene: Scene, camera: Camera): void {

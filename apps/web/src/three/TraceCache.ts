@@ -58,7 +58,7 @@ type ViewParams = {
 
 export class TraceCache implements TraceImpostor {
   private cacheCamera = new OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
-  private quadScene = new Scene();
+  readonly scene = new Scene();
   private quad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
   private trailingQuad = new CompositeQuad(QUAD_VERTEX_SHADER, 1);
   private readonly main = new OffscreenTarget(this.quad, { depthBuffer: false });
@@ -94,7 +94,7 @@ export class TraceCache implements TraceImpostor {
   constructor(requestFrame: () => void) {
     this.settle = new SettleTimer(requestFrame, Math.max(VIEW_SETTLE_MS, EVICTION_QUIET_MS / 2));
     this.trailingQuad.mesh.renderOrder = 1;
-    this.quadScene.add(this.quad.mesh, this.trailingQuad.mesh);
+    this.scene.add(this.quad.mesh, this.trailingQuad.mesh);
   }
 
   markContentDirty(): void {
@@ -268,7 +268,7 @@ export class TraceCache implements TraceImpostor {
     }
 
     this.quad.mesh.visible = this.bakedEnd > this.bakeStart;
-    return { scene: this.quadScene };
+    return { scene: this.scene };
   }
 
   // Temporarily hides every live chunk outside [startSeq, endSeq) — the chunks' objects live in

@@ -45,10 +45,18 @@ export class TraceLayer extends ZScaledLayer {
   readonly object3D = new Group();
   readonly slot = "traceLine" as const;
   override readonly invalidationKeys = ["trace"] as const;
-  private pool: Chunk[] = [];
+  // every chunk made, and the ones no entry holds
+  private chunks: Chunk[] = [];
+  private free: Chunk[] = [];
   private assigned = new Map<TraceEntry, Chunk>();
   // monotonic append sequence stamped on each chunk's objects
   private nextSeq = 0;
+
+  constructor() {
+    super();
+    // one chunk from the start, so the scene manager compiles the trace's programs ahead of the first trace
+    this.free.push(this.makeChunk());
+  }
 
   private makeChunk(): Chunk {
     const chunk: Chunk = {
@@ -56,7 +64,7 @@ export class TraceLayer extends ZScaledLayer {
       sprites: new PointCloud({ color: PALETTE.trace, pixelSize: SPRITE.tracePoint, shape: "disc", slot: "tracePoints", vertexColors: false }),
     };
     this.object3D.add(chunk.ribbon.mesh, chunk.sprites.points);
-    this.pool.push(chunk);
+    this.chunks.push(chunk);
     return chunk;
   }
 
@@ -69,21 +77,20 @@ export class TraceLayer extends ZScaledLayer {
   }
 
   protected rebuild(state: State, snap: ViewportRenderSnapshot): void {
-    // recycle the chunks whose entries were evicted from the buffer
+    // free the chunks whose entries were evicted from the buffer
     const live = new Set<TraceEntry>(state.traceBuffer);
-    const freed: Chunk[] = [];
     for (const [entry, chunk] of this.assigned) {
       if (live.has(entry)) continue;
       this.assigned.delete(entry);
       chunk.ribbon.mesh.visible = false;
       chunk.sprites.points.visible = false;
-      freed.push(chunk);
+      this.free.push(chunk);
     }
 
     // build and upload only the entries that have no chunk yet
     for (const entry of state.traceBuffer) {
       if (this.assigned.has(entry) || entry.count < 2) continue;
-      const chunk = freed.pop() ?? this.makeChunk();
+      const chunk = this.free.pop() ?? this.makeChunk();
       chunk.ribbon.setPath(iteratePositions(entry), entry.count);
       const sampled = sampledIterates(entry);
       chunk.sprites.draw(sampled.length, (out) => writeIteratePositions(out, entry, sampled.length, sampled));
@@ -101,11 +108,12 @@ export class TraceLayer extends ZScaledLayer {
   }
 
   dispose(): void {
-    for (const { ribbon, sprites } of this.pool) {
+    for (const { ribbon, sprites } of this.chunks) {
       ribbon.dispose();
       sprites.dispose();
     }
-    this.pool = [];
+    this.chunks = [];
+    this.free = [];
     this.assigned.clear();
   }
 }
