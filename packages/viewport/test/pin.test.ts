@@ -206,7 +206,7 @@ function buildTranscript() {
 }
 
 describe("viewport pin", () => {
-  const { lines, snapshots } = buildTranscript();
+  const { snapshots } = buildTranscript();
 
   // test("every function's output over the grid is unchanged", () => {
   //   const transcript = lines.join("\n");
