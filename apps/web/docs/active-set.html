@@ -127,7 +127,7 @@ Optimal basis after 2 pivots</code></pre>
    3p    +8.24    +4.84    +7.2e+1     5.0e+0 3,4
    4*    +7.00    +5.00    +6.4e+1     0.0e+0 3,4</code></pre>
         <ul>
-          <li><strong>KKT</strong>: the largest of the constraint violation, the stationarity gap ‖<var>c</var> − <var>A</var>ᵀ<var>y</var>‖<sub>∞</sub> and the complementarity gap.</li>
+          <li><strong>KKT</strong>: the largest of the constraint violation, the stationarity gap ‖<var>c</var> − <var>A</var>ᵀ<var>y</var>‖<sub>∞</sub> and the complementarity gap. In the 3D view each PDAS iterate rises by it, so the path comes down to the floor at the optimum; criss-cross has no such measure and is drawn flat, like simplex.</li>
           <li><strong>Active</strong>: the constraints whose multipliers are free in that Newton step ("−" for none; a long list shows as a count).</li>
           <li>Markers after the iteration number: <code>p</code> solved its subproblem, so the centers moved; <code>f</code> is a Lawson–Hanson step after a cycle; <code>*</code> is the identified optimal vertex.</li>
         </ul>

@@ -110,7 +110,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "Ellipsoid",
     pager: "The Ellipsoid Method",
     description:
-      "How the ellipsoid method solves linear programs by shrinking a localizing set around the optimum: deep cuts, the objective ray shoot, the ρ certificate, and the Chebyshev, analytic and volumetric cutting-plane query points — visualized interactively in lpviz.",
+      "How the ellipsoid method solves linear programs by shrinking a localizing set around the optimum: deep cuts, the objective ray shoot, the ρ certificate, the Chebyshev, analytic and volumetric cutting-plane query points, and constraint generation — visualized interactively in lpviz.",
     og: {
       title: "The Ellipsoid Method and Cutting Planes, Visualized",
       description: "Watch a localizing ellipsoid shrink onto the optimum of a polytope you draw, and compare it with the Chebyshev, analytic and volumetric cutting-plane query points.",

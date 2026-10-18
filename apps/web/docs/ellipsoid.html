@@ -62,7 +62,7 @@
               <tr>
                 <td>Query point</td>
                 <td>Ellipsoid</td>
-                <td>Which point of the localizing set to ask the oracle about. <em>Ellipsoid</em> is the method proper; the other three localize with a polyhedron instead. See <a href="#query">below</a>.</td>
+                <td>Which point of the localizing set to ask the oracle about. <em>Ellipsoid</em> is the method proper; the other four localize with a polyhedron instead, the last of them (<em>Constraint gen.</em>) being constraint generation. See <a href="#query">below</a>.</td>
               </tr>
               <tr>
                 <td>Deep cuts</td>
@@ -77,7 +77,7 @@
             </tbody>
           </table>
         </div>
-        <p><em>Deep cuts</em> greys out unless the query point is <em>Ellipsoid</em>: it describes how the ellipsoid update reshapes itself, and the other three query points never build an ellipsoid to reshape. Their cuts are already as deep as the oracle can make them, since a polyhedron can simply store the violated constraint itself. <em>Ray shoot</em> applies to all four.</p>
+        <p><em>Deep cuts</em> greys out unless the query point is <em>Ellipsoid</em>: it describes how the ellipsoid update reshapes itself, and the other query points never build an ellipsoid to reshape. Their cuts are already as deep as the oracle can make them, since a polyhedron can simply store the violated constraint itself. <em>Ray shoot</em> applies to all but constraint generation, whose first feasible query is already the optimum.</p>
 
         <h3 id="initial-size">Initial ellipsoid size</h3>
         <figure>
@@ -150,7 +150,7 @@
 
         <h2 id="query">Query point</h2>
         <p>This is the setting that changes the algorithm rather than tuning it. The ellipsoid method's defining move is to query the <em>center of a covering ellipsoid</em>, which is a crude proxy for "deep inside the region still under consideration". It is crude because an ellipsoid is a lossy summary: after a few cuts, the real region under consideration is a polyhedron, and the ellipsoid drawn around it can be far larger and shaped quite differently.</p>
-        <p>The other three settings keep the polyhedron. They accumulate cuts exactly as before — same oracle, same incumbent handling, same ray shoot, same initial bounding box — and differ only in which interior point of it they ask about next.</p>
+        <p>The other settings keep the polyhedron. They accumulate cuts exactly as before — same oracle, same incumbent handling, same ray shoot, same initial bounding box — and differ only in which interior point of it they ask about next.</p>
         <figure>
           <svg viewBox="0 0 360 224" width="360" height="224" role="img" aria-labelledby="ell-query-fig">
             <title id="ell-query-fig">A localizing polygon with four labelled query points inside it: the center of a dashed covering ellipse, the center of the largest inscribed circle, the analytic center, and the volumetric center.</title>
@@ -181,6 +181,8 @@
           <dd>The ACCPM point: the minimizer of the log barrier −Σ log(<var>b</var><sub>i</sub> − <var>a</var><sub>i</sub>ᵀ<var>x</var>), found by damped Newton. Unlike a ball, the barrier sees the shape of the set, so the point adapts to anisotropy — the same object that governs the <a href="/docs/central-path">central path</a>, used here as a notion of "middle" rather than as a path to follow.</dd>
           <dt>Volumetric</dt>
           <dd>Vaidya's point: the minimizer of ½ log det <var>H</var>(<var>x</var>), where <var>H</var> is the barrier Hessian. It weights each face by its <em>leverage score</em>, so nearly-redundant cuts stop dragging the query point around. It also drops cuts whose leverage falls below a threshold, which is what keeps the constraint count — and the per-iteration cost — bounded as the run goes on. Dropping a cut only ever enlarges the localizing set, so it can never lose the optimum.</dd>
+          <dt>Constraint gen.</dt>
+          <dd>Constraint generation (Kelley's cutting-plane method, applied to an LP): the query point is the optimum of the <em>restricted</em> LP over the localizing set — the initial box plus the constraints added so far. It is a corner of the set rather than its middle, and usually outside your region; the oracle hands back the constraint it breaks most, which joins the restricted LP, and the next optimum is recomputed. The first query that breaks nothing is the optimum itself, so a run never needs more rounds than there are constraints, and usually far fewer: three on the <em>Pentagon</em>. This is how large LPs with too many constraints to write down are solved in practice. Since ρ is zero by construction here, the log's last column is <strong>Viol</strong> instead — how far the query breaks the worst constraint — and the 3D view lifts each query by it.</dd>
         </dl>
         <p>Mean iterations to a 10⁻⁶ gap, averaged over 12 objective directions:</p>
         <div class="table-scroll">
@@ -249,7 +251,7 @@
           <li><strong>Ellipsoid:</strong> the ellipse is the localizing set — a <em>covering</em> ellipsoid. Everything still under consideration is inside it, and successive centers are therefore always inside it too.</li>
           <li><strong>Chebyshev, analytic, volumetric:</strong> the ellipse is <em>inscribed</em> at the query point — the Dikin ellipsoid of the barrier there, or Chebyshev's inscribed ball. It is a local measure of elbow room, not a bound on anything, so the next query point routinely lands outside it. That is expected.</li>
         </ul>
-        <p>For those three the region actually under consideration is the polyhedron of accumulated cuts, and lpviz will draw it: hover a row in the iteration log (or scrub the replay) and its localizing polyhedron appears as a thin outline. It is drawn one at a time on purpose — they nest, they are many-sided, and unlike the ellipses they do not shrink smoothly, so drawing them all at once buries the picture. The invariant that does hold, and that hovering successive rows makes visible, is that the polyhedron only ever shrinks.</p>
+        <p>For the polyhedral query points the region actually under consideration is the polyhedron of accumulated cuts, and lpviz will draw it: hover a row in the iteration log (or scrub the replay) and its localizing polyhedron appears as a thin outline. It is drawn one at a time on purpose — they nest, they are many-sided, and unlike the ellipses they do not shrink smoothly, so drawing them all at once buries the picture. The invariant that does hold, and that hovering successive rows makes visible, is that the polyhedron only ever shrinks.</p>
 
         <h2 id="log">Reading the log</h2>
         <pre><code> Iter        x        y        Obj     Infeas          ρ
