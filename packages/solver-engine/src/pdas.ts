@@ -132,9 +132,12 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
   let fallbacks = 0;
   let status: "optimal" | "unbounded" | undefined;
   const step = new Float64Array(n);
+  // the KKT residual per iterate: the log's column and the height the 3D view lifts it by
+  const residuals: number[] = [];
   const record = (point: Float64Array, multipliers: Float64Array, marker: string, rowsShown: readonly number[]) => {
     const residual = kktResidual(A, b, c, point, multipliers);
     iterates.push(point);
+    residuals.push(residual);
     rows.push(`${fmtIteration(rows.length + 1, marker)} ${fmtIterate(point, dot(c, point))} ${fmtExpUnsigned(residual, measure, 1)} ${fmtRowSet(rowsShown)}`);
     return residual;
   };
@@ -283,6 +286,7 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
   const note = status === "unbounded" ? "The proximal step repeats along a ray that improves the objective and breaks no row: the LP is unbounded.\n" : "";
   return {
     iterates: iteratesOf(iterates),
+    convergence: Float64Array.from(residuals),
     log: [{ header, rows, footer: `${note}${tally}\n${footer}` }],
     status,
   };

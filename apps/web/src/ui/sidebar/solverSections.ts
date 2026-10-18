@@ -5,7 +5,13 @@ import { checkboxRow, fixed, group, labeledSelect, maxitSlider, numberSlider, ty
 // value without a label into a compile error.
 const ENTERING_RULE_LABELS: Record<SolverSettings["simplexEnteringRule"], string> = { coeff: "Dantzig", first: "Bland (low)", last: "Bland (high)" };
 const LEAVING_RULE_LABELS: Record<SolverSettings["simplexLeavingRule"], string> = { first: "Lowest index", last: "Highest index" };
-const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> = { ellipsoid: "Ellipsoid", chebyshev: "Chebyshev", analytic: "Analytic", volumetric: "Volumetric" };
+const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> = {
+  ellipsoid: "Ellipsoid",
+  chebyshev: "Chebyshev",
+  analytic: "Analytic",
+  volumetric: "Volumetric",
+  lpOptimum: "Constraint gen.",
+};
 
 const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
@@ -30,8 +36,13 @@ const ellipsoidSection = (ctx: SectionContext): SettingControl[] => [
   maxitSlider(ctx, "maxitSliderEllipsoid", "maxitEllipsoid"),
   group("settings-inline-row", [labeledSelect(ctx, "ellipsoidQueryPoint", "Query point:", QUERY_POINT_LABELS)]),
   // the cut shape options belong to the ellipsoid update itself; the
-  // other query points localize with a polyhedron and never form one
-  checkboxRow(ctx, { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" }, (next, key) => next.ellipsoidQueryPoint === "ellipsoid" || key === "ellipsoidRayShoot"),
+  // other query points localize with a polyhedron and never form one. Constraint generation's
+  // feasible query is already optimal, so it has nothing to ray-shoot either
+  checkboxRow(
+    ctx,
+    { ellipsoidDeepCuts: "Deep cuts", ellipsoidRayShoot: "Ray shoot" },
+    (next, key) => next.ellipsoidQueryPoint === "ellipsoid" || (key === "ellipsoidRayShoot" && next.ellipsoidQueryPoint !== "lpOptimum"),
+  ),
 ];
 
 const simplexSection = (ctx: SectionContext): SettingControl[] => [

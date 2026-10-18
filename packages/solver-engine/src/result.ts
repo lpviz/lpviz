@@ -54,7 +54,8 @@ export interface SolverResult {
   log: LogSection[];
   /**
    * The height the 3D view lifts each iterate above the floor: the solver's stopping measure (pdhg
-   * eps, ipm mu, ellipsoid rho) or the central path's barrier term. Absent for simplex, drawn flat.
+   * eps, ipm mu, ellipsoid rho, PDAS's KKT residual) or the central path's barrier term. Absent for
+   * the pivoting methods (simplex, criss-cross), drawn flat.
    */
   convergence?: Float64Array | undefined;
   /** a phase label per iterate: simplex's phase, pdhg's basis hash */

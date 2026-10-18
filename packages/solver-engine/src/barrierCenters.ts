@@ -19,8 +19,8 @@ const MIN_CHEBYSHEV_RADIUS = 1e-12;
 // inert box for the LP solver: the localizing set carries its own bounds
 export const LP_BOUND = 1e6;
 
-export const QUERY_POINTS = ["chebyshev", "analytic", "volumetric"] as const;
-export type QueryPoint = (typeof QUERY_POINTS)[number];
+export const BARRIER_QUERY_POINTS = ["chebyshev", "analytic", "volumetric"] as const;
+export type BarrierQueryPoint = (typeof BARRIER_QUERY_POINTS)[number];
 
 type QueryResult = {
   point: Float64Array;
@@ -31,7 +31,7 @@ type QueryResult = {
   leverage: Float64Array | null;
 };
 
-export function computeQueryPoint(kind: QueryPoint, rows: LpRow[], n: number): QueryResult | null {
+export function computeQueryPoint(kind: BarrierQueryPoint, rows: LpRow[], n: number): QueryResult | null {
   const ball = chebyshevCenter(rows, n, LP_BOUND);
   if (!ball || !(ball.radius > MIN_CHEBYSHEV_RADIUS)) return null;
   if (!ball.center.every(Number.isFinite)) {

@@ -1,7 +1,7 @@
 import { lcg } from "@lpviz/math/random";
 import { describe, expect, test } from "bun:test";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import { computeQueryPoint } from "../src/barrierCenters";
+import { BARRIER_QUERY_POINTS, computeQueryPoint } from "../src/barrierCenters";
 import { QUERY_POINTS, cuttingPlane, type CuttingPlaneOptions, type QueryPoint } from "../src/cuttingPlane";
 import { ellipsoid } from "../src/ellipsoid";
 import {
@@ -69,7 +69,7 @@ describe("cuttingPlane", () => {
   test("rho is a genuine bound: it never understates the true gap", () => {
     const objective = Float64Array.of(1, 1);
     const expected = bruteForceOptimum(objective, SQUARE_VERTICES);
-    for (const queryPoint of QUERY_POINTS) {
+    for (const queryPoint of BARRIER_QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       const rows = rowsOf(r);
       // objective at the query point plus rho upper-bounds the optimum at every
@@ -87,7 +87,7 @@ describe("cuttingPlane", () => {
     // ellipse is inscribed at the query point, a local measure of elbow room,
     // not the region still under consideration. What cannot happen is the
     // region itself growing, which would show up as a rising upper bound.
-    for (const queryPoint of QUERY_POINTS) {
+    for (const queryPoint of BARRIER_QUERY_POINTS) {
       for (let k = 0; k < 8; k++) {
         const angle = (k / 8) * 2 * Math.PI;
         const objective = Float64Array.of(Math.cos(angle), Math.sin(angle));
@@ -107,7 +107,7 @@ describe("cuttingPlane", () => {
     // point, so every ellipse must sit inside the original constraints once the
     // cuts that define it have been discovered
     const objective = Float64Array.of(1, 1);
-    for (const queryPoint of QUERY_POINTS) {
+    for (const queryPoint of BARRIER_QUERY_POINTS) {
       const r = cuttingPlane(SQUARE_VERTICES, SQUARE, objective, opts(queryPoint));
       for (let i = 0; i < r.iterates.count; i++) {
         const { p11, p12, p22 } = ellipseAt(r, i);
@@ -206,5 +206,36 @@ describe("cuttingPlane", () => {
         expect([...again.ellipsoids!.data]).toEqual([...first.ellipsoids!.data]);
       }
     }
+  });
+
+  describe("constraint generation", () => {
+    test("queries the master's optimum: its objective never rises, and the violation falls to zero at the optimum", () => {
+      const rand = lcg(31);
+      let runs = 0;
+      for (let t = 0; t < 60 && runs < 25; t++) {
+        const polygon = randomPolygon(rand);
+        if (!polygon) continue;
+        const objective = randomObjective(rand);
+        runs++;
+        const r = cuttingPlane(polygon.hull, polygon.constraints, objective, opts("lpOptimum"));
+        const rows = rowsOf(r);
+        expect(footerOf(r)).toMatch(/^Converged/);
+        expect(r.log[0]!.header).toContain("Viol");
+        for (let i = 1; i < rows.length; i++) expect(rows[i]!.objective).toBeLessThanOrEqual(rows[i - 1]!.objective + 1e-9);
+        expect(rows.at(-1)!.convergence).toBeLessThanOrEqual(1e-9);
+        expect(objectiveValue(objective, lastIterate(r))).toBeCloseTo(bruteForceOptimum(objective, polygon.hull), 6);
+      }
+      expect(runs).toBeGreaterThan(15);
+    });
+
+    test("adds one constraint per round and draws no ellipse", () => {
+      const r = cuttingPlane(SQUARE_VERTICES, SQUARE, Float64Array.of(1, 1), opts("lpOptimum"));
+      for (let i = 0; i < r.iterates.count; i++) {
+        const { p11, p12, p22 } = ellipseAt(r, i);
+        expect([p11, p12, p22]).toEqual([0, 0, 0]);
+      }
+      // the box alone is iterate 1, so at most one round per constraint of the square
+      expect(r.iterates.count).toBeLessThanOrEqual(SQUARE.length + 1);
+    });
   });
 });

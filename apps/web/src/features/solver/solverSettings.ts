@@ -7,11 +7,19 @@ import { ENTERING_RULES, type EnteringRule, LEAVING_RULES, type LeavingRule } fr
 export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid", "activeSet"] as const;
 export type SolverMode = (typeof SOLVER_MODES)[number];
 
-export const SOLVER_LABELS: Record<SolverMode, string> = { central: "Central Path", ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", ellipsoid: "Ellipsoid", activeSet: "Active-Set" };
+export const SOLVER_LABELS: Record<SolverMode, string> = {
+  central: "Central Path",
+  ipm: "IPM",
+  simplex: "Simplex",
+  pdhg: "PDHG",
+  ellipsoid: "Query-Point",
+  activeSet: "Active-Set",
+};
 
 // Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
-// method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
-const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
+// method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane),
+// "lpOptimum" being constraint generation. Appended only: a link carries the index.
+const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric", "lpOptimum"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
 // Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas and crissCross).

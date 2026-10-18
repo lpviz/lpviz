@@ -1,11 +1,19 @@
 import type { DenseMatrix } from "@lpviz/math/blas";
 import { boxRows, type LpRow, solveSmallLp } from "@lpviz/math/lp";
 import type { Constraint, Vec } from "@lpviz/math/types";
-import { computeQueryPoint, LP_BOUND, type QueryPoint } from "./barrierCenters";
+import { BARRIER_QUERY_POINTS, computeQueryPoint, LP_BOUND } from "./barrierCenters";
 import { LocalizationRun, regionBoundingBox, type LocalizationOptions } from "./localization";
 import type { SolverResult } from "./result";
 
-export { QUERY_POINTS, type QueryPoint } from "./barrierCenters";
+/**
+ * The points the polyhedral methods query: the barrier family's centers, and `lpOptimum`, the
+ * restricted LP's own optimum, which makes the method constraint generation (Kelley's cutting
+ * planes on an LP): the localizing set is the box plus the constraints added so far, and each
+ * round adds the one the master's optimum violates most. Appended, never reordered: share links
+ * carry the index.
+ */
+export const QUERY_POINTS = [...BARRIER_QUERY_POINTS, "lpOptimum"] as const;
+export type QueryPoint = (typeof QUERY_POINTS)[number];
 
 // Vaidya drops a cut once its leverage score falls below this, which bounds the constraint
 // count; dropping only ever enlarges the localizing set, so it can never lose the optimum.
@@ -26,14 +34,19 @@ export interface CuttingPlaneOptions extends LocalizationOptions {
  * leverage-weighted faces plus cut dropping. The oracle, incumbent and ray shoot are shared with
  * the ellipsoid method, so iteration counts are directly comparable. The polyhedron's support
  * function has no closed form, so the upper bound `max c'x over L` behind `rho` and the stopping
- * gap is an actual LP, solved exactly each iteration.
+ * gap is an actual LP, solved exactly each iteration. For `lpOptimum` that LP's solution is the
+ * query point itself, so a feasible query is optimal and ends the run; there is no inscribed shape
+ * to draw, only the localizing set.
  *
  * Written for n variables: the barriers' Hessians are n x n (two variables keep their closed
  * forms, more go through a Cholesky factorization), and the localizing set is emitted as a polygon
  * for n = 2 and as its half-spaces otherwise.
  */
 export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[], objective: Float64Array, opts: CuttingPlaneOptions): SolverResult {
-  const run = new LocalizationRun(constraints, objective, opts, true, "The cutting-plane query points require at least two variables.");
+  // Constraint generation queries the master's own optimum, so ρ is always zero there; its
+  // measure is how far that optimum breaks the worst constraint, which falls to zero instead.
+  const generating = opts.queryPoint === "lpOptimum";
+  const run = new LocalizationRun(constraints, objective, opts, true, "The cutting-plane query points require at least two variables.", generating ? "Viol" : "ρ");
   const { A, c, n, trace, incumbent } = run;
   const { center: boxCenter, halfExtents } = regionBoundingBox(vertices, n, opts.initialScale);
 
@@ -49,7 +62,8 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
   const objectiveRow = Array.from(c);
 
   while (trace.count < opts.maxit) {
-    const query = computeQueryPoint(opts.queryPoint, set.rows, n);
+    const { queryPoint } = opts;
+    const query = queryPoint === "lpOptimum" ? masterOptimum(objectiveRow, set.rows, n) : computeQueryPoint(queryPoint, set.rows, n);
     if (!query) {
       run.termination = "exhausted";
       break;
@@ -73,7 +87,7 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     const objectiveRadius = Math.max(0, bound.value - answer.objectiveValue);
 
     // drawn as the set stood when this point was queried
-    run.record(point, query.P, answer, objectiveRadius, set.drawn());
+    run.record(point, query.P, answer, generating ? Math.max(0, answer.violation) : objectiveRadius, set.drawn());
     if (run.converged(answer.feasible)) break;
 
     const cut = new Array<number>(n + 1);
@@ -91,6 +105,13 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     exhausted: incumbent.found ? ["Localizing set exhausted", "Nothing better than the incumbent remains, so it is optimal"] : ["No feasible point inside the initial box"],
     unbounded: ["Stopped on the initial box boundary", "The objective is unbounded over this region: the method only searches inside the initial box"],
   });
+}
+
+// Constraint generation's query: the optimum of the restricted (master) LP over the localizing
+// set, with no shape around it; null when the set is empty.
+function masterOptimum(objective: readonly number[], rows: LpRow[], n: number) {
+  const best = solveSmallLp(objective, rows, LP_BOUND);
+  return best.status === "optimal" ? { point: best.x, P: new Float64Array(n * n), leverage: null } : null;
 }
 
 // The localizing set: the initial box, cut by everything learned so far. Its rows feed the query

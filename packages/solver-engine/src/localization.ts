@@ -169,8 +169,9 @@ class LocalizationTrace extends NumericTrace {
     private readonly n: number,
     withLocalizingSets: boolean,
     maxit: number,
+    measure: string,
   ) {
-    super(n, "ρ", maxit);
+    super(n, measure, maxit);
     this.ellipsoids = new FloatBlock(ellipsoidStride(n));
     this.shape = new Float64Array(this.ellipsoids.stride);
     this.localizingSets = withLocalizingSets ? [] : null;
@@ -269,10 +270,11 @@ export class LocalizationRun {
   termination: Termination = "maxit";
   private readonly tol: number;
 
-  constructor(constraints: readonly Constraint[], objective: Float64Array, opts: LocalizationOptions, withLocalizingSets: boolean, tooFewVariables: string) {
+  /** `measure` heads the log's stopping-measure column: ρ, or constraint generation's violation. */
+  constructor(constraints: readonly Constraint[], objective: Float64Array, opts: LocalizationOptions, withLocalizingSets: boolean, tooFewVariables: string, measure = "ρ") {
     const { A, b } = denseFromConstraints(constraints);
     // the trace first: an iteration cap over the limit is refused before the variable count is
-    this.trace = new LocalizationTrace(A.cols, withLocalizingSets, opts.maxit);
+    this.trace = new LocalizationTrace(A.cols, withLocalizingSets, opts.maxit, measure);
     if (A.cols < 2) throw new Error(tooFewVariables);
     this.A = A;
     this.b = b;
