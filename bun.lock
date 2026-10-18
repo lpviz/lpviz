@@ -25,22 +25,22 @@
     },
     "apps/web": {
       "name": "@lpviz/web",
-      "version": "1.2.0",
+      "version": "1.3.0",
     },
     "packages/math": {
       "name": "@lpviz/math",
-      "version": "1.2.0",
+      "version": "1.3.0",
     },
     "packages/polytope": {
       "name": "@lpviz/polytope",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "dependencies": {
         "@lpviz/math": "workspace:*",
       },
     },
     "packages/solver-engine": {
       "name": "@lpviz/solver-engine",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "dependencies": {
         "@lpviz/math": "workspace:*",
         "@lpviz/polytope": "workspace:*",
@@ -48,7 +48,7 @@
     },
     "packages/viewport": {
       "name": "@lpviz/viewport",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "dependencies": {
         "@lpviz/math": "workspace:*",
         "three": "^0.181.1",
