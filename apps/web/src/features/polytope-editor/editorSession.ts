@@ -112,18 +112,19 @@ const NOOP: EditorTransition = { kind: "noop" };
 const reject = (reason: string): EditorTransition => ({ kind: "reject-nonconvex", reason });
 
 // A click: the objective while one is being selected; while drafting, the region closed on its
-// first vertex, an interior point that closes it, or one more vertex when convexity allows.
-// `closeThreshold` is the world-space equivalent of a fixed pixel hit radius, so closing on the
-// first vertex stays equally easy at any zoom (it is otherwise a tiny target when zoomed out, e.g.
-// on mobile).
+// first vertex, an interior point that closes it, or one more vertex when convexity allows. A
+// click on any other vertex (the second click of a quick double click, most often) does nothing:
+// a vertex stacked on another leaves a near-zero edge whose direction is noise, and the next
+// click would be rejected as nonconvex. `closeThreshold` is the world-space equivalent of a fixed
+// pixel hit radius, so closing on the first vertex stays equally easy at any zoom (it is
+// otherwise a tiny target when zoomed out, e.g. on mobile).
 export function clickAt(state: State, point: Vec, closeThreshold: number): EditorTransition {
   const { session } = getEditorContext(state);
   if (session === "selecting-objective") return { kind: "select-objective", objectiveVector: state.currentObjective || point };
   if (session !== "drafting") return NOOP;
-  if (state.vertices.length >= 3) {
-    if (vecDistance(point, state.vertices[0]!) < closeThreshold) return closeOn(state.vertices);
-    if (polygonContains(state.vertices, point)) return edit(state.vertices, "closed", point);
-  }
+  if (state.vertices.length >= 3 && vecDistance(point, state.vertices[0]!) < closeThreshold) return closeOn(state.vertices);
+  if (state.vertices.some((vertex) => vecDistance(point, vertex) < closeThreshold)) return NOOP;
+  if (state.vertices.length >= 3 && polygonContains(state.vertices, point)) return edit(state.vertices, "closed", point);
   const tentative = [...state.vertices, point];
   if (tentative.length >= 3 && !isConvexPolygon(tentative)) return reject("Adding this vertex would make the polytope nonconvex. Please choose another point.");
   return edit(tentative, "draft", null);

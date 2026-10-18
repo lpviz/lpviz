@@ -1,5 +1,5 @@
 import { onAbort } from "@/features/core/lifetime";
-import { restartableTimeout } from "@/features/core/timers";
+import { restartableTimeout, singleFrame } from "@/features/core/timers";
 import { getState } from "@/features/core/store";
 import type { EditorTools } from "@/features/polytope-editor/editorTools";
 import { swallow } from "@/ui/dom";
@@ -13,16 +13,17 @@ const POINTER_TAP_SLOP_PX = 5;
 
 type PointerTools = Omit<EditorTools, "cleanup">;
 
-// The primary pointer's press: where it began, whether it has since drifted beyond a tap, and
-// whether a press-and-hold has already acted on it.
-type Press = { pointerId: number; pointerType: string; clientX: number; clientY: number; moved: boolean; held: boolean };
+// The primary pointer's press: where it began, whether it has since drifted beyond a tap or
+// panned the view, and whether a press-and-hold has already acted on it.
+type Press = { pointerId: number; pointerType: string; clientX: number; clientY: number; moved: boolean; panned: boolean; held: boolean };
 
 // What a click after a press means: the browser's click follows every press, so a press that
-// drifted (a drag or a pan) or that completed a double tap must not also count as a click.
+// was a gesture (a drag, a pan, a drifted touch or pen) or that completed a double tap must not
+// also count as a click.
 type ClickState = {
   lastTap: { time: number; clientX: number; clientY: number } | null;
   suppressClickUntil: number;
-  lastPressMoved: boolean;
+  lastPressWasGesture: boolean;
 };
 
 // The editor behind the transition guard: while the view animates between 2D and 3D nothing is
@@ -40,9 +41,8 @@ const guarded = (tools: PointerTools) => ({
   handleContextMenu: unlessTransitioning(tools.handleContextMenu),
 });
 
-// The editor's handlers as a press reaches them (a move while the viewport navigates is not the
-// editor's), plus the tap and double-tap detection for touch and pen (a mouse gets the browser's
-// dblclick instead).
+// The editor's handlers as a press reaches them, plus the tap and double-tap detection for touch
+// and pen (a mouse gets the browser's dblclick instead).
 function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickState) {
   const endDrag = (event: Event) => {
     const wasInteracting = getState().editorInteraction.kind !== "idle";
@@ -54,9 +54,19 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
     if (editor.handleDragStart(event.clientX, event.clientY)) swallow(event);
   };
 
+  // A move with nothing held only previews the pointer, once a frame for the latest one. The frame
+  // also reads the view after a pan or an orbit has moved it under the pointer (their listeners
+  // run after this one), so the preview stays under the pointer while the view moves.
+  const preview = singleFrame();
+  let previewAt = { clientX: 0, clientY: 0 };
   const move = (event: PointerEvent) => {
-    const state = getState();
-    if (state.isNavigatingViewport && state.editorInteraction.kind === "idle") return;
+    if (getState().editorInteraction.kind === "idle") {
+      previewAt = { clientX: event.clientX, clientY: event.clientY };
+      preview.request(() => {
+        if (getState().editorInteraction.kind === "idle") editor.handleDragMove(previewAt.clientX, previewAt.clientY);
+      });
+      return;
+    }
     editor.handleDragMove(event.clientX, event.clientY);
     if (getState().editorInteraction.kind !== "idle") swallow(event);
   };
@@ -98,14 +108,14 @@ function createPointerBridge(editor: ReturnType<typeof guarded>, clicks: ClickSt
     if (doubled) swallow(event);
   };
 
-  return { start, move, hold, endDrag, endPress };
+  return { start, move, hold, endDrag, endPress, cancelPreview: preview.cancel };
 }
 
 // Pointer-gesture normalization for the canvas: registers every listener (the press, then the
 // context menu, double-click and click) against the editor's handlers.
 export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTools, signal: AbortSignal): void {
-  const clicks: ClickState = { lastTap: null, suppressClickUntil: 0, lastPressMoved: false };
-  const isClickSuppressed = () => clicks.lastPressMoved || performance.now() < clicks.suppressClickUntil;
+  const clicks: ClickState = { lastTap: null, suppressClickUntil: 0, lastPressWasGesture: false };
+  const isClickSuppressed = () => clicks.lastPressWasGesture || performance.now() < clicks.suppressClickUntil;
   const editor = guarded(tools);
   const bridge = createPointerBridge(editor, clicks);
   const capture = { capture: true, signal };
@@ -116,9 +126,9 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
     "pointerdown",
     (event) => {
       if (!event.isPrimary || event.button !== 0) return;
-      const started: Press = { pointerId: event.pointerId, pointerType: event.pointerType, clientX: event.clientX, clientY: event.clientY, moved: false, held: false };
+      const started: Press = { pointerId: event.pointerId, pointerType: event.pointerType, clientX: event.clientX, clientY: event.clientY, moved: false, panned: false, held: false };
       press = started;
-      clicks.lastPressMoved = false;
+      clicks.lastPressWasGesture = false;
       // with the pointer captured, a lift outside the canvas still ends the drag
       try {
         canvas.setPointerCapture(event.pointerId);
@@ -144,9 +154,10 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
       if (press?.pointerId === event.pointerId && !press.moved) {
         const slop = press.pointerType === "touch" ? TOUCH_TAP_SLOP_PX : POINTER_TAP_SLOP_PX;
         press.moved = Math.hypot(event.clientX - press.clientX, event.clientY - press.clientY) > slop;
-        clicks.lastPressMoved = press.moved;
         if (press.moved) hold.clear();
       }
+      // the navigation flag outlives a pan by a moment, so the press remembers it panned
+      if (press?.pointerId === event.pointerId && press.moved && getState().isNavigatingViewport) press.panned = true;
       // a finger has no hover: while nothing is being dragged, its moves preview nothing (a moved
       // touch places no vertex, so a sketch cursor following it would be left pointing nowhere)
       if (event.pointerType === "touch" && getState().editorInteraction.kind === "idle") return;
@@ -161,6 +172,12 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
       hold.clear();
       const ended = press;
       press = null;
+      // a mouse or pen that drifts while pressing still clicks, unless the drift dragged something
+      // (still in force at the lift) or panned the view (the pan waits out a quick click, see
+      // panZoom2D); a touch that drifted is a gesture
+      const state = getState();
+      const gestured = ended.pointerType === "touch" || ended.panned || state.editorInteraction.kind === "dragging" || state.isNavigatingViewport;
+      clicks.lastPressWasGesture = ended.moved && gestured;
       bridge.endPress(event, ended);
     },
     capture,
@@ -191,5 +208,8 @@ export function attachCanvasGestures(canvas: HTMLCanvasElement, tools: PointerTo
   canvas.addEventListener("dblclick", (event) => editor.handleDoubleClickAt(event.clientX, event.clientY), { signal });
   // the browser's click follows every mouse press; one that follows a drag, a pan or a double tap is not a click
   canvas.addEventListener("click", (event) => (isClickSuppressed() ? swallow(event) : editor.handleClick(event.clientX, event.clientY)), { signal });
-  onAbort(signal, hold.clear);
+  onAbort(signal, () => {
+    hold.clear();
+    bridge.cancelPreview();
+  });
 }

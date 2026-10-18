@@ -130,6 +130,10 @@ export function createEditorTools2D(deps: EditorToolsDeps): EditorTools {
       return;
     }
 
+    // a double click on a vertex inserts nothing: on an edge's end, the insertion would stack a
+    // vertex on it (and while drafting, the double click's own clicks already landed there)
+    if (findVertexNearCanvasPoint(viewportApi, getCanvasFromClient(viewportApi, clientX, clientY), displayVertices) !== -1) return;
+
     const edgeIndex = nearestEdge(displayVertices, logicalMouse, worldDistanceForPixels(viewportApi, logicalMouse, EDGE_HIT_RADIUS_PX), displayMode === "closed");
     if (edgeIndex !== null) {
       const insertion = insertOnEdge(state, edgeIndex, logicalMouse);

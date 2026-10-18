@@ -77,6 +77,12 @@ describe("clickAt", () => {
     if (t.kind === "reject-nonconvex") expect(t.reason).toContain("nonconvex");
   });
 
+  test("click on a placed vertex (a double click's second click) adds nothing", () => {
+    expect(click(st({ vertices: [[0, 0]] }), [0.1, 0])).toEqual({ kind: "noop" });
+    expect(click(st({ vertices: TRI.slice(0, 2) }), [4, 0.2])).toEqual({ kind: "noop" });
+    expect(click(st({ vertices: TRI }), [2, 2.9])).toEqual({ kind: "noop" });
+  });
+
   test("click while selecting objective picks the objective", () => {
     const t = click(st({ vertices: TRI, completionMode: "closed" }), [3, 2]);
     expect(t).toEqual({

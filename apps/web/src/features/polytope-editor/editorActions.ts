@@ -24,12 +24,11 @@ export type EditorDeps = {
 };
 
 // Every accepted transition is its own undoable step; an edit also clears the derived polytope
-// for the re-derive. A rejection goes to the problem panel's message slot (the same one that
-// shows "Nonconvex"), which the next accepted edit clears: no blocking dialog.
+// for the re-derive. A rejection changes nothing and tells the user why in an alert.
 export function applyEditorTransition({ saveHistory, derivePolytope }: EditorDeps, transition: EditorTransition) {
   if (transition.kind === "noop") return;
   if (transition.kind === "reject-nonconvex") {
-    setState({ inequalitiesMessage: transition.reason });
+    alert(transition.reason);
     return;
   }
   saveHistory();
