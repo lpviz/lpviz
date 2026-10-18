@@ -2,7 +2,8 @@ import type { EditorState } from "@/features/polytope-editor/editorState";
 import type { SolverMode, SolverSettings } from "@/features/solver/solverSettings";
 import type { SolverState } from "@/features/solver/solverState";
 import type { Vec } from "@lpviz/math/types";
-import { vecDistance, zeroVec } from "@lpviz/math/vec";
+import { vecDistance, vecFrom, zeroVec } from "@lpviz/math/vec";
+import { defaultStartVertex } from "@lpviz/solver-engine/crissCross";
 import { isObjectiveDirectionUnbounded } from "@lpviz/polytope/halfSpaces";
 import { hasConstraints } from "@lpviz/polytope/polytope";
 
@@ -100,20 +101,30 @@ const START_POINT: Record<SolverMode, (settings: SolverSettings) => "none" | "fr
   ipm: () => "free",
   pdhg: () => "free",
   simplex: (settings) => (settings.simplexDualMode ? "none" : "vertex"),
+  activeSet: (settings) => (settings.activeSetMethod === "pdas" ? "free" : "vertex"),
 };
 
+// Where a solver starts when the marker was never dragged. The origin for most: IPM, PDHG and
+// PDAS begin there, and Phase-1 simplex's first displayed iterate is the origin too (all structural
+// variables start nonbasic). Criss-cross needs a basis, so it begins where the first independent
+// constraints in its index order meet.
+function defaultSolverStart(state: EditorState & SolverState): Vec {
+  const { solverMode, solverSettings: settings, polytope } = state;
+  const vertex = solverMode === "activeSet" && settings.activeSetMethod === "crissCross" && hasConstraints(polytope) ? defaultStartVertex(polytope.constraints, settings.activeSetIndexOrder) : null;
+  return vertex ? vecFrom(vertex) : zeroVec(state.dimension);
+}
+
 /**
- * The start the solver would use: the dragged point (snapped to the nearest region vertex when the
- * solver walks vertices), or the solver default when nothing has been dragged yet. The default is
- * the origin for all three: IPM and PDHG begin there, and Phase-1 simplex's first displayed
- * iterate is the origin too (all structural variables start nonbasic). Null when the solver finds
- * its own start or the problem is not solvable, which is when the marker is hidden.
+ * The start the solver would use, which is where its path begins: the dragged point (snapped to
+ * the nearest region vertex when the solver walks vertices), or the solver's default when nothing
+ * has been dragged yet. Null when the solver finds its own start or the problem is not solvable,
+ * which is when the marker is hidden.
  */
 export function displayedSolverStartPoint(state: EditorState & SolverState): Vec | null {
   if (!isReadyForSolvers(state) || !hasFeasibleRegion(state)) return null;
   const meaning = START_POINT[state.solverMode](state.solverSettings);
   if (meaning === "none") return null;
   const point = state.solverStartPoint;
-  if (!point) return zeroVec(state.dimension);
+  if (!point) return defaultSolverStart(state);
   return meaning === "vertex" ? (nearestPolytopeVertex(state, point) ?? point) : point;
 }

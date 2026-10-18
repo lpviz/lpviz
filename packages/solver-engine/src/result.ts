@@ -64,7 +64,7 @@ export interface SolverResult {
   ellipsoids?: EllipsoidPath | undefined;
   /** the cutting planes' localizing set per iterate, once one was recorded */
   localizingSets?: LocalizingSetPath | undefined;
-  /** simplex: how the run ended */
+  /** the pivoting methods (simplex, criss-cross, PDAS): how the run ended */
   status?: "optimal" | "unbounded" | "infeasible" | undefined;
   /** simplex: which LP it walked */
   mode?: "primal" | "dual" | undefined;

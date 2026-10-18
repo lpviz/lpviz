@@ -1,11 +1,14 @@
 import type { SolverMode, SolverSettings } from "@/features/solver/solverSettings";
-import { checkboxRow, fixed, group, labeledSelect, maxitSlider, numberSlider, type SectionContext, type SettingControl } from "./solverSettingControls";
+import { checkboxRow, fixed, group, labeledSelect, maxitSlider, numberSlider, type SectionContext, type SettingControl, shownWhen } from "./solverSettingControls";
 
 // The labels of each select's vocabulary (the settings table has the values); a Record turns a
 // value without a label into a compile error.
 const ENTERING_RULE_LABELS: Record<SolverSettings["simplexEnteringRule"], string> = { coeff: "Dantzig", first: "Bland (low)", last: "Bland (high)" };
 const LEAVING_RULE_LABELS: Record<SolverSettings["simplexLeavingRule"], string> = { first: "Lowest index", last: "Highest index" };
 const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> = { ellipsoid: "Ellipsoid", chebyshev: "Chebyshev", analytic: "Analytic", volumetric: "Volumetric" };
+
+const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross" };
+const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
 
@@ -37,6 +40,22 @@ const simplexSection = (ctx: SectionContext): SettingControl[] => [
   group("settings-select-grid", [labeledSelect(ctx, "simplexEnteringRule", "Entering:", ENTERING_RULE_LABELS), labeledSelect(ctx, "simplexLeavingRule", "Leaving:", LEAVING_RULE_LABELS)]),
 ];
 
+// each method shows only its own knobs; the iteration cap is shared
+const isPdas = (settings: SolverSettings) => settings.activeSetMethod === "pdas";
+const activeSetSection = (ctx: SectionContext): SettingControl[] => [
+  group("settings-inline-row", [labeledSelect(ctx, "activeSetMethod", "Method:", ACTIVE_SET_METHOD_LABELS)]),
+  shownWhen(group("settings-inline-row", [labeledSelect(ctx, "activeSetIndexOrder", "Index order:", INDEX_ORDER_LABELS)]), (settings) => !isPdas(settings)),
+  shownWhen(
+    group("settings-pdas", [
+      numberSlider(ctx, { key: "activeSetRho", label: "ρ (primal proximal weight):", format: fixed(2) }),
+      numberSlider(ctx, { key: "activeSetDelta", label: "δ (dual proximal weight):", format: fixed(2) }),
+    ]),
+    isPdas,
+  ),
+  maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"),
+  shownWhen(checkboxRow(ctx, { activeSetShrinkWeights: "Shrink weights", activeSetIdentify: "Identify vertex" }), isPdas),
+];
+
 const centralSection = (ctx: SectionContext): SettingControl[] => [
   numberSlider(ctx, { key: "centralPathIter", label: "N (number of steps):", format: String, parse: (v) => parseInt(v, 10), br: false }),
 ];
@@ -46,6 +65,7 @@ const SECTIONS: Record<SolverMode, (ctx: SectionContext) => SettingControl[]> = 
   pdhg: pdhgSection,
   ellipsoid: ellipsoidSection,
   simplex: simplexSection,
+  activeSet: activeSetSection,
   central: centralSection,
 };
 

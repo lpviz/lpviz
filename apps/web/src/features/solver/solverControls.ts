@@ -104,6 +104,27 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
       };
     },
   }),
+  activeSet: control({
+    emptyRegion: "The active-set methods require a valid feasible region.",
+    request: (s, { problem }) => {
+      const settings = s.solverSettings;
+      // PDAS starts its first proximal center at the dragged point, criss-cross from the basis of
+      // the vertex it snaps to (see displayedSolverStartPoint)
+      const startPoint = requestedStartPoint(s);
+      return {
+        solver: "activeSet",
+        ...problem,
+        ...(startPoint ? { startPoint } : {}),
+        method: settings.activeSetMethod,
+        rho: settings.activeSetRho,
+        delta: settings.activeSetDelta,
+        shrinkWeights: settings.activeSetShrinkWeights,
+        identify: settings.activeSetIdentify,
+        order: settings.activeSetIndexOrder,
+        maxit: iterations(settings.maxitActiveSet),
+      };
+    },
+  }),
   ellipsoid: control({
     emptyRegion: "The ellipsoid method requires a feasible region.",
     request: (s, { problem }) => {

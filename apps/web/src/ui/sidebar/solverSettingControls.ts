@@ -144,3 +144,15 @@ export function maxitSlider(ctx: SectionContext, id: string, key: MaxitSettingKe
   const scale = ["1", "10", "100", "1k", "10k", "100k"].map((text) => el("span", { text }));
   return { nodes: [el("div", { className: "log-slider-control" }, [...nodes, el("div", { className: "log-slider-scale", attrs: { "aria-hidden": "true" } }, scale)])], sync };
 }
+
+/** The control, shown only while the settings make it apply (a method's own knobs). */
+export function shownWhen(control: SettingControl, applies: (settings: SolverSettings) => boolean): SettingControl {
+  return {
+    nodes: control.nodes,
+    sync: (next) => {
+      const shown = applies(next);
+      for (const node of control.nodes) if (node instanceof HTMLElement) node.hidden = !shown;
+      control.sync(next);
+    },
+  };
+}

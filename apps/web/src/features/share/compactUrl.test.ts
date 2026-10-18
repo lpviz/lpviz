@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { decodeSharedState, encodeSharedState } from "./compactUrl";
+import { SOLVER_MODES } from "@/features/solver/solverSettings";
 import { expectNear, expectVerticesNear } from "./fixtures";
 import type { SharedAppState } from "./sharedState";
 
@@ -59,7 +60,7 @@ describe("compact share links", () => {
   });
 
   test("round-trips every solver mode and completion mode", () => {
-    for (const solverMode of ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const) {
+    for (const solverMode of SOLVER_MODES) {
       for (const completionMode of ["draft", "closed", "open"] as const) {
         const decoded = roundTrip({ ...BASE, solverMode, completionMode })!;
         expect(decoded.solverMode).toBe(solverMode);

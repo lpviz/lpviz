@@ -64,3 +64,18 @@ export function solveFooter(converged: boolean, iterationCount: number, solveTim
   const elapsed = formatMilliseconds(solveTime);
   return converged ? `Converged to optimal solution in ${elapsed} / ${iterationCount} iterations` : `${stopped} after ${iterationCount} iterations in ${elapsed}`;
 }
+
+// the widest row set a log row lists in full, so a row stays within the column the panel fits
+const ROW_SET_WIDTH = 11;
+
+/**
+ * A set of constraint rows, 1-based as the problem panel lists them: "2,5", "-" when empty, "14 rows"
+ * past the column, padded to the column so every row of a log is as wide as the panel's fit samples.
+ */
+export function fmtRowSet(rows: readonly number[]): string {
+  const list = rows.map((row) => row + 1).join(",");
+  return (rows.length === 0 ? "-" : list.length <= ROW_SET_WIDTH ? list : `${rows.length} rows`).padEnd(ROW_SET_WIDTH);
+}
+
+/** The header over a fmtRowSet column. */
+export const rowSetHeader = (label: string): string => label.padEnd(ROW_SET_WIDTH);

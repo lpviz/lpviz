@@ -1,17 +1,22 @@
 import { DEFAULT_REPLAY_DURATION_MS } from "@/features/solver/replayDuration";
+import { INDEX_ORDERS, type IndexOrder } from "@lpviz/solver-engine/crissCross";
 import type { QueryPoint } from "@lpviz/solver-engine/cuttingPlane";
 import { ENTERING_RULES, type EnteringRule, LEAVING_RULES, type LeavingRule } from "@lpviz/solver-engine/simplex";
 
 // Index order is the share link's wire identity (compactUrl): only ever append.
-export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid"] as const;
+export const SOLVER_MODES = ["central", "ipm", "simplex", "pdhg", "ellipsoid", "activeSet"] as const;
 export type SolverMode = (typeof SOLVER_MODES)[number];
 
-export const SOLVER_LABELS: Record<SolverMode, string> = { central: "Central Path", ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", ellipsoid: "Ellipsoid" };
+export const SOLVER_LABELS: Record<SolverMode, string> = { central: "Central Path", ipm: "IPM", simplex: "Simplex", pdhg: "PDHG", ellipsoid: "Ellipsoid", activeSet: "Active-Set" };
 
 // Which point of the localizing set the ellipsoid mode queries next: "ellipsoid" is the ellipsoid
 // method proper, the rest localize with a polyhedron of cuts (see @lpviz/solver-engine/cuttingPlane).
 const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
+
+// Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas and crissCross).
+const ACTIVE_SET_METHODS = ["pdas", "crissCross"] as const;
+export type ActiveSetMethod = (typeof ACTIVE_SET_METHODS)[number];
 
 export type SolverSettings = {
   alphaMax: number;
@@ -32,6 +37,13 @@ export type SolverSettings = {
   ellipsoidRayShoot: boolean;
   ellipsoidQueryPoint: EllipsoidQueryPoint;
   ellipsoidInitialScale: number;
+  activeSetMethod: ActiveSetMethod;
+  activeSetRho: number;
+  activeSetDelta: number;
+  activeSetShrinkWeights: boolean;
+  activeSetIdentify: boolean;
+  activeSetIndexOrder: IndexOrder;
+  maxitActiveSet: number;
   objectiveAngleStep: number;
   objectiveRotationSpeed: number;
   // Total wall-clock length of an "Animate" replay: the replay maps elapsed time onto the whole
@@ -90,6 +102,13 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   // every lowercase legacy letter is taken; uppercase never collides with them
   ellipsoidQueryPoint: { default: "ellipsoid", owner: "ellipsoid", values: QUERY_POINTS, wire: { slot: 14, codec: { enumeration: QUERY_POINTS } }, legacyKey: "Q" },
   ellipsoidInitialScale: { default: 1.5, owner: "ellipsoid", range: ["1.05", "4", "0.05"], wire: { slot: 15, codec: { scaled: 1e4 } }, legacyKey: "w" },
+  activeSetMethod: { default: "pdas", owner: "activeSet", values: ACTIVE_SET_METHODS, wire: { slot: 18, codec: { enumeration: ACTIVE_SET_METHODS } } },
+  activeSetRho: { default: 0.3, owner: "activeSet", range: ["0.01", "3", "0.01"], wire: { slot: 19, codec: { scaled: 1e4 } } },
+  maxitActiveSet: { default: 1000, owner: "activeSet", wire: { slot: 20, codec: "int" } },
+  activeSetIndexOrder: { default: "first", owner: "activeSet", values: INDEX_ORDERS, wire: { slot: 21, codec: { enumeration: INDEX_ORDERS } } },
+  activeSetDelta: { default: 0.3, owner: "activeSet", range: ["0.01", "3", "0.01"], wire: { slot: 22, codec: { scaled: 1e4 } } },
+  activeSetShrinkWeights: { default: true, owner: "activeSet", wire: { slot: 23, codec: "bool" } },
+  activeSetIdentify: { default: true, owner: "activeSet", wire: { slot: 24, codec: "bool" } },
   objectiveAngleStep: { default: 0.1, owner: "global", range: ["0.01", "0.5", "0.01"], wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
   objectiveRotationSpeed: { default: 1, owner: "global", range: ["0.2", "3", "0.1"], wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
   replayDurationMs: { default: DEFAULT_REPLAY_DURATION_MS, owner: "local" },

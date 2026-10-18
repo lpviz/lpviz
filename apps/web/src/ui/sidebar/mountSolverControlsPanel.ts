@@ -13,7 +13,7 @@ export function mountSolverControlsPanel(parent: HTMLElement, actions: Pick<AppA
   root.append(buttonGroup);
   const buttons = new Map<SolverMode, HTMLButtonElement>();
   // the panel's order, the general-purpose solvers first
-  for (const mode of ["ipm", "pdhg", "simplex", "ellipsoid", "central"] as const) {
+  for (const mode of ["ipm", "pdhg", "simplex", "activeSet", "ellipsoid", "central"] as const) {
     const b = button(SOLVER_LABELS[mode], () => actions.setActiveSolverMode(mode), { id: `${mode}Button` });
     buttons.set(mode, b);
     buttonGroup.append(b);

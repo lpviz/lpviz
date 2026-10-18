@@ -31,6 +31,8 @@ export class SolverStartLayer extends ZScaledLayer {
       state.solverStartPoint,
       state.solverMode,
       state.solverSettings.simplexDualMode,
+      state.solverSettings.activeSetMethod,
+      state.solverSettings.activeSetIndexOrder,
       state.vertices,
       state.completionMode,
       state.objectiveVector,

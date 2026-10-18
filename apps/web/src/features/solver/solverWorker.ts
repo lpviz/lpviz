@@ -1,7 +1,9 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
+import { crissCross } from "@lpviz/solver-engine/crissCross";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
 import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
 import { ipm } from "@lpviz/solver-engine/ipm";
+import { pdas } from "@lpviz/solver-engine/pdas";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
 import type { SolverResult } from "@lpviz/solver-engine/result";
 import { simplex } from "@lpviz/solver-engine/simplex";
@@ -26,6 +28,14 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
   pdhg: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;
     return pdhg(constraints, objective, withTol(options));
+  },
+  // the active-set methods: criss-cross pivots on vertex bases, PDAS takes Newton steps on proximal
+  // subproblems; both return text rows and feasibility phases, like simplex
+  activeSet: (payload) => {
+    const { solver: _, constraints, objective, method, order, maxit, startPoint, ...pdasOptions } = payload;
+    return method === "crissCross"
+      ? crissCross(constraints, objective, withTol({ maxit, order, startVertex: startPoint }))
+      : pdas(constraints, objective, withTol({ ...pdasOptions, maxit, startPoint }));
   },
   central: (payload) => {
     const { solver: _, vertices, constraints, objective, ...options } = payload;
