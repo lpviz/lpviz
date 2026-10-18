@@ -11,7 +11,7 @@ const ORIGIN = "https://lpviz.net";
 // The table is non-empty by construction (the overview is its first entry).
 const overview = DOCS_PAGES[0]!;
 const articles = DOCS_PAGES.slice(1);
-const APP_DESCRIPTION = "Interactive web app for visualizing linear programming solvers: Simplex, interior point methods, PDHG, the ellipsoid method, and the central path.";
+const APP_DESCRIPTION = "Interactive web app for visualizing linear programming solvers: Simplex, active-set methods, interior point methods, PDHG, the ellipsoid method, and the central path.";
 
 const pagePath = (page: DocsPage): string => (page === overview ? "/docs/" : `/docs/${page.slug}`);
 const pageUrl = (page: DocsPage): string => ORIGIN + pagePath(page);

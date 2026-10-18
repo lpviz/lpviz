@@ -12,6 +12,7 @@
   --pdhg: #0f9960;
   --central: #8250df;
   --ellipsoid: #b45309;
+  --activeset: #0e7490;
   color-scheme: light dark;
 }
 
@@ -29,6 +30,7 @@
     --pdhg: #3fbf8a;
     --central: #ab7ff0;
     --ellipsoid: #e0994a;
+    --activeset: #3fb8d4;
   }
 }
 

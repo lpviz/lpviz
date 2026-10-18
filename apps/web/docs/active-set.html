@@ -1,0 +1,142 @@
+        <h1>Active-set methods: criss-cross and PDAS</h1>
+        <p class="lede">An active-set method guesses which constraints hold with equality at the optimum, solves for the point that guess implies, and repairs the guess. <a href="https://lpviz.net/">lpviz</a>'s <em>Active-Set</em> mode runs two of them: the <strong>criss-cross method</strong>, which repairs one constraint at a time, and the <strong>primal-dual active-set method (PDAS)</strong>, which repairs many at once. Neither keeps the iterate inside your region, so their paths cut across the outside of the drawing.</p>
+
+        <figure>
+          <svg viewBox="0 0 340 230" width="340" height="230" role="img" aria-labelledby="active-set-fig">
+            <title id="active-set-fig">A convex polygon with its edge lines extended. The criss-cross path hops between intersections of those lines, one of them outside the polygon, before ending at the optimal vertex.</title>
+            <g stroke="currentColor" stroke-opacity="0.25" stroke-width="1.25" stroke-dasharray="5 4">
+              <line x1="168" y1="28" x2="262" y2="0.4" />
+              <line x1="268" y1="66" x2="252" y2="0.2" />
+            </g>
+            <polygon points="38,150 66,58 168,28 268,66 286,140 160,202" fill="none" stroke="currentColor" stroke-opacity="0.45" stroke-width="1.5" />
+            <polyline points="38,150 66,58 252.7,3.1 268,66" fill="none" stroke="var(--activeset)" stroke-width="2" />
+            <g fill="var(--activeset)">
+              <circle cx="38" cy="150" r="3.5" /><circle cx="66" cy="58" r="3.5" /><circle cx="252.7" cy="3.1" r="3.5" />
+            </g>
+            <circle cx="268" cy="66" r="4.5" fill="currentColor" />
+          </svg>
+          <figcaption>Every iterate is where two constraint lines cross. Some of those crossings lie outside the region; the last one is the optimal vertex (black dot).</figcaption>
+        </figure>
+
+        <h2 id="idea">The idea</h2>
+        <p>For <span class="mono">maximize <var>c</var>ᵀ<var>x</var> s.t. <var>A</var><var>x</var> ≤ <var>b</var></span> with <var>n</var> variables, a <em>basis</em> here is a set <var>B</var> of <var>n</var> linearly independent constraints held tight. It fixes two things:</p>
+        <ul>
+          <li>the <strong>point</strong> <var>x</var> solving <var>A</var><sub>B</sub><var>x</var> = <var>b</var><sub>B</sub>, which is where those constraint lines cross, inside your region or not;</li>
+          <li>the <strong>multipliers</strong> <var>y</var><sub>B</sub> solving <var>A</var><sub>B</sub>ᵀ<var>y</var><sub>B</sub> = <var>c</var>, which write the objective as a combination of the tight constraints' normals.</li>
+        </ul>
+        <p>The basis is optimal exactly when the point breaks no other constraint (<em>primal feasible</em>) and every multiplier is nonnegative (<em>dual feasible</em>). <a href="/docs/simplex">Primal simplex</a> keeps the first condition and works towards the second; <a href="/docs/simplex#dual">dual simplex</a> keeps the second and works towards the first. The methods on this page keep <em>neither</em>: they are free to visit any crossing of constraint lines, which is what makes their paths look so different.</p>
+
+        <h2 id="criss-cross">The criss-cross method</h2>
+        <p>Criss-cross (Terlaky, 1985; Wang, 1987) needs no phase 1 and no ratio test. At each basis it lists the constraints that are wrong — a constraint outside the basis that the point breaks, or a tight one with a negative multiplier — and fixes the <strong>first</strong> of them by index:</p>
+        <ol>
+          <li><strong>A broken constraint</strong> joins the basis; the first tight constraint whose release moves the point back towards it leaves.</li>
+          <li><strong>A negative multiplier</strong> means releasing that constraint improves the objective; it leaves the basis, and the first constraint the point would run into along that direction joins.</li>
+        </ol>
+        <p>That is all. Without a ratio test the objective can go down, and the point can jump far outside the region. What saves the method is the index rule: always fixing the lowest-index problem with the lowest-index repair provably never revisits a basis, so the walk is finite. When no repair exists, the stuck constraint is a certificate: a broken constraint no tight one can relax towards proves the LP <em>infeasible</em>, and a negative multiplier whose release opens a ray no constraint stops proves it <em>unbounded</em>.</p>
+
+        <h3 id="criss-cross-controls">Controls</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Control</th><th>Default</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Index order</td>
+                <td>Lowest first</td>
+                <td>The order "first" refers to. <em>Highest first</em> scans from the last constraint instead. Any fixed order keeps the method finite, but the two can take wildly different routes.</td>
+              </tr>
+              <tr>
+                <td>Maximum iterations</td>
+                <td>1,000</td>
+                <td>Cap on the bases visited. A run that hits it says so instead of claiming optimality.</td>
+              </tr>
+              <tr>
+                <td>Start (draggable marker)</td>
+                <td>First independent constraints</td>
+                <td>Without a drag, the walk starts where the first <var>n</var> independent constraints in the index order cross, and the marker sits there. Drag it and it snaps to a region vertex; the walk starts from the constraints tight there.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="pdas">The primal-dual active-set method</h2>
+        <p>PDAS (Hintermüller, Ito and Kunisch, 2002) is Newton's method on the complementarity conditions "each constraint is tight or its multiplier is zero". From a guess of the active set it solves for the point and multipliers, then updates the guess in one block: every active constraint whose multiplier went negative is dropped, and every constraint the point breaks is added. On a strictly convex quadratic program this converges in a handful of steps.</p>
+        <p>On an LP it is <strong>ill-posed</strong>: the Newton system is only square when exactly <var>n</var> constraints are active, and the block update almost never produces that. So lpviz runs PDAS on the <em>proximal method of multipliers</em> instead. Around a primal center <var>z</var> and a dual center <var>w</var>, each subproblem</p>
+        <p class="eq">max<sub><var>x</var></sub> min<sub><var>y</var> ≥ 0</sub>&nbsp;&nbsp;<var>c</var>ᵀ<var>x</var> − <var>y</var>ᵀ(<var>A</var><var>x</var> − <var>b</var>) − (ρ/2)‖<var>x</var> − <var>z</var>‖² + (δ/2)‖<var>y</var> − <var>w</var>‖²</p>
+        <p>is strictly convex in <var>y</var> once <var>x</var> = <var>z</var> + (<var>c</var> − <var>A</var>ᵀ<var>y</var>)/ρ is eliminated, so every Newton system has a unique solution, whatever the active set. PDAS solves the subproblem; its solution becomes the next pair of centers; and the proximal point method reaches an optimal pair of the LP itself.</p>
+        <p>Three additions make the walk short and robust:</p>
+        <ul>
+          <li><strong>Lawson–Hanson fallback.</strong> PDAS can cycle between active sets. When a subproblem repeats one, lpviz finishes that subproblem with Lawson and Hanson's monotone active-set method, which cannot cycle. Those steps carry an <code>f</code> in the log.</li>
+          <li><strong>Shrinking weights.</strong> When the iterates slide along one face, each step covers only that face's share of <var>c</var>/ρ, so progress crawls. While the active set holds across proximal steps, ρ and δ halve.</li>
+          <li><strong>Vertex identification.</strong> Once the active set has <var>n</var> independent constraints, lpviz solves the LP's own optimality conditions on them exactly. If that vertex is feasible with nonnegative multipliers it is the optimum, and the run ends there (marked <code>*</code>) instead of waiting for the centers to converge. A proximal step that repeats along a ray improving the objective ends the run as <em>unbounded</em>.</li>
+        </ul>
+
+        <h3 id="pdas-controls">Controls</h3>
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Control</th><th>Default</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>ρ (primal proximal weight)</td>
+                <td>0.30</td>
+                <td>How strongly each subproblem holds <var>x</var> near its center. The first step from the start is exactly <var>c</var>/ρ, so a small ρ throws the first iterate far out along the objective; a large ρ takes small, cautious steps.</td>
+              </tr>
+              <tr>
+                <td>δ (dual proximal weight)</td>
+                <td>0.30</td>
+                <td>How strongly the multipliers are held near theirs. It also sets how far a subproblem may break a constraint: a larger δ lets the iterates stray further outside while the multipliers catch up.</td>
+              </tr>
+              <tr>
+                <td>Maximum iterations</td>
+                <td>1,000</td>
+                <td>Cap on Newton steps over all subproblems.</td>
+              </tr>
+              <tr>
+                <td>Shrink weights</td>
+                <td>On</td>
+                <td>Halve ρ and δ while the active set holds. Turn it off to see plain proximal steps creep along a nearly flat face.</td>
+              </tr>
+              <tr>
+                <td>Identify vertex</td>
+                <td>On</td>
+                <td>Stop at an optimal vertex as soon as the active set pins it down. Off, the run ends only when the KKT residual falls below tolerance.</td>
+              </tr>
+              <tr>
+                <td>Start (draggable marker)</td>
+                <td>Origin</td>
+                <td>The first proximal center, and the path's first iterate.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 id="log">Reading the logs</h2>
+        <p>Criss-cross on the <em>Pentagon</em> preset:</p>
+        <pre><code> Iter        x        y        Obj Pinf Dinf Tight
+    1    -9.00    +4.00    -5.1e+1    0    1 1,2
+    2    -2.00    +9.00    +1.3e+1    0    1 2,3
+    3    +7.00    +5.00    +6.4e+1    0    0 3,4
+Optimal basis after 2 pivots</code></pre>
+        <ul>
+          <li><strong>Pinf</strong>: how many constraints the point breaks. <strong>Dinf</strong>: how many tight constraints have a negative multiplier. The basis is optimal when both are zero.</li>
+          <li><strong>Tight</strong>: the constraints in the basis, numbered as the problem panel lists them.</li>
+        </ul>
+        <p>PDAS on the same region:</p>
+        <pre><code> Iter        x        y        Obj        KKT Active
+    1    +0.00    +0.00    +0.0e+0     7.0e+0 -
+    2   +23.33   +10.00    +1.9e+2     1.7e+1 -
+   3p    +8.24    +4.84    +7.2e+1     5.0e+0 3,4
+   4*    +7.00    +5.00    +6.4e+1     0.0e+0 3,4</code></pre>
+        <ul>
+          <li><strong>KKT</strong>: the largest of the constraint violation, the stationarity gap ‖<var>c</var> − <var>A</var>ᵀ<var>y</var>‖<sub>∞</sub> and the complementarity gap.</li>
+          <li><strong>Active</strong>: the constraints whose multipliers are free in that Newton step ("−" for none; a long list shows as a count).</li>
+          <li>Markers after the iteration number: <code>p</code> solved its subproblem, so the centers moved; <code>f</code> is a Lawson–Hanson step after a cycle; <code>*</code> is the identified optimal vertex.</li>
+        </ul>
+
+        <h2 id="behavior">Behavior to watch for</h2>
+        <ul>
+          <li><strong>Index order matters enormously.</strong> On <em>Many Facets</em>, criss-cross with <em>Lowest first</em> pivots around the boundary in 3 steps. Switch to <em>Highest first</em> and it zig-zags in 18, alternating between crossings far outside the region and vertices on its far side.</li>
+          <li><strong>The objective can go down.</strong> Nothing in criss-cross forces improvement: watch the Obj column jump up and down in the highest-first run. Finiteness comes from the index rule alone.</li>
+          <li><strong>Block changes.</strong> In PDAS's log, the active set can lose and gain several constraints in one step, where criss-cross and simplex change one at a time. On <em>Many Facets</em>, the first Newton step activates every constraint the unconstrained step broke.</li>
+          <li><strong>The first step is <var>c</var>/ρ.</strong> Drag the PDAS start marker or move the ρ slider: the second iterate always sits at the start plus <var>c</var>/ρ, and the rest of the path pulls back from there.</li>
+          <li><strong>Turn off the shortcuts.</strong> With <em>Identify vertex</em> and <em>Shrink weights</em> off, PDAS is the plain proximal method of multipliers with PDAS subproblems — and on a nearly flat facet it can take hundreds of steps to slide to the optimum.</li>
+        </ul>

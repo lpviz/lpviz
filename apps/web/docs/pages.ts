@@ -29,10 +29,11 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     pager: "Docs overview",
     title: "lpviz Documentation — Visualize Linear Programming Solvers",
     description:
-      "How lpviz works: draw a feasible region, pick an objective, and watch the Simplex method, interior point methods (IPM), PDHG, the ellipsoid method, and the central path solve your linear program step by step.",
+      "How lpviz works: draw a feasible region, pick an objective, and watch the Simplex method, active-set methods, interior point methods (IPM), PDHG, the ellipsoid method, and the central path solve your linear program step by step.",
     og: {
       title: "lpviz Documentation — Visualize Linear Programming Solvers",
-      description: "Interactive guides to the Simplex method, interior point methods, PDHG, the ellipsoid method, and the central path — with a browser app that animates every iteration.",
+      description:
+        "Interactive guides to the Simplex method, active-set methods, interior point methods, PDHG, the ellipsoid method, and the central path — with a browser app that animates every iteration.",
     },
     twitter: {
       title: "lpviz Documentation",
@@ -54,6 +55,22 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     schema: {
       name: "The Simplex Method",
       description: "How the Simplex method solves linear programs by pivoting between vertices, and how lpviz implements and visualizes it.",
+    },
+  },
+  {
+    slug: "active-set",
+    nav: "Active-Set",
+    pager: "Active-Set Methods",
+    description:
+      "How active-set methods solve linear programs by guessing which constraints are tight: the criss-cross method's least-index pivots and the primal-dual active-set method (PDAS) on proximal subproblems — visualized interactively in lpviz.",
+    og: {
+      title: "Criss-Cross and PDAS, Visualized",
+      description: "Watch the criss-cross method hop between constraint crossings outside your region, and PDAS swap whole blocks of active constraints on its way to the optimum.",
+    },
+    twitter: { title: "Active-Set Methods, Visualized — lpviz", description: "The criss-cross method and the primal-dual active-set method on LPs you draw." },
+    schema: {
+      name: "Active-Set Methods: Criss-Cross and PDAS",
+      description: "How the criss-cross method and the primal-dual active-set method solve linear programs, and how lpviz implements and visualizes them.",
     },
   },
   {
