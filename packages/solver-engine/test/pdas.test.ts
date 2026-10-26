@@ -108,6 +108,13 @@ describe("pdas", () => {
     expect(footerOf(r)).toMatch(/unbounded/);
   });
 
+  test("shrinking weights do not hold off the unbounded certificate", () => {
+    // the halved weights double each step: compared raw, steps never repeat until the weights bottom out
+    const r = solve(STRIP, Float64Array.of(1, 1), { tol: 1e-7 });
+    expect(r.status).toBe("unbounded");
+    expect(Math.max(...Array.from(r.iterates.points, Math.abs))).toBeLessThan(1e4);
+  });
+
   test("the iteration cap stops the run without claiming optimality", () => {
     const r = solve(largePolygon(lcg(4), 40).constraints, Float64Array.of(1, 0.2), { maxit: 2 });
     expect(r.iterates.count).toBe(2);

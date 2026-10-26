@@ -304,16 +304,17 @@ function primalMultipliers(A: DenseMatrix, c: Float64Array, active: readonly num
   active.forEach((i, r) => (out[i] = solution[r]!));
 }
 
-// Whether the proximal step x - z repeats the previous one (kept in `previous`, which this updates)
-// along a direction d with c·d > 0 and A d <= 0: a ray of the region that improves the objective
-// forever, the certificate of an unbounded LP.
+// Whether the proximal step x - z repeats the previous one's direction (kept in `previous` as a unit
+// vector, which this updates) along a direction d with c·d > 0 and A d <= 0: a ray of the region that
+// improves the objective forever, the certificate of an unbounded LP. Directions, not steps: shrinking
+// the weights doubles the step each time, which would hold the test off until the weights bottom out.
 function isImprovingRay(A: DenseMatrix, c: Float64Array, x: Float64Array, z: Float64Array, previous: Float64Array, tol: number): boolean {
   const n = A.cols;
   const d = Float64Array.from(x, (value, j) => value - z[j]!);
   const length = Math.hypot(...d);
   let repeats = length > tol;
-  for (let j = 0; j < n; j++) if (Math.abs(d[j]! - previous[j]!) > tol * (1 + length)) repeats = false;
-  previous.set(d);
+  for (let j = 0; j < n; j++) if (Math.abs(d[j]! / length - previous[j]!) > tol) repeats = false;
+  previous.set(length > tol ? d.map((value) => value / length) : d);
   if (!repeats || dot(c, d) <= tol * length) return false;
   for (let i = 0; i < A.rows; i++) if (rowDot(A, i, d) > tol * length) return false;
   return true;
