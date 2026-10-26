@@ -12,6 +12,7 @@ import {
   expectFeasible,
   footerOf,
   lastIterate,
+  lastRowOf,
   LOCALIZATION_DEFAULTS,
   objectiveValue,
   randomObjective,
@@ -250,4 +251,21 @@ describe("cuttingPlane", () => {
       expect(r.iterates.count).toBeLessThanOrEqual(SQUARE.length + 1);
     });
   });
+});
+
+test("a run that empties its set closes with rho 0", () => {
+  const constraints: Constraint[] = [
+    [-1, 0, 0],
+    [0, -1, 0],
+    [1, 1, 1],
+  ];
+  const vertices: Vec[] = [
+    [0, 0],
+    [1, 0],
+    [0, 1],
+  ];
+  for (const queryPoint of ["chebyshev", "analytic", "volumetric"] as const) {
+    const r = cuttingPlane(vertices, constraints, Float64Array.of(1, 1), { ...opts(queryPoint), initialScale: 1.1 });
+    expect(lastRowOf(r).convergence).toBe(0);
+  }
 });

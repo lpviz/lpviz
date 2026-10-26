@@ -333,7 +333,10 @@ export class LocalizationRun {
   finish(stops: TerminationLines): SolverResult {
     const [lead, after] = stops[this.termination] ?? [];
     const footer = this.trace.footerOf({ converged: this.termination === "converged", lead, after });
-    this.trace.closeOnIncumbent(this.incumbent, this.upperBound);
+    // an emptied set ("exhausted", or the ellipsoid's "infeasible" cut) holds nothing above the incumbent,
+    // though the bound still stands from before the last cut
+    const emptied = this.termination === "exhausted" || this.termination === "infeasible";
+    this.trace.closeOnIncumbent(this.incumbent, emptied ? this.incumbent.objective : this.upperBound);
     return this.trace.result(footer);
   }
 }
