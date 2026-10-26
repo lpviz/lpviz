@@ -61,4 +61,12 @@ describe("hpdlp", () => {
     expect(r.status).toBe("optimal");
     expect(r.restartIndices!.length).toBeGreaterThan(0);
   });
+
+  test("a warm start is the first iterate and the next stays near it", () => {
+    // starting on the optimal corner: a bare (1, x0, 1, 0) anchor sent the next point to (-0.08, -0.08)
+    const r = hpdlp(SQUARE, Float64Array.of(1, 1), { ...OPTS, startPoint: [-4, -4] });
+    expect(Array.from(r.iterates.points.subarray(0, 2))).toEqual([-4, -4]);
+    expect(Math.abs(r.iterates.points[2]!)).toBeGreaterThan(1);
+    expect(r.status).toBe("optimal");
+  });
 });

@@ -150,9 +150,14 @@ function hpdlpCore(A: LinearOperator, l: Float64Array, u: Float64Array, c: Float
   };
   setSteps();
 
-  // the practical anchor (1, 0, 1, 0) of the paper, with a warm start's x in place of 0
+  // the practical anchor (1, 0, 1, 0) of the paper. A warm start puts its x in place of 0 and shifts
+  // alpha by -c'x0: tau's first step is driven by c'x + 2 alpha' - alpha, so a bare (1, x0, 1, 0)
+  // would scale tau by c'x0 and pull the recovered point x / tau toward the origin
   const z = new HsdPoint(n, m);
-  if (x0) z.x.set(x0);
+  if (x0) {
+    z.x.set(x0);
+    z.alpha = 1 - dot(c, x0);
+  }
   const anchor = new HsdPoint(n, m);
   anchor.set(z);
   const t = new HsdPoint(n, m);
@@ -254,6 +259,11 @@ function hpdlpCore(A: LinearOperator, l: Float64Array, u: Float64Array, c: Float
   let lastTrialFixedPointError = Number.POSITIVE_INFINITY;
   let epsilon = Number.POSITIVE_INFINITY;
   let status: "optimal" | "infeasible" | "unbounded" | undefined;
+
+  // the first row is the start, as PDHG's is, with the anchor's zero duals
+  epsilon = kkt.of(point, yHat);
+  if (colorByBasis) basisHashes.push(0);
+  trace.record(point, -kkt.cTx, kkt.primal, epsilon);
 
   while (trace.count < maxit) {
     step();
