@@ -51,10 +51,9 @@ export function computeQueryPoint(kind: BarrierQueryPoint, rows: LpRow[], n: num
 
   const hessian = barrierHessian(rows, center, kind === "volumetric", n);
   if (!hessian) return null;
-  const P = invertSymmetric(hessian.metric, n);
-  if (!P) return null;
-
-  return { point: center, P, leverage: hessian.leverage };
+  // the Dikin ellipse H^-1, inscribed in the region; the volumetric Q^-1 is at least as large (every
+  // leverage is at most 1, so Q <= H) and crosses faces
+  return { point: center, P: hessian.dikin, leverage: hessian.leverage };
 }
 
 function slacksOf(rows: LpRow[], x: Float64Array, n: number): Float64Array | null {
@@ -121,8 +120,8 @@ function barrierHessian(rows: LpRow[], x: Float64Array, weighted: boolean, n: nu
   for (let i = 0; i < rows.length; i++) {
     leverage[i] = symmetricQuadraticForm(inverse, rows[i]!, n) / (slacks[i]! * slacks[i]!);
   }
-  if (!weighted) return { metric: H, leverage, slacks };
-  return { metric: rowsGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), leverage, slacks };
+  if (!weighted) return { metric: H, dikin: inverse, leverage, slacks };
+  return { metric: rowsGram(rows, (i) => leverage[i]! / (slacks[i]! * slacks[i]!), n), dikin: inverse, leverage, slacks };
 }
 
 // Damped Newton on a self-concordant barrier: full steps once the Newton

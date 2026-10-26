@@ -132,6 +132,18 @@ describe("cuttingPlane", () => {
     expect(leverage!.reduce((total, score) => total + score, 0)).toBeCloseTo(2, 10);
   });
 
+  test("the barrier centers' drawn ellipses are inscribed", () => {
+    // near-duplicate faces push the leverage-weighted Q well below H, so Q^-1 would cross a face
+    const rows = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], ...Array.from({ length: 30 }, () => [1, 0, 1.0001])];
+    for (const kind of ["analytic", "volumetric"] as const) {
+      const { point, P } = computeQueryPoint(kind, rows, 2)!;
+      for (const [a1, a2, b] of rows) {
+        const reach = Math.sqrt(a1! * (P[0]! * a1! + P[1]! * a2!) + a2! * (P[2]! * a1! + P[3]! * a2!));
+        expect(reach).toBeLessThanOrEqual(b! - a1! * point[0]! - a2! * point[1]! + 1e-12);
+      }
+    }
+  });
+
   test("an empty region terminates instead of spinning", () => {
     for (const queryPoint of QUERY_POINTS) {
       const r = cuttingPlane(EMPTY_HULL, EMPTY, Float64Array.of(1, 1), opts(queryPoint));
