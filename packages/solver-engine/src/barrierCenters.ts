@@ -38,19 +38,20 @@ export function computeQueryPoint(kind: BarrierQueryPoint, rows: LpRow[], n: num
     return null;
   }
 
-  if (kind === "chebyshev") {
-    const P = new Float64Array(n * n);
-    for (let j = 0; j < n; j++) P[j * n + j] = ball.radius * ball.radius;
-    return { point: ball.center, P, leverage: null };
-  }
+  const P = new Float64Array(n * n);
+  for (let j = 0; j < n; j++) P[j * n + j] = ball.radius * ball.radius;
+  const chebyshev = { point: ball.center, P, leverage: null };
+  if (kind === "chebyshev") return chebyshev;
 
   // the inscribed ball's center is strictly interior, which is exactly what
-  // both barriers need to start from — no cut-restoration step required
+  // both barriers need to start from — no cut-restoration step required. The set is non-empty
+  // (it holds that ball), so a barrier that fails numerically falls back to the ball's center: a
+  // null here would read as an emptied set, and end the run claiming the incumbent optimal
   const center = barrierCenter(rows, ball.center, kind === "volumetric", n);
-  if (!center) return null;
+  if (!center) return chebyshev;
 
   const hessian = barrierHessian(rows, center, kind === "volumetric", n);
-  if (!hessian) return null;
+  if (!hessian) return chebyshev;
   // the Dikin ellipse H^-1, inscribed in the region; the volumetric Q^-1 is at least as large (every
   // leverage is at most 1, so Q <= H) and crosses faces
   return { point: center, P: hessian.dikin, leverage: hessian.leverage };
