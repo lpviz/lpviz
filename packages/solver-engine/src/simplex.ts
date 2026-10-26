@@ -39,7 +39,9 @@ function primalPointFromDualBasis(A: DenseMatrix, b: Float64Array, columns: read
     .sort((p, q) => p - q)
     .filter((index) => index < A.rows)
     .slice(0, n);
-  if (support.length < n) return new Float64Array(n);
+  // a basis free of Phase 1's artificials with fewer than n rows belongs to a region with no vertex
+  // (its dependent dual rows were dropped): the point of the supporting planes nearest the origin
+  if (support.length < n) return support.length === columns.length ? leastNormPoint(A, b, support) : new Float64Array(n);
 
   if (n === 2) {
     const [i, k] = support as [number, number];
@@ -66,6 +68,29 @@ function primalPointFromDualBasis(A: DenseMatrix, b: Float64Array, columns: read
   )
     return new Float64Array(n);
   return point.every(Number.isFinite) ? point : new Float64Array(n);
+}
+
+// x = A_S'(A_S A_S')^-1 b_S, the least-norm solution of the rows `support` (the origin when they are dependent)
+function leastNormPoint(A: DenseMatrix, b: Float64Array, support: readonly number[]): Float64Array {
+  const n = A.cols;
+  const k = support.length;
+  const rows = selectRows(A, support);
+  const gram = new Float64Array(k * k);
+  for (let i = 0; i < k; i++) for (let j = 0; j < k; j++) gram[i * k + j] = rowDot(rows, i, rows.data.subarray(j * n, (j + 1) * n));
+  const weights = new Float64Array(k);
+  const point = new Float64Array(n);
+  if (
+    k === 0 ||
+    !trySolveDenseSystem(
+      gram,
+      k,
+      Float64Array.from(support, (row) => b[row]!),
+      weights,
+    )
+  )
+    return point;
+  for (let i = 0; i < k; i++) for (let j = 0; j < n; j++) point[j]! += weights[i]! * rows.data[i * n + j]!;
+  return point;
 }
 
 function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array, cfg: Pick<PhaseConfig, "tol" | "pivotRules">): SolverResult {

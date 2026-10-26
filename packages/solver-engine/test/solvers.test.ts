@@ -120,6 +120,7 @@ describe("simplex", () => {
     // x in [-1, 2], maximize x: the y-column of the dual system is all zeros
     const r = simplex(STRIP, Float64Array.of(1, 0), opts(true));
     expect(r.status).toBe("optimal");
+    expect(lastIterate(r)[0]).toBeCloseTo(2, 9);
   });
 
   test("dual mode solves a slanted strip, whose dual rows are dependent", () => {
@@ -130,6 +131,8 @@ describe("simplex", () => {
     ];
     const r = simplex(strip, Float64Array.of(1, 1), opts(true));
     expect(r.status).toBe("optimal");
+    const [x, y] = lastIterate(r);
+    expect(x! + y!).toBeCloseTo(1, 9);
   });
 
   test("dual mode reports an infeasible primal as infeasible, not unbounded", () => {
