@@ -212,7 +212,12 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
           }
         }
         if (entering === -1) {
+          // the subproblem's solution, which the centers move to: an iterate like PDAS's own
           active = free;
+          if (record(x, y, PROX_STEP_MARKER, free) <= tol) {
+            status = "optimal";
+            return false;
+          }
           return true;
         }
         free = [...free, entering].sort((p, q) => p - q);

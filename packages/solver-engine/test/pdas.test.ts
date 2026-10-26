@@ -97,6 +97,11 @@ describe("pdas", () => {
       if (!rowsOf(r).some((row) => markerOf(row) === FALLBACK_MARKER)) continue;
       fallbacks++;
       expect(footerOf(r)).toMatch(/Lawson-Hanson/);
+      // a fallback ends on the subproblem's solution, recorded as the step the centers take
+      const markers = rowsOf(r).map(markerOf);
+      markers.forEach((marker, i) => {
+        if (marker === FALLBACK_MARKER && i + 1 < markers.length) expect([FALLBACK_MARKER, PROX_STEP_MARKER]).toContain(markers[i + 1]!);
+      });
       expect(objectiveValue(obj, lastIterate(r))).toBeCloseTo(bruteForceOptimum(obj, polygon.hull), 5);
     }
     expect(fallbacks).toBeGreaterThan(0);
