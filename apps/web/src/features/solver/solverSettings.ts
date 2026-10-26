@@ -109,7 +109,7 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   // H-PDLP: the homogeneous self-dual embedding with its own Halpern scheme, on PDHG's eta and tau
   pdhgHsd: { default: false, owner: "pdhg", wire: { slot: 25, codec: "bool" } },
   pdhgHsdNu: { default: 0.998, owner: "pdhg", range: ["0.010", "0.999", "0.001"], wire: { slot: 26, codec: { scaled: 1e4 } } },
-  pdhgHsdAdaptiveWeight: { default: true, owner: "pdhg", wire: { slot: 27, codec: "bool" } },
+  pdhgHsdAdaptiveWeight: { default: false, owner: "pdhg", wire: { slot: 27, codec: "bool" } },
   centralPathIter: { default: 75, owner: "central", range: ["2", "100", "1"], wire: { slot: 10, codec: "int" }, legacyKey: "c" },
   maxitEllipsoid: { default: 500, owner: "ellipsoid", wire: { slot: 11, codec: "int" }, legacyKey: "n" },
   ellipsoidDeepCuts: { default: true, owner: "ellipsoid", wire: { slot: 12, codec: "bool" }, legacyKey: "u" },
