@@ -109,6 +109,13 @@ describe("simplex", () => {
     }
   });
 
+  test("dual mode logs the objective with the primal's sign", () => {
+    // the square's optimum (-4, -4) has value -8 under max x + y; dual Phase 2 maximizes -b'y
+    const lastRow = (dual: boolean) => (simplex(SQUARE, Float64Array.of(1, 1), opts(dual)).log.at(-1)!.rows as string[]).at(-1)!;
+    expect(lastRow(true)).toContain("-8.0");
+    expect(lastRow(false)).toContain("-8.0");
+  });
+
   test("dual mode handles redundant zero rows (vertical strip)", () => {
     // x in [-1, 2], maximize x: the y-column of the dual system is all zeros
     const r = simplex(STRIP, Float64Array.of(1, 0), opts(true));

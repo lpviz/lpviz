@@ -74,7 +74,7 @@ function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array,
   const cDual = negate(b);
   const phase1 = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
   const iterates = new FloatBlock(A.cols);
-  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, iterates, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE };
+  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, iterates, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE, negatePhase2Objective: true };
 
   // An unbounded dual means the primal LP being visualized is infeasible.
   const run = runTwoPhase(phase1, { A: phase1.columns, b: phase1.lp.b, c: cDual }, config, { phase2UnboundedNote: "Dual LP is unbounded: the LP is infeasible." });

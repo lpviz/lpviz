@@ -21,6 +21,8 @@ export interface PhaseConfig {
   pointOf: (x: Float64Array, basis: Basis) => Float64Array;
   /** the line logged when no leaving variable exists */
   unboundedNote: string;
+  /** dual mode: Phase 2 maximizes -b'y, logged as the dual objective b'y, the primal value it bounds */
+  negatePhase2Objective?: boolean | undefined;
 }
 
 /** What a phase hands on: how many iterates it appended and its log, and the basis and objective it ended on. */
@@ -65,7 +67,7 @@ export function simplexPhase(lp: StandardLp, initialBasis: readonly boolean[], c
     const point = pointOf(solution.x, basis);
     iterates.push(point);
     count++;
-    rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtIterate(point, objective)} ${basisString(basis.isBasic)}\n`);
+    rows.push(`${fmtIteration(iteration, guard.active ? "d" : "")} ${fmtIterate(point, phase === 2 && cfg.negatePhase2Objective ? -objective : objective)} ${basisString(basis.isBasic)}\n`);
 
     if (entering === -1) break;
 
