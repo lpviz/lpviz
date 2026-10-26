@@ -24,11 +24,17 @@ const ipmSection = (ctx: SectionContext): SettingControl[] => [
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
 ];
 
+// H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma
+const isClassicPdhg = (settings: SolverSettings) => !settings.pdhgHsd;
+const isHsd = (settings: SolverSettings) => settings.pdhgHsd;
 const pdhgSection = (ctx: SectionContext): SettingControl[] => [
   numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }),
   numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }),
+  shownWhen(numberSlider(ctx, { key: "pdhgHsdNu", label: "ν (homogeneous step coupling):", format: fixed(3) }), isHsd),
   maxitSlider(ctx, "maxitSliderPDHG", "maxitPDHG"),
-  checkboxRow(ctx, { pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }),
+  checkboxRow(ctx, { pdhgHsd: "H-PDLP", pdhgHsdAdaptiveWeight: "Adaptive weight", pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }, (next, key) =>
+    key === "pdhgHsdAdaptiveWeight" ? isHsd(next) : isClassicPdhg(next) || key === "pdhgHsd" || key === "pdhgColorByBasis",
+  ),
 ];
 
 const ellipsoidSection = (ctx: SectionContext): SettingControl[] => [

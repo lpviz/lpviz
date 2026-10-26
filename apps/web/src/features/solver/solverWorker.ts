@@ -2,6 +2,7 @@ import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
 import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
+import { hpdlp } from "@lpviz/solver-engine/hpdlp";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdas } from "@lpviz/solver-engine/pdas";
 import { pdhg } from "@lpviz/solver-engine/pdhg";
@@ -26,8 +27,9 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
     return simplex(constraints, objective, withTol(options));
   },
   pdhg: (payload) => {
-    const { solver: _, constraints, objective, ...options } = payload;
-    return pdhg(constraints, objective, withTol(options));
+    // H-PDLP takes tau as its dual step sigma and always runs its own Halpern scheme on the inequality form
+    const { solver: _, constraints, objective, hsd, nu, adaptiveWeight, ...options } = payload;
+    return hsd ? hpdlp(constraints, objective, withTol({ ...options, sigma: options.tau, nu, adaptiveWeight })) : pdhg(constraints, objective, withTol(options));
   },
   // the active-set methods: criss-cross pivots on vertex bases, PDAS takes Newton steps on proximal
   // subproblems; both return text rows and feasibility phases, like simplex

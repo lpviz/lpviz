@@ -39,7 +39,7 @@ function primalResidual(ax: Float64Array, b: Float64Array, ineq: boolean) {
 // The relative KKT error of a primal-dual pair: the worst of the primal residual, the dual
 // residual and the duality gap, each scaled by the data it is measured against. The primal side's
 // parts (A x, the residual, c'x) are kept from the last measurement for the log row and the step.
-class KktError {
+export class KktError {
   readonly ax: Float64Array;
   primal = 0;
   cTx = 0;
@@ -80,7 +80,7 @@ class KktError {
   }
 }
 
-function shouldRestartHalpern(innerIteration: number, totalIteration: number, fixedPointError: number, initialFixedPointError: number, lastTrialFixedPointError: number) {
+export function shouldRestartHalpern(innerIteration: number, totalIteration: number, fixedPointError: number, initialFixedPointError: number, lastTrialFixedPointError: number) {
   if (!Number.isFinite(initialFixedPointError) || innerIteration < 2) {
     return false;
   }
