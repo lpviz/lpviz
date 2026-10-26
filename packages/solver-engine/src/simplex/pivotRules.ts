@@ -118,7 +118,7 @@ export function createCyclingGuard(initial: PivotRules, tol: number) {
     /** Record the step length (minimum ratio) of the pivot just taken. */
     recordPivot(step: number) {
       degeneratePivots = step <= tol ? degeneratePivots + 1 : 0;
-      if (active || degeneratePivots <= MAX_CONSECUTIVE_DEGENERATE_PIVOTS) return;
+      if (active || degeneratePivots < MAX_CONSECUTIVE_DEGENERATE_PIVOTS) return;
       if (rules.entering === BLAND_RULES.entering && rules.leaving === BLAND_RULES.leaving) return;
       rules.entering = BLAND_RULES.entering;
       rules.leaving = BLAND_RULES.leaving;
