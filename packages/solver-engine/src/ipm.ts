@@ -20,14 +20,14 @@ export interface IPMOptions {
 
 /**
  * A Mehrotra-style predictor–corrector interior point method on `max c'x s.t. Ax <= b`, written
- * as the minimization of −c over `(−A)x + s = −b, s ≥ 0`. Each iteration solves the normal
+ * as the minimization of −c over `(−A)x − s = −b, s ≥ 0`. Each iteration solves the normal
  * equations twice (the affine step, then the corrector) and steps a fraction `alphaMax` of the way
  * to the boundary; `mu = s'y / m` is the complementarity measure the 3D path is lifted by.
  */
 export function ipm(constraints: readonly Constraint[], objective: Float64Array, opts: IPMOptions): SolverResult {
   const { tol, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
-  // Ax <= b becomes (-A)x + s = -b with slack s >= 0, and max becomes min.
+  // Ax <= b becomes (-A)x - s = -b with slack s >= 0, and max becomes min.
   const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
   const A = negateMatrix(aOriginal);
   const At = transposeMatrix(A);
