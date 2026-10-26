@@ -138,3 +138,16 @@ describe("pdas", () => {
     }
   });
 });
+
+test("an empty region with shrinking weights stops instead of throwing", () => {
+  // x <= 1 and x >= 2: the weights halve toward zero and the Newton system turns singular
+  const empty: Constraint[] = [
+    [1, 0, 1],
+    [-1, 0, -2],
+    [0, 1, 1],
+    [0, -1, 1],
+  ];
+  const r = solve(empty, Float64Array.of(1, 1));
+  expect(r.status).toBeUndefined();
+  expect(r.log[0]!.footer).not.toMatch(/^Converged/m);
+});

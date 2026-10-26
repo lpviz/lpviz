@@ -131,6 +131,7 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
   let proxSteps = 0;
   let fallbacks = 0;
   let status: "optimal" | "unbounded" | undefined;
+  let singular = false;
   const step = new Float64Array(n);
   // the KKT residual per iterate: the log's column and the height the 3D view lifts it by
   const residuals: number[] = [];
@@ -150,8 +151,9 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
       x[j] = z[j]! + (c[j]! - aty) / rho;
     }
   };
-  // The Newton step on `free`: H_FF y_F = q_F with the rest of y at zero, into y and its x.
-  const solveOn = (free: readonly number[]) => {
+  // The Newton step on `free`: H_FF y_F = q_F with the rest of y at zero, into y and its x; false
+  // when H_FF is singular, as it becomes on an empty region once the shrinking weights near zero.
+  const solveOn = (free: readonly number[]): boolean => {
     y.fill(0);
     const size = free.length;
     if (size > 0) {
@@ -169,10 +171,11 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
           solution,
         )
       )
-        throw new Error("PDAS: singular Newton system");
+        return false;
       free.forEach((i, r) => (y[i] = solution[r]!));
     }
     primalOf(y);
+    return true;
   };
   // (Hy - q)_i for a row held at zero: negative when the row is broken, net of the regularization
   const wantsMultiplier = (i: number) => rowDot(A, i, x) - b[i]! + delta * w[i]! > ACTIVE_SET_SLACK;
@@ -184,7 +187,10 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
     let free = start.filter((i) => previous[i]! > 0);
     while (true) {
       if (rows.length >= maxit) return false;
-      solveOn(free);
+      if (!solveOn(free)) {
+        singular = true;
+        return false;
+      }
       const blocked = free.filter((i) => y[i]! < 0);
       if (blocked.length > 0) {
         // step from the previous feasible multipliers towards the solve until one hits zero
@@ -229,7 +235,10 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
 
     while (true) {
       if (rows.length >= maxit) break outer;
-      solveOn(active);
+      if (!solveOn(active)) {
+        singular = true;
+        break outer;
+      }
 
       // the next active set: keep the rows whose multiplier stays nonnegative, add the rows that
       // want one
@@ -281,7 +290,7 @@ export function pdas(constraints: readonly Constraint[], objective: Float64Array
     previousActive = key;
   }
 
-  const footer = solveFooter(status === "optimal", rows.length, performance.now() - startTime, status === "unbounded" ? "Unbounded LP" : undefined);
+  const footer = solveFooter(status === "optimal", rows.length, performance.now() - startTime, status === "unbounded" ? "Unbounded LP" : singular ? "Stopped on a singular Newton system" : undefined);
   const tally = `${proxSteps} proximal steps${fallbacks > 0 ? `, ${fallbacks} finished by Lawson-Hanson after a cycle` : ""}`;
   const note = status === "unbounded" ? "The proximal step repeats along a ray that improves the objective and breaks no row: the LP is unbounded.\n" : "";
   return {
