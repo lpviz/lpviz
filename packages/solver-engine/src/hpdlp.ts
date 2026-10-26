@@ -165,7 +165,8 @@ function hpdlpCore(A: LinearOperator, l: Float64Array, u: Float64Array, c: Float
   const xShift = new Float64Array(n);
   const dx = new Float64Array(n);
   const adx = new Float64Array(m);
-  const point = new Float64Array(n);
+  // the anchor's recovered point (tau = 1), drawn until a PDHG point with tau > 0 replaces it
+  const point = Float64Array.from(z.x);
   const yHat = new Float64Array(m);
   let dualWarm = 0;
 
