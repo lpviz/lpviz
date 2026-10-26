@@ -122,6 +122,16 @@ describe("simplex", () => {
     expect(r.status).toBe("optimal");
   });
 
+  test("dual mode solves a slanted strip, whose dual rows are dependent", () => {
+    // -1 <= x + y <= 1, maximize x + y: no vertex, and A' has rank 1
+    const strip: Constraint[] = [
+      [1, 1, 1],
+      [-1, -1, 1],
+    ];
+    const r = simplex(strip, Float64Array.of(1, 1), opts(true));
+    expect(r.status).toBe("optimal");
+  });
+
   test("dual mode reports an infeasible primal as infeasible, not unbounded", () => {
     // x <= 1 and x >= 2: empty region
     const empty: Constraint[] = [

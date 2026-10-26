@@ -1,7 +1,7 @@
 // Two-phase simplex on `max c'x s.t. Ax <= b`: this file is the entry, the warm start and the dual
 // mode; the basis, the pivot rules, a phase's walk and the two-phase sequence are in simplex/.
 
-import { denseFromConstraints, type DenseMatrix, negate, rowDot, scaleRows, selectRows, transposeMatrix } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, negate, rowDot, scaleRows, selectRows, transposeMatrix } from "@lpviz/math/blas";
 import { trySolveDenseSystem } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { warmStart } from "./limits";
@@ -74,7 +74,15 @@ function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array,
   const cDual = negate(b);
   const phase1 = phase1Problem(dual.b, (gamma) => scaleRows(dual.A, gamma));
   const iterates = new FloatBlock(A.cols);
-  const config: Omit<PhaseConfig, "phase"> = { tol, pivotRules, dimension: A.cols, iterates, pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol), unboundedNote: UNBOUNDED_NOTE, negatePhase2Objective: true };
+  const config: Omit<PhaseConfig, "phase"> = {
+    tol,
+    pivotRules,
+    dimension: A.cols,
+    iterates,
+    pointOf: (_, basis) => primalPointFromDualBasis(A, b, basis.columns, tol),
+    unboundedNote: UNBOUNDED_NOTE,
+    negatePhase2Objective: true,
+  };
 
   // An unbounded dual means the primal LP being visualized is infeasible.
   const run = runTwoPhase(phase1, { A: phase1.columns, b: phase1.lp.b, c: cDual }, config, { phase2UnboundedNote: "Dual LP is unbounded: the LP is infeasible." });
@@ -86,19 +94,28 @@ function solveDualMode(A: DenseMatrix, b: Float64Array, objective: Float64Array,
   return simplexResult(iterates, run.phase1, run.phase2, run.phase2.status === "unbounded" ? "infeasible" : run.phase2.status, "dual");
 }
 
-// Rows of the dual system that are identically zero with a zero right-hand side are redundant
-// (0 = 0); Phase 1 can never pivot their artificial variables out of the basis, so drop them up front.
+// Rows of the dual system A'y = c that follow from the rows before them, right-hand side included,
+// are redundant: a region with no vertex (a strip, a slab) has fewer than n independent rows, and
+// Phase 1 can never pivot the artificial variable of a dependent row out of the basis, so drop them
+// up front. An inconsistent row (c outside the rows' span: the dual is infeasible) stays for Phase 1
+// to report. Gram-Schmidt on the rows extended by their right-hand side.
 function dropRedundantRows(A: DenseMatrix, b: Float64Array, tol: number): { A: DenseMatrix; b: Float64Array } {
+  const width = A.cols + 1;
   const kept: number[] = [];
+  const span: Float64Array[] = [];
   for (let row = 0; row < A.rows; row++) {
-    let allZero = true;
-    for (let col = 0; col < A.cols; col++) {
-      if (Math.abs(A.data[row * A.cols + col]!) > tol) {
-        allZero = false;
-        break;
-      }
+    const v = new Float64Array(width);
+    v.set(A.data.subarray(row * A.cols, (row + 1) * A.cols));
+    v[A.cols] = b[row]!;
+    const norm = Math.hypot(...v);
+    for (const q of span) {
+      const projection = dot(q, v);
+      for (let j = 0; j < width; j++) v[j]! -= projection * q[j]!;
     }
-    if (!allZero || Math.abs(b[row]!) > tol) kept.push(row);
+    const residual = Math.hypot(...v);
+    if (!(residual > tol * Math.max(norm, 1))) continue;
+    span.push(v.map((value) => value / residual));
+    kept.push(row);
   }
   if (kept.length === A.rows) return { A, b };
   return { A: selectRows(A, kept), b: Float64Array.from(kept, (row) => b[row]!) };
