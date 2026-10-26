@@ -70,6 +70,8 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     }
     const point = query.point;
 
+    // the set the point was queried from, before Vaidya's drop below enlarges it
+    const drawn = set.drawn();
     if (opts.queryPoint === "volumetric" && query.leverage) {
       set.dropBelow(query.leverage);
     }
@@ -86,8 +88,7 @@ export function cuttingPlane(vertices: Vec[], constraints: readonly Constraint[]
     run.upperBound = bound.value;
     const objectiveRadius = Math.max(0, bound.value - answer.objectiveValue);
 
-    // drawn as the set stood when this point was queried
-    run.record(point, query.P, answer, generating ? Math.max(0, answer.violation) : objectiveRadius, set.drawn());
+    run.record(point, query.P, answer, generating ? Math.max(0, answer.violation) : objectiveRadius, drawn);
     if (run.converged(answer.feasible)) break;
 
     const cut = new Array<number>(n + 1);
