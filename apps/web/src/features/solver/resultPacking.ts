@@ -10,7 +10,7 @@ import type { LazyRows, ResultLogSection, SolverWireResponse, SolverWireSuccess,
 // PDHG's is numerically tiny, so it is scaled to share IPM's visual range. Display tuning only,
 // never fed back into the math.
 const PDHG_EPS_Z_LIFT = 500;
-// HALO-LP's mu drops by orders of magnitude per Newton step, so a linear lift is one tall start and
+// HALO-LP's mu (and the homogeneous IPM's mu/tau^2) drops by orders of magnitude per step, so a linear lift is one tall start and
 // a flat path. It is lifted by its order of magnitude above the run's smallest mu instead, so the
 // last iterate of a converged run sits on the floor, with mu = 1 at PDHG's lifted start (eps = 1):
 // every power of ten is one even step down. At least one decade separates the two.
@@ -24,7 +24,7 @@ export function haloLift(mu: Float64Array): Float64Array {
 const liftOf = (request: SolverWorkerPayload, convergence: Float64Array | undefined): Float64Array | undefined => {
   if (!convergence) return undefined;
   if (request.solver === "pdhg") return Float64Array.from(convergence, (eps) => PDHG_EPS_Z_LIFT * eps);
-  if (request.solver === "ipm" && request.halo) return haloLift(convergence);
+  if (request.solver === "ipm" && (request.halo || request.homogeneous)) return haloLift(convergence);
   return convergence;
 };
 
@@ -35,7 +35,7 @@ export function packSolverResponse(id: number, request: SolverWorkerPayload, res
   const { iterates, convergence, log, phases, restartIndices, ellipsoids, localizingSets } = result;
   const lift = liftOf(request, convergence);
   // a buffer transfers once however many views share it (the lift is the convergence column for
-  // every solver but PDHG and HALO-LP); an empty one is not worth a transfer, and skipping it keeps a detached
+  // every solver but PDHG, HALO-LP and the homogeneous IPM); an empty one is not worth a transfer, and skipping it keeps a detached
   // zero-length array from ever reaching the client
   const buffers = new Set<ArrayBufferLike>();
   const transfer = (array: Float64Array | Uint8Array | Uint32Array | undefined) => {

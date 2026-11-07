@@ -33,6 +33,7 @@ export type SolverSettings = {
   ipmHalo: boolean;
   haloRhoN: number;
   haloHomogeneous: boolean;
+  ipmHomogeneous: boolean;
   simplexDualMode: boolean;
   simplexEnteringRule: EnteringRule;
   simplexLeavingRule: LeavingRule;
@@ -104,6 +105,8 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   haloRhoN: { default: 0.01, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 29, codec: { scaled: 1e4 } } },
   // unchecked: no homogeneous embedding, which is ODYN on the LP
   haloHomogeneous: { default: true, owner: "ipm", wire: { slot: 30, codec: "bool" } },
+  // the predictor–corrector on the homogeneous self-dual embedding; off keeps older links' paths
+  ipmHomogeneous: { default: false, owner: "ipm", wire: { slot: 31, codec: "bool" } },
   simplexDualMode: { default: false, owner: "simplex", wire: { slot: 3, codec: "bool" }, legacyKey: "d" },
   // the pivot rules have no slot yet: a link does not carry them (a codec bump, to be its own decision)
   simplexEnteringRule: { default: "first", owner: "simplex", values: ENTERING_RULES, legacyKey: "E" },

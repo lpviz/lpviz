@@ -80,6 +80,7 @@ describe("shared solver settings", () => {
       ipmHalo: DEFAULT_SOLVER_SETTINGS.ipmHalo,
       haloRhoN: DEFAULT_SOLVER_SETTINGS.haloRhoN,
       haloHomogeneous: DEFAULT_SOLVER_SETTINGS.haloHomogeneous,
+      ipmHomogeneous: DEFAULT_SOLVER_SETTINGS.ipmHomogeneous,
     });
     expect(Object.keys(collectShareSettings(settings, "pdhg"))).not.toContain("alphaMax");
   });

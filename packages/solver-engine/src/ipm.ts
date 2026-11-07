@@ -7,6 +7,8 @@ import { NumericTrace, type SolverResult } from "./result";
 const SIGMA_MIN = 1e-8;
 const SIGMA_MAX = 1 - 1e-8;
 const SIGMA_POWER = 3;
+// the homogeneous method's normal-equations regularization, relative to A'DA's largest diagonal
+const REGULARIZATION = 1e-12;
 
 export interface IPMOptions {
   /** the primal residual, dual residual and relative gap all have to drop below this */
@@ -14,6 +16,8 @@ export interface IPMOptions {
   maxit: number;
   alphaMax: number;
   correctorThreshold: number;
+  /** Run the predictor–corrector on the homogeneous self-dual embedding (see ipmHomogeneous). */
+  homogeneous?: boolean | undefined;
   /** Optional primal warm start; need not be feasible (infeasible-start method). */
   startPoint?: readonly number[] | undefined;
 }
@@ -25,6 +29,7 @@ export interface IPMOptions {
  * to the boundary; `mu = s'y / m` is the complementarity measure the 3D path is lifted by.
  */
 export function ipm(constraints: readonly Constraint[], objective: Float64Array, opts: IPMOptions): SolverResult {
+  if (opts.homogeneous) return ipmHomogeneous(constraints, objective, opts);
   const { tol, maxit, alphaMax, correctorThreshold, startPoint } = opts;
 
   // Ax <= b becomes (-A)x - s = -b with slack s >= 0, and max becomes min.
@@ -201,4 +206,177 @@ function fractionToBoundary(values: Float64Array, delta: Float64Array) {
     }
   }
   return alpha;
+}
+
+/**
+ * The same predictor–corrector on the homogeneous self-dual embedding (Xu, Hung and Ye 1996) of
+ * `min c'x s.t. Ax - s = b, s >= 0` and its dual `max b'y s.t. A'y = c, y >= 0`:
+ *
+ *   F1 = Ax - s - b tau = 0,   F2 = A'y - c tau = 0,   F3 = c'x - b'y + kappa = 0,
+ *   s o y = mu e,   tau kappa = mu,   (s, y, tau, kappa) > 0.
+ *
+ * A solution with tau > 0 is the optimum (x, y) / tau; one with tau = 0 < kappa is a Farkas
+ * certificate, so the method runs on infeasible and unbounded LPs too. All steps share one length
+ * (tau couples the primal and the dual), and mu = (s'y + tau kappa) / (m + 1) is reported as
+ * mu / tau^2, the complementarity of the recovered point, in the plain method's units.
+ */
+function ipmHomogeneous(constraints: readonly Constraint[], objective: Float64Array, opts: IPMOptions): SolverResult {
+  const { tol, maxit, alphaMax, correctorThreshold, startPoint } = opts;
+  const { A: aOriginal, b: bOriginal } = denseFromConstraints(constraints);
+  const A = negateMatrix(aOriginal);
+  const At = transposeMatrix(A);
+  const b = negate(bOriginal);
+  const c = negate(objective);
+  const m = A.rows;
+  const n = A.cols;
+
+  const x = new Float64Array(n);
+  const s = new Float64Array(m).fill(1);
+  const y = new Float64Array(m).fill(1);
+  let tau = 1;
+  let kappa = 1;
+  const x0 = warmStart(startPoint, n);
+  if (x0) x.set(x0);
+
+  const trace = new NumericTrace(n, "µ", maxit);
+  const point = new Float64Array(n);
+  const ax = new Float64Array(m);
+  const aty = new Float64Array(n);
+  const F1 = new Float64Array(m);
+  const F2 = new Float64Array(n);
+  const F4 = new Float64Array(m);
+  const M = new Float64Array(n * n);
+  const lu = new Float64Array(n * n);
+  const weighted = new Float64Array(m);
+  const rhs = new Float64Array(n);
+  const pSol = new Float64Array(n);
+  const qSol = new Float64Array(n);
+  const dBVec = new Float64Array(m);
+  const atDb = new Float64Array(n);
+  const step = { dx: new Float64Array(n), ds: new Float64Array(m), dy: new Float64Array(m), dTau: 0, dKappa: 0 };
+  const aff = { dx: new Float64Array(n), ds: new Float64Array(m), dy: new Float64Array(m), dTau: 0, dKappa: 0 };
+  const scratchDx = new Float64Array(m);
+
+  // One Newton step for the linear residuals F1..F3 and the complementarity right-hand sides
+  // F4 (per pair) and F5 (tau kappa); D = y / s is the normal-equations weight:
+  //   (A'DA) dx = r1 + (A'Db - c) dTau,   r1 = F2 - A'(D F1 + F4 / s)
+  //   dTau from the gap row, then dy = D(-F1 - A dx + b dTau) - F4 / s, ds and dKappa from complementarity.
+  // Solves J d = -F for the residuals as given; returns false when A'DA is singular.
+  const newton = (F3: number, F5: number, out: typeof step): boolean => {
+    for (let i = 0; i < m; i++) {
+      const D = y[i]! / s[i]!;
+      weighted[i] = D * F1[i]! + F4[i]! / s[i]!;
+      dBVec[i] = D * b[i]!;
+    }
+    matVec(At, weighted, rhs);
+    for (let j = 0; j < n; j++) rhs[j] = F2[j]! - rhs[j]!;
+    if (!trySolveDenseSystem(M, n, rhs, pSol, lu)) return false;
+    matVec(At, dBVec, atDb);
+    for (let j = 0; j < n; j++) rhs[j] = atDb[j]! - c[j]!;
+    if (!trySolveDenseSystem(M, n, rhs, qSol, lu)) return false;
+    // the gap row: (c + A'Db)'dx - (b'Db + kappa/tau) dTau = -F3 - b'(D F1 + F4 / s) + F5 / tau
+    let eP = 0;
+    let eQ = 0;
+    for (let j = 0; j < n; j++) {
+      const e = c[j]! + atDb[j]!;
+      eP += e * pSol[j]!;
+      eQ += e * qSol[j]!;
+    }
+    const denominator = eQ - dot(b, dBVec) - kappa / tau;
+    const dTau = (-F3 - dot(b, weighted) + F5 / tau - eP) / denominator;
+    if (!Number.isFinite(dTau)) return false;
+    for (let j = 0; j < n; j++) out.dx[j] = pSol[j]! + qSol[j]! * dTau;
+    matVec(A, out.dx, scratchDx);
+    for (let i = 0; i < m; i++) {
+      out.dy[i] = (y[i]! / s[i]!) * (-F1[i]! - scratchDx[i]! + b[i]! * dTau) - F4[i]! / s[i]!;
+      out.ds[i] = (-F4[i]! - s[i]! * out.dy[i]!) / y[i]!;
+    }
+    out.dTau = dTau;
+    out.dKappa = (-F5 - kappa * dTau) / tau;
+    return true;
+  };
+  // the largest step in [0, 1] keeping s, y, tau and kappa nonnegative
+  const boundary = (d: typeof step) => {
+    let alpha = Math.min(fractionToBoundary(s, d.ds), fractionToBoundary(y, d.dy));
+    if (d.dTau < 0) alpha = Math.min(alpha, -tau / d.dTau);
+    if (d.dKappa < 0) alpha = Math.min(alpha, -kappa / d.dKappa);
+    return alpha;
+  };
+
+  let status: "optimal" | "infeasible" | "unbounded" | undefined;
+  let failure: string | null = null;
+  while (trace.count < maxit) {
+    matVec(A, x, ax);
+    matVec(At, y, aty);
+    for (let i = 0; i < m; i++) F1[i] = ax[i]! - s[i]! - b[i]! * tau;
+    for (let j = 0; j < n; j++) F2[j] = aty[j]! - c[j]! * tau;
+    const cx = dot(c, x);
+    const by = dot(b, y);
+    const F3 = cx - by + kappa;
+    const mu = (dot(s, y) + tau * kappa) / (m + 1);
+
+    for (let j = 0; j < n; j++) point[j] = x[j]! / tau;
+    const pRes = infinityNorm(F1) / tau;
+    const dRes = infinityNorm(F2) / tau;
+    const gap = Math.abs(cx - by) / tau / (1 + Math.abs(cx / tau));
+    trace.record(point, -cx / tau, pRes, mu / (tau * tau));
+
+    if (pRes <= tol && dRes <= tol && gap <= tol) {
+      status = "optimal";
+      break;
+    }
+    // tau has collapsed against kappa: test the Farkas rays, scale-free
+    if (tau < tol * kappa) {
+      const yScale = infinityNorm(y);
+      if (by > tol * yScale && infinityNorm(aty) <= tol * by) {
+        status = "infeasible";
+        break;
+      }
+      let recession = 0;
+      for (let i = 0; i < m; i++) recession = Math.max(recession, Math.abs(ax[i]! - s[i]!));
+      if (-cx > tol * infinityNorm(x) && recession <= tol * -cx) {
+        status = "unbounded";
+        break;
+      }
+    }
+
+    weightedGram(A, (i) => y[i]! / s[i]!, M);
+    // a variable no row bounds (a strip's free direction) leaves A'DA singular; a regularization far
+    // below the tolerance lets that direction move, and the gap row then finds the unbounded ray
+    let diagonal = 0;
+    for (let j = 0; j < n; j++) diagonal = Math.max(diagonal, M[j * n + j]!);
+    for (let j = 0; j < n; j++) M[j * n + j]! += REGULARIZATION * (1 + diagonal);
+    // predictor: the affine step, mu -> 0
+    for (let i = 0; i < m; i++) F4[i] = s[i]! * y[i]!;
+    if (!newton(F3, tau * kappa, aff)) {
+      failure = "IPM linear solve failed: Singular linear system";
+      break;
+    }
+    const alphaAff = boundary(aff);
+    let next = aff;
+    if (!(alphaAff >= correctorThreshold)) {
+      let muAff = (tau + alphaAff * aff.dTau) * (kappa + alphaAff * aff.dKappa);
+      for (let i = 0; i < m; i++) muAff += (s[i]! + alphaAff * aff.ds[i]!) * (y[i]! + alphaAff * aff.dy[i]!);
+      muAff /= m + 1;
+      const sigma = mu > 0 ? Math.max(SIGMA_MIN, Math.min(SIGMA_MAX, (muAff / mu) ** SIGMA_POWER)) : SIGMA_MIN;
+      // corrector: centering toward sigma mu with Mehrotra's second-order term, in one solve
+      for (let i = 0; i < m; i++) F4[i] = s[i]! * y[i]! + aff.ds[i]! * aff.dy[i]! - sigma * mu;
+      if (!newton(F3, tau * kappa + aff.dTau * aff.dKappa - sigma * mu, step)) {
+        failure = "IPM corrector solve failed: Singular linear system";
+        break;
+      }
+      next = step;
+    }
+    const alpha = alphaMax * boundary(next);
+    for (let j = 0; j < n; j++) x[j]! += alpha * next.dx[j]!;
+    for (let i = 0; i < m; i++) {
+      s[i]! += alpha * next.ds[i]!;
+      y[i]! += alpha * next.dy[i]!;
+    }
+    tau += alpha * next.dTau;
+    kappa += alpha * next.dKappa;
+  }
+
+  const lead = status === "infeasible" ? "Certified primal infeasible" : status === "unbounded" ? "Certified unbounded" : failure ? "Stopped" : undefined;
+  return trace.finish({ converged: status === "optimal", lead, ...(failure ? { before: failure } : {}) }, { status });
 }

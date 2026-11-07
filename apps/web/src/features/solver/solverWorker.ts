@@ -22,7 +22,9 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
   ipm: (payload) => {
     // HALO-LP takes no step size: alphaMax and the corrector threshold are the predictor-corrector's
     const { solver: _, constraints, objective, halo: useHalo, rhoN, homogeneous, ...options } = payload;
-    return useHalo ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN, homogeneous })) : ipm(constraints, objective, withTol(options));
+    return useHalo
+      ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN, homogeneous }))
+      : ipm(constraints, objective, withTol({ ...options, homogeneous }));
   },
   simplex: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;

@@ -26,7 +26,11 @@ const ipmSection = (ctx: SectionContext): SettingControl[] => [
   shownWhen(numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }), isPredictorCorrector),
   shownWhen(numberSlider(ctx, { key: "haloRhoN", label: "ρₙ (NCP proximal weight):", format: fixed(3) }), isHalo),
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
-  checkboxRow(ctx, { ipmHalo: "HALO-LP", haloHomogeneous: "Homogeneous" }, (next, key) => key === "ipmHalo" || isHalo(next)),
+  // one "Homogeneous" box, bound to the active method's own setting: the predictor–corrector's
+  // defaults off (its links and pictures predate it), HALO-LP's on (the paper's method)
+  checkboxRow(ctx, { ipmHalo: "HALO-LP", ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) =>
+    key === "ipmHomogeneous" ? !isHalo(next) : key === "haloHomogeneous" ? isHalo(next) : true,
+  ),
 ];
 
 // H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma
