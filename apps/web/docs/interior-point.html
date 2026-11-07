@@ -127,6 +127,9 @@
         <h3 id="halo-3d">In 3D</h3>
         <p>The µ column is µ/τ², the complementarity of the drawn point <var>x</var>/τ, so it is in the same units as the predictor–corrector's <var>s</var>ᵀ<var>y</var>/<var>m</var>. HALO-LP shrinks it by orders of magnitude per step, so the 3D view lifts each iterate by its order of magnitude above the run's smallest µ: the optimum sits on the floor, a cold start (µ = 1) as high as a PDHG start, and every power of ten in between is an equal step. The staircase you see is the superlinear convergence.</p>
 
+        <h3 id="halo-homogeneous">Without the embedding: ODYN</h3>
+        <p>HALO-LP borrows its non-interior machinery from <a href="https://arxiv.org/abs/2602.16005">ODYN</a> (Rojas et al., 2026), a QP solver with the same shifted NCP functions and proximal terms but no homogeneous embedding. Uncheck <strong>Homogeneous</strong> to run ODYN on your LP: τ stays 1, κ disappears, and the Newton step is the same condensed solve without its Δτ part. On a solvable LP the two paths look nearly alike. They part ways on an empty region or an unbounded objective. HALO-LP certifies those from the iterate, once κ outgrows τ. ODYN has no τ to watch, so it reads the certificate off the Newton direction instead: as the iterates run away, the step points along a Farkas ray, and the footer reports it the same way.</p>
+
         <h3 id="halo-controls">Controls</h3>
         <p>α<sub>max</sub> and the corrector threshold are hidden, since the line search replaces both. HALO-LP has one control of its own:</p>
         <ul>

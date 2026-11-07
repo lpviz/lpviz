@@ -88,6 +88,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         correctorThreshold: settings.correctorThreshold,
         halo: settings.ipmHalo,
         rhoN: settings.haloRhoN,
+        homogeneous: settings.haloHomogeneous,
         maxit: iterations(settings.maxitIPM),
       };
     },

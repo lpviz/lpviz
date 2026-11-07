@@ -21,8 +21,8 @@ const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...
 const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
   ipm: (payload) => {
     // HALO-LP takes no step size: alphaMax and the corrector threshold are the predictor-corrector's
-    const { solver: _, constraints, objective, halo: useHalo, rhoN, ...options } = payload;
-    return useHalo ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN })) : ipm(constraints, objective, withTol(options));
+    const { solver: _, constraints, objective, halo: useHalo, rhoN, homogeneous, ...options } = payload;
+    return useHalo ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN, homogeneous })) : ipm(constraints, objective, withTol(options));
   },
   simplex: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;

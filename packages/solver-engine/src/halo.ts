@@ -47,6 +47,12 @@ export interface HALOOptions {
   maxit: number;
   /** rho_n, the proximal weight of the shifted NCP equations, at the start; it halves each time the reference moves */
   rhoN: number;
+  /**
+   * Solve the homogeneous self-dual embedding (HALO-LP), or the LP's own KKT system with tau fixed at
+   * 1 and no kappa: ODYN (arXiv:2602.16005) on an LP, which certifies infeasibility from where its
+   * Newton directions point rather than from tau going to 0.
+   */
+  homogeneous: boolean;
   /** Optional primal warm start; s takes b - Ax0, negative where x0 violates a constraint. */
   startPoint?: readonly number[] | undefined;
 }
@@ -120,12 +126,14 @@ interface Unscale {
 
 /** HALO-LP on `min c'x s.t. Gx <= h`, x free. */
 function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly number[] | null, opts: HALOOptions, { xScale, objScale }: Unscale): SolverResult {
-  const { tol, maxit } = opts;
+  const { tol, maxit, homogeneous } = opts;
   let RHO_N = opts.rhoN;
   const { rows: p, cols: n } = G;
   const Gt = transposeMatrix(G);
 
   const w = new Point(n, p);
+  // without the embedding tau stays 1 (no step ever moves it) and kappa is not a variable
+  if (!homogeneous) w.kappa = 0;
   if (x0) {
     // the slack of the warm start, negative where it violates a row: no interior push
     w.x.set(x0);
@@ -138,9 +146,9 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
   const d = new Point(n, p);
 
   const complementarityMeasure = (v: Point) => {
-    let sum = minSq(v.tau, v.kappa);
+    let sum = homogeneous ? minSq(v.tau, v.kappa) : 0;
     for (let i = 0; i < p; i++) sum += minSq(v.s[i]!, v.z[i]!);
-    return sum / (p + 1);
+    return sum / (homogeneous ? p + 1 : Math.max(p, 1));
   };
   let mu = Math.max(complementarityMeasure(w), MU_FLOOR);
 
@@ -152,8 +160,9 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
       r.rI[i] = r.gx[i]! + v.s[i]! - h[i]! * v.tau - RHO * (v.z[i]! - ref.z[i]!);
       r.rN[i] = ncp(v.s[i]!, v.z[i]!, mu) + RHO_N * (v.s[i]! - ref.s[i]!) + RHO_N * (v.z[i]! - ref.z[i]!);
     }
-    r.rG = -dot(c, v.x) - dot(h, v.z) - v.kappa + RHO * (v.tau - ref.tau);
-    r.rH = ncp(v.tau, v.kappa, mu) + RHO_N * (v.tau - ref.tau) + RHO_N * (v.kappa - ref.kappa);
+    // without the embedding the gap row and the (tau, kappa) pair are not equations
+    r.rG = homogeneous ? -dot(c, v.x) - dot(h, v.z) - v.kappa + RHO * (v.tau - ref.tau) : 0;
+    r.rH = homogeneous ? ncp(v.tau, v.kappa, mu) + RHO_N * (v.tau - ref.tau) + RHO_N * (v.kappa - ref.kappa) : 0;
   };
   const res = new Residuals(n, p);
   const trialRes = new Residuals(n, p);
@@ -231,20 +240,25 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
     }
     const L = cholesky(H, n);
     if (!L) return false;
-    for (let j = 0; j < n; j++) vecA[j] = -vecA[j]!;
-    cholSolve(L, vecA, pSol);
     for (let j = 0; j < n; j++) rBarX[j] = -rBarX[j]!;
     cholSolve(L, rBarX, qSol);
-    const denominator = gamma + dot(vecD, pSol);
-    if (!Number.isFinite(denominator) || denominator === 0) return false;
-    d.tau = (-rBarTau - dot(vecD, qSol)) / denominator;
+    if (homogeneous) {
+      for (let j = 0; j < n; j++) vecA[j] = -vecA[j]!;
+      cholSolve(L, vecA, pSol);
+      const denominator = gamma + dot(vecD, pSol);
+      if (!Number.isFinite(denominator) || denominator === 0) return false;
+      d.tau = (-rBarTau - dot(vecD, qSol)) / denominator;
+    } else {
+      // ODYN's step: the same condensed solve with tau held, H dx = -rBarX alone
+      d.tau = 0;
+    }
     for (let j = 0; j < n; j++) d.x[j] = qSol[j]! + d.tau * pSol[j]!;
     matVec(G, d.x, gdx);
     for (let i = 0; i < p; i++) {
       d.z[i] = dInv[i]! * (gdx[i]! - h[i]! * d.tau + rBarI[i]!);
       d.s[i] = -(res.rN[i]! + zJac[i]! * d.z[i]!) / sJac[i]!;
     }
-    d.kappa = -(res.rH + chiTau * d.tau) / chiKappa;
+    d.kappa = homogeneous ? -(res.rH + chiTau * d.tau) / chiKappa : 0;
     return Number.isFinite(d.tau) && d.x.every(Number.isFinite);
   };
 
@@ -280,28 +294,41 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
       scale(rawD) <= bound(tau * cNorm, scale(gtz)) &&
       scale(rawI) <= bound(scale(gx), sNorm, tau * hNorm) &&
       rc <= bound(sNorm, zNorm, rn) &&
-      Math.abs(rg) <= bound(tau, Math.abs(cx), Math.abs(hz)) &&
-      Math.abs(kappa) <= 2 * tol * tau
+      // ODYN's tests stop here: with tau fixed there is no gap row, and feasibility plus
+      // complementarity already close the gap
+      (!homogeneous || (Math.abs(rg) <= bound(tau, Math.abs(cx), Math.abs(hz)) && Math.abs(kappa) <= 2 * tol * tau))
     );
   };
-  // the Farkas tests, once kappa dominates tau: z with G'z = 0, z >= 0, h'z < 0 (primal
-  // infeasible), or x with Gx <= 0 and c'x < 0 (dual infeasible, so unbounded)
-  const certificate = (): "infeasible" | "unbounded" | undefined => {
-    const { tau, kappa, x, z, s } = w;
-    if (!(kappa > tol) || Math.abs(tau) > 2 * tol * kappa) return undefined;
+  // The Farkas tests on (x, z, s) with Gx and G'z: z with G'z = 0, z >= 0, h'z < 0 (primal
+  // infeasible), or x with Gx <= 0 and c'x < 0 (dual infeasible, so unbounded). HALO-LP reads them off
+  // the iterate once kappa dominates tau; ODYN off the Newton direction, which on an infeasible or
+  // unbounded LP points along the certificate as the iterates run away.
+  const farkas = (x: Float64Array, z: Float64Array, s: Float64Array, gx: Float64Array, gtz: Float64Array): "infeasible" | "unbounded" | undefined => {
     const omegaP = scale(z);
     let zNeg = 0;
     for (let i = 0; i < p; i++) zNeg = Math.max(zNeg, -z[i]!);
-    if (omegaP > 0 && scale(res.gtz) <= tol * omegaP && zNeg <= tol * omegaP && dot(h, z) < -tol * omegaP) return "infeasible";
+    if (omegaP > 0 && scale(gtz) <= tol * omegaP && zNeg <= tol * omegaP && dot(h, z) < -tol * omegaP) return "infeasible";
     const omegaD = scale(x);
     let recession = 0;
     let sNeg = 0;
     for (let i = 0; i < p; i++) {
-      recession = Math.max(recession, Math.abs(res.gx[i]! + s[i]!));
+      recession = Math.max(recession, Math.abs(gx[i]! + s[i]!));
       sNeg = Math.max(sNeg, -s[i]!);
     }
     if (omegaD > 0 && recession <= tol * omegaD && sNeg <= tol * omegaD && dot(c, x) < -tol * omegaD) return "unbounded";
     return undefined;
+  };
+  const certificate = (): "infeasible" | "unbounded" | undefined => {
+    const { tau, kappa } = w;
+    if (!(kappa > tol) || Math.abs(tau) > 2 * tol * kappa) return undefined;
+    return farkas(w.x, w.z, w.s, res.gx, res.gtz);
+  };
+  const dGx = new Float64Array(p);
+  const dGtz = new Float64Array(n);
+  const directionCertificate = (): "infeasible" | "unbounded" | undefined => {
+    matVec(G, d.x, dGx);
+    matVec(Gt, d.z, dGtz);
+    return farkas(d.x, d.z, d.s, dGx, dGtz);
   };
 
   const trace = new NumericTrace(n, "µ", maxit);
@@ -334,11 +361,15 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
       status = "optimal";
       break;
     }
-    status = certificate();
+    status = homogeneous ? certificate() : undefined;
     if (status || trace.count >= maxit) break;
     if (!direction()) {
       failure = "HALO-LP Newton solve failed: Singular linear system";
       break;
+    }
+    if (!homogeneous) {
+      status = directionCertificate();
+      if (status) break;
     }
 
     // ODYN's flexible Armijo on the stacked merit: an exact Newton step has slope -2 merit

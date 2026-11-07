@@ -5,7 +5,7 @@ import { halo } from "../src/halo";
 import { simplex } from "../src/simplex";
 import { BOX, bruteForceOptimum, CUBE, expectNear, footerOf, lastIterate, objectiveValue, randomObjective, randomPolygon, SLICED_BOX, SQUARE } from "./fixtures";
 
-const OPTS = { maxit: 200, tol: 1e-7, rhoN: 0.01 };
+const OPTS = { maxit: 200, tol: 1e-7, rhoN: 0.01, homogeneous: true };
 
 describe("halo", () => {
   test("converges to the square's corner", () => {
@@ -116,5 +116,42 @@ describe("halo on badly scaled LPs", () => {
       const optimum = objectiveValue(c, lastIterate(reference));
       expect(Math.abs(objectiveValue(c, lastIterate(r)) - optimum) / (1 + Math.abs(optimum))).toBeLessThan(1e-5);
     }
+  });
+});
+
+describe("halo without the homogeneous embedding (ODYN on the LP)", () => {
+  const ODYN = { ...OPTS, homogeneous: false };
+
+  test("converges to the square's corner from an infeasible start", () => {
+    const r = halo(SQUARE, Float64Array.of(1, 0.3), { ...ODYN, startPoint: [3, 7] });
+    expect(r.status).toBe("optimal");
+    expectNear(lastIterate(r), [-4, -4], 5);
+  });
+
+  test("certifies an infeasible LP from its Newton directions", () => {
+    const r = halo(
+      [
+        [1, 0, -1],
+        [-1, 0, -1],
+        [0, 1, 1],
+        [0, -1, 1],
+      ],
+      Float64Array.of(1, 1),
+      ODYN,
+    );
+    expect(r.status).toBe("infeasible");
+  });
+
+  test("certifies an unbounded LP from its Newton directions", () => {
+    const r = halo(
+      [
+        [1, 0, 1],
+        [-1, 0, 1],
+        [0, -1, 1],
+      ],
+      Float64Array.of(0, 1),
+      ODYN,
+    );
+    expect(r.status).toBe("unbounded");
   });
 });
