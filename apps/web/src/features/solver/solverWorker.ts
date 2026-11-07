@@ -1,5 +1,5 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
-import { affineScaling } from "@lpviz/solver-engine/affineScaling";
+import { karmarkar } from "@lpviz/solver-engine/karmarkar";
 import { hpr } from "@lpviz/solver-engine/hpr";
 import { scs } from "@lpviz/solver-engine/scs";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
@@ -25,11 +25,11 @@ const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...
 // (see SolverWorkerPayload), so the rest of it spreads straight in.
 const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
   ipm: (payload) => {
-    // HALO-LP takes no step size; affine scaling and Karmarkar take alphaMax as their step fraction
+    // HALO-LP takes no step size; Karmarkar takes alphaMax as its step fraction
     const { solver: _, constraints, objective, method, rhoN, homogeneous, ...options } = payload;
     const { maxit, startPoint, alphaMax } = options;
     if (method === "halo") return halo(constraints, objective, withTol({ maxit, startPoint, rhoN, homogeneous }));
-    if (method === "affine" || method === "karmarkar") return affineScaling(constraints, objective, withTol({ maxit, startPoint, alphaMax, projective: method === "karmarkar" }));
+    if (method === "karmarkar") return karmarkar(constraints, objective, withTol({ maxit, startPoint, alphaMax }));
     return ipm(constraints, objective, withTol({ ...options, homogeneous }));
   },
   simplex: (payload) => {

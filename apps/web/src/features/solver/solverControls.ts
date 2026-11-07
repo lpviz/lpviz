@@ -78,7 +78,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
   }),
   ipm: control({
     // HALO-LP (either way) and the homogeneous predictor–corrector run on an empty region: they
-    // certify the infeasibility. Affine scaling and Karmarkar need an interior to start from.
+    // certify the infeasibility. Karmarkar needs an interior to start from.
     alsoBlocked: (s) => (!certifiesInfeasibility(s.solverSettings) && isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
     request: (s, { problem }) => {
       const settings = s.solverSettings;

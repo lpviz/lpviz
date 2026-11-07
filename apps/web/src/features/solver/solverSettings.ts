@@ -23,9 +23,9 @@ const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric", "lpOpt
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
 // Which interior method the IPM mode runs: Mehrotra's predictor–corrector, HALO-LP (see
-// @lpviz/solver-engine/halo), or the primal methods before them, affine scaling and Karmarkar's
-// projective method (see affineScaling). Appended only: a link carries the index.
-const IPM_METHODS = ["mpc", "halo", "affine", "karmarkar"] as const;
+// @lpviz/solver-engine/halo), or the primal method before them, Karmarkar's projective method
+// (see karmarkar). Appended only: a link carries the index.
+const IPM_METHODS = ["mpc", "halo", "karmarkar"] as const;
 export type IpmMethod = (typeof IPM_METHODS)[number];
 
 // Which first-order splitting the PDHG mode runs: PDHG itself (with H-PDLP behind its own box), SCS's
@@ -114,8 +114,8 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   alphaMax: { default: 0.1, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 0, codec: { scaled: 1e4 } }, legacyKey: "a" },
   correctorThreshold: { default: 0.9, owner: "ipm", range: ["0.001", "0.999", "0.001"], wire: { slot: 1, codec: { scaled: 1e4 } }, legacyKey: "f" },
   maxitIPM: { default: 1000, owner: "ipm", wire: { slot: 2, codec: "int" }, legacyKey: "i" },
-  // HALO-LP takes Newton steps on the homogeneous embedding with shifted NCP functions; affine scaling
-  // and Karmarkar step along the Dikin ellipsoid (slot 28 never shipped as anything else)
+  // HALO-LP takes Newton steps on the homogeneous embedding with shifted NCP functions; Karmarkar steps
+  // along the Dikin ellipsoid (slot 28 never shipped as anything else)
   ipmMethod: { default: "mpc", owner: "ipm", values: IPM_METHODS, wire: { slot: 28, codec: { enumeration: IPM_METHODS } } },
   haloRhoN: { default: 0.01, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 29, codec: { scaled: 1e4 } } },
   // unchecked: no homogeneous embedding, which is ODYN on the LP

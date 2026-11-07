@@ -13,15 +13,15 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
   lpOptimum: "Constraint gen.",
 };
 
-const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", affine: "Affine scaling", karmarkar: "Karmarkar" };
+const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", karmarkar: "Karmarkar" };
 const PDHG_METHOD_LABELS: Record<SolverSettings["pdhgMethod"], string> = { pdhg: "PDHG", scs: "SCS (ADMM)", hpr: "HPR-LP" };
 const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)", megiddo: "Megiddo (2D)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
 
-// HALO-LP globalizes by line search, so the step knobs are hidden for it; affine scaling and
-// Karmarkar take αmax as their step fraction, and have no corrector and no embedding
+// HALO-LP globalizes by line search, so the step knobs are hidden for it; Karmarkar takes αmax
+// as its step fraction, and have no corrector and no embedding
 const isPredictorCorrector = (settings: SolverSettings) => settings.ipmMethod === "mpc";
 const isHalo = (settings: SolverSettings) => settings.ipmMethod === "halo";
 const ipmSection = (ctx: SectionContext): SettingControl[] => [

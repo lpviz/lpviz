@@ -1,21 +1,18 @@
-// The primal interior methods that came before the primal-dual ones, on `max c'x s.t. Ax <= b` with
-// slacks s = b - Ax > 0. Both work in the Dikin metric at the current point, ‖S⁻¹A d‖, whose unit
-// ball (the Dikin ellipsoid) lies inside the region; that ellipsoid is drawn at every iterate.
+// Karmarkar's projective method on `max c'x s.t. Ax <= b` with slacks s = b - Ax > 0, in the
+// potential-reduction form Gonzaga and Todd–Burrell gave it for this inequality form: minimize
+// Karmarkar's potential q·log(z - c'x) - Σ log sᵢ, where z is an upper bound on the optimum, by a
+// Newton-like step in the Dikin metric ‖S⁻¹A d‖ and a line search. The metric's unit ball, the
+// Dikin ellipsoid, lies inside the region, and is drawn at every iterate. The step produces dual
+// estimates y with Aᵀy = c; whenever they are nonnegative, b'y is a better bound and z drops to it.
+// Karmarkar's projective transformation is exactly what turns his method into this one, so the
+// iterates are his, without the simplex-shaped canonical form.
 //
-// - Affine scaling (Dikin 1967; Barnes, Vanderbei et al. 1986, as the "dual affine" method on this
-//   inequality form): step towards the best point of the Dikin ellipsoid, d = H⁻¹c with
-//   H = AᵀS⁻²A, then a fraction γ of the way to the boundary along d. With γ near 1 the method
-//   can converge to a non-optimal point on degenerate problems, which is the classic cautionary
-//   tale; with a fraction like 2/3 it is known to converge.
-// - Karmarkar's projective method, in the potential-reduction form Gonzaga and Todd–Burrell gave
-//   it for this form: minimize Karmarkar's potential m·log(z - c'x) - Σ log sᵢ, where z is an upper
-//   bound on the optimum, by a Newton-like step in the Dikin metric and a line search. The step
-//   produces dual estimates y with Aᵀy = c; whenever they are nonnegative, b'y is a better bound
-//   and z drops to it. Karmarkar's projective transformation is exactly what turns his method into
-//   this one, so the iterates are his, without the simplex-shaped canonical form.
+// Until the first bound is known the potential has nothing to push against, so the method steps
+// towards the best point of the Dikin ellipsoid, d = H⁻¹c with H = AᵀS⁻²A, a fraction αmax of the
+// way to the boundary (Dikin's affine-scaling step).
 //
-// Both need a strictly interior start: the dragged point if it is one, the Chebyshev center (the
-// center of the largest inscribed ball) otherwise. Both stop when the dual estimates are
+// It needs a strictly interior start: the dragged point if it is one, the Chebyshev center (the
+// center of the largest inscribed ball) otherwise. It stops when the dual estimates are
 // (nearly) nonnegative and the gap s'y between the two objectives is below the tolerance.
 
 import { denseFromConstraints, dot, type DenseMatrix, rowDot, weightedGram } from "@lpviz/math/blas";
@@ -27,13 +24,11 @@ import { warmStart } from "./limits";
 import { ellipsoidStride } from "./localization";
 import { FloatBlock, NumericTrace, type SolverResult } from "./result";
 
-export interface AffineScalingOptions {
+export interface KarmarkarOptions {
   tol: number;
   maxit: number;
-  /** the fraction of the way to the boundary each step takes (affine scaling) */
+  /** the fraction of the way to the boundary each step takes before the first bound is known */
   alphaMax: number;
-  /** Karmarkar's potential-reduction steps instead of affine scaling */
-  projective: boolean;
   startPoint?: readonly number[] | undefined;
 }
 
@@ -90,9 +85,9 @@ function freeImprovingDirection(A: DenseMatrix, c: Float64Array, tol: number): b
   return Math.hypot(...rest) > tol * (1 + Math.hypot(...c));
 }
 
-/** Affine scaling or Karmarkar's method on `max objective'x s.t. Ax <= b`. */
-export function affineScaling(constraints: readonly Constraint[], objective: Float64Array, { tol, maxit, alphaMax, projective, startPoint }: AffineScalingOptions): SolverResult {
-  const name = projective ? "Karmarkar's method" : "Affine scaling";
+/** Karmarkar's method on `max objective'x s.t. Ax <= b`. */
+export function karmarkar(constraints: readonly Constraint[], objective: Float64Array, { tol, maxit, alphaMax, startPoint }: KarmarkarOptions): SolverResult {
+  const name = "Karmarkar's method";
   const { A, b } = denseFromConstraints(constraints);
   const m = A.rows;
   const n = A.cols;
@@ -140,13 +135,12 @@ export function affineScaling(constraints: readonly Constraint[], objective: Flo
       stop = { converged: false, lead: "Stopped", after: "The Dikin metric is singular: the rows do not span every direction." };
       break;
     }
-    const gap0 = projective && Number.isFinite(bound) ? bound - dot(c, x) : 0;
-    // the direction: H⁻¹c for affine scaling; minus the potential's gradient through H⁻¹ for Karmarkar
-    // (with no bound yet, the potential's objective term is the affine scaling one, scaled by m)
+    const gap0 = Number.isFinite(bound) ? bound - dot(c, x) : 0;
+    // the direction: minus the potential's gradient through H⁻¹, or H⁻¹c (Dikin's step) with no bound yet
     for (let j = 0; j < n; j++) {
       let barrier = 0;
       for (let i = 0; i < m; i++) barrier += A.data[i * n + j]! / s[i]!;
-      g[j] = projective ? (Number.isFinite(bound) ? (q * c[j]!) / gap0 : c[j]!) - (Number.isFinite(bound) ? barrier : 0) : c[j]!;
+      g[j] = Number.isFinite(bound) ? (q * c[j]!) / gap0 - barrier : c[j]!;
     }
     for (let j = 0; j < n; j++) {
       let v = 0;
@@ -154,13 +148,13 @@ export function affineScaling(constraints: readonly Constraint[], objective: Flo
       d[j] = v;
     }
     for (let i = 0; i < m; i++) As[i] = rowDot(A, i, d);
-    // dual estimates with Aᵀy = c: y = S⁻²A H⁻¹c for affine scaling; for Karmarkar, the ones the
+    // dual estimates with Aᵀy = c: before a bound, y = S⁻²A H⁻¹c; after, the ones the
     // potential step implies, y = (gap/m) S⁻¹(e + S⁻¹A d) (see the header)
     const y = new Float64Array(m);
-    if (projective && Number.isFinite(bound)) {
+    if (Number.isFinite(bound)) {
       for (let i = 0; i < m; i++) y[i] = (gap0 / q) * (1 / s[i]! + As[i]! / (s[i]! * s[i]!));
     } else {
-      // H⁻¹c is d itself for affine scaling, and for Karmarkar before it has a bound
+      // H⁻¹c is d itself before the first bound
       for (let i = 0; i < m; i++) y[i] = As[i]! / (s[i]! * s[i]!);
     }
     const gap = dot(s, y);
@@ -187,10 +181,10 @@ export function affineScaling(constraints: readonly Constraint[], objective: Flo
     }
     if (k + 1 >= maxit) break;
 
-    // affine scaling's Ad is the slack's rate of decrease along d: s(t) = s - t·Ad
+    // Ad is the slack's rate of decrease along d: s(t) = s - t·Ad
     const ds = Float64Array.from(As, (v) => -v);
     const boundary = stepToBoundary(s, ds);
-    if (!Number.isFinite(boundary) && !(projective && Number.isFinite(bound))) {
+    if (!Number.isFinite(boundary) && !Number.isFinite(bound)) {
       if (dot(c, d) > 0) {
         stop = { converged: false, lead: "Stopped", after: "The step direction improves the objective and no constraint ever blocks it: the LP is unbounded." };
         break;
@@ -199,7 +193,7 @@ export function affineScaling(constraints: readonly Constraint[], objective: Flo
       break;
     }
     let t = alphaMax * boundary;
-    if (projective && Number.isFinite(bound)) {
+    if (Number.isFinite(bound)) {
       // a line search on Karmarkar's potential, from the boundary fraction down
       const potential = (point: Float64Array) => {
         const slack = slacksAt(A, b, point);
