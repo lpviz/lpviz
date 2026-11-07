@@ -2,6 +2,7 @@ import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
 import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
+import { halo } from "@lpviz/solver-engine/halo";
 import { hpdlp } from "@lpviz/solver-engine/hpdlp";
 import { ipm } from "@lpviz/solver-engine/ipm";
 import { pdas } from "@lpviz/solver-engine/pdas";
@@ -19,8 +20,9 @@ const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...
 // (see SolverWorkerPayload), so the rest of it spreads straight in.
 const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
   ipm: (payload) => {
-    const { solver: _, constraints, objective, ...options } = payload;
-    return ipm(constraints, objective, withTol(options));
+    // HALO-LP takes no step size: alphaMax and the corrector threshold are the predictor-corrector's
+    const { solver: _, constraints, objective, halo: useHalo, rhoN, ...options } = payload;
+    return useHalo ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN })) : ipm(constraints, objective, withTol(options));
   },
   simplex: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;

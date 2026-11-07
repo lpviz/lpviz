@@ -75,7 +75,8 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     }),
   }),
   ipm: control({
-    emptyRegion: "IPM requires a feasible region.",
+    // HALO-LP runs on an empty region: its homogeneous embedding certifies the infeasibility
+    alsoBlocked: (s) => (!s.solverSettings.ipmHalo && isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
     request: (s, { problem }) => {
       const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
@@ -85,6 +86,8 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         ...(startPoint ? { startPoint } : {}),
         alphaMax: settings.alphaMax,
         correctorThreshold: settings.correctorThreshold,
+        halo: settings.ipmHalo,
+        rhoN: settings.haloRhoN,
         maxit: iterations(settings.maxitIPM),
       };
     },
