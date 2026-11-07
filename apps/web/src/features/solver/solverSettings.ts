@@ -28,8 +28,8 @@ export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 const IPM_METHODS = ["mpc", "halo", "affine", "karmarkar"] as const;
 export type IpmMethod = (typeof IPM_METHODS)[number];
 
-// Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas, crissCross and seidel).
-const ACTIVE_SET_METHODS = ["pdas", "crissCross", "seidel"] as const;
+// Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas, crissCross, seidel and megiddo).
+const ACTIVE_SET_METHODS = ["pdas", "crissCross", "seidel", "megiddo"] as const;
 export type ActiveSetMethod = (typeof ACTIVE_SET_METHODS)[number];
 
 export type SolverSettings = {

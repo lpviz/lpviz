@@ -14,7 +14,7 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
 };
 
 const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", affine: "Affine scaling", karmarkar: "Karmarkar" };
-const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)" };
+const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)", megiddo: "Megiddo (2D)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
@@ -69,7 +69,7 @@ const simplexSection = (ctx: SectionContext): SettingControl[] => [
 
 // each method shows only its own knobs; the iteration cap is shared
 const isPdas = (settings: SolverSettings) => settings.activeSetMethod === "pdas";
-// Seidel visits every row once, so it has no iteration cap
+// Seidel visits every row once, and Megiddo prunes a quarter of them per round: neither has an iteration cap
 const isSeidel = (settings: SolverSettings) => settings.activeSetMethod === "seidel";
 const activeSetSection = (ctx: SectionContext): SettingControl[] => [
   group("settings-inline-row", [labeledSelect(ctx, "activeSetMethod", "Method:", ACTIVE_SET_METHOD_LABELS)]),
@@ -82,7 +82,7 @@ const activeSetSection = (ctx: SectionContext): SettingControl[] => [
     ]),
     isPdas,
   ),
-  shownWhen(maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"), (settings) => !isSeidel(settings)),
+  shownWhen(maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"), (settings) => !isSeidel(settings) && settings.activeSetMethod !== "megiddo"),
   shownWhen(checkboxRow(ctx, { activeSetShrinkWeights: "Shrink weights", activeSetIdentify: "Identify vertex" }), isPdas),
 ];
 

@@ -1,5 +1,5 @@
-        <h1>Active-set methods: criss-cross, PDAS and Seidel</h1>
-        <p class="lede">An active-set method guesses which constraints hold with equality at the optimum, solves for the point that guess implies, and repairs the guess. <a href="https://lpviz.net/">lpviz</a>'s <em>Active-Set</em> mode runs three of them: the <strong>criss-cross method</strong>, which repairs one constraint at a time; the <strong>primal-dual active-set method (PDAS)</strong>, which repairs many at once; and <strong>Seidel's algorithm</strong>, which builds the answer up by adding the constraints one by one. None of them keeps the iterate inside your region, so their paths cut across the outside of the drawing.</p>
+        <h1>Active-set methods: criss-cross, PDAS, Seidel and Megiddo</h1>
+        <p class="lede">An active-set method guesses which constraints hold with equality at the optimum, solves for the point that guess implies, and repairs the guess. <a href="https://lpviz.net/">lpviz</a>'s <em>Active-Set</em> mode runs four of them: the <strong>criss-cross method</strong>, which repairs one constraint at a time; the <strong>primal-dual active-set method (PDAS)</strong>, which repairs many at once; <strong>Seidel's algorithm</strong>, which builds the answer up by adding the constraints one by one; and <strong>Megiddo's prune-and-search</strong>, which throws them away a quarter at a time. None of them keeps the iterate inside your region, so their paths cut across the outside of the drawing.</p>
 
         <figure>
           <svg viewBox="0 0 340 230" width="340" height="230" role="img" aria-labelledby="active-set-fig">
@@ -133,6 +133,16 @@
         </div>
         <p>Every constraint is inserted exactly once, so there is no iteration cap, and the run always starts from the box, so there is no start marker.</p>
 
+        <h2 id="megiddo">Megiddo's prune-and-search</h2>
+        <p>Megiddo's method (Megiddo, 1983; Dyer, 1984, independently) was the first algorithm to solve a fixed-dimensional LP in time linear in the number of constraints, deterministically. lpviz runs its planar version, so it is available for two variables only. Turn the plane so the objective points straight up. Every constraint is then a <em>ceiling</em> (the point must lie below a line), a <em>floor</em> (above a line) or a vertical wall, and the LP asks for the highest point under the lowest ceiling that is still above the highest floor. Each round:</p>
+        <ol>
+          <li>pairs up the ceilings, and the floors, and finds where each pair of lines crosses;</li>
+          <li>tests the vertical line through the <strong>median</strong> crossing. The lowest ceiling and the highest floor there, and their slopes, say on which side of the line the optimum lies, or that the line holds the optimum, or that the region is empty;</li>
+          <li>looks at every pair that crosses on the far side. On the near side one of the pair is always above the other, so for a ceiling pair the upper line can never be the lowest ceiling there, and for a floor pair the lower one can never be the highest floor. That line is dropped.</li>
+        </ol>
+        <p>Half the pairs cross on the far side of the median, so each round drops at least a quarter of the lines, and the rounds cost <var>m</var> + ¾<var>m</var> + (¾)²<var>m</var> + … = O(<var>m</var>) in all. Once only a handful of lines remain, the last few crossings are checked directly. Like Seidel's algorithm, the run starts inside a box half again the size of your region; an optimum on that box means the LP is unbounded.</p>
+        <p>Each iterate is the point of the test line on the lowest ceiling, so the path is a binary search closing in on the optimum from both sides. Hover over a log row to see the <em>slab</em> of the plane still in play at that test: it narrows with every round. Megiddo's method has no settings.</p>
+
         <h2 id="log">Reading the logs</h2>
         <p>Criss-cross on the <em>Pentagon</em> preset:</p>
         <pre><code> Iter        x        y        Obj Pinf Dinf Tight
@@ -169,6 +179,18 @@ Optimal after inserting 5 rows (2 moved the optimum)</code></pre>
           <li><strong>Row</strong>: the constraint just inserted; the first row is the starting box corner. <strong>Moved</strong>: whether it broke the optimum so far, forcing a solve on its line. Seidel is drawn flat in the 3D view, like criss-cross.</li>
         </ul>
 
+        <p>Megiddo on <em>Many Facets</em>:</p>
+        <pre><code> Iter        x        y        Obj Lines  Side
+    1    +5.21    +9.01    +8.9e+1    32  right
+    2   +11.52    +2.64    +7.6e+1    24  left
+    3    +8.98    +6.57    +9.1e+1    15  left
+    4    +7.25    +7.94    +9.2e+1    10  right
+    5    +7.48    +7.82    +9.2e+1     5  optimum
+Optimal after 4 median tests</code></pre>
+        <ul>
+          <li><strong>Lines</strong>: the lines still in play at that test, counting the four box sides. <strong>Side</strong>: which side of the test line holds the optimum. The last row is the optimum among the few lines left.</li>
+        </ul>
+
         <h2 id="behavior">Behavior to watch for</h2>
         <ul>
           <li><strong>Index order matters enormously.</strong> On <em>Many Facets</em>, criss-cross with <em>Lowest first</em> pivots around the boundary in 3 steps. Switch to <em>Highest first</em> and it zig-zags in 18, alternating between crossings far outside the region and vertices on its far side.</li>
@@ -178,4 +200,5 @@ Optimal after inserting 5 rows (2 moved the optimum)</code></pre>
           <li><strong>Turn off the shortcuts.</strong> With <em>Identify vertex</em> and <em>Shrink weights</em> off, PDAS is the plain proximal method of multipliers with PDAS subproblems — and on a nearly flat facet it can take hundreds of steps to slide to the optimum.</li>
           <li><strong>The objective only goes down.</strong> Each Seidel iterate is the optimum of more constraints than the last, so Obj never increases, and the path is a staircase of jumps that ends exactly on the optimal vertex. Most insertions move nothing.</li>
           <li><strong>Change the seed.</strong> Different orders move the optimum a different number of times. The worst orders insert the constraints that define the optimum last; the expected number of moves grows only like <var>n</var> log <var>m</var>.</li>
+          <li><strong>A quarter at a time.</strong> In Megiddo's log the Lines column falls by at least a quarter per round. On <em>Many Facets</em> it goes from 32 to 5 in four tests, while the path jumps from side to side of the optimum.</li>
         </ul>

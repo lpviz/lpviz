@@ -31,7 +31,7 @@ export interface SeidelOptions {
 }
 
 /** A half-space a'x <= b in the coordinates of the current subproblem. */
-type Halfspace = { a: Float64Array; b: number };
+export type Halfspace = { a: Float64Array; b: number };
 
 function shuffled<T>(items: readonly T[], next: () => number): T[] {
   const out = [...items];
@@ -184,13 +184,8 @@ function boxRadius(rows: readonly Halfspace[], d: number, tol: number): number {
   return vertices > 0 ? 1.5 * vertices : 2 * crossings;
 }
 
-/** Seidel's algorithm on `max objective'x s.t. Ax <= b`, inserting the rows in the order `seed` shuffles them to. */
-export function seidel(constraints: readonly Constraint[], objective: Float64Array, { tol, seed }: SeidelOptions): SolverResult {
-  const { A, b } = denseFromConstraints(constraints);
-  const d = A.cols;
-  assertAtMost("constraints", A.rows, MAX_ITERATIONS);
-  const startTime = performance.now();
-  const rows: Halfspace[] = Array.from({ length: A.rows }, (_, i) => ({ a: Float64Array.from(A.data.subarray(i * d, (i + 1) * d)), b: b[i]! }));
+/** The starting box as half-spaces, ±x_j <= M for each coordinate in turn (see boxRadius). */
+export function startingBox(rows: readonly Halfspace[], d: number, tol: number): Halfspace[] {
   const radius = boxRadius(rows, d, tol);
   const box: Halfspace[] = [];
   for (let j = 0; j < d; j++) {
@@ -200,6 +195,17 @@ export function seidel(constraints: readonly Constraint[], objective: Float64Arr
       box.push({ a, b: radius });
     }
   }
+  return box;
+}
+
+/** Seidel's algorithm on `max objective'x s.t. Ax <= b`, inserting the rows in the order `seed` shuffles them to. */
+export function seidel(constraints: readonly Constraint[], objective: Float64Array, { tol, seed }: SeidelOptions): SolverResult {
+  const { A, b } = denseFromConstraints(constraints);
+  const d = A.cols;
+  assertAtMost("constraints", A.rows, MAX_ITERATIONS);
+  const startTime = performance.now();
+  const rows: Halfspace[] = Array.from({ length: A.rows }, (_, i) => ({ a: Float64Array.from(A.data.subarray(i * d, (i + 1) * d)), b: b[i]! }));
+  const box = startingBox(rows, d, tol);
   const c = Float64Array.from(objective);
   const next = mulberry32(seed);
   const order = shuffled(
