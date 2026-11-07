@@ -28,6 +28,12 @@ export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 const IPM_METHODS = ["mpc", "halo", "affine", "karmarkar"] as const;
 export type IpmMethod = (typeof IPM_METHODS)[number];
 
+// Which first-order splitting the PDHG mode runs: PDHG itself (with H-PDLP behind its own box), SCS's
+// ADMM on the homogeneous embedding, or HPR-LP's Halpern Peaceman–Rachford (see @lpviz/solver-engine/scs
+// and hpr). Appended only: a link carries the index.
+const PDHG_METHODS = ["pdhg", "scs", "hpr"] as const;
+export type PdhgMethod = (typeof PDHG_METHODS)[number];
+
 // Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas, crissCross, seidel and megiddo).
 const ACTIVE_SET_METHODS = ["pdas", "crissCross", "seidel", "megiddo"] as const;
 export type ActiveSetMethod = (typeof ACTIVE_SET_METHODS)[number];
@@ -43,6 +49,7 @@ export type SolverSettings = {
   simplexDualMode: boolean;
   simplexEnteringRule: EnteringRule;
   simplexLeavingRule: LeavingRule;
+  pdhgMethod: PdhgMethod;
   pdhgEta: number;
   pdhgTau: number;
   maxitPDHG: number;
@@ -119,6 +126,7 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   // the pivot rules have no slot yet: a link does not carry them (a codec bump, to be its own decision)
   simplexEnteringRule: { default: "first", owner: "simplex", values: ENTERING_RULES, legacyKey: "E" },
   simplexLeavingRule: { default: "first", owner: "simplex", values: LEAVING_RULES, legacyKey: "L" },
+  pdhgMethod: { default: "pdhg", owner: "pdhg", values: PDHG_METHODS, wire: { slot: 33, codec: { enumeration: PDHG_METHODS } } },
   pdhgEta: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 4, codec: { scaled: 1e4 } }, legacyKey: "e" },
   pdhgTau: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 5, codec: { scaled: 1e4 } }, legacyKey: "t" },
   maxitPDHG: { default: 1000, owner: "pdhg", wire: { slot: 6, codec: "int" }, legacyKey: "p" },

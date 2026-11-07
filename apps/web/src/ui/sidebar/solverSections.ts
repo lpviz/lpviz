@@ -14,6 +14,7 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
 };
 
 const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", affine: "Affine scaling", karmarkar: "Karmarkar" };
+const PDHG_METHOD_LABELS: Record<SolverSettings["pdhgMethod"], string> = { pdhg: "PDHG", scs: "SCS (ADMM)", hpr: "HPR-LP" };
 const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)", megiddo: "Megiddo (2D)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
@@ -35,15 +36,18 @@ const ipmSection = (ctx: SectionContext): SettingControl[] => [
 ];
 
 // H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma
-const isClassicPdhg = (settings: SolverSettings) => !settings.pdhgHsd;
-const isHsd = (settings: SolverSettings) => settings.pdhgHsd;
+// SCS and HPR-LP set their own steps (SCS's relaxation, HPR-LP's adaptive σ), so PDHG's knobs are hidden for them
+const isPdhg = (settings: SolverSettings) => settings.pdhgMethod === "pdhg";
+const isClassicPdhg = (settings: SolverSettings) => isPdhg(settings) && !settings.pdhgHsd;
+const isHsd = (settings: SolverSettings) => isPdhg(settings) && settings.pdhgHsd;
 const pdhgSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }),
-  numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }),
+  group("settings-inline-row", [labeledSelect(ctx, "pdhgMethod", "Method:", PDHG_METHOD_LABELS)]),
+  shownWhen(numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }), isPdhg),
+  shownWhen(numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }), isPdhg),
   shownWhen(numberSlider(ctx, { key: "pdhgHsdNu", label: "ν (homogeneous step coupling):", format: fixed(3) }), isHsd),
   maxitSlider(ctx, "maxitSliderPDHG", "maxitPDHG"),
   checkboxRow(ctx, { pdhgHsd: "H-PDLP", pdhgHsdAdaptiveWeight: "Adaptive weight", pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }, (next, key) =>
-    key === "pdhgHsdAdaptiveWeight" ? isHsd(next) : isClassicPdhg(next) || key === "pdhgHsd" || key === "pdhgColorByBasis",
+    key === "pdhgHsdAdaptiveWeight" ? isHsd(next) : isClassicPdhg(next) || ((key === "pdhgHsd" || key === "pdhgColorByBasis") && isPdhg(next)),
   ),
 ];
 

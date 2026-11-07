@@ -94,7 +94,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "PDHG",
     pager: "PDHG",
     description:
-      "How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, and basis identification — visualized in lpviz.",
+      "How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, basis identification, and the SCS and HPR-LP splittings — visualized in lpviz.",
     og: {
       title: "PDHG for Linear Programming, Visualized",
       description: "The first-order method behind GPU LP solvers like PDLP: watch PDHG spiral into the optimum, diverge when step sizes are too big, and accelerate with Halpern restarts.",

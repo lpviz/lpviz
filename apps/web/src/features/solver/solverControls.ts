@@ -161,6 +161,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         ...(startPoint ? { startPoint } : {}),
         ineq: settings.pdhgIneqMode,
         halpern: settings.pdhgHalpernMode,
+        method: settings.pdhgMethod,
         hsd: settings.pdhgHsd,
         nu: settings.pdhgHsdNu,
         adaptiveWeight: settings.pdhgHsdAdaptiveWeight,

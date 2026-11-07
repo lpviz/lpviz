@@ -1,5 +1,7 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { affineScaling } from "@lpviz/solver-engine/affineScaling";
+import { hpr } from "@lpviz/solver-engine/hpr";
+import { scs } from "@lpviz/solver-engine/scs";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
 import { megiddo } from "@lpviz/solver-engine/megiddo";
 import { seidel } from "@lpviz/solver-engine/seidel";
@@ -36,7 +38,10 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
   },
   pdhg: (payload) => {
     // H-PDLP takes tau as its dual step sigma and always runs its own Halpern scheme on the inequality form
-    const { solver: _, constraints, objective, hsd, nu, adaptiveWeight, ...options } = payload;
+    const { solver: _, constraints, objective, method, hsd, nu, adaptiveWeight, ...options } = payload;
+    // SCS and HPR-LP take only the cap and the start: their steps are their own
+    if (method === "scs") return scs(constraints, objective, withTol({ maxit: options.maxit }));
+    if (method === "hpr") return hpr(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint }));
     return hsd ? hpdlp(constraints, objective, withTol({ ...options, sigma: options.tau, nu, adaptiveWeight })) : pdhg(constraints, objective, withTol(options));
   },
   // the active-set methods: criss-cross pivots on vertex bases, PDAS takes Newton steps on proximal
