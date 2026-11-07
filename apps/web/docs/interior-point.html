@@ -124,6 +124,9 @@
         <h3 id="halo-certificates">Infeasible and unbounded problems</h3>
         <p>HALO-LP solves the homogeneous self-dual embedding of the LP, which adds the pair τ, κ. A solution with τ &gt; 0 gives the optimum <var>x</var>/τ, and that point is what the canvas draws. A solution with τ = 0 and κ &gt; 0 is a Farkas certificate: either the constraints are infeasible, or the objective is unbounded. The footer then reads <em>Certified primal infeasible</em> or <em>Certified unbounded</em>. For this reason IPM still runs on an empty region while HALO-LP is checked.</p>
 
+        <h3 id="halo-3d">In 3D</h3>
+        <p>The µ column is µ/τ², the complementarity of the drawn point <var>x</var>/τ, so it is in the same units as the predictor–corrector's <var>s</var>ᵀ<var>y</var>/<var>m</var>. HALO-LP shrinks it by orders of magnitude per step, so the 3D view lifts each iterate by its order of magnitude above the run's smallest µ: the optimum sits on the floor, a cold start (µ = 1) as high as a PDHG start, and every power of ten in between is an equal step. The staircase you see is the superlinear convergence.</p>
+
         <h3 id="halo-controls">Controls</h3>
         <p>α<sub>max</sub> and the corrector threshold are hidden, since the line search replaces both. HALO-LP has one control of its own:</p>
         <ul>

@@ -284,12 +284,18 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
 
   const trace = new NumericTrace(n, "µ", maxit);
   const point = Float64Array.from(w.x);
+  // mu / tau^2: the complementarity of the recovered pair (s, z) / tau, in the LP's units as IPM's
+  // s'y/m is; raw mu is homogeneous and grows with tau
+  let scaledMu = mu;
   const record = () => {
-    // the recovered point; while tau <= 0 the last one stays drawn
-    if (w.tau > 0) for (let j = 0; j < n; j++) point[j] = w.x[j]! / w.tau;
+    // the recovered point; while tau <= 0 the last one (and its mu) stays drawn
+    if (w.tau > 0) {
+      for (let j = 0; j < n; j++) point[j] = w.x[j]! / w.tau;
+      scaledMu = mu / (w.tau * w.tau);
+    }
     let infeasibility = 0;
     if (w.tau > 0) for (let i = 0; i < p; i++) infeasibility = Math.max(infeasibility, (res.gx[i]! - h[i]! * w.tau) / w.tau);
-    trace.record(point, -dot(c, point), Math.max(infeasibility, 0), mu);
+    trace.record(point, -dot(c, point), Math.max(infeasibility, 0), scaledMu);
   };
 
   const merits: number[] = [];

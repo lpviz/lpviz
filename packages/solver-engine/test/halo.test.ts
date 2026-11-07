@@ -84,4 +84,13 @@ describe("halo", () => {
     expect(r.status).toBe("optimal");
     expectNear(lastIterate(r), [-4, -4], 5);
   });
+
+  test("measures mu in the recovered point's units, decreasing to the floor", () => {
+    const r = halo(SQUARE, Float64Array.of(1, 0.3), { ...OPTS, startPoint: [3, 7] });
+    const mu = r.convergence!;
+    // tau = 1 at the start, so the first is the raw measure; tau grows past 20 on the way
+    expect(mu[0]).toBeGreaterThan(1);
+    expect(mu[mu.length - 1]!).toBeLessThan(1e-12);
+    for (let i = 1; i < mu.length; i++) expect(mu[i]!).toBeLessThan(mu[i - 1]!);
+  });
 });
