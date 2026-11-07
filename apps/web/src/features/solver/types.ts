@@ -1,4 +1,4 @@
-import type { ActiveSetMethod, EllipsoidQueryPoint } from "./solverSettings";
+import type { ActiveSetMethod, EllipsoidQueryPoint, IpmMethod } from "./solverSettings";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { CrissCrossOptions } from "@lpviz/solver-engine/crissCross";
@@ -67,7 +67,7 @@ export type Problem = { constraints: Constraint[]; objective: Float64Array };
 type DrawnProblem = Problem & { vertices: Vec[] };
 
 export type SolverWorkerPayload =
-  | ({ solver: "ipm" } & Problem & Omit<IPMOptions, "tol"> & { halo: boolean } & Omit<HALOOptions, "tol" | "maxit" | "startPoint">)
+  | ({ solver: "ipm" } & Problem & Omit<IPMOptions, "tol"> & { method: IpmMethod } & Omit<HALOOptions, "tol" | "maxit" | "startPoint">)
   | ({ solver: "simplex" } & Problem & Omit<SimplexOptions, "tol">)
   | ({ solver: "pdhg" } & Problem & Omit<PDHGOptions, "tol"> & { hsd: boolean } & Pick<HPDLPOptions, "nu" | "adaptiveWeight">)
   | ({ solver: "activeSet" } & Problem & Omit<PDASOptions, "tol"> & Pick<CrissCrossOptions, "order"> & Pick<SeidelOptions, "seed"> & { method: ActiveSetMethod })

@@ -13,24 +13,25 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
   lpOptimum: "Constraint gen.",
 };
 
+const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", affine: "Affine scaling", karmarkar: "Karmarkar" };
 const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
 
-// HALO-LP globalizes by line search, so the predictor-corrector's step knobs are hidden for it
-const isPredictorCorrector = (settings: SolverSettings) => !settings.ipmHalo;
-const isHalo = (settings: SolverSettings) => settings.ipmHalo;
+// HALO-LP globalizes by line search, so the step knobs are hidden for it; affine scaling and
+// Karmarkar take αmax as their step fraction, and have no corrector and no embedding
+const isPredictorCorrector = (settings: SolverSettings) => settings.ipmMethod === "mpc";
+const isHalo = (settings: SolverSettings) => settings.ipmMethod === "halo";
 const ipmSection = (ctx: SectionContext): SettingControl[] => [
-  shownWhen(numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }), isPredictorCorrector),
+  group("settings-inline-row", [labeledSelect(ctx, "ipmMethod", "Method:", IPM_METHOD_LABELS)]),
+  shownWhen(numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }), (settings) => !isHalo(settings)),
   shownWhen(numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }), isPredictorCorrector),
   shownWhen(numberSlider(ctx, { key: "haloRhoN", label: "ρₙ (NCP proximal weight):", format: fixed(3) }), isHalo),
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
   // one "Homogeneous" box, bound to the active method's own setting: the predictor–corrector's
   // defaults off (its links and pictures predate it), HALO-LP's on (the paper's method)
-  checkboxRow(ctx, { ipmHalo: "HALO-LP", ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) =>
-    key === "ipmHomogeneous" ? !isHalo(next) : key === "haloHomogeneous" ? isHalo(next) : true,
-  ),
+  checkboxRow(ctx, { ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) => (key === "ipmHomogeneous" ? isPredictorCorrector(next) : isHalo(next))),
 ];
 
 // H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma

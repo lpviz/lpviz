@@ -77,7 +77,7 @@ describe("shared solver settings", () => {
       alphaMax: 0.5,
       correctorThreshold: DEFAULT_SOLVER_SETTINGS.correctorThreshold,
       maxitIPM: DEFAULT_SOLVER_SETTINGS.maxitIPM,
-      ipmHalo: DEFAULT_SOLVER_SETTINGS.ipmHalo,
+      ipmMethod: DEFAULT_SOLVER_SETTINGS.ipmMethod,
       haloRhoN: DEFAULT_SOLVER_SETTINGS.haloRhoN,
       haloHomogeneous: DEFAULT_SOLVER_SETTINGS.haloHomogeneous,
       ipmHomogeneous: DEFAULT_SOLVER_SETTINGS.ipmHomogeneous,

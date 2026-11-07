@@ -1,4 +1,5 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
+import { affineScaling } from "@lpviz/solver-engine/affineScaling";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
 import { seidel } from "@lpviz/solver-engine/seidel";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
@@ -21,11 +22,12 @@ const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...
 // (see SolverWorkerPayload), so the rest of it spreads straight in.
 const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
   ipm: (payload) => {
-    // HALO-LP takes no step size: alphaMax and the corrector threshold are the predictor-corrector's
-    const { solver: _, constraints, objective, halo: useHalo, rhoN, homogeneous, ...options } = payload;
-    return useHalo
-      ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN, homogeneous }))
-      : ipm(constraints, objective, withTol({ ...options, homogeneous }));
+    // HALO-LP takes no step size; affine scaling and Karmarkar take alphaMax as their step fraction
+    const { solver: _, constraints, objective, method, rhoN, homogeneous, ...options } = payload;
+    const { maxit, startPoint, alphaMax } = options;
+    if (method === "halo") return halo(constraints, objective, withTol({ maxit, startPoint, rhoN, homogeneous }));
+    if (method === "affine" || method === "karmarkar") return affineScaling(constraints, objective, withTol({ maxit, startPoint, alphaMax, projective: method === "karmarkar" }));
+    return ipm(constraints, objective, withTol({ ...options, homogeneous }));
   },
   simplex: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;

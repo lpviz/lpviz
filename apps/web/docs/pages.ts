@@ -78,7 +78,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "Interior Point",
     pager: "Interior Point Methods",
     description:
-      "How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, infeasible starts, and the non-interior HALO-LP method — visualized interactively in lpviz.",
+      "How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, infeasible starts, the non-interior HALO-LP method, and the primal methods before them, affine scaling and Karmarkar's algorithm — visualized interactively in lpviz.",
     og: {
       title: "Interior Point Methods, Visualized",
       description: "Watch a Mehrotra predictor-corrector interior point method arc through the interior of a polytope you draw, and learn what every knob does.",
