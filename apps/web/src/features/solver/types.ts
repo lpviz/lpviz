@@ -2,6 +2,7 @@ import type { ActiveSetMethod, EllipsoidQueryPoint } from "./solverSettings";
 import type { Constraint, Vec } from "@lpviz/math/types";
 import type { CentralPathOptions } from "@lpviz/solver-engine/centralPath";
 import type { CrissCrossOptions } from "@lpviz/solver-engine/crissCross";
+import type { SeidelOptions } from "@lpviz/solver-engine/seidel";
 import type { EllipsoidOptions } from "@lpviz/solver-engine/ellipsoid";
 import type { HALOOptions } from "@lpviz/solver-engine/halo";
 import type { IPMOptions } from "@lpviz/solver-engine/ipm";
@@ -69,7 +70,7 @@ export type SolverWorkerPayload =
   | ({ solver: "ipm" } & Problem & Omit<IPMOptions, "tol"> & { halo: boolean } & Omit<HALOOptions, "tol" | "maxit" | "startPoint">)
   | ({ solver: "simplex" } & Problem & Omit<SimplexOptions, "tol">)
   | ({ solver: "pdhg" } & Problem & Omit<PDHGOptions, "tol"> & { hsd: boolean } & Pick<HPDLPOptions, "nu" | "adaptiveWeight">)
-  | ({ solver: "activeSet" } & Problem & Omit<PDASOptions, "tol"> & Pick<CrissCrossOptions, "order"> & { method: ActiveSetMethod })
+  | ({ solver: "activeSet" } & Problem & Omit<PDASOptions, "tol"> & Pick<CrissCrossOptions, "order"> & Pick<SeidelOptions, "seed"> & { method: ActiveSetMethod })
   | ({ solver: "central" } & DrawnProblem & Omit<CentralPathOptions, "interiorPoint">)
   | ({ solver: "ellipsoid" } & DrawnProblem & Omit<EllipsoidOptions, "tol"> & { queryPoint: EllipsoidQueryPoint });
 

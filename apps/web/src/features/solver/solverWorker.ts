@@ -1,5 +1,6 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
+import { seidel } from "@lpviz/solver-engine/seidel";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
 import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
 import { halo } from "@lpviz/solver-engine/halo";
@@ -36,9 +37,10 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
     return hsd ? hpdlp(constraints, objective, withTol({ ...options, sigma: options.tau, nu, adaptiveWeight })) : pdhg(constraints, objective, withTol(options));
   },
   // the active-set methods: criss-cross pivots on vertex bases, PDAS takes Newton steps on proximal
-  // subproblems; both return text rows and feasibility phases, like simplex
+  // subproblems, Seidel inserts the rows in a random order; all return text rows and feasibility phases, like simplex
   activeSet: (payload) => {
-    const { solver: _, constraints, objective, method, order, maxit, startPoint, ...pdasOptions } = payload;
+    const { solver: _, constraints, objective, method, order, seed, maxit, startPoint, ...pdasOptions } = payload;
+    if (method === "seidel") return seidel(constraints, objective, withTol({ seed }));
     return method === "crissCross"
       ? crissCross(constraints, objective, withTol({ maxit, order, startVertex: startPoint }))
       : pdas(constraints, objective, withTol({ ...pdasOptions, maxit, startPoint }));

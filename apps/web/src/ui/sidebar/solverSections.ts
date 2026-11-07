@@ -13,7 +13,7 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
   lpOptimum: "Constraint gen.",
 };
 
-const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross" };
+const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
@@ -68,9 +68,12 @@ const simplexSection = (ctx: SectionContext): SettingControl[] => [
 
 // each method shows only its own knobs; the iteration cap is shared
 const isPdas = (settings: SolverSettings) => settings.activeSetMethod === "pdas";
+// Seidel visits every row once, so it has no iteration cap
+const isSeidel = (settings: SolverSettings) => settings.activeSetMethod === "seidel";
 const activeSetSection = (ctx: SectionContext): SettingControl[] => [
   group("settings-inline-row", [labeledSelect(ctx, "activeSetMethod", "Method:", ACTIVE_SET_METHOD_LABELS)]),
-  shownWhen(group("settings-inline-row", [labeledSelect(ctx, "activeSetIndexOrder", "Index order:", INDEX_ORDER_LABELS)]), (settings) => !isPdas(settings)),
+  shownWhen(group("settings-inline-row", [labeledSelect(ctx, "activeSetIndexOrder", "Index order:", INDEX_ORDER_LABELS)]), (settings) => settings.activeSetMethod === "crissCross"),
+  shownWhen(numberSlider(ctx, { key: "activeSetSeed", label: "Insertion order seed:", format: String, parse: (v) => parseInt(v, 10) }), isSeidel),
   shownWhen(
     group("settings-pdas", [
       numberSlider(ctx, { key: "activeSetRho", label: "ρ (primal proximal weight):", format: fixed(2) }),
@@ -78,7 +81,7 @@ const activeSetSection = (ctx: SectionContext): SettingControl[] => [
     ]),
     isPdas,
   ),
-  maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"),
+  shownWhen(maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"), (settings) => !isSeidel(settings)),
   shownWhen(checkboxRow(ctx, { activeSetShrinkWeights: "Shrink weights", activeSetIdentify: "Identify vertex" }), isPdas),
 ];
 

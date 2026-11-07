@@ -62,15 +62,15 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "Active-Set",
     pager: "Active-Set Methods",
     description:
-      "How active-set methods solve linear programs by guessing which constraints are tight: the criss-cross method's least-index pivots and the primal-dual active-set method (PDAS) on proximal subproblems — visualized interactively in lpviz.",
+      "How active-set methods solve linear programs by guessing which constraints are tight: the criss-cross method's least-index pivots, the primal-dual active-set method (PDAS) on proximal subproblems and Seidel's randomized incremental algorithm — visualized interactively in lpviz.",
     og: {
       title: "Criss-Cross and PDAS, Visualized",
       description: "Watch the criss-cross method hop between constraint crossings outside your region, and PDAS swap whole blocks of active constraints on its way to the optimum.",
     },
     twitter: { title: "Active-Set Methods, Visualized — lpviz", description: "The criss-cross method and the primal-dual active-set method on LPs you draw." },
     schema: {
-      name: "Active-Set Methods: Criss-Cross and PDAS",
-      description: "How the criss-cross method and the primal-dual active-set method solve linear programs, and how lpviz implements and visualizes them.",
+      name: "Active-Set Methods: Criss-Cross, PDAS and Seidel",
+      description: "How the criss-cross method, the primal-dual active-set method and Seidel's algorithm solve linear programs, and how lpviz implements and visualizes them.",
     },
   },
   {

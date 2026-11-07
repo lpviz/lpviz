@@ -39,7 +39,7 @@
           <a href="/docs/simplex"><strong>Simplex method</strong>
             <p>Walks from vertex to vertex along edges of the region, improving the objective at every pivot. Includes a two-phase setup, selectable pivot rules (Bland, Dantzig), and a dual simplex mode.</p></a>
           <a href="/docs/active-set"><strong>Active-set methods</strong>
-            <p>Guess which constraints are tight and repair the guess: the criss-cross method one constraint at a time with a least-index rule, PDAS whole blocks at once on proximal subproblems. Neither stays inside the region.</p></a>
+            <p>Guess which constraints are tight and repair the guess: the criss-cross method one constraint at a time with a least-index rule, PDAS whole blocks at once on proximal subproblems, Seidel by inserting the constraints in random order. None stays inside the region.</p></a>
           <a href="/docs/interior-point"><strong>Interior point method (IPM)</strong>
             <p>A Mehrotra-style predictor–corrector method that cuts smoothly through the interior, loosely tracking the central path.</p></a>
           <a href="/docs/pdhg"><strong>PDHG</strong>
@@ -56,7 +56,7 @@
             </thead>
             <tbody>
               <tr><td><a href="/docs/simplex">Simplex</a></td><td>Active-set / pivoting</td><td>Hops between vertices along edges</td><td>Dual simplex mode, entering rule (Bland / Dantzig), ratio-test tie-break</td></tr>
-              <tr><td><a href="/docs/active-set">Active-Set</a></td><td>Active-set / pivoting</td><td>Hops between constraint crossings, often outside the region</td><td>Method (criss-cross / PDAS), index order, ρ, δ, shrink weights, identify vertex</td></tr>
+              <tr><td><a href="/docs/active-set">Active-Set</a></td><td>Active-set / pivoting</td><td>Hops between constraint crossings, often outside the region</td><td>Method (criss-cross / PDAS / Seidel), index order, seed, ρ, δ, shrink weights, identify vertex</td></tr>
               <tr><td><a href="/docs/interior-point">IPM</a></td><td>Primal-dual interior point</td><td>A smooth arc through the interior</td><td>α<sub>max</sub>, corrector threshold, max iterations</td></tr>
               <tr><td><a href="/docs/pdhg">PDHG</a></td><td>First-order primal-dual</td><td>A spiral tightening around the optimum</td><td>η, τ, Halpern, inequality mode, color by basis</td></tr>
               <tr><td><a href="/docs/ellipsoid">Ellipsoid</a></td><td>Cutting plane / localization</td><td>A shrinking ellipse, centers precessing</td><td>Initial size, query point (incl. constraint generation), deep cuts, ray shoot</td></tr>

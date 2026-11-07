@@ -115,7 +115,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     request: (s, { problem }) => {
       const settings = s.solverSettings;
       // PDAS starts its first proximal center at the dragged point, criss-cross from the basis of
-      // the vertex it snaps to (see displayedSolverStartPoint)
+      // the vertex it snaps to; Seidel starts from its box and ignores it (see displayedSolverStartPoint)
       const startPoint = requestedStartPoint(s);
       return {
         solver: "activeSet",
@@ -127,6 +127,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         shrinkWeights: settings.activeSetShrinkWeights,
         identify: settings.activeSetIdentify,
         order: settings.activeSetIndexOrder,
+        seed: settings.activeSetSeed,
         maxit: iterations(settings.maxitActiveSet),
       };
     },
