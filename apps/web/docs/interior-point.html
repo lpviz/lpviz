@@ -116,7 +116,7 @@
           <li><strong>A µ driven to zero.</strong> Complementarity <var>s</var><sub>i</sub> <var>y</var><sub>i</sub> = 0 is relaxed by a smoothing parameter µ. The paper derives the smoothed equations from a log-barrier potential, and at a centered point they reduce to the usual centrality <var>s</var><sub>i</sub> <var>y</var><sub>i</sub> = µ. The log's µ column means the same thing for both methods.</li>
           <li><strong>The same scale of iteration counts.</strong> Expect a dozen or so iterations with a superlinear endgame, not the hundreds of a first-order method like <a href="/docs/pdhg">PDHG</a>.</li>
         </ul>
-        <p>What changes is how positivity is handled. The predictor–corrector keeps <var>s</var>, <var>y</var> &gt; 0 with a fraction-to-boundary step. HALO-LP instead writes each complementarity pair through a smoothed NCP function, φ(<var>a</var>, <var>b</var>; µ) = <var>a</var> + <var>b</var> − √((<var>a</var> − <var>b</var>)² + 4µ). This function is zero exactly when <var>a</var>, <var>b</var> &gt; 0 and <var>a</var><var>b</var> = µ, and it is defined everywhere else too. A backtracking line search on the size of these residuals replaces the step ratio.</p>
+        <p>What changes is how positivity is handled. The predictor–corrector keeps <var>s</var>, <var>y</var> &gt; 0 with a fraction-to-boundary step. HALO-LP instead writes each complementarity pair through a smoothed NCP function, φ(<var>a</var>, <var>b</var>; µ) = <var>a</var> + <var>b</var> − √((<var>a</var> − <var>b</var>)² + 4µ). This function is zero exactly when <var>a</var>, <var>b</var> &gt; 0 and <var>a</var><var>b</var> = µ, and it is defined everywhere else too. A backtracking line search on the size of all the residuals, linear and NCP alike, replaces the step ratio.</p>
 
         <h3 id="halo-warm-start">Warm starts</h3>
         <p>Positivity is not required, so any start is a valid start. Drag the start marker outside the region: HALO-LP takes that point's slack <var>b</var> − <var>A</var><var>x</var><sub>0</sub> as it is, negative where the point violates a constraint. The predictor–corrector cannot do that. It has to reset the slacks to 1 and loses most of what the start knew. This is the method's main purpose: re-solving a slightly changed LP from the last solution, as in model predictive control.</p>
@@ -130,7 +130,7 @@
         <h3 id="halo-controls">Controls</h3>
         <p>α<sub>max</sub> and the corrector threshold are hidden, since the line search replaces both. HALO-LP has one control of its own:</p>
         <ul>
-          <li><strong>ρ<sub>n</sub></strong> (NCP proximal weight, default 0.010): how strongly the complementarity equations are pulled toward the current reference point. Larger values make the Newton matrix better conditioned and the steps more conservative.</li>
+          <li><strong>ρ<sub>n</sub></strong> (NCP proximal weight, default 0.010): how strongly the complementarity equations are pulled toward the current reference point, at the start: it halves each time the reference moves, so the endgame is not held back. Larger values make the early Newton steps better conditioned and more conservative.</li>
         </ul>
 
         <h2 id="log">Reading the log</h2>

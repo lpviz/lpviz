@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { Constraint } from "@lpviz/math/types";
 import { mulberry32 } from "@lpviz/math/random";
 import { halo } from "../src/halo";
+import { simplex } from "../src/simplex";
 import { BOX, bruteForceOptimum, CUBE, expectNear, footerOf, lastIterate, objectiveValue, randomObjective, randomPolygon, SLICED_BOX, SQUARE } from "./fixtures";
 
 const OPTS = { maxit: 200, tol: 1e-7, rhoN: 0.01 };
@@ -92,5 +93,28 @@ describe("halo", () => {
     expect(mu[0]).toBeGreaterThan(1);
     expect(mu[mu.length - 1]!).toBeLessThan(1e-12);
     for (let i = 1; i < mu.length; i++) expect(mu[i]!).toBeLessThan(mu[i - 1]!);
+  });
+});
+
+describe("halo on badly scaled LPs", () => {
+  // right-hand sides up to ~1e3 and rows that are not unit length: before the solver rescaled, the
+  // paper's relative complementarity test let such a run stop 1% short of the optimum
+  test("matches simplex", () => {
+    const rand = mulberry32(484);
+    for (let k = 0; k < 30; k++) {
+      const n = 2 + (k % 2);
+      const rows: Constraint[] = Array.from({ length: n + 3 }, () => {
+        const a = Array.from({ length: n }, () => (rand() * 2 - 1) * 50);
+        return [...a, 50 * (1 + rand() * 1000)] as number[] as Constraint;
+      });
+      const bounds = Array.from({ length: n }, (_, j) => [1, -1].map((sign) => [...Array.from({ length: n }, (_, i) => (i === j ? sign : 0)), 2000] as number[] as Constraint)).flat();
+      const constraints = [...rows, ...bounds];
+      const c = randomObjective(rand, n);
+      const r = halo(constraints, c, OPTS);
+      const reference = simplex(constraints, c, { tol: 1e-9, dual: false, enteringRule: "first", leavingRule: "first" });
+      expect(r.status).toBe("optimal");
+      const optimum = objectiveValue(c, lastIterate(reference));
+      expect(Math.abs(objectiveValue(c, lastIterate(r)) - optimum) / (1 + Math.abs(optimum))).toBeLessThan(1e-5);
+    }
   });
 });

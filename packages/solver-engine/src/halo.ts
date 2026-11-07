@@ -5,11 +5,19 @@
 // w_E. No iterate has to stay positive: s, z, tau, kappa may all leave the orthant, so any warm start
 // is a valid start. The drawn trace is the recovered point x / tau of each iterate.
 //
-// The paper leaves the line search and the parameter updates to ODYN; here they are a non-monotone
-// Armijo backtrack on the natural NCP merit, and, whenever an accepted step shrinks the stacked
-// residual enough, the proximal reference moves to the iterate and mu to its complementarity measure.
+// The paper leaves the line search and the parameter updates to ODYN (arXiv:2602.16005, sec. V):
+//  - the merit is ODYN's natural merit 1/2 ||r~||^2 over every perturbed residual. HALO-LP's eq. (31)
+//    keeps only the NCP blocks, which is 0 at a centered start (phi(1, 1; 1) = 0): every step looks
+//    like ascent there and the linear residuals are never reduced;
+//  - the line search is ODYN's flexible Armijo test, merit(w + a dw) <= gamma merit(w) - 2 eta a
+//    merit(w), with ODYN's eta and neighborhood (beta, theta); ODYN gives no value for gamma;
+//  - when the neighborhood test passes, the proximal reference moves to the iterate and mu to its
+//    complementarity measure, never up. ODYN instead scales mu by an adaptive centering sigma and
+//    interpolates the reference between iterates, but leaves those rules' starting values
+//    unspecified; its rho = 1e-9 relies on them, and without them stalls 3% of the audit's random LPs.
+//    So rho is larger here and rho_n shrinks (see RHO_N_SHRINK).
 
-import { denseFromConstraints, type DenseMatrix, dot, matVec, negate, transposeMatrix } from "@lpviz/math/blas";
+import { denseFromConstraints, type DenseMatrix, dot, matVec, transposeMatrix } from "@lpviz/math/blas";
 import { cholesky } from "@lpviz/math/lapack";
 import type { Constraint } from "@lpviz/math/types";
 import { warmStart } from "./limits";
@@ -17,20 +25,27 @@ import { NumericTrace, type SolverResult } from "./result";
 
 // the proximal weight on x, z and tau (rho_d, rho_i, rho_tau); rhoN, the NCP shift, is an option
 const RHO = 1e-6;
-// the update neighborhood (theta, beta) and the Armijo line search
-const THETA = 0.9;
-const BETA = 10;
-const ARMIJO = 1e-4;
+// ODYN's update neighborhood (theta, beta) and line search constant (eta), and the flexible Armijo
+// reference gamma, which ODYN leaves open (1 and 1.1 tested the same; 2 stalls more often)
+const THETA = 0.95;
+const BETA = 0.85;
+const ARMIJO = 1e-2;
+const GAMMA = 1.1;
 const BACKTRACK = 0.5;
 const MIN_STEP = 1e-10;
-const NONMONOTONE_MEMORY = 5;
 const MU_FLOOR = 1e-16;
+// rho_n halves each time the proximal reference moves, down to this floor. The paper leaves the
+// schedule to ODYN; a fixed weight turns the endgame into a crawling proximal-point loop once tau
+// and the slacks are small next to it (hundreds of iterations at tau ~ 1e-3), and shrinking faster
+// than halving destabilizes the line search on the audit's random LPs.
+const RHO_N_SHRINK = 0.5;
+const RHO_N_MIN = 1e-8;
 
 export interface HALOOptions {
   /** absolute and relative termination tolerance (the paper's eps_a = eps_r) */
   tol: number;
   maxit: number;
-  /** rho_n, the proximal weight of the shifted NCP equations */
+  /** rho_n, the proximal weight of the shifted NCP equations, at the start; it halves each time the reference moves */
   rhoN: number;
   /** Optional primal warm start; s takes b - Ax0, negative where x0 violates a constraint. */
   startPoint?: readonly number[] | undefined;
@@ -85,9 +100,9 @@ class Residuals {
     this.gx = new Float64Array(p);
     this.gtz = new Float64Array(n);
   }
-  /** the natural merit 1/2 (||rN||^2 + rH^2) */
+  /** the line search's merit 1/2 ||r~||^2; the Newton step's slope along it is -2 merit */
   merit() {
-    return 0.5 * (dot(this.rN, this.rN) + this.rH * this.rH);
+    return 0.5 * (dot(this.rD, this.rD) + dot(this.rI, this.rI) + dot(this.rN, this.rN) + this.rG * this.rG + this.rH * this.rH);
   }
   /** the stacked residual's infinity norm */
   norm() {
@@ -97,9 +112,16 @@ class Residuals {
   }
 }
 
+/** How the scaled problem maps back to the drawn one: x = xScale x', c'x = objScale c'x'. */
+interface Unscale {
+  xScale: number;
+  objScale: number;
+}
+
 /** HALO-LP on `min c'x s.t. Gx <= h`, x free. */
-function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly number[] | null, opts: HALOOptions): SolverResult {
-  const { tol, maxit, rhoN: RHO_N } = opts;
+function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly number[] | null, opts: HALOOptions, { xScale, objScale }: Unscale): SolverResult {
+  const { tol, maxit } = opts;
+  let RHO_N = opts.rhoN;
   const { rows: p, cols: n } = G;
   const Gt = transposeMatrix(G);
 
@@ -287,18 +309,20 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
   // mu / tau^2: the complementarity of the recovered pair (s, z) / tau, in the LP's units as IPM's
   // s'y/m is; raw mu is homogeneous and grows with tau
   let scaledMu = mu;
+  // everything recorded is in the drawn problem's units: s scales with x (by xScale) and z with c
+  // (by objScale), so their complementarity by both
   const record = () => {
     // the recovered point; while tau <= 0 the last one (and its mu) stays drawn
     if (w.tau > 0) {
-      for (let j = 0; j < n; j++) point[j] = w.x[j]! / w.tau;
-      scaledMu = mu / (w.tau * w.tau);
+      for (let j = 0; j < n; j++) point[j] = (xScale * w.x[j]!) / w.tau;
+      scaledMu = (xScale * objScale * mu) / (w.tau * w.tau);
     }
     let infeasibility = 0;
     if (w.tau > 0) for (let i = 0; i < p; i++) infeasibility = Math.max(infeasibility, (res.gx[i]! - h[i]! * w.tau) / w.tau);
-    trace.record(point, -dot(c, point), Math.max(infeasibility, 0), scaledMu);
+    // max c'x of the drawn problem is -(objScale c')(point / xScale) scaled back
+    trace.record(point, (-objScale * dot(c, point)) / xScale, xScale * Math.max(infeasibility, 0), scaledMu);
   };
 
-  const merits: number[] = [];
   let status: "optimal" | "infeasible" | "unbounded" | undefined;
   let failure: string | undefined;
   evaluate(w, res);
@@ -317,16 +341,13 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
       break;
     }
 
-    // non-monotone Armijo on the natural merit: an exact Newton step has slope -2 merit
+    // ODYN's flexible Armijo on the stacked merit: an exact Newton step has slope -2 merit
     const merit = res.merit();
-    merits.push(merit);
-    if (merits.length > NONMONOTONE_MEMORY) merits.shift();
-    const meritRef = Math.max(...merits);
     let alpha = 1;
     for (;;) {
       trial.set(w, alpha, d);
       evaluate(trial, trialRes);
-      if (trialRes.merit() <= meritRef - 2 * ARMIJO * alpha * merit || alpha <= MIN_STEP) break;
+      if (trialRes.merit() <= GAMMA * merit - 2 * ARMIJO * alpha * merit || alpha <= MIN_STEP) break;
       alpha *= BACKTRACK;
     }
     w.set(trial);
@@ -336,8 +357,8 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
       // the step made enough progress on the current subproblem: move the proximal reference to
       // the iterate and mu to its complementarity measure, never up
       ref.set(w);
+      RHO_N = Math.max(RHO_N * RHO_N_SHRINK, RHO_N_MIN);
       mu = Math.max(Math.min(mu, complementarityMeasure(w)), MU_FLOOR);
-      merits.length = 0;
       evaluate(w, res);
       referenceError = res.norm();
     } else {
@@ -349,8 +370,30 @@ function haloCore(G: DenseMatrix, h: Float64Array, c: Float64Array, x0: readonly
   return trace.finish({ converged: status === "optimal", lead, ...(failure ? { before: failure } : {}) }, { status });
 }
 
-/** HALO-LP on `max objective'x s.t. Ax <= b`. */
+/**
+ * HALO-LP on `max objective'x s.t. Ax <= b`, solved on a rescaled copy. The paper's stopping tests are
+ * relative to ||s|| and ||z||, and the problem is not equilibrated before them: with b ~ 1e3 the
+ * complementarity test |min(s, z)| <= eps ||s|| admits negative multipliers of size eps ||s||, which
+ * times b ~ 1e3 open a duality gap; a random LP stopped 1% short of its optimum that way. So each row
+ * is divided by its norm (the region is unchanged), then b and the objective by their largest entries
+ * when those exceed 1, and that slack is back to eps. The tolerance, the start and the rho weights all
+ * live in the scaled units; the log, the drawn points and mu are scaled back.
+ */
 export function halo(constraints: readonly Constraint[], objective: Float64Array, opts: HALOOptions): SolverResult {
   const { A, b } = denseFromConstraints(constraints);
-  return haloCore(A, b, negate(objective), warmStart(opts.startPoint, A.cols), opts);
+  const { rows: m, cols: n } = A;
+  for (let i = 0; i < m; i++) {
+    let norm = 0;
+    for (let j = 0; j < n; j++) norm = Math.hypot(norm, A.data[i * n + j]!);
+    if (norm === 0) continue;
+    for (let j = 0; j < n; j++) A.data[i * n + j]! /= norm;
+    b[i]! /= norm;
+  }
+  const largest = (v: Float64Array) => v.reduce((most, value) => Math.max(most, Math.abs(value)), 0);
+  const xScale = Math.max(1, largest(b));
+  const objScale = Math.max(1, largest(objective));
+  const h = Float64Array.from(b, (value) => value / xScale);
+  const c = Float64Array.from(objective, (value) => -value / objScale);
+  const warm = warmStart(opts.startPoint, n);
+  return haloCore(A, h, c, warm && warm.map((value) => value / xScale), opts, { xScale, objScale });
 }
