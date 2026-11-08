@@ -1,7 +1,7 @@
 import { getState, type State } from "@/features/core/store";
 import { displayedSolverStartPoint, hasUnboundedObjectiveDirection, isEmptyRegion } from "@/features/problem/selectors";
 import { messageBlocks, type ResultRenderPayload } from "@/features/solver/resultPresenter";
-import { type SolverMode } from "@/features/solver/solverSettings";
+import { type SolverMode, type SolverSettings } from "@/features/solver/solverSettings";
 import type { Problem, SolverWorkerPayload } from "@/features/solver/types";
 import type { Vec } from "@lpviz/math/types";
 import { hasConstraints, type Polytope } from "@lpviz/polytope/polytope";
@@ -57,6 +57,8 @@ const requestedStartPoint = (state: State): Vec | null => (state.solverStartPoin
 // a slider at 0 (or cleared) still runs one iteration
 const iterations = (count: number) => Math.max(1, count || 1);
 
+// the IPM variants that read an empty region as a certificate instead of refusing it
+const certifiesInfeasibility = (settings: SolverSettings) => settings.ipmMethod === "halo" || (settings.ipmMethod === "mpc" && settings.ipmHomogeneous);
 const emptyRegionBlock = (message: string): ResultRenderPayload => messageBlocks("No valid region", message);
 const unboundedObjectiveBlock = messageBlocks(
   "Solver unavailable",
@@ -76,8 +78,8 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
   }),
   ipm: control({
     // HALO-LP (either way) and the homogeneous predictor–corrector run on an empty region: they
-    // certify the infeasibility
-    alsoBlocked: (s) => (!s.solverSettings.ipmHalo && !s.solverSettings.ipmHomogeneous && isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
+    // certify the infeasibility. Karmarkar needs an interior to start from.
+    alsoBlocked: (s) => (!certifiesInfeasibility(s.solverSettings) && isEmptyRegion(s) ? emptyRegionBlock("IPM requires a feasible region.") : null),
     request: (s, { problem }) => {
       const settings = s.solverSettings;
       const startPoint = requestedStartPoint(s);
@@ -87,10 +89,10 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         ...(startPoint ? { startPoint } : {}),
         alphaMax: settings.alphaMax,
         correctorThreshold: settings.correctorThreshold,
-        halo: settings.ipmHalo,
+        method: settings.ipmMethod,
         rhoN: settings.haloRhoN,
         // one embedding flag, read from the active method's own setting
-        homogeneous: settings.ipmHalo ? settings.haloHomogeneous : settings.ipmHomogeneous,
+        homogeneous: settings.ipmMethod === "halo" ? settings.haloHomogeneous : settings.ipmMethod === "mpc" && settings.ipmHomogeneous,
         maxit: iterations(settings.maxitIPM),
       };
     },
@@ -115,7 +117,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
     request: (s, { problem }) => {
       const settings = s.solverSettings;
       // PDAS starts its first proximal center at the dragged point, criss-cross from the basis of
-      // the vertex it snaps to (see displayedSolverStartPoint)
+      // the vertex it snaps to; Seidel starts from its box and ignores it (see displayedSolverStartPoint)
       const startPoint = requestedStartPoint(s);
       return {
         solver: "activeSet",
@@ -127,6 +129,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         shrinkWeights: settings.activeSetShrinkWeights,
         identify: settings.activeSetIdentify,
         order: settings.activeSetIndexOrder,
+        seed: settings.activeSetSeed,
         maxit: iterations(settings.maxitActiveSet),
       };
     },
@@ -158,6 +161,7 @@ export const SOLVER_CONTROLS: Record<SolverMode, SolverControl> = {
         ...(startPoint ? { startPoint } : {}),
         ineq: settings.pdhgIneqMode,
         halpern: settings.pdhgHalpernMode,
+        method: settings.pdhgMethod,
         hsd: settings.pdhgHsd,
         nu: settings.pdhgHsdNu,
         adaptiveWeight: settings.pdhgHsdAdaptiveWeight,

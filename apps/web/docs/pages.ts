@@ -62,15 +62,15 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "Active-Set",
     pager: "Active-Set Methods",
     description:
-      "How active-set methods solve linear programs by guessing which constraints are tight: the criss-cross method's least-index pivots and the primal-dual active-set method (PDAS) on proximal subproblems — visualized interactively in lpviz.",
+      "How active-set methods solve linear programs by guessing which constraints are tight: the criss-cross method's least-index pivots, the primal-dual active-set method (PDAS) on proximal subproblems Seidel's randomized incremental algorithm and Megiddo's prune-and-search — visualized interactively in lpviz.",
     og: {
       title: "Criss-Cross and PDAS, Visualized",
       description: "Watch the criss-cross method hop between constraint crossings outside your region, and PDAS swap whole blocks of active constraints on its way to the optimum.",
     },
     twitter: { title: "Active-Set Methods, Visualized — lpviz", description: "The criss-cross method and the primal-dual active-set method on LPs you draw." },
     schema: {
-      name: "Active-Set Methods: Criss-Cross and PDAS",
-      description: "How the criss-cross method and the primal-dual active-set method solve linear programs, and how lpviz implements and visualizes them.",
+      name: "Active-Set Methods: Criss-Cross, PDAS, Seidel and Megiddo",
+      description: "How the criss-cross method, the primal-dual active-set method, Seidel's algorithm and Megiddo's method solve linear programs, and how lpviz implements and visualizes them.",
     },
   },
   {
@@ -78,7 +78,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "Interior Point",
     pager: "Interior Point Methods",
     description:
-      "How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, infeasible starts, and the non-interior HALO-LP method — visualized interactively in lpviz.",
+      "How primal-dual interior point methods solve linear programs: the central path, Mehrotra's predictor-corrector, fraction-to-boundary steps, infeasible starts, the non-interior HALO-LP method, and the primal method before them, Karmarkar's algorithm — visualized interactively in lpviz.",
     og: {
       title: "Interior Point Methods, Visualized",
       description: "Watch a Mehrotra predictor-corrector interior point method arc through the interior of a polytope you draw, and learn what every knob does.",
@@ -94,7 +94,7 @@ export const DOCS_PAGES: readonly DocsPage[] = [
     nav: "PDHG",
     pager: "PDHG",
     description:
-      "How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, and basis identification — visualized in lpviz.",
+      "How the primal-dual hybrid gradient (PDHG) method solves linear programs with only matrix-vector products: step sizes, spiraling dynamics, Halpern acceleration with restarts, basis identification, and the SCS and HPR-LP splittings — visualized in lpviz.",
     og: {
       title: "PDHG for Linear Programming, Visualized",
       description: "The first-order method behind GPU LP solvers like PDLP: watch PDHG spiral into the optimum, diverge when step sizes are too big, and accelerate with Halpern restarts.",

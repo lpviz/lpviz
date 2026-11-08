@@ -22,21 +22,34 @@ export const SOLVER_LABELS: Record<SolverMode, string> = {
 const QUERY_POINTS = ["ellipsoid", "chebyshev", "analytic", "volumetric", "lpOptimum"] as const satisfies readonly ("ellipsoid" | QueryPoint)[];
 export type EllipsoidQueryPoint = (typeof QUERY_POINTS)[number];
 
-// Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas and crissCross).
-const ACTIVE_SET_METHODS = ["pdas", "crissCross"] as const;
+// Which interior method the IPM mode runs: Mehrotra's predictor–corrector, HALO-LP (see
+// @lpviz/solver-engine/halo), or the primal method before them, Karmarkar's projective method
+// (see karmarkar). Appended only: a link carries the index.
+const IPM_METHODS = ["mpc", "halo", "karmarkar"] as const;
+export type IpmMethod = (typeof IPM_METHODS)[number];
+
+// Which first-order splitting the PDHG mode runs: PDHG itself (with H-PDLP behind its own box), SCS's
+// ADMM on the homogeneous embedding, or HPR-LP's Halpern Peaceman–Rachford (see @lpviz/solver-engine/scs
+// and hpr). Appended only: a link carries the index.
+const PDHG_METHODS = ["pdhg", "scs", "hpr"] as const;
+export type PdhgMethod = (typeof PDHG_METHODS)[number];
+
+// Which active-set method the Active-Set mode runs (see @lpviz/solver-engine/pdas, crissCross, seidel and megiddo).
+const ACTIVE_SET_METHODS = ["pdas", "crissCross", "seidel", "megiddo"] as const;
 export type ActiveSetMethod = (typeof ACTIVE_SET_METHODS)[number];
 
 export type SolverSettings = {
   alphaMax: number;
   correctorThreshold: number;
   maxitIPM: number;
-  ipmHalo: boolean;
+  ipmMethod: IpmMethod;
   haloRhoN: number;
   haloHomogeneous: boolean;
   ipmHomogeneous: boolean;
   simplexDualMode: boolean;
   simplexEnteringRule: EnteringRule;
   simplexLeavingRule: LeavingRule;
+  pdhgMethod: PdhgMethod;
   pdhgEta: number;
   pdhgTau: number;
   maxitPDHG: number;
@@ -57,6 +70,7 @@ export type SolverSettings = {
   activeSetDelta: number;
   activeSetShrinkWeights: boolean;
   activeSetIdentify: boolean;
+  activeSetSeed: number;
   activeSetIndexOrder: IndexOrder;
   maxitActiveSet: number;
   objectiveAngleStep: number;
@@ -100,8 +114,9 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   alphaMax: { default: 0.1, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 0, codec: { scaled: 1e4 } }, legacyKey: "a" },
   correctorThreshold: { default: 0.9, owner: "ipm", range: ["0.001", "0.999", "0.001"], wire: { slot: 1, codec: { scaled: 1e4 } }, legacyKey: "f" },
   maxitIPM: { default: 1000, owner: "ipm", wire: { slot: 2, codec: "int" }, legacyKey: "i" },
-  // HALO-LP: Newton steps on the homogeneous embedding with shifted NCP functions; no step size knobs
-  ipmHalo: { default: false, owner: "ipm", wire: { slot: 28, codec: "bool" } },
+  // HALO-LP takes Newton steps on the homogeneous embedding with shifted NCP functions; Karmarkar steps
+  // along the Dikin ellipsoid (slot 28 never shipped as anything else)
+  ipmMethod: { default: "mpc", owner: "ipm", values: IPM_METHODS, wire: { slot: 28, codec: { enumeration: IPM_METHODS } } },
   haloRhoN: { default: 0.01, owner: "ipm", range: ["0.001", "1", "0.001"], wire: { slot: 29, codec: { scaled: 1e4 } } },
   // unchecked: no homogeneous embedding, which is ODYN on the LP
   haloHomogeneous: { default: true, owner: "ipm", wire: { slot: 30, codec: "bool" } },
@@ -111,6 +126,7 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   // the pivot rules have no slot yet: a link does not carry them (a codec bump, to be its own decision)
   simplexEnteringRule: { default: "first", owner: "simplex", values: ENTERING_RULES, legacyKey: "E" },
   simplexLeavingRule: { default: "first", owner: "simplex", values: LEAVING_RULES, legacyKey: "L" },
+  pdhgMethod: { default: "pdhg", owner: "pdhg", values: PDHG_METHODS, wire: { slot: 33, codec: { enumeration: PDHG_METHODS } } },
   pdhgEta: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 4, codec: { scaled: 1e4 } }, legacyKey: "e" },
   pdhgTau: { default: 0.25, owner: "pdhg", range: ["0.001", "0.750", "0.001"], wire: { slot: 5, codec: { scaled: 1e4 } }, legacyKey: "t" },
   maxitPDHG: { default: 1000, owner: "pdhg", wire: { slot: 6, codec: "int" }, legacyKey: "p" },
@@ -135,6 +151,8 @@ const SOLVER_SETTING_SPECS: { [K in keyof SolverSettings]: SettingSpec<SolverSet
   activeSetDelta: { default: 0.3, owner: "activeSet", range: ["0.01", "3", "0.01"], wire: { slot: 22, codec: { scaled: 1e4 } } },
   activeSetShrinkWeights: { default: true, owner: "activeSet", wire: { slot: 23, codec: "bool" } },
   activeSetIdentify: { default: true, owner: "activeSet", wire: { slot: 24, codec: "bool" } },
+  // Seidel's insertion order: the seed of its shuffle
+  activeSetSeed: { default: 1, owner: "activeSet", range: ["1", "50", "1"], wire: { slot: 32, codec: "int" } },
   objectiveAngleStep: { default: 0.1, owner: "global", range: ["0.01", "0.5", "0.01"], wire: { slot: 16, codec: { scaled: 1e4 } }, legacyKey: "r" },
   objectiveRotationSpeed: { default: 1, owner: "global", range: ["0.2", "3", "0.1"], wire: { slot: 17, codec: { scaled: 1e4 } }, legacyKey: "q" },
   replayDurationMs: { default: DEFAULT_REPLAY_DURATION_MS, owner: "local" },

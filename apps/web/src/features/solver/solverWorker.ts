@@ -1,5 +1,10 @@
 import { centralPath } from "@lpviz/solver-engine/centralPath";
+import { karmarkar } from "@lpviz/solver-engine/karmarkar";
+import { hpr } from "@lpviz/solver-engine/hpr";
+import { scs } from "@lpviz/solver-engine/scs";
 import { crissCross } from "@lpviz/solver-engine/crissCross";
+import { megiddo } from "@lpviz/solver-engine/megiddo";
+import { seidel } from "@lpviz/solver-engine/seidel";
 import { cuttingPlane } from "@lpviz/solver-engine/cuttingPlane";
 import { ellipsoid } from "@lpviz/solver-engine/ellipsoid";
 import { halo } from "@lpviz/solver-engine/halo";
@@ -20,11 +25,12 @@ const withTol = <O extends object>(options: O) => ({ tol: DEFAULT_TOLERANCE, ...
 // (see SolverWorkerPayload), so the rest of it spreads straight in.
 const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver: K }>) => SolverResult } = {
   ipm: (payload) => {
-    // HALO-LP takes no step size: alphaMax and the corrector threshold are the predictor-corrector's
-    const { solver: _, constraints, objective, halo: useHalo, rhoN, homogeneous, ...options } = payload;
-    return useHalo
-      ? halo(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint, rhoN, homogeneous }))
-      : ipm(constraints, objective, withTol({ ...options, homogeneous }));
+    // HALO-LP takes no step size; Karmarkar takes alphaMax as its step fraction
+    const { solver: _, constraints, objective, method, rhoN, homogeneous, ...options } = payload;
+    const { maxit, startPoint, alphaMax } = options;
+    if (method === "halo") return halo(constraints, objective, withTol({ maxit, startPoint, rhoN, homogeneous }));
+    if (method === "karmarkar") return karmarkar(constraints, objective, withTol({ maxit, startPoint, alphaMax }));
+    return ipm(constraints, objective, withTol({ ...options, homogeneous }));
   },
   simplex: (payload) => {
     const { solver: _, constraints, objective, ...options } = payload;
@@ -32,13 +38,18 @@ const RUN: { [K in SolverMode]: (payload: Extract<SolverWorkerPayload, { solver:
   },
   pdhg: (payload) => {
     // H-PDLP takes tau as its dual step sigma and always runs its own Halpern scheme on the inequality form
-    const { solver: _, constraints, objective, hsd, nu, adaptiveWeight, ...options } = payload;
+    const { solver: _, constraints, objective, method, hsd, nu, adaptiveWeight, ...options } = payload;
+    // SCS and HPR-LP take only the cap and the start: their steps are their own
+    if (method === "scs") return scs(constraints, objective, withTol({ maxit: options.maxit }));
+    if (method === "hpr") return hpr(constraints, objective, withTol({ maxit: options.maxit, startPoint: options.startPoint }));
     return hsd ? hpdlp(constraints, objective, withTol({ ...options, sigma: options.tau, nu, adaptiveWeight })) : pdhg(constraints, objective, withTol(options));
   },
   // the active-set methods: criss-cross pivots on vertex bases, PDAS takes Newton steps on proximal
-  // subproblems; both return text rows and feasibility phases, like simplex
+  // subproblems, Seidel inserts the rows in a random order, Megiddo prunes them by median tests; all return text rows and feasibility phases, like simplex
   activeSet: (payload) => {
-    const { solver: _, constraints, objective, method, order, maxit, startPoint, ...pdasOptions } = payload;
+    const { solver: _, constraints, objective, method, order, seed, maxit, startPoint, ...pdasOptions } = payload;
+    if (method === "seidel") return seidel(constraints, objective, withTol({ seed }));
+    if (method === "megiddo") return megiddo(constraints, objective, withTol({}));
     return method === "crissCross"
       ? crissCross(constraints, objective, withTol({ maxit, order, startVertex: startPoint }))
       : pdas(constraints, objective, withTol({ ...pdasOptions, maxit, startPoint }));

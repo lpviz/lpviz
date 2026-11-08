@@ -13,36 +13,41 @@ const QUERY_POINT_LABELS: Record<SolverSettings["ellipsoidQueryPoint"], string> 
   lpOptimum: "Constraint gen.",
 };
 
-const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross" };
+const IPM_METHOD_LABELS: Record<SolverSettings["ipmMethod"], string> = { mpc: "Predictor–corrector", halo: "HALO-LP", karmarkar: "Karmarkar" };
+const PDHG_METHOD_LABELS: Record<SolverSettings["pdhgMethod"], string> = { pdhg: "PDHG", scs: "SCS (ADMM)", hpr: "HPR-LP" };
+const ACTIVE_SET_METHOD_LABELS: Record<SolverSettings["activeSetMethod"], string> = { pdas: "PDAS (proximal)", crissCross: "Criss-cross", seidel: "Seidel (incremental)", megiddo: "Megiddo (2D)" };
 const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> = { first: "Lowest first", last: "Highest first" };
 
 export type SettingsSync = SettingControl["sync"];
 
-// HALO-LP globalizes by line search, so the predictor-corrector's step knobs are hidden for it
-const isPredictorCorrector = (settings: SolverSettings) => !settings.ipmHalo;
-const isHalo = (settings: SolverSettings) => settings.ipmHalo;
+// HALO-LP globalizes by line search, so the step knobs are hidden for it; Karmarkar takes αmax
+// as its step fraction, and have no corrector and no embedding
+const isPredictorCorrector = (settings: SolverSettings) => settings.ipmMethod === "mpc";
+const isHalo = (settings: SolverSettings) => settings.ipmMethod === "halo";
 const ipmSection = (ctx: SectionContext): SettingControl[] => [
-  shownWhen(numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }), isPredictorCorrector),
+  group("settings-inline-row", [labeledSelect(ctx, "ipmMethod", "Method:", IPM_METHOD_LABELS)]),
+  shownWhen(numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }), (settings) => !isHalo(settings)),
   shownWhen(numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }), isPredictorCorrector),
   shownWhen(numberSlider(ctx, { key: "haloRhoN", label: "ρₙ (NCP proximal weight):", format: fixed(3) }), isHalo),
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
   // one "Homogeneous" box, bound to the active method's own setting: the predictor–corrector's
   // defaults off (its links and pictures predate it), HALO-LP's on (the paper's method)
-  checkboxRow(ctx, { ipmHalo: "HALO-LP", ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) =>
-    key === "ipmHomogeneous" ? !isHalo(next) : key === "haloHomogeneous" ? isHalo(next) : true,
-  ),
+  checkboxRow(ctx, { ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) => (key === "ipmHomogeneous" ? isPredictorCorrector(next) : isHalo(next))),
 ];
 
 // H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma
-const isClassicPdhg = (settings: SolverSettings) => !settings.pdhgHsd;
-const isHsd = (settings: SolverSettings) => settings.pdhgHsd;
+// SCS and HPR-LP set their own steps (SCS's relaxation, HPR-LP's adaptive σ), so PDHG's knobs are hidden for them
+const isPdhg = (settings: SolverSettings) => settings.pdhgMethod === "pdhg";
+const isClassicPdhg = (settings: SolverSettings) => isPdhg(settings) && !settings.pdhgHsd;
+const isHsd = (settings: SolverSettings) => isPdhg(settings) && settings.pdhgHsd;
 const pdhgSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }),
-  numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }),
+  group("settings-inline-row", [labeledSelect(ctx, "pdhgMethod", "Method:", PDHG_METHOD_LABELS)]),
+  shownWhen(numberSlider(ctx, { key: "pdhgEta", label: "η (primal step size factor):" }), isPdhg),
+  shownWhen(numberSlider(ctx, { key: "pdhgTau", label: "τ (dual step size factor):" }), isPdhg),
   shownWhen(numberSlider(ctx, { key: "pdhgHsdNu", label: "ν (homogeneous step coupling):", format: fixed(3) }), isHsd),
   maxitSlider(ctx, "maxitSliderPDHG", "maxitPDHG"),
   checkboxRow(ctx, { pdhgHsd: "H-PDLP", pdhgHsdAdaptiveWeight: "Adaptive weight", pdhgIneqMode: "Inequality mode", pdhgHalpernMode: "Halpern", pdhgColorByBasis: "Color by basis" }, (next, key) =>
-    key === "pdhgHsdAdaptiveWeight" ? isHsd(next) : isClassicPdhg(next) || key === "pdhgHsd" || key === "pdhgColorByBasis",
+    key === "pdhgHsdAdaptiveWeight" ? isHsd(next) : isClassicPdhg(next) || ((key === "pdhgHsd" || key === "pdhgColorByBasis") && isPdhg(next)),
   ),
 ];
 
@@ -68,9 +73,12 @@ const simplexSection = (ctx: SectionContext): SettingControl[] => [
 
 // each method shows only its own knobs; the iteration cap is shared
 const isPdas = (settings: SolverSettings) => settings.activeSetMethod === "pdas";
+// Seidel visits every row once, and Megiddo prunes a quarter of them per round: neither has an iteration cap
+const isSeidel = (settings: SolverSettings) => settings.activeSetMethod === "seidel";
 const activeSetSection = (ctx: SectionContext): SettingControl[] => [
   group("settings-inline-row", [labeledSelect(ctx, "activeSetMethod", "Method:", ACTIVE_SET_METHOD_LABELS)]),
-  shownWhen(group("settings-inline-row", [labeledSelect(ctx, "activeSetIndexOrder", "Index order:", INDEX_ORDER_LABELS)]), (settings) => !isPdas(settings)),
+  shownWhen(group("settings-inline-row", [labeledSelect(ctx, "activeSetIndexOrder", "Index order:", INDEX_ORDER_LABELS)]), (settings) => settings.activeSetMethod === "crissCross"),
+  shownWhen(numberSlider(ctx, { key: "activeSetSeed", label: "Insertion order seed:", format: String, parse: (v) => parseInt(v, 10) }), isSeidel),
   shownWhen(
     group("settings-pdas", [
       numberSlider(ctx, { key: "activeSetRho", label: "ρ (primal proximal weight):", format: fixed(2) }),
@@ -78,7 +86,7 @@ const activeSetSection = (ctx: SectionContext): SettingControl[] => [
     ]),
     isPdas,
   ),
-  maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"),
+  shownWhen(maxitSlider(ctx, "maxitSliderActiveSet", "maxitActiveSet"), (settings) => !isSeidel(settings) && settings.activeSetMethod !== "megiddo"),
   shownWhen(checkboxRow(ctx, { activeSetShrinkWeights: "Shrink weights", activeSetIdentify: "Identify vertex" }), isPdas),
 ];
 
