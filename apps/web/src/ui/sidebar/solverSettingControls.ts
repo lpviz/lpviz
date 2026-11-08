@@ -81,11 +81,12 @@ export function numberSlider(
 }
 
 // one <label>text " "<input type=checkbox></label> per entry, in order; `applies` greys out the
-// boxes that the current settings make moot
+// boxes that the current settings make moot, `shown` hides the ones that belong to another mode
 export function checkboxRow(
   { set }: SectionContext,
   labels: Partial<Record<SettingKeys<boolean>, string>>,
   applies?: (settings: SolverSettings, key: SettingKeys<boolean>) => boolean,
+  shown?: (settings: SolverSettings, key: SettingKeys<boolean>) => boolean,
 ): SettingControl {
   const row = el("div", { className: "settings-checkbox-row" });
   const boxes = (Object.entries(labels) as [SettingKeys<boolean>, string][]).map(([key, label]) => {
@@ -99,6 +100,7 @@ export function checkboxRow(
     sync: (next) => {
       for (const { key, box, wrap } of boxes) {
         box.checked = next[key];
+        if (shown) wrap.hidden = !shown(next, key);
         if (!applies) continue;
         const enabled = applies(next, key);
         box.disabled = !enabled;

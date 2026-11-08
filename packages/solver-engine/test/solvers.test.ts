@@ -614,3 +614,25 @@ describe("draggable start point", () => {
     }
   });
 });
+
+describe("ipm on the homogeneous self-dual embedding", () => {
+  const HSD = { ...ipmOptions(0.9), homogeneous: true };
+
+  test("converges to the same corner as the plain method", () => {
+    const plain = ipm(SQUARE, Float64Array.of(1, 0.3), ipmOptions(0.9));
+    const r = ipm(SQUARE, Float64Array.of(1, 0.3), HSD);
+    expect(r.status).toBe("optimal");
+    expectNear(lastIterate(r), Array.from(lastIterate(plain)), 4);
+  });
+
+  test("certifies an empty region", () => {
+    const r = ipm(EMPTY, Float64Array.of(1, 1), HSD);
+    expect(r.status).toBe("infeasible");
+    expect(footerOf(r).startsWith("Certified primal infeasible")).toBe(true);
+  });
+
+  test("certifies an unbounded objective", () => {
+    const r = ipm(STRIP, Float64Array.of(0, 1), HSD);
+    expect(r.status).toBe("unbounded");
+  });
+});

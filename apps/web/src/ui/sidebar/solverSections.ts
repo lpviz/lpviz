@@ -18,10 +18,19 @@ const INDEX_ORDER_LABELS: Record<SolverSettings["activeSetIndexOrder"], string> 
 
 export type SettingsSync = SettingControl["sync"];
 
+// HALO-LP globalizes by line search, so the predictor-corrector's step knobs are hidden for it
+const isPredictorCorrector = (settings: SolverSettings) => !settings.ipmHalo;
+const isHalo = (settings: SolverSettings) => settings.ipmHalo;
 const ipmSection = (ctx: SectionContext): SettingControl[] => [
-  numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }),
-  numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }),
+  shownWhen(numberSlider(ctx, { key: "alphaMax", label: "αmax (maximum step size ratio):" }), isPredictorCorrector),
+  shownWhen(numberSlider(ctx, { key: "correctorThreshold", label: "Corrector threshold:" }), isPredictorCorrector),
+  shownWhen(numberSlider(ctx, { key: "haloRhoN", label: "ρₙ (NCP proximal weight):", format: fixed(3) }), isHalo),
   maxitSlider(ctx, "maxitSliderIPM", "maxitIPM"),
+  // one "Homogeneous" box, bound to the active method's own setting: the predictor–corrector's
+  // defaults off (its links and pictures predate it), HALO-LP's on (the paper's method)
+  checkboxRow(ctx, { ipmHalo: "HALO-LP", ipmHomogeneous: "Homogeneous", haloHomogeneous: "Homogeneous" }, undefined, (next, key) =>
+    key === "ipmHomogeneous" ? !isHalo(next) : key === "haloHomogeneous" ? isHalo(next) : true,
+  ),
 ];
 
 // H-PDLP always runs its own Halpern scheme on the inequality form; eta and tau are its eta and sigma

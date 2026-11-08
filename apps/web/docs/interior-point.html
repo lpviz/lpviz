@@ -52,6 +52,11 @@
                 <td>1,000</td>
                 <td>Iteration cap (log scale, up to 100k). Small α<sub>max</sub> values need more iterations to converge.</td>
               </tr>
+              <tr>
+                <td>Homogeneous</td>
+                <td>off</td>
+                <td>Runs the same predictor–corrector on the homogeneous self-dual embedding (see <a href="#homogeneous">below</a>), so it also certifies empty regions and unbounded objectives.</td>
+              </tr>
             </tbody>
           </table>
         </div>
@@ -105,6 +110,41 @@
           <figcaption>The threshold is a test on the predictor's step ratio, not on the objective: it asks whether the affine direction was blocked, and only pays for a second solve when it was.</figcaption>
         </figure>
         <p>The corrector costs a second solve with the same factorized matrix, so it is worth skipping when the predictor is already doing well. The threshold is where "well" is drawn: at the default 0.9, any predictor that can move at least 90% of the way to the boundary in both the primal and the dual is taken as-is. Below that, Mehrotra's corrector is added, and its centering weight σ = (µ<sub>aff</sub>/µ)³ scales with how badly the predictor did — barely centering when it was almost free, retreating hard toward the <a href="/docs/central-path">central path</a> when it was blocked at a corner. Raising the threshold toward 0.999 corrects nearly every iteration; lowering it approaches pure affine scaling, which takes the greedy direction and lets the corners deal with the consequences.</p>
+
+        <h3 id="homogeneous">The homogeneous embedding</h3>
+        <p>Check <strong>Homogeneous</strong> and the predictor–corrector solves a slightly larger system, the homogeneous self-dual embedding of Xu, Hung and Ye, instead of the KKT conditions themselves. It adds two scalars: τ scales the whole primal–dual point, and κ measures the duality gap. The KKT equations become</p>
+        <p class="eq"><var>A</var><var>x</var> + <var>s</var> = <var>b</var>τ,&nbsp;&nbsp;&nbsp;<var>A</var>ᵀ<var>y</var> = <var>c</var>τ,&nbsp;&nbsp;&nbsp;<var>b</var>ᵀ<var>y</var> − <var>c</var>ᵀ<var>x</var> + κ = 0,&nbsp;&nbsp;&nbsp;<var>s</var><sub>i</sub> <var>y</var><sub>i</sub> = 0,&nbsp;&nbsp;&nbsp;τκ = 0,</p>
+        <p>all with <var>s</var>, <var>y</var>, τ, κ ≥ 0. This system always has a solution, whatever the LP. If τ &gt; 0, the canvas draws <var>x</var>/τ, the optimum. If τ = 0 &lt; κ, there is no optimum, and the iterate is a Farkas certificate instead: proof that the region is empty or that the objective is unbounded. The footer reads <em>Certified primal infeasible</em> or <em>Certified unbounded</em>, and IPM runs on an empty region while the box is checked. On a solvable LP the path is close to the plain method's, and it often takes fewer iterations, because it never has to reach feasibility before making progress on the gap. The log's µ column is µ/τ², so it stays in the plain method's units. In 3D it is lifted on the same log scale as HALO-LP (see <a href="#halo-3d">below</a>), with the optimum on the floor. This is the form production solvers such as MOSEK use.</p>
+
+        <h2 id="halo-lp">HALO-LP: a non-interior-point method</h2>
+        <p>The <strong>HALO-LP</strong> checkbox swaps the predictor–corrector for <a href="https://arxiv.org/abs/2611.01038">HALO-LP</a> (Rojas, Aguilar and Bugarin, 2026), a <em>homogeneous all-shifted non-interior-point method</em>. It drops the one rule this page opened with: its iterates need not stay inside anything. The slacks <var>s</var>, the multipliers <var>y</var>, and the homogeneous pair τ, κ may all go negative along the way.</p>
+
+        <h3 id="why-under-ipm">Why it lives under IPM</h3>
+        <p>"Non-interior" describes where the iterates are allowed to go, not how the method works. Everything else is the interior point recipe on this page:</p>
+        <ul>
+          <li><strong>Newton steps on the KKT system.</strong> Each iteration linearizes the same optimality conditions and solves one linear system. That system condenses to a positive-definite matrix ρ<var>I</var> + <var>A</var>ᵀ<var>D</var><var>A</var>, the IPM normal equations with a small proximal term added.</li>
+          <li><strong>A µ driven to zero.</strong> Complementarity <var>s</var><sub>i</sub> <var>y</var><sub>i</sub> = 0 is relaxed by a smoothing parameter µ. The paper derives the smoothed equations from a log-barrier potential, and at a centered point they reduce to the usual centrality <var>s</var><sub>i</sub> <var>y</var><sub>i</sub> = µ. The log's µ column means the same thing for both methods.</li>
+          <li><strong>The same scale of iteration counts.</strong> Expect a dozen or so iterations with a superlinear endgame, not the hundreds of a first-order method like <a href="/docs/pdhg">PDHG</a>.</li>
+        </ul>
+        <p>What changes is how positivity is handled. The predictor–corrector keeps <var>s</var>, <var>y</var> &gt; 0 with a fraction-to-boundary step. HALO-LP instead writes each complementarity pair through a smoothed NCP function, φ(<var>a</var>, <var>b</var>; µ) = <var>a</var> + <var>b</var> − √((<var>a</var> − <var>b</var>)² + 4µ). This function is zero exactly when <var>a</var>, <var>b</var> &gt; 0 and <var>a</var><var>b</var> = µ, and it is defined everywhere else too. A backtracking line search on the size of all the residuals, linear and NCP alike, replaces the step ratio.</p>
+
+        <h3 id="halo-warm-start">Warm starts</h3>
+        <p>Positivity is not required, so any start is a valid start. Drag the start marker outside the region: HALO-LP takes that point's slack <var>b</var> − <var>A</var><var>x</var><sub>0</sub> as it is, negative where the point violates a constraint. The predictor–corrector cannot do that. It has to reset the slacks to 1 and loses most of what the start knew. This is the method's main purpose: re-solving a slightly changed LP from the last solution, as in model predictive control.</p>
+
+        <h3 id="halo-certificates">Infeasible and unbounded problems</h3>
+        <p>HALO-LP solves the homogeneous self-dual embedding of the LP, which adds the pair τ, κ. A solution with τ &gt; 0 gives the optimum <var>x</var>/τ, and that point is what the canvas draws. A solution with τ = 0 and κ &gt; 0 is a Farkas certificate: either the constraints are infeasible, or the objective is unbounded. The footer then reads <em>Certified primal infeasible</em> or <em>Certified unbounded</em>. For this reason IPM still runs on an empty region while HALO-LP is checked.</p>
+
+        <h3 id="halo-3d">In 3D</h3>
+        <p>The µ column is µ/τ², the complementarity of the drawn point <var>x</var>/τ, so it is in the same units as the predictor–corrector's <var>s</var>ᵀ<var>y</var>/<var>m</var>. HALO-LP shrinks it by orders of magnitude per step, so the 3D view lifts each iterate by its order of magnitude above the run's smallest µ: the optimum sits on the floor, a cold start (µ = 1) as high as a PDHG start, and every power of ten in between is an equal step. The staircase you see is the superlinear convergence.</p>
+
+        <h3 id="halo-homogeneous">Without the embedding: ODYN</h3>
+        <p>HALO-LP borrows its non-interior machinery from <a href="https://arxiv.org/abs/2602.16005">ODYN</a> (Rojas et al., 2026), a QP solver with the same shifted NCP functions and proximal terms but no homogeneous embedding. With HALO-LP checked, the same <strong>Homogeneous</strong> box controls its embedding, and it starts checked, since the embedding is HALO-LP's method. Uncheck it to run ODYN on your LP: τ stays 1, κ disappears, and the Newton step is the same condensed solve without its Δτ part. On a solvable LP the two paths look nearly alike. They part ways on an empty region or an unbounded objective. HALO-LP certifies those from the iterate, once κ outgrows τ. ODYN has no τ to watch, so it reads the certificate off the Newton direction instead: as the iterates run away, the step points along a Farkas ray, and the footer reports it the same way.</p>
+
+        <h3 id="halo-controls">Controls</h3>
+        <p>α<sub>max</sub> and the corrector threshold are hidden, since the line search replaces both. HALO-LP has one control of its own:</p>
+        <ul>
+          <li><strong>ρ<sub>n</sub></strong> (NCP proximal weight, default 0.010): how strongly the complementarity equations are pulled toward the current reference point, at the start: it halves each time the reference moves, so the endgame is not held back. Larger values make the early Newton steps better conditioned and more conservative.</li>
+        </ul>
 
         <h2 id="log">Reading the log</h2>
         <pre><code> Iter        x        y        Obj     Infeas          µ
