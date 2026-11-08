@@ -37,6 +37,12 @@ export function createCanvasStage(parent: HTMLElement, signal: AbortSignal) {
     mountToolbar(main, actions, signal);
     mountHelpButton(main, viewport, signal);
     main.append(handle);
+    // `/?record`: the scripted demo for presentation footage; dev-only, so a build drops it
+    if (import.meta.env.DEV && new URLSearchParams(window.location.search).has("record")) {
+      void import("@/record/mountRecordMode").then(({ maybeMountRecordMode }) => {
+        if (!signal.aborted) maybeMountRecordMode({ actions, tools, viewportApi, signal });
+      });
+    }
   };
 
   return { viewportApi, mountChrome };
